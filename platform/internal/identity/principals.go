@@ -27,9 +27,9 @@ const (
 
 // PrincipalsConfig is what [NewPrincipals] is built from.
 type PrincipalsConfig struct {
-	// Keys are the public keys of each service, as
-	// [ParseServiceKeys] read them.
-	Keys ServiceKeys
+	// Keys is asked for each service's public keys on every
+	// authentication, so a change to them takes no restart.
+	Keys KeySource
 	// ExchangeEndpoint and IntrospectEndpoint are the URLs an
 	// assertion names as its audience on each route.
 	ExchangeEndpoint   string
@@ -50,7 +50,7 @@ type PrincipalsConfig struct {
 // organization's: an assertion signed by a key of the service for a
 // principal that no longer exists is refused.
 type Principals struct {
-	keys      ServiceKeys
+	keys      KeySource
 	endpoints map[Route]string
 	admitter  Admitter
 	perSource map[Route]*operator.Limiter
@@ -78,12 +78,18 @@ func NewPrincipals(cfg PrincipalsConfig) *Principals {
 // which the per-source bound counts before anything else is read, and
 // past it the answer is an [*operator.Exceeded]. A bad signature, a
 // service with no key, a wrong identity, audience or time, a principal
-// that does not exist and a replayed assertion are one refusal.
+// that does not exist and a replayed assertion are one refusal. Keys
+// that cannot be read are [ErrPrincipalsOff]'s kind, unavailable, and
+// not a bad client.
 func (p *Principals) Authenticate(ctx context.Context, route Route, source, clientID, assertion string) (Principal, error) {
 	if err := p.perSource[route].Check(source); err != nil {
 		return Principal{}, err
 	}
-	principal, ok := parsePrincipal(clientID, func(service string) bool { return len(p.keys[service]) > 0 })
+	keys, err := p.keys.ServiceKeys()
+	if err != nil {
+		return Principal{}, err
+	}
+	principal, ok := parsePrincipal(clientID, func(service string) bool { return len(keys[service]) > 0 })
 	if !ok {
 		return Principal{}, operator.ErrClientInvalid
 	}
@@ -91,7 +97,7 @@ func (p *Principals) Authenticate(ctx context.Context, route Route, source, clie
 	if err != nil {
 		return Principal{}, operator.ErrClientInvalid
 	}
-	for _, key := range p.keys[principal.Service] {
+	for _, key := range keys[principal.Service] {
 		if key.KID != parsed.KID() {
 			continue
 		}

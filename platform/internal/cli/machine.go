@@ -202,9 +202,9 @@ type MachineConfig struct {
 	// exchanges for the issuer's token for the policy service, and
 	// introspects the tokens of the audience its service's name is.
 	// Identity nil serves neither, and ServiceKeys nil authenticates no
-	// principal.
+	// principal. ServiceKeys is asked on every authentication.
 	Identity    *identity.Issuer
-	ServiceKeys identity.ServiceKeys
+	ServiceKeys identity.KeySource
 	// Metrics is where the count of requests by how they authenticated
 	// is registered (ADR-0100). Nil registers it nowhere.
 	Metrics prometheus.Registerer

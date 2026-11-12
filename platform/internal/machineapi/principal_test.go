@@ -65,7 +65,7 @@ func principalListener(t *testing.T, private *rsa.PrivateKey, issuerOn bool) (st
 
 	store := &spendingAdmitter{}
 	principals := identity.NewPrincipals(identity.PrincipalsConfig{
-		Keys: identity.ServiceKeys{identity.ServiceCowork: {
+		Keys: identity.FixedKeys{identity.ServiceCowork: {
 			{KID: kid, Algorithm: operator.KeyAlgorithm, Public: &private.PublicKey},
 		}},
 		ExchangeEndpoint:   principalTokenURL,

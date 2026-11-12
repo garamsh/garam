@@ -120,7 +120,8 @@
 //	                       set they are the same, or start-up fails
 //	GARAM_IDENTITY_SERVICE_KEYS_FILE  each first-party service's
 //	                       public keys, JSON, by service name, at most
-//	                       two each (serve machine)
+//	                       two each, re-read on every authentication
+//	                       (serve machine)
 package cli
 
 import (

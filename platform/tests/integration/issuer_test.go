@@ -112,7 +112,7 @@ func (s *issuerStack) machineListener(t *testing.T, issuer *identity.Issuer) str
 	listener := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	t.Cleanup(listener.Close)
 	principals := identity.NewPrincipals(identity.PrincipalsConfig{
-		Keys:               s.keys,
+		Keys:               identity.FixedKeys(s.keys),
 		ExchangeEndpoint:   listener.URL + "/oauth/token",
 		IntrospectEndpoint: listener.URL + "/oauth/introspect",
 		Admitter:           identitypg.New(s.pool),

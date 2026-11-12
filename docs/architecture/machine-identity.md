@@ -319,8 +319,9 @@ else.
   (`grn:<org>/iam/service/<name>`, one per organization, written and
   removed with it) authenticates at introspection and at the exchange
   from the public keys `GARAM_IDENTITY_SERVICE_KEYS_FILE` names, read
-  once at start, by an assertion whose jti is spent in the database, so
-  a replay reaching another replica is refused. Each route bounds a
+  on every authentication, by an assertion whose jti is spent in the
+  database, so a replay reaching another replica is refused. Each
+  route bounds a
   source by the operator exchange's constants, in a limiter of its own
   in each process. No first-party service is an audience today, so
   introspection has no caller a deployment can configure yet. The
@@ -385,8 +386,10 @@ every machine operation it reaches, so cowork reaches no queue.
   private half in an owner-only file. The listener is configured with
   the public JWKs of each first-party service, read per exchange, at
   most two per service for a rotation; nothing on either listener
-  issues or withdraws them. Built, but read once at start, not per
-  exchange.
+  issues or withdraws them. Built: the file is re-read and re-parsed
+  on every authentication, so removing a compromised key takes no
+  restart, and a file that is gone or no longer parses refuses every
+  principal as unavailable (503), not as a bad client.
 - **The exchange is `exchangeClientAssertion`** under
   `machine-token.v2`, with the organization's principal GRN as
   `client_id`, `iss` and `sub`, and the key found by `kid` among the

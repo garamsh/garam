@@ -530,8 +530,12 @@ to the JSON Web Key Set holding the public keys that service signs its
 client assertions with: RSA keys, at most two per service so that one
 can be replaced beside another, and a name off the closed list in code
 refuses the file. The `kid` is each key's RFC 7638 thumbprint. The
-file holds no secret, so it needs no owner-only mode, and it is read
-once, at start: a changed file takes a restart. There is no other
+file holds no secret, so it needs no owner-only mode. It is read and
+parsed at start, which refuses a file that does not parse, and again on
+every authentication, so a change takes no restart and removing a
+compromised key refuses it from the next request. A file that is gone
+or no longer parses refuses every principal as unavailable, 503
+`temporarily_unavailable`, and not as a bad client. There is no other
 setting and the earlier meaning, a map from audience, is gone.
 
 Each service has one principal per organization,

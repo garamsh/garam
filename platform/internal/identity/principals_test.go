@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -93,6 +96,10 @@ func (a *admitter) Admit(_ context.Context, principal grn.GRN, _ operator.Verifi
 }
 
 func principalsOf(keys identity.ServiceKeys, a identity.Admitter) *identity.Principals {
+	return principalsFrom(identity.FixedKeys(keys), a)
+}
+
+func principalsFrom(keys identity.KeySource, a identity.Admitter) *identity.Principals {
 	return identity.NewPrincipals(identity.PrincipalsConfig{
 		Keys: keys, ExchangeEndpoint: tokenURL, IntrospectEndpoint: introspectURL,
 		Admitter: a, Now: func() time.Time { return noon },
@@ -169,6 +176,41 @@ func TestPrincipals_BoundEachSourceOnEachRoute(t *testing.T) {
 	assert.ErrorAs(t, ask(identity.RouteIntrospect, "10.0.0.1"), &exceeded, "past the bound the source is refused")
 	assert.NoError(t, ask(identity.RouteIntrospect, "10.0.0.2"), "another source is not held back")
 	assert.NoError(t, ask(identity.RouteExchange, "10.0.0.1"), "nor is the same source on the other route")
+}
+
+// TestPrincipals_ReadTheKeysFileOnEveryAuthentication holds ADR-0129
+// item 2: replacing the file takes effect on the next exchange, with
+// no restart; a file that is gone or no longer parses refuses every
+// principal as unavailable, not as a bad client.
+func TestPrincipals_ReadTheKeysFileOnEveryAuthentication(t *testing.T) {
+	removed, added := rsaKey(t), rsaKey(t)
+	path := filepath.Join(t.TempDir(), "keys.json")
+	write := func(raw []byte) { require.NoError(t, os.WriteFile(path, raw, 0o600)) }
+	principals := principalsFrom(identity.KeysFile(path), &admitter{})
+	ask := func(private *rsa.PrivateKey, jti string) error {
+		_, err := principals.Authenticate(context.Background(), identity.RouteExchange, "10.0.0.1",
+			coworkID.String(), assertion(t, private, coworkID, tokenURL, jti))
+		return err
+	}
+
+	write(keysFile(t, map[string][]*rsa.PrivateKey{identity.ServiceCowork: {removed}}))
+	require.NoError(t, ask(removed, jtiA))
+	assert.ErrorIs(t, ask(added, jtiA), operator.ErrClientInvalid, "a key not yet in the file")
+
+	write(keysFile(t, map[string][]*rsa.PrivateKey{identity.ServiceCowork: {added}}))
+	assert.ErrorIs(t, ask(removed, jtiB), operator.ErrClientInvalid, "the removed key is refused at once")
+	assert.NoError(t, ask(added, jtiB), "the added key is admitted at once")
+
+	for name, raw := range map[string][]byte{"not parsing": []byte("x"), "a service off the list": keysFile(t, map[string][]*rsa.PrivateKey{identity.AudiencePolicy: {added}})} {
+		write(raw)
+		err := ask(added, jtiA)
+		assert.Equal(t, errorx.KindUnavailable, errorx.KindOf(err), name)
+		assert.NotErrorIs(t, err, operator.ErrClientInvalid, name)
+	}
+	require.NoError(t, os.Remove(path))
+	err := ask(added, jtiA)
+	assert.Equal(t, errorx.KindUnavailable, errorx.KindOf(err), "a file that is gone")
+	assert.NotErrorIs(t, err, operator.ErrClientInvalid)
 }
 
 func TestParseServiceKeys(t *testing.T) {

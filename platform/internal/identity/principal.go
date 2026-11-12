@@ -3,6 +3,7 @@ package identity
 import (
 	"crypto/rsa"
 	"encoding/json"
+	"os"
 	"slices"
 
 	"github.com/go-jose/go-jose/v4"
@@ -107,6 +108,38 @@ func ParseServiceKeys(raw []byte) (ServiceKeys, error) {
 			}
 			keys[service] = append(keys[service], operator.Key{KID: kid, Algorithm: operator.KeyAlgorithm, Public: public})
 		}
+	}
+	return keys, nil
+}
+
+// KeySource answers each first-party service's public keys. It is
+// asked on every authentication (ADR-0129 item 2), so removing a
+// compromised key is an edit to the source and not a restart. An error
+// is the source's own failure, of the kind unavailable.
+type KeySource interface {
+	ServiceKeys() (ServiceKeys, error)
+}
+
+// FixedKeys is a [KeySource] that always answers keys.
+type FixedKeys ServiceKeys
+
+// ServiceKeys answers the keys the source holds.
+func (f FixedKeys) ServiceKeys() (ServiceKeys, error) { return ServiceKeys(f), nil }
+
+// KeysFile is a [KeySource] that reads and parses the file at the path
+// on every call. The file holds at most two keys a service, so the
+// read is small. A file that is gone or does not parse is unavailable.
+type KeysFile string
+
+// ServiceKeys reads and parses the file.
+func (f KeysFile) ServiceKeys() (ServiceKeys, error) {
+	raw, err := os.ReadFile(string(f))
+	if err != nil {
+		return nil, errorx.Wrap(err, "identity: service keys file", errorx.KindUnavailable)
+	}
+	keys, err := ParseServiceKeys(raw)
+	if err != nil {
+		return nil, errorx.Wrap(err, "identity: service keys file", errorx.KindUnavailable)
 	}
 	return keys, nil
 }

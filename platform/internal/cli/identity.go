@@ -62,12 +62,15 @@ const (
 	introspectionPathTail = "/oauth/introspect"
 )
 
-// identityServiceKeys reads the service keys file: each first-party
+// identityServiceKeys names the service keys file: each first-party
 // service's public keys, by service name. It returns nil where
 // GARAM_IDENTITY_SERVICE_KEYS_FILE is unset, and then no service
 // principal can authenticate: no service holds a key to ask with. The
-// file is read once, at start.
-func identityServiceKeys() (identity.ServiceKeys, error) {
+// file is read and parsed at start, which refuses one that does not
+// parse, and again on every authentication (ADR-0129 item 2), so a
+// changed or removed key takes no restart and a file that is gone or
+// unreadable later refuses every principal as unavailable.
+func identityServiceKeys() (identity.KeySource, error) {
 	file := envOr(envIdentityServiceKeysFile, "")
 	if file == "" {
 		return nil, nil
@@ -76,11 +79,10 @@ func identityServiceKeys() (identity.ServiceKeys, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, string(envIdentityServiceKeysFile), errorx.KindInvalidArgument)
 	}
-	keys, err := identity.ParseServiceKeys(raw)
-	if err != nil {
+	if _, err := identity.ParseServiceKeys(raw); err != nil {
 		return nil, errorx.Wrap(err, string(envIdentityServiceKeysFile))
 	}
-	return keys, nil
+	return identity.KeysFile(file), nil
 }
 
 // introspectionURL derives the URL an assertion names as its audience

@@ -78,6 +78,20 @@ cluster already holds; the value never passes through this chart.
 {{- end -}}
 
 {{/*
+The policy service's own DSN, read by `policy serve` and `policy
+migrate` alike. It keeps a database of its own (ADR-0130), so it takes
+no part in `database` above, and it names a Secret the cluster already
+holds.
+*/}}
+{{- define "garam.policyDatabaseEnv" -}}
+- name: POLICY_DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ required "policy.database.secretName is required: it names the Secret holding the policy service's connection string" .Values.policy.database.secretName }}
+      key: {{ required "policy.database.secretKey is required" .Values.policy.database.secretKey }}
+{{- end -}}
+
+{{/*
 The operator exchange's token endpoint (ADR-0102), read by `serve api`,
 which names it in every key it issues, and by `serve machine`, which
 compares every assertion's aud with it byte for byte. One value renders
@@ -185,7 +199,7 @@ default.
 Indented for a pod spec, the one depth all five workloads call it from.
 */}}
 {{- define "garam.serviceAccountName" -}}
-{{- with (index .root.Values .component "serviceAccount").name }}
+{{- with (index .root.Values (default .component .valuesKey) "serviceAccount").name }}
       serviceAccountName: {{ . }}
 {{- end }}
 {{- end -}}
@@ -193,10 +207,13 @@ Indented for a pod spec, the one depth all five workloads call it from.
 {{/*
 Rendered at the end of each workload's own file, so one workload's
 objects stay in one file. A caller whose workload is a hook passes the
-hook annotations that put its account in the same phase.
+hook annotations that put its account in the same phase. A component
+whose values sit under a key other than its label, because the label
+carries a hyphen a values key does not, names that key as `valuesKey`.
 */}}
 {{- define "garam.serviceAccount" -}}
-{{- $account := index .root.Values .component "serviceAccount" -}}
+{{- $key := default .component .valuesKey -}}
+{{- $account := index .root.Values $key "serviceAccount" -}}
 {{/*
 Annotations reach an account this chart creates, and there is nothing
 for them to reach when it creates none: under `create: false` the
@@ -206,14 +223,14 @@ never arrive. Refused rather than dropped — the annotation belongs
 wherever that account is created.
 */}}
 {{- if and (not $account.create) $account.annotations -}}
-{{- fail (printf "%s.serviceAccount.annotations is set with create: false. The chart renders no ServiceAccount under create: false, so these annotations would reach nothing: set them where that account is created, or set create: true." .component) -}}
+{{- fail (printf "%s.serviceAccount.annotations is set with create: false. The chart renders no ServiceAccount under create: false, so these annotations would reach nothing: set them where that account is created, or set create: true." $key) -}}
 {{- end -}}
 {{- if $account.create }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ required (printf "%s.serviceAccount.name is required when create is true: the chart composes no name, because another repository owns the role bound to this subject (ADR-0043)" .component) $account.name }}
+  name: {{ required (printf "%s.serviceAccount.name is required when create is true: the chart composes no name, because another repository owns the role bound to this subject (ADR-0043)" $key) $account.name }}
   labels:
     {{- include "garam.labels" . | nindent 4 }}
   {{- if or .hookAnnotations $account.annotations }}

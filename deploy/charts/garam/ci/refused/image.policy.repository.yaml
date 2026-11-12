@@ -1,0 +1,6 @@
+# An empty policy repository. The render must refuse and name
+# image.policy.repository: an empty one renders `image: :<tag>`, which
+# no registry resolves and helm lint accepts.
+image:
+  policy:
+    repository: ""

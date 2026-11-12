@@ -1,6 +1,6 @@
 # garam Helm Chart
 
-The description of how garam is deployed: the five workloads it runs,
+The description of how garam is deployed: the six workloads it runs,
 the ports they answer on, and every configuration value a deployment
 supplies.
 
@@ -14,6 +14,7 @@ supplies.
 - Exposure is the cluster owner's
 - Key material and secrets
 - Message signing keys in OpenBao Transit
+- The policy service
 - Delivering the policy feed
 - Pinning a version
 - What keeps it true
@@ -35,7 +36,7 @@ held nothing of this chart when it was read on 2026-08-25.
 
 ## What it renders
 
-Six workloads, a `ClusterIP` Service in front of each of the five that
+Eight workloads, a `ClusterIP` Service in front of each of the six that
 listen, and a `ServiceAccount` for each workload a deployment names one
 for (§Workload identities). Each workload's file renders all of its own
 objects:
@@ -45,6 +46,11 @@ objects:
   `/metrics` on 9091.
 - `templates/machine.yaml` — `serve machine`, mTLS on 8443, probes on
   8444.
+- `templates/policy.yaml` — `policy serve`, gRPC over TLS on 8443,
+  probes on 8091 (§The policy service).
+- `templates/policy-migrate.yaml` — `policy migrate`, a `pre-install`
+  and `pre-upgrade` hook, ordered and kept as `migrate.yaml`'s is. The
+  two databases are independent, so neither Job waits on the other.
 - `templates/web.yaml` — the Next.js console, port 3000.
 - `templates/site.yaml` — the Next.js site, the landing page and the way
   in (ADR-0131), port 3000.
@@ -106,7 +112,9 @@ Every workload can run as an account of its own, and **the chart creates
 none by default**. `<workload>.serviceAccount.name` is the account it
 runs as and `<workload>.serviceAccount.create` renders the object under
 that name; both are off until a deployment sets them, so the chart
-renders none, one, or six accounts and the values decide which.
+renders none, one, or eight accounts and the values decide which.
+`policy-migrate` is the one whose component label carries a hyphen a
+values key does not, so its values sit under `policyMigrate`.
 
 | Workload | Kind | Account name |
 |---|---|---|
@@ -114,6 +122,8 @@ renders none, one, or six accounts and the values decide which.
 | `authz` | Deployment | `authz.serviceAccount.name` |
 | `machine` | Deployment | `machine.serviceAccount.name` |
 | `migrate` | Job | `migrate.serviceAccount.name` |
+| `policy` | Deployment | `policy.serviceAccount.name` |
+| `policy-migrate` | Job | `policyMigrate.serviceAccount.name` |
 | `site` | Deployment | `site.serviceAccount.name` |
 | `web` | Deployment | `web.serviceAccount.name` |
 
@@ -178,9 +188,9 @@ the machine listener's own rather than one every pod in the namespace
 presents.
 
 `serve api` needs one when it reads a cloud-held secret of its own —
-Google sign-in is the pending case. `authz`, `web`, `site` and `migrate`
-read none, so a role bound to an account for any of them would grant
-what nothing asks for.
+Google sign-in is the pending case. `authz`, `web`, `site`, `migrate`,
+`policy` and `policy-migrate` read none, so a role bound to an account
+for any of them would grant what nothing asks for.
 
 Getting the machine listener's identity wrong fails in the right
 direction — the pod does not start, and restoring the identity fixes it.
@@ -196,12 +206,27 @@ which carries what the only remedy costs).
 `values.yaml` documents each. These have no default and the render
 fails without them:
 
-- `image.server.tag`, `image.web.tag`, `image.site.tag` — the version a
-  deployment runs is
+- `image.server.tag`, `image.web.tag`, `image.site.tag`,
+  `image.policy.tag` — the version a deployment runs is
   its own to name. A default would go on naming the release it was
   written against once the next one lands, with nothing in the chart
   changed to say so.
 - `database.secretName` — the Secret holding `GARAM_DATABASE_URL`.
+- `policy.database.secretName` — the Secret holding the policy
+  service's own `POLICY_DATABASE_URL`, read by `policy serve` and
+  `policy migrate` alike. The policy service keeps a database of its own
+  (ADR-0130), so `database.*` does not reach it.
+- `policy.jwks.secretName` — the Secret holding the JWKS file, the
+  public half of the platform's signing key, which `policy serve` reads
+  once at start (ADR-0138).
+- `policy.tls.secretName` — the Secret holding the policy service's
+  certificate and key (§The policy service).
+- `api.policy.tokenIssuer`, `api.policy.caSecretName` and
+  `api.policy.signingKeyFile` — the feed is always delivered, so what
+  it needs is always required (§Delivering the policy feed).
+  `api.policy.tokenIssuer` is also what `policy serve` trusts as
+  `POLICY_TOKEN_ISSUER`: one value renders both sides, so they cannot
+  disagree.
 - `machine.keyMaterial.secretName` — the Secret each of the machine
   listener's four key-material files is read from, less whichever of
   them names a Secret of its own (§Key material and secrets).
@@ -246,12 +271,13 @@ one-time code (ADR-0131), so the chart sets no cookie domain and the
 two hosts need not share a parent.
 
 **Each image carries the account it declares**, as `runAsUser` and
-`runAsGroup` under `image.server`, `image.web` and `image.site`. The
-defaults are what the two Dockerfiles build — 10001 for the server
-image, 1000 for the web images' `node` — and a deployment running either
-under another account moves the pair there rather than one pair per
-workload, because four of the five workloads run the server image. The
-machine pod takes the server pair for its `fsGroup` as well: the copy
+`runAsGroup` under `image.server`, `image.web`, `image.site` and
+`image.policy`. The defaults are what the Dockerfiles build — 10001
+for the server image and the policy image, 1000 for the web images'
+`node` — and a deployment running any under another account moves the
+pair there rather than one pair per workload, because four of the eight
+workloads run the server image. The machine pod takes the server pair
+for its `fsGroup` as well: the copy
 its init container makes has to be owned by the UID the container
 beside it reads under (§Key material and secrets).
 
@@ -292,6 +318,10 @@ startup — anything but an https URL with a host and no user
 information, query or fragment — and names the value. No private key
 passes through it: an operator's key stays the owner-only file
 `deployment-contract.md` §Operator key and enrollment rollout names.
+
+`policy.resources` reaches the policy pod's `tls` init container as
+well as its `policy` container, for the reason `machine.resources`
+below gives.
 
 `resources` is empty on every workload. No figure has been measured for
 any garam process and setting none is not neutral, both of which
@@ -382,7 +412,9 @@ Key material reaches a process as a file readable only by its owner
 projection satisfies neither half of that rule
 (`deployment-contract.md` §What the binary enforces about key material).
 `templates/machine.yaml` renders the shape that
-does satisfy it: an initContainer running as `image.server.runAsUser`
+does satisfy it, and `templates/policy.yaml` renders it again for the
+policy service's key (§The policy service). In the machine pod, an
+initContainer running as `image.server.runAsUser`
 copies the projected volume with `install -m 0600` onto a memory-backed
 `emptyDir`. That volume is projected `0440`, so the pod's `fsGroup` —
 `image.server.runAsGroup`, the same account — is what gives the copy a
@@ -463,17 +495,59 @@ stated in
   Agent's injector, is asked for; the chart renders no writer and no
   volume for one.
 
+## The policy service
+
+`templates/policy.yaml` deploys `policy serve` (ADR-0146), and
+`templates/policy-migrate.yaml` its migration as a hook, as
+`migrate.yaml` does the platform's. The service keeps a database of its
+own (ADR-0130), named by `policy.database`; `policy serve` applies no
+migration, so the Job runs before it.
+
+It serves gRPC over TLS on 8443 and in no other way (ADR-0138). Its
+probes answer in plaintext on 8091, which is why the Service names two
+ports: `/healthz` for liveness and `/readyz` for readiness, the latter
+with `timeoutSeconds: 3` because readiness is bounded at 2s inside the
+process.
+
+**The key file is not plain Secret projection.** The process refuses a
+key file it does not own or that any group or other bit is set on
+(ADR-0015), so the pod does as the machine pod does
+(§Key material and secrets): its `tls` init container, running the
+image `machine.copyImage` names, copies the pair out of a projected
+`0440` volume with `install -m 0600` onto a memory-backed `emptyDir`,
+and the pod's `fsGroup` is `image.policy.runAsGroup`. One image
+serves both pods rather than a second pinned digest.
+`policy.tls.secretName` names the Secret, `certKey` and `keyKey` the
+keys under it, and only those two keys are projected. The certificate
+must name the Service host `<release>-garam-policy`, which is the host
+the platform dials by default. Both files are read once at start, so a
+rotation is a rollout.
+
+**The JWKS is projected as it is.** `policy.jwks` names the Secret and
+the key of the file holding the public half of the platform's signing
+key, which `policy serve` reads once at start and trusts nothing
+besides. It is public, so it is not copied to an owner-only file. The
+chart does not create it: the deployment provides it, from the key
+`api.policy.signingKeyFile` names the private half of.
+
+`POLICY_TOKEN_ISSUER` is rendered from `api.policy.tokenIssuer`, the
+issuer `serve api` signs under, so the one value is both sides' and
+they cannot disagree. The listen and health addresses are fixed in the
+template, as every other workload's ports are.
+
 ## Delivering the policy feed
 
 `api.policy` holds where `serve api` delivers the policy feed and what
 it signs the delivery with
 ([ADR-0140](../../../docs/architecture/adr/0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)).
-It is off while `api.policy.address` is empty, and the render then
-carries none of its variables. The feed itself is off by default too,
-and an address with the feed off delivers nothing. Set, `tokenIssuer`,
-`caSecretName` and `signingKeyFile` are required and the render refuses
-without each, naming it: garam refuses to start holding part of the
-setting.
+The render always carries its variables, because this chart deploys the
+service they reach: `api.policy.address` is empty by default and then
+names the policy service this chart renders, `<release>-garam-policy`
+on 8443, and a deployment that runs the service elsewhere sets it. The
+feed itself is off by default, and an address with the feed off
+delivers nothing. `tokenIssuer`, `caSecretName` and `signingKeyFile` are
+required and the render refuses without each, naming it: garam refuses
+to start holding part of the setting.
 
 - **The CA** is read from the Secret `caSecretName` names, under
   `caKey`, and projected as it is: it is public.
@@ -493,16 +567,20 @@ mean something else. `Chart.yaml`'s `version` moves when the chart
 changes and names no garam version.
 
 The images are pinned separately, through `image.server.tag`,
-`image.web.tag` and `image.site.tag`. A release is a `vX.Y.Z` git tag
+`image.web.tag`, `image.site.tag` and `image.policy.tag`. A release is a
+`vX.Y.Z` git tag
 and the image tag is that tag with the `v` dropped; one commit publishes
 every image under one version, so a deployment pins one version across
 them (ADR-0039). A release tag is immutable, so the tag answers what is
 deployed on its own. Each image has one repository, `garam/server`,
-`garam/console` or `garam/site`, and a development build is in the same
+`garam/console`, `garam/site` or `garam/policy`, and a development build
+is in the same
 one, tagged by a commit prefix or `X.Y.Z-<prerelease>` rather than a
 bare version (ADR-0071,
 [ADR-0134](../../../docs/architecture/adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)),
 so running one sets the tag alone, and pins a build nobody released.
+No release publishes `garam/policy` yet, so `image.policy.tag` names a
+build nobody released until one does.
 
 **A digest is optional and names the bytes.** `image.server.digest` and
 `image.web.digest` render after the tag rather than in place of it —
@@ -540,8 +618,9 @@ covered and fails when a count is zero:
 - `chart-render` — `helm template` against each, so a template that
   cannot render fails, and the environment comparison above against the
   names the source reads: `envOr` in `platform/internal/cli/`, which
-  wraps the module's only `os.Getenv` call, and the schema in
-  `platform-web/src/env.ts`.
+  wraps the module's only `os.Getenv` call, the schema in
+  `platform-web/src/env.ts`, and the `required(...)` calls in
+  `policy/crates/server/src/config.rs`.
 - `chart-identity` — the identity comparison against
   §Workload identities. Every rendered Deployment and Job is a workload
   that table declares, every account the chart renders is one a workload
@@ -608,7 +687,12 @@ print.
   and refuses a name written at a call site instead of declared there.
   The web half is `platform-web/src/env.ts` parsed for its own shape,
   and it carries no such guard — a module reading `process.env` directly
-  would be a name this check never sees.
+  would be a name this check never sees. The policy half is the
+  `required("NAME")` calls in `config.rs`, and the target refuses a
+  second read of the environment (`std::env::var`) anywhere under
+  `policy/crates`, so a read outside `required` cannot hide a name. It
+  reads Rust source by pattern, which a macro building a name would
+  evade.
 - `chart-identity` is complete over **pod identity**: which account each
   Deployment and Job runs as, whether every account rendered is one a
   workload runs as, and whether either moves when the release name

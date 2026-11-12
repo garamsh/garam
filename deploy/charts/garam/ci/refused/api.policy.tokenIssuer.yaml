@@ -1,0 +1,7 @@
+# No issuer. The render must refuse and name api.policy.tokenIssuer: the
+# platform signs its calls under it and the policy service refuses
+# every token that does not name it, so one value renders both
+# (ADR-0138).
+api:
+  policy:
+    tokenIssuer: ""

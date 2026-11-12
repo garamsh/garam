@@ -8,8 +8,25 @@ image:
     tag: "0.0.0-ci"
   site:
     tag: "0.0.0-ci"
+  policy:
+    tag: "0.0.0-ci"
 database:
   secretName: garam-database
+# The policy service and the feed to it, which every deployment runs
+# (ADR-0146): the three Secrets the service reads, and the three values
+# the platform signs and verifies its calls with.
+policy:
+  database:
+    secretName: garam-policy-database
+  jwks:
+    secretName: garam-policy-jwks
+  tls:
+    secretName: garam-policy-tls
+api:
+  policy:
+    tokenIssuer: https://garam.example
+    caSecretName: garam-policy-ca
+    signingKeyFile: /vault/secrets/policy-signing-key
 machine:
   keyMaterial:
     secretName: garam-machine-key-material

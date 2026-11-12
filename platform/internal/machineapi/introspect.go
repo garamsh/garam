@@ -9,20 +9,23 @@ import (
 )
 
 // WithIdentity has the server answer introspection of the tokens
-// issuer signed (ADR-0141) to the services callers authenticates.
-// Without it the operation answers 404 as any path the listener has no
-// route for does.
-func (s *Server) WithIdentity(issuer *identity.Issuer, callers *identity.Callers) *Server {
-	s.issuer, s.callers = issuer, callers
+// issuer signed (ADR-0141) to the service principals principals
+// authenticates, and exchange a principal's assertion for the issuer's
+// token (ADR-0129). Without either the introspection answers 404 as
+// any path the listener has no route for does, and the exchange refuses
+// a principal as unavailable.
+func (s *Server) WithIdentity(issuer *identity.Issuer, principals *identity.Principals) *Server {
+	s.issuer, s.principals = issuer, principals
 	return s
 }
 
 // IntrospectIssuedToken answers RFC 7662's introspection of a token
-// garam issued, to the service it was issued for. The caller
+// garam issued, to the service principal of the audience it was issued
+// for. The caller
 // authenticates by `private_key_jwt` and so reads no identity off the
 // request otherwise, as the client assertion exchange does.
 func (s *Server) IntrospectIssuedToken(w http.ResponseWriter, r *http.Request) {
-	if s.issuer == nil || s.callers == nil {
+	if s.issuer == nil || s.principals == nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -45,12 +48,15 @@ func (s *Server) IntrospectIssuedToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	audience, err := s.callers.Authenticate(form.Get("client_id"), form.Get("client_assertion"))
+	principal, err := s.principals.Authenticate(r.Context(), identity.RouteIntrospect,
+		sourceOf(r), form.Get("client_id"), form.Get("client_assertion"))
 	if err != nil {
 		writeOAuthError(w, err)
 		return
 	}
-	claims, active, err := s.issuer.Introspect(r.Context(), audience, form.Get("token"))
+	// A principal reads the tokens of the audience its service's name
+	// is, and no other's.
+	claims, active, err := s.issuer.Introspect(r.Context(), principal.Service, form.Get("token"))
 	if err != nil {
 		writeOAuthError(w, err)
 		return

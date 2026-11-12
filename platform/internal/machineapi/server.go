@@ -65,10 +65,12 @@ type Server struct {
 	// credentialAudit records every credential issued, renewed or
 	// refused (ADR-0114); nil records nothing.
 	credentialAudit CredentialAudit
-	// issuer and callers answer introspection of the tokens garam
-	// signs as an OIDC issuer (ADR-0141); nil answers 404.
-	issuer  *identity.Issuer
-	callers *identity.Callers
+	// issuer and principals answer introspection of the tokens garam
+	// signs as an OIDC issuer (ADR-0141) and exchange a service
+	// principal's assertion for one (ADR-0129); nil answers 404 or
+	// 503.
+	issuer     *identity.Issuer
+	principals *identity.Principals
 }
 
 // Rechecker reads again, for one decision, what admitted the caller's

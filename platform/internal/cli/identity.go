@@ -18,10 +18,19 @@ import (
 // alone has no issuer. An issuer set with no key is logged rather than
 // refused for the same reason, since the key's absence is the setting
 // that says off.
+//
+// The policy service trusts one issuer, so a deployment that names both
+// this identity and GARAM_POLICY_TOKEN_ISSUER names the same one
+// (ADR-0129 item 3): the two set and different is refused here, before
+// the key is read.
 func identityIssuer(sessions identity.Sessions, logger *slog.Logger) (*identity.Issuer, error) {
 	raw, keyFile := envOr(envIdentityIssuer, ""), envOr(envPolicySigningKeyFile, "")
 	if raw == "" {
 		return nil, nil
+	}
+	if feed := envOr(envPolicyTokenIssuer, ""); feed != "" && feed != raw {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			string(envIdentityIssuer)+" and "+string(envPolicyTokenIssuer)+" are both set and differ: the policy service trusts one issuer")
 	}
 	if keyFile == "" {
 		logger.Warn(string(envIdentityIssuer) + " is set and " + string(envPolicySigningKeyFile) +
@@ -53,30 +62,38 @@ const (
 	introspectionPathTail = "/oauth/introspect"
 )
 
-// identityCallers reads the service keys file into what authenticates
-// a service at introspection. endpoint is the URL an assertion names as
-// its audience, derived from the machine token endpoint: one listener
-// serves both, and the introspection URL is the token URL with its
-// /oauth/token replaced by /oauth/introspect. It returns nil where
-// GARAM_IDENTITY_SERVICE_KEYS_FILE is unset, which serves no
-// introspection: no service holds a key to ask with.
-func identityCallers(tokenURL string) (*identity.Callers, error) {
+// identityServiceKeys names the service keys file: each first-party
+// service's public keys, by service name. It returns nil where
+// GARAM_IDENTITY_SERVICE_KEYS_FILE is unset, and then no service
+// principal can authenticate: no service holds a key to ask with. The
+// file is read and parsed at start, which refuses one that does not
+// parse, and again on every authentication (ADR-0129 item 2), so a
+// changed or removed key takes no restart and a file that is gone or
+// unreadable later refuses every principal as unavailable.
+func identityServiceKeys() (identity.KeySource, error) {
 	file := envOr(envIdentityServiceKeysFile, "")
 	if file == "" {
 		return nil, nil
-	}
-	endpoint, ok := strings.CutSuffix(tokenURL, machineTokenPath)
-	if !ok {
-		return nil, errorx.New(errorx.KindInvalidArgument,
-			string(envMachineTokenURL)+" ends in "+machineTokenPath+" where "+string(envIdentityServiceKeysFile)+" is set")
 	}
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		return nil, errorx.Wrap(err, string(envIdentityServiceKeysFile), errorx.KindInvalidArgument)
 	}
-	callers, err := identity.ParseCallers(raw, endpoint+introspectionPathTail, nil)
-	if err != nil {
+	if _, err := identity.ParseServiceKeys(raw); err != nil {
 		return nil, errorx.Wrap(err, string(envIdentityServiceKeysFile))
 	}
-	return callers, nil
+	return identity.KeysFile(file), nil
+}
+
+// introspectionURL derives the URL an assertion names as its audience
+// at introspection from the machine token endpoint: one listener serves
+// both, and the introspection URL is the token URL with its
+// /oauth/token replaced by /oauth/introspect.
+func introspectionURL(tokenURL string) (string, error) {
+	origin, ok := strings.CutSuffix(tokenURL, machineTokenPath)
+	if !ok {
+		return "", errorx.New(errorx.KindInvalidArgument,
+			string(envMachineTokenURL)+" ends in "+machineTokenPath+" where "+string(envIdentityServiceKeysFile)+" is set")
+	}
+	return origin + introspectionPathTail, nil
 }

@@ -108,6 +108,18 @@ func (s *Server) SetStatus(t *testing.T, name string, status api.MicroVMStatus) 
 	s.store("microvms", name, &m, &m.Metadata)
 }
 
+// RemoveVolume removes a Volume as a person would, outside the
+// requests the operator made.
+func (s *Server) RemoveVolume(t *testing.T, name string) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.objects["volumes"][name]; !ok {
+		t.Fatalf("gaonfake: no volume %q to remove", name)
+	}
+	delete(s.objects["volumes"], name)
+}
+
 func load[T any](t *testing.T, s *Server, kind, name string) (T, bool) {
 	t.Helper()
 	s.mu.Lock()

@@ -309,6 +309,31 @@ func TestReconcile_AStoppedAgentWithNoMicroVMIsNotStarted(t *testing.T) {
 	assert.Empty(t, h.garam.minted)
 }
 
+func TestReconcile_AMissingVolumeOfAnExistingMicroVMIsNotMadeAgain(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	h.feed.set(d)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	name := objectName(t, d)
+	h.gaon.SetStatus(t, name, api.MicroVMStatus{Phase: api.MicroVMRunning, Conditions: []api.Condition{{Type: "Ready", Status: api.ConditionTrue}}})
+	h.gaon.RemoveVolume(t, name+"-memory")
+	before, _ := h.gaon.MicroVM(t, name)
+	puts := h.gaon.Count("PUT", "volumes") + h.gaon.Count("PUT", "microvms") + h.gaon.Count("PUT", "secrets")
+	reports := len(h.garam.reported())
+	h.restart()
+
+	err := h.svc.Reconcile(t.Context())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), name+"-memory")
+	assert.Equal(t, puts, h.gaon.Count("PUT", "volumes")+h.gaon.Count("PUT", "microvms")+h.gaon.Count("PUT", "secrets"), "nothing is written")
+	_, remade := h.gaon.Volume(t, name+"-memory")
+	assert.False(t, remade)
+	after, _ := h.gaon.MicroVM(t, name)
+	assert.Equal(t, before, after, "the microvm is left as it was")
+	assert.Len(t, h.garam.reported(), reports, "no ready is sent")
+}
+
 func TestReconcile_AnAgentThatLeftTheFeedIsHaltedAndKept(t *testing.T) {
 	h := newHarness(t)
 	d := desired("a1")

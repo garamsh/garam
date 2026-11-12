@@ -160,16 +160,31 @@ func (s *service) reconcileAgent(ctx context.Context, d Desired, snap *snapshot)
 	if m == nil && d.Stopped {
 		return nil
 	}
+	// A Volume is the agent's memory and is removed only by a person
+	// (ADR-0151 §3). Where the MicroVM exists, a Volume that is missing
+	// is never made again under its name: the agent would start on an
+	// empty memory with nothing said.
+	volumes := map[string]api.Quantity{n.memory: d.MemoryStorage, n.workspace: d.WorkspaceStorage}
+	if m != nil {
+		for _, name := range []string{n.memory, n.workspace} {
+			if snap.volumes[name] == nil {
+				return errorx.New(errorx.KindFailedPrecondition,
+					"volume "+name+" is missing and its microvm exists; nothing is created for the agent")
+			}
+		}
+	}
 	secret, err := s.ensureSecret(ctx, d, snap)
 	if err != nil {
 		return err
 	}
-	for name, size := range map[string]api.Quantity{n.memory: d.MemoryStorage, n.workspace: d.WorkspaceStorage} {
-		if snap.volumes[name] != nil {
-			continue
-		}
-		if _, err := s.cluster.PutVolume(ctx, volumeFor(name, d, size)); err != nil {
-			return errorx.Wrap(err, "put volume "+name)
+	if m == nil {
+		for _, name := range []string{n.memory, n.workspace} {
+			if snap.volumes[name] != nil {
+				continue
+			}
+			if _, err := s.cluster.PutVolume(ctx, volumeFor(name, d, volumes[name])); err != nil {
+				return errorx.Wrap(err, "put volume "+name)
+			}
 		}
 	}
 	if m == nil {

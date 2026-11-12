@@ -36,6 +36,11 @@ loses.
   in the `Secret`. The MicroVM's files take them with
   `valueFrom.secretKeyRef`, mode 0400, owner 65532; no file carries
   inline content.
+- **Volumes are made once.** They are created only where the agent has
+  no MicroVM yet. Where the MicroVM exists and a Volume is missing, the
+  operator creates nothing for that agent, returns an error naming the
+  Volume and reports no state: a Volume is removed only by a person
+  (ADR-0151 §3).
 - **Mint once.** A Secret that exists is never minted over. One that is
   missing is minted again, which is what makes a restart lose nothing.
 - **Report.** `observe` maps a MicroVM to `provisioned`, `ready` or

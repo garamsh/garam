@@ -94,13 +94,13 @@ async fn a_key_that_is_not_the_certificates_stops_the_service() {
     let stopped = serve(
         unreachable_pool(),
         verifier(),
-        tonic::transport::Identity::from_pem(&certificate.cert, &another.key),
+        server::Identity::from_pem(&certificate.cert, &another.key),
         bound.listeners,
         std::future::pending(),
     )
     .await;
 
-    assert!(matches!(stopped, Err(Error::Transport(_))), "{stopped:?}");
+    assert!(matches!(stopped, Err(Error::Tls(_))), "{stopped:?}");
 }
 
 #[tokio::test]

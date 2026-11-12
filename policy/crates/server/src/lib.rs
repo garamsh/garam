@@ -1,10 +1,12 @@
-//! The policy service: serves `garam.policy.v1`, authenticates its
-//! callers, and is the only crate joining adapters to ports.
+//! The policy service: serves `garam.policy.v1` and AuthZEN's HTTP
+//! binding, authenticates its callers, and is the only crate joining
+//! adapters to ports.
 
 mod caller;
 mod config;
 mod entity_changes;
 mod entity_sink;
+mod http;
 mod policy_service;
 mod probes;
 mod status;
@@ -17,17 +19,18 @@ use entity::EntityStore;
 use grant::PolicyStore;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use tls::Incoming;
 use tokio::net::TcpListener;
-use tokio_stream::wrappers::TcpListenerStream;
+use tonic::service::Routes;
 use tonic::service::interceptor::InterceptedService;
-use tonic::transport::{Identity, Server, ServerTlsConfig};
+use tonic::transport::Server;
 
 pub use caller::{Caller, KeysError, Principal, Refusal, Verifier};
 pub use config::{Config, ConfigError, database_url};
 pub use entity_sink::EntitySink;
 pub use policy_service::Service;
 pub use probes::{ProbeError, probe};
-pub use tls::{TlsError, load_identity};
+pub use tls::{Identity, TlsError, load_identity};
 
 /// The generated contract.
 pub mod proto {
@@ -48,6 +51,9 @@ pub enum Error {
     /// The migrations do not apply.
     #[error("the migrations do not apply")]
     Migration(#[source] sqlx::migrate::MigrateError),
+    /// The certificate and key do not make a listener's identity.
+    #[error(transparent)]
+    Tls(TlsError),
     /// The server failed.
     #[error("the server failed")]
     Transport(#[source] tonic::transport::Error),
@@ -113,11 +119,16 @@ pub async fn serve(
         PolicyStore::new(pool.clone()),
         EntityStore::new(pool.clone(), engine),
     );
-    let contract = Server::builder()
-        .tls_config(ServerTlsConfig::new().identity(identity))
-        .map_err(Error::Transport)?
-        .add_service(authenticated(service, verifier))
-        .serve_with_incoming_shutdown(TcpListenerStream::new(listeners.contract), shutdown);
+    let incoming = Incoming::new(listeners.contract, identity.acceptor().map_err(Error::Tls)?);
+    // The binding's routes join the contract's beside it: one listener,
+    // one TLS, and the same service and verifier behind both.
+    let routes = Routes::new(authenticated(service.clone(), verifier.clone()))
+        .into_axum_router()
+        .merge(http::router(service, verifier));
+    let mut server = Server::builder().accept_http1(true);
+    let contract = server
+        .add_routes(Routes::from(routes))
+        .serve_with_incoming_shutdown(incoming, shutdown);
     tokio::select! {
         served = contract => served.map_err(Error::Transport),
         answered = probes::answer(listeners.probes, pool) => answered.map_err(Error::Probes),

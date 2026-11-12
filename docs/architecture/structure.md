@@ -99,6 +99,12 @@ on are boundaries inside a service.
   publishes**: its API specification, or a library in `lib/`. Reaching
   into another service's `internal/` or its database is a
   defect, even where it builds.
+- **`gaon-operator/` is proposed and not yet created**
+  ([ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)): an operator that runs managed agents as MicroVMs
+  on a gaon cluster, with a module of its own, the binary
+  `cmd/gaon-operator` and the image `garam/gaon-operator`. A service's
+  folder is created by its first pull request, which also adds the
+  module to `go.work` and `tooling/ci/modules`.
 - **Dependencies point toward `platform/`**, and none points back.
   `policy/` (ADR-0130, built in part) sits below it: the platform and
   cowork are to call `policy/`, and `policy/` calls no service.

@@ -92,6 +92,19 @@ registering grants nothing and this withdraws what an operator runs on
 the seams that admit a token, which are the one place either listener
 reads it to decide whether a caller is admitted.
 
+## The gaon operator
+
+Unbuilt, and proposed by [ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md): a second operator, in this
+repository, that runs each managed agent as one MicroVM on a gaon
+cluster. It is an operator in this document's sense, so everything
+above and below holds for it: it holds a garam-issued key, exchanges an
+assertion for a token, calls the machine listener, and garam dials no
+cluster. It is registered as a pair, its own cluster manager and a
+control service whose registration names it, and it reports
+provisioning state from what it observes of the MicroVM.
+`garamsh/garam-agent-operator` stays the Kubernetes operator; this one
+is not a port of it.
+
 ## An Operator's two identities
 
 An Operator is a cluster manager and at most one control service,

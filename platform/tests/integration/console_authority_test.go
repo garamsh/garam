@@ -441,8 +441,10 @@ func TestMigration000032_ReappliesOverRowsARollbackKept(t *testing.T) {
 	assert.False(t, dirty)
 	assert.Equal(t, 1, storedRows(t, p, schema), "no row is deleted")
 
-	assert.Error(t, store("new-without", "iam:agent-template-read", ""), "a new row breaking 000032's checks is refused")
-	assert.NoError(t, store("new-with", "iam:agent-template-read", "/v1/orgs/mig/templates"),
+	// The schema is at 000032 again, whose checks name an operation as
+	// it was before 000071, so these rows are written that way.
+	assert.Error(t, store("new-without", "agent-template:read", ""), "a new row breaking 000032's checks is refused")
+	assert.NoError(t, store("new-with", "agent-template:read", "/v1/orgs/mig/templates"),
 		"the control: a new row satisfying them")
 	require.NoError(t, m.Up(), "000033 applies again too")
 }

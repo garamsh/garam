@@ -1262,7 +1262,9 @@ ADRs:
   — the policy service records every write of a policy, kept as long as
   its organization exists, and every denial, removed 90 days after it
   was last made, in its own database and for the organization of the
-  resource; an allowed decision is not recorded; identical denials in
+  resource; an allowed decision and a denied probe, a question a
+  caller states it asked to decide what to show, are not recorded;
+  identical denials in
   an hour collapse into one record with a count and an organization
   holds at most 10,000 live denial records, with a per-day overflow
   record beyond; an organization's owners and administrators read them

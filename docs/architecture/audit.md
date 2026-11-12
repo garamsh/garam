@@ -105,7 +105,10 @@ of its own. The platform's database holds none of it, and
   rolled back, removed) is recorded in the transaction of the write and
   kept as long as its organization exists.
 - **Every denial** is recorded and removed 90 days after its last
-  occurrence. An allowed decision is not recorded.
+  occurrence. An allowed decision is not recorded, and neither is a
+  denied probe: a question a caller states it asked to decide what to
+  show, as in filtering a list. A question that does not say is an
+  attempt and is recorded.
 - **A record belongs to the organization of the resource decided on**
   and goes with it. A denial for an organization the service does not
   hold is not recorded.

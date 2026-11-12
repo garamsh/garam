@@ -75,6 +75,18 @@ days, and an organization's owners and administrators read them.**
    refused before any decision (a caller the service does not know, a
    caller asking outside its service) is not a decision and is not
    recorded.
+   - **A denied probe is not recorded.** A question says whether it is
+     an attempt, a request someone made and was refused, or a probe, a
+     caller deciding what to show, such as filtering a list or
+     enabling a control. An attempt is the default, so a question that
+     says nothing is recorded when denied. A denied probe is not
+     recorded, and an allowed one never is. The callers are the closed
+     list of services (ADR-0140), and which of a caller's questions
+     are probes is that caller's to state in its own code, where it is
+     reviewed. Without this a list filtered through `Evaluations`, as
+     cowork's pages and the console's controls are, would make most of
+     the record and reach item 7's cap in ordinary use. The contract
+     leaves open only how a request carries the statement.
    - **What removes it.** The policy service itself, on a schedule it
      runs in `policy serve`, deleting every denial record whose
      `last_at` is more than 90 days before the database's clock. The
@@ -125,7 +137,11 @@ days, and an organization's owners and administrators read them.**
      and the `count` of item 7, all on the database's clock;
    - who: the subject's GRN and the calling service's `sub` (ADR-0140
      item 1). For a write the subject is the writer the platform
-     names, which `created_by` holds today;
+     names, which `created_by` holds today. A write the platform makes
+     as itself with no writer, as it writes a member's role link from
+     the memberships (#1799, ADR-0146), is recorded with the calling
+     service and no subject. Whether the platform names who changed
+     the membership is open;
    - the action, in its qualified wire form (`iam:permit.write`,
      ADR-0145);
    - the resource's GRN: for a write, the policy's;
@@ -220,11 +236,12 @@ days, and an organization's owners and administrators read them.**
 - **A denial costs a write on the answering path.** Collapse makes the
   common loop one upsert, and whether the answer waits for the write
   is the implementation's, since the answer is the same either way.
-- **A list that filters by asking `Evaluations` writes a denial for
-  every object it drops.** That is what "every denial" says, and the
-  collapse and the cap are what keep it from filling the store. Whether
-  a filtering ask should be recorded is left to the first use that
-  shows it (Signs the decision was wrong).
+- **A list that filters by asking `Evaluations` records nothing for
+  the objects it drops,** since its caller states those questions are
+  probes (item 2). The record is of attempts, and the cap is not
+  spent on what a caller decided to show. A caller that fails to state
+  a probe records its denials as attempts, and the collapse and the cap
+  bound that.
 - **A record can be lost, and a write's cannot.** A denial's write
   that fails, or that the cap refuses, is gone and is counted. A
   policy write and its record commit together.
@@ -243,8 +260,8 @@ days, and an organization's owners and administrators read them.**
 - An organization needs to see an allowed decision, which would argue
   for recording more than this does and for a different bound.
 - The overflow record appears for an organization in ordinary use, so
-  the cap of 10,000 is too small to keep the record useful, or list
-  filtering is filling it with denials no one wants.
+  the cap of 10,000 is too small to keep the record useful, or probes
+  a caller did not state are filling it with denials no one wants.
 - A denial is needed after 90 days to answer an investigation, which
   would argue for a longer window or for keeping denials of one kind.
 - A record is found for an organization the service does not hold, or

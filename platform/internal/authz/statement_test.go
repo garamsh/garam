@@ -6,11 +6,12 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/garamsh/garam/platform/internal/authz"
+	"github.com/garamsh/garam/platform/internal/org"
 )
 
 // matchResource is a literal every case below matches on, so that only
 // the action pattern under test decides the result.
-const matchResource = "grn:root:default:org:acme"
+const matchResource = "grn:root/iam/org/acme"
 
 // TestStatementMatches_LiteralPatternNeverBacktracks pins the guard on
 // the matcher's backtracking branch: a pattern holding no `*` has
@@ -63,20 +64,20 @@ func TestStatementMatches_Wildcards(t *testing.T) {
 		value   string
 		want    bool
 	}{
-		{"star alone matches anything", "*", "org:read", true},
+		{"star alone matches anything", "*", "iam:org.read", true},
 		{"star alone matches the empty value", "*", "", true},
-		{"trailing star matches the rest", "org:*", "org:member-list", true},
-		{"trailing star matches an empty rest", "org:*", "org:", true},
-		{"trailing star does not cross its literal prefix", "org:*", "group:read", false},
-		{"leading star matches a suffix", "*:read", "project:read", true},
+		{"trailing star matches the rest", "iam:org.*", "iam:org.member-list", true},
+		{"trailing star matches an empty rest", "iam:org.*", "iam:org.", true},
+		{"trailing star does not cross its literal prefix", "iam:org.*", "iam:group.read", false},
+		{"leading star matches a suffix", "*.read", "iam:project.read", true},
 		{"question matches exactly one byte", "or?", "org", true},
 		{"question does not match zero bytes", "or?", "or", false},
 		{"question does not match two bytes", "or?", "orgs", false},
 		{"interior star backtracks to a later match", "a*bc", "abxbc", true},
 		{"interior star fails when no offset works", "a*bc", "abxbd", false},
 		{"two interior stars both backtrack", "a*b*c", "axxbyyc", true},
-		{"star does not excuse a missing literal tail", "org:*-list", "org:member", false},
-		{"empty pattern matches only the empty value", "", "org:read", false},
+		{"star does not excuse a missing literal tail", "iam:org.*-list", "iam:org.member", false},
+		{"empty pattern matches only the empty value", "", "iam:org.read", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -93,12 +94,42 @@ func TestStatementMatches_Wildcards(t *testing.T) {
 // are the conjunction and not a statement that matches nothing.
 func TestStatementMatches_RequiresBothActionAndResource(t *testing.T) {
 	st := authz.Statement{
-		Action:   []string{"org:read", "org:update"},
-		Resource: []string{"grn:root:default:org:acme", "grn:acme:*"},
+		Action:   []string{"iam:org.read", "iam:org.update"},
+		Resource: []string{"grn:root/iam/org/acme", "grn:acme/*"},
 	}
-	assert.True(t, st.Matches("org:read", "grn:root:default:org:acme"), "first entry of each list")
-	assert.True(t, st.Matches("org:update", "grn:acme:default:project:web"), "last entry of each list")
-	assert.False(t, st.Matches("org:delete", "grn:root:default:org:acme"), "action matches no entry")
-	assert.False(t, st.Matches("org:read", "grn:globex:default:org:other"), "resource matches no entry")
-	assert.False(t, authz.Statement{}.Matches("org:read", "grn:root:default:org:acme"), "no patterns at all")
+	assert.True(t, st.Matches("iam:org.read", "grn:root/iam/org/acme"), "first entry of each list")
+	assert.True(t, st.Matches("iam:org.update", "grn:acme/iam/project/web"), "last entry of each list")
+	assert.False(t, st.Matches("iam:org.delete", "grn:root/iam/org/acme"), "action matches no entry")
+	assert.False(t, st.Matches("iam:org.read", "grn:globex/iam/org/other"), "resource matches no entry")
+	assert.False(t, authz.Statement{}.Matches("iam:org.read", "grn:root/iam/org/acme"), "no patterns at all")
+}
+
+// TestStatementMatches_ATypeGroupNamesItsTypeAndNoPrefixOfIt pins what
+// ADR-0145 item 2 rests on, under the platform's own evaluator: a
+// `<type>.*` pattern is the type's actions and no other type's, though
+// `agent-template` begins with `agent` and `permit` is not `policy`.
+// Under the hyphen form, `iam:agent-*` reached `iam:agent-template-
+// publish` and the administrator's `iam:policy-*` reached
+// `iam:policy-permit`, the right only an owner holds.
+//
+// Each refusal has its control: the pattern matches an action of its
+// own type, so the refusal is the dot and not a pattern that matches
+// nothing.
+func TestStatementMatches_ATypeGroupNamesItsTypeAndNoPrefixOfIt(t *testing.T) {
+	const resource = "grn:root/iam/org/acme"
+	matches := func(patterns []string, action string) bool {
+		return authz.Statement{Action: patterns, Resource: []string{resource}}.Matches(action, resource)
+	}
+
+	admin := org.RoleAdmin.Actions()
+	assert.True(t, matches(admin, "iam:policy.create"), "control: an administrator's own group")
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.False(t, matches(r.Actions(), "iam:permit.write"), "%s: only the policy service's owner role holds it", r)
+	}
+
+	agent := []string{"iam:agent.*"}
+	assert.False(t, matches(agent, "iam:agent-template.publish"))
+	assert.False(t, matches(agent, "iam:agent-template.read"))
+	assert.True(t, matches(agent, "iam:agent.read"), "control: an action of type agent")
+	assert.True(t, matches(agent, "iam:agent.execution-read"), "control: a hyphenated verb")
 }

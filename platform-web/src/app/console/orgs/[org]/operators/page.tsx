@@ -31,7 +31,7 @@ type Params = {
  * ADR-0102).
  *
  * Every role reads the list; connecting starts by registering, which is
- * `operator:register`. The page asks the server once and leaves the
+ * `iam:operator.register`. The page asks the server once and leaves the
  * control out only where the answer is a denial, so a check that could
  * not be asked still offers it and the API refuses whoever holds only
  * the read. `?connect` opens the dialog, which is where an operator's
@@ -41,7 +41,7 @@ type Params = {
  *
  * What each operator reports running and when it last made contact is
  * the hosted operator's control service's to answer (#1047), read in
- * the browser under `operator:read`, and left out only where the
+ * the browser under `iam:operator.read`, and left out only where the
  * server denies the caller that read.
  */
 export default async function OperatorsPage({ params, searchParams }: Params) {
@@ -50,8 +50,8 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
     lookupOperators(org),
     listHostedOperators(org),
     checkPermissions(org, {
-      register: { action: "operator:register" },
-      readReports: { action: "operator:read" },
+      register: { action: "iam:operator.register" },
+      readReports: { action: "iam:operator.read" },
     }),
   ]);
   const operatorsHref = orgHref(org, "operators");

@@ -7,7 +7,8 @@
 -- A registered caller with every column NULL has not authenticated
 -- since evidence began to be kept: an idle caller G3 has to name. One
 -- whose registered column is false was deleted while its organization
--- remained, and its row is the evidence that it stopped.
+-- remained, and its row is the evidence that it stopped; its cohort is
+-- 'unregistered', since no SQL reads a type off a GRN.
 -- last_certificate is a sighting an earlier release recorded: garam
 -- accepts no certificate since ADR-0118, so nothing writes one now.
 -- Nothing here reads a credential: the table holds none.
@@ -32,7 +33,7 @@ evidence AS (
     FROM machine_authentication_evidence
     GROUP BY caller_grn
 )
-SELECT COALESCE(c.cohort, split_part(ev.caller_grn, ':', 4)) AS cohort,
+SELECT COALESCE(c.cohort, 'unregistered')                     AS cohort,
        COALESCE(c.caller_grn, ev.caller_grn)                  AS caller_grn,
        c.caller_grn IS NOT NULL                               AS registered,
        ev.last_certificate,

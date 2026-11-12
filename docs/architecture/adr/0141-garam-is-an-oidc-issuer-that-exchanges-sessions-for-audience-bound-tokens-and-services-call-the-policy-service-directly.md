@@ -1,7 +1,17 @@
 # ADR 0141: garam is an OIDC issuer that exchanges sessions for audience-bound tokens, and services call the policy service directly
 
-> Status: accepted; unbuilt. The issuer, the exchange, introspection
-> and a service's direct calls are decided and none is built
+> Status: accepted; partly built. The issuer, the exchange of a CLI
+> session and introspection are built (#1757); cowork's direct calls
+> are built in cowork, which asks and feeds the policy service where
+> its settings are set and the platform otherwise (#1758); the
+> exchange of an agent's browser token and the direct calls of every
+> other service are decided and not built;
+> superseded in part by
+> [ADR-0142](./0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)
+> (the GRN forms of worked-example answers 4 and 5)
+> and by [ADR-0143](./0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
+> (§5 and §13, how the list of services is held and that an ADR adds
+> one)
 > Date: 2026-11-11
 
 Drafted for #1754, which reserves this number and holds the owner's

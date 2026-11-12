@@ -4,6 +4,7 @@ use cedar_policy::{EntityId, EntityTypeName, EntityUid, ParseErrors};
 use decision::Engine;
 use entity::EntityChange;
 
+use crate::caller::Principal;
 use crate::proto;
 use crate::proto::entity_change::Operation;
 
@@ -68,6 +69,37 @@ pub(crate) fn parse(engine: &Engine, change: &proto::EntityChange) -> Result<Ent
         Some(Operation::Delete(_)) => Ok(EntityChange::delete(entity, change.sequence)),
         None => Err(Fault::Missing("operation")),
     }
+}
+
+/// Whether a change stays inside the organization a scoped caller is
+/// bound to: its entity, its `members` and every parent are that
+/// organization's, and its `org` is that organization's own `Org`. A
+/// reference that does not parse is not judged here: [`parse`] refuses
+/// that change by itself, and nothing of it is written.
+pub(crate) fn within(principal: &Principal, change: &proto::EntityChange) -> bool {
+    let Some(org) = principal.org() else {
+        return true;
+    };
+    let Some(entity) = change.entity.as_ref().and_then(|entity| uid(entity).ok()) else {
+        return true;
+    };
+    if !principal.admits(&entity) {
+        return false;
+    }
+    let Some(Operation::Upsert(upsert)) = change.operation.as_ref() else {
+        return true;
+    };
+    let names_org = |reference: &proto::EntityRef| {
+        uid(reference).map_or(true, |named| {
+            named.type_name().to_string() == "Iam::Org" && named.id().unescaped() == org.as_str()
+        })
+    };
+    let admitted = |reference: &proto::EntityRef| {
+        uid(reference).map_or(true, |named| principal.admits(&named))
+    };
+    upsert.org.as_ref().is_none_or(names_org)
+        && upsert.members.as_ref().is_none_or(admitted)
+        && upsert.parents.iter().all(admitted)
 }
 
 fn uid(entity: &proto::EntityRef) -> Result<EntityUid, Fault> {

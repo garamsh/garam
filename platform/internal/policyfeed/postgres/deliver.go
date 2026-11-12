@@ -161,10 +161,10 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 	}
 	state := &policyfeed.State{Parents: make([]policyfeed.Entity, len(types))}
 	if org != nil {
-		state.Org = &policyfeed.Entity{Type: "Org", ID: *org}
+		state.Org = &policyfeed.Entity{Type: "Iam::Org", ID: *org}
 	}
 	if members != nil {
-		state.Members = &policyfeed.Entity{Type: "OrgMembers", ID: *members}
+		state.Members = &policyfeed.Entity{Type: "Iam::OrgMembers", ID: *members}
 	}
 	for i := range types {
 		state.Parents[i] = policyfeed.Entity{Type: types[i], ID: ids[i]}

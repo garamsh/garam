@@ -497,7 +497,8 @@ Responsibility documents:
 ADRs:
 
 - [0001](./adr/0001-grn-segments.md) — GRN segments identify owning
-  resources
+  resources; the five-segment format and the `default` project segment
+  are superseded by 0142
 - [0002](./adr/0002-iam-style-policy-model.md) — IAM-style policy
   documents, native evaluator
 - [0003](./adr/0003-single-cli-topology.md) — single cobra CLI,
@@ -729,15 +730,15 @@ ADRs:
   and "no delete" are superseded by 0117
 - [0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)
   — an operator carries a name and description beside its GRN, changed
-  on `operator:update` and moving nothing it authenticates or enrols
+  on `iam:operator.update` and moving nothing it authenticates or enrols
   by; the console lists operators by name and opens a page per
   operator, with the identifier wherever a name alone could be
   ambiguous
 - [0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)
   — an agent is started from a template copied once and carries a name
   of its own: templates are an organization's resource on
-  `agent-template:*` actions with nothing linking them to the agents
-  defined from them, a definition's name changes on `agent:rename`
+  `iam:agent-template.*` actions with nothing linking them to the agents
+  defined from them, a definition's name changes on `iam:agent.rename`
   and moves nothing else, and the console lists desired agents by name
   apart from what operators report. Which service owns a template is
   superseded by 0077, its template writes and forms by 0088, and
@@ -842,11 +843,11 @@ ADRs:
   never written or removed
 - [0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)
   — garam accepts no new agent definition: `defineAgent` and
-  `agent:define` are removed, a schema guard refuses a new definition,
-  a changed value or a direct delete from whichever release sends it
-  while a rename and the organization's cascade stay admitted, every
-  definition held stays readable, claimable and cut-over-able, and an
-  agent is created through the control service; superseded by 0117
+  `agent:define` are removed, a schema guard refuses a new
+  definition, a changed value or a direct delete from whichever release
+  sends it while a rename and the organization's cascade stay admitted,
+  every definition held stays readable, claimable and cut-over-able, and
+  an agent is created through the control service; superseded by 0117
 - [0091](./adr/0091-a-recovered-credential-names-its-chain-and-garam-stores-it-with-the-recovery.md)
   — a recovered credential's answer names its issuer and garam server
   root, added to `execution-fence.v1` without a version change; garam
@@ -967,11 +968,11 @@ ADRs:
   read by nobody through garam yet
 - [0107](./adr/0107-a-managed-replacement-is-authorized-by-an-agent-replace-reference-naming-the-agent-its-assignment-and-the-controller-it-moves-to.md)
   — a managed replacement under `agent-enrollment.v1` is authorized
-  by a new `agent:replace` reference, held by owners and
+  by a new `iam:agent.replace` reference, held by owners and
   administrators, that targets the replaced agent, snapshots its
   assignment and names the controller it moves to, which the grant
-  must cover with the current one; `agent:create`, `agent:cutover` and
-  `agent:recover` keep their reading
+  must cover with the current one; `iam:agent.create`,
+  `iam:agent.cutover` and `iam:agent.recover` keep their reading
 - [0108](./adr/0108-a-reply-answered-outside-its-contract-is-offered-again-on-a-bounded-schedule-and-a-refusal-on-its-merits-is-not.md)
   — the adapter offers again, on its per-entry backoff up to the retry
   cap, a reply garam answered outside its contract, so an adapter
@@ -1057,7 +1058,7 @@ ADRs:
 - [0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)
   — a managed agent carries a display name on its own record, set at
   creation on both machine routes as part of what a retry repeats, and
-  renamed under a restored `agent:rename` on the agent's own GRN;
+  renamed under a restored `iam:agent.rename` on the agent's own GRN;
   supersedes 0118 in part, on an agent's name
 - [0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
   — a person signs the CLI in by the device grant (RFC 8628), and the
@@ -1082,7 +1083,7 @@ ADRs:
   own key; the control service's record names its cluster manager by
   GRN, at most one per cluster manager and never a chain, set at
   registration or, on a record naming none, once by
-  `setOperatorManager` under `operator:register`, and answered by
+  `setOperatorManager` under `iam:operator.register`, and answered by
   `listOperators`, so the console lists one row per Operator; the
   console's three terms and the API names they map to; the delegation
   stays authority alone
@@ -1110,10 +1111,10 @@ ADRs:
   keeping a list
 - [0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
   — each organization has one cowork principal,
-  `grn:<org>:default:service:cowork`, written with the organization;
+  `grn:<org>/iam/service/cowork`, written with the organization;
   cowork exchanges an assertion its one deployment key signs for a
   one-hour machine-listener token that posts only to that
-  organization's agents, decided by `message:send`; the deployment
+  organization's agents, decided by `iam:message.send`; the deployment
   holds the key and revokes a principal, which stops that
   organization's cowork; not yet built; how an open WebSocket stops is
   superseded by 0139
@@ -1124,7 +1125,7 @@ ADRs:
   membership from an entity store its owners feed; not yet built;
   supersedes 0002, 0003, 0007, 0008, 0025 and 0038 in part; tenant
   isolation's form and the role templates' scopes are superseded by
-  0137
+  0137, §3's one schema file by 0143 and §4's last clause by 0144
 - [0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)
   — the session cookie stays host-only to each app; a person signs in
   on `site-web/`, and another app is handed a session of its own by a
@@ -1169,8 +1170,8 @@ ADRs:
 - [0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)
   — an invitation carries a random `id` that admits no one, by which
   the organization lists the pending ones and revokes one on
-  `org:invite`; revoking deletes the row, so its token is answered as
-  an unknown one, and a spent invitation is not revoked
+  `iam:org.invite`; revoking deletes the row, so its token is answered
+  as an unknown one, and a spent invitation is not revoked
 - [0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
   — tenant isolation is `principal in resource.org.members`, read from
   a group of each organization's members that no team or project sits
@@ -1198,7 +1199,8 @@ ADRs:
   and read at delivery under one shared sequence; a signer moves to
   slice 3's delivery; built: the policy service's half, the platform's
   outbox and its delivery (#1689);
-  supersedes 0138 in part, on when the issuer lands
+  supersedes 0138 in part, on when the issuer lands; §2's table of who
+  owns a type is superseded by 0143
 - [0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
   — garam is an OIDC and OAuth issuer inside `platform/` that exchanges
   a CLI session or an agent's token (RFC 8693) for a JWT of at most 300
@@ -1206,5 +1208,53 @@ ADRs:
   introspection endpoint (RFC 7662) beside offline verification by the
   JWKS of ADR-0138's signer; services call the policy service directly,
   each owning a Cedar namespace and feeding its own entities; codehub
-  is the worked example; unbuilt; supersedes 0127 in part, on §5, and
-  0140 in part, on §2
+  is the worked example; built: the issuer, the exchange of a CLI
+  session and introspection (#1757) and cowork's direct calls, in
+  cowork (#1758), unbuilt: the exchange of an agent's browser token
+  and the direct calls of every other service; supersedes 0127
+  in part, on §5, and 0140 in part, on §2; the GRN forms of its
+  worked-example answers 4 and 5 are superseded by 0142, and §5 and
+  §13, on how the list of services is held, by 0143
+- [0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)
+  — a GRN is `grn:<org>/<service>/<type>/<id>` with further `type/id`
+  pairs and an optional `#<locator>` the owning service reads, an RFC
+  3986 URI; the platform's types sit under `iam`, an identifier is
+  immutable and never reused, one grammar replaces the five-segment
+  form; supersedes 0001 in part, on the format and `default`, and 0141
+  in part, on the GRN forms of answers 4 and 5
+- [0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
+  — a service is declared by one manifest, its Cedar schema file
+  `policy/schema/<service>.cedarschema` with one namespace (`Iam`,
+  `Cowork`) and annotations for its name, a type's GRN type and the
+  caller that writes it; the GRN catalogue is generated from the
+  manifests, the audience list and the caller list are checked against
+  them, and the caller table is read from them; an action is
+  `<service>:<type>.<verb>` and every action moves, the platform's
+  included; a role is the `Iam` namespace's; the platform serves a
+  read-only registry of services, types and actions; adding a service
+  is one pull request adding one manifest; partly built (items 1, 2,
+  3 and 5, #1777, item 4, the platform's action names, #1779, and
+  item 6, the registry, #1788), a new service's proofs not;
+  supersedes 0130 in part, on
+  §3's one schema file, 0140 in part, on §2's table of who owns a
+  type, and 0141 in part, on §5 and §13; item 3's separator and group
+  spelling are superseded by 0145
+- [0144](./adr/0144-an-organization-may-write-permit-policies-over-resources-inside-itself.md)
+  — an organization may write `permit` policies beside its role links
+  and `forbid` guardrails, each scoped at the write to resources inside
+  the organization, validated against the manifests and named by
+  `Explain`; writing one is the action `iam:permit.write`, held by
+  `role-owner` alone, and a role other than the owner writing one is
+  open; it still cannot touch the system tier or permit across
+  organizations; partly built (the policy service's write, store and
+  decision, #1780), the console's editor and the platform's switch
+  not; supersedes 0130 in part, on §4's last clause; item 7's action
+  name is superseded by 0145
+- [0145](./adr/0145-an-action-is-a-type-and-a-verb-joined-by-a-dot.md)
+  — an action is `<type>.<verb>`, on the wire `<service>:<type>.<verb>`,
+  both slugs, so a name parses one way; a type's group is `<type>.*`
+  and holds exactly that type's actions, which the manifest check
+  holds; a role group is `role-<name>`, the one id with no dot; writing
+  a `permit` is `iam:permit.write`; built (#1783); supersedes 0143 in
+  part, on item 3's separator and group spelling, and 0144 in part, on
+  item 7's action name

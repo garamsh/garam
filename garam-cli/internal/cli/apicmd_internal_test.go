@@ -36,7 +36,7 @@ func TestAPIOperations_PlaceEveryOperationOfTheSpecification(t *testing.T) {
 	}{
 		// The counts docs/architecture/cli.md §Coverage states; an
 		// operation added or removed changes both.
-		{"../../../platform/api/openapi.yaml", "commands.yaml", apiOperations, 85},
+		{"../../../platform/api/openapi.yaml", "commands.yaml", apiOperations, 90},
 		{"../../../cowork/api/openapi.yaml", "cowork.yaml", coworkOperations, 28},
 	} {
 		t.Run(tc.config, func(t *testing.T) {
@@ -122,7 +122,7 @@ func runRoot(t *testing.T, args ...string) (string, string, *cobra.Command, erro
 
 const issuedKey = `{"key":{"kid":"kid-1","algorithm":"RS256","state":"active","issuedAt":"2026-10-20T00:00:00Z"},` +
 	`"privateKeyPem":"-----BEGIN PRIVATE KEY-----\nMIIsecretkeymaterial\n-----END PRIVATE KEY-----\n",` +
-	`"clientId":"grn:acme:default:operator:hosted","tokenUrl":"https://machine.garam.test/oauth/token"}`
+	`"clientId":"grn:acme/iam/operator/hosted","tokenUrl":"https://machine.garam.test/oauth/token"}`
 
 // keyServer answers issueOperatorKey and counts the issues it served.
 func keyServer(t *testing.T) (*httptest.Server, *atomic.Int32, *[]byte) {
@@ -312,7 +312,7 @@ func TestAPICommand_UnderAHandWrittenNounReadsItsFlags(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		asked = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"grn":"grn:root:default:org:globex","name":"Globex","createdAt":"2026-10-20T00:00:00Z"}`))
+		_, _ = w.Write([]byte(`{"grn":"grn:root/iam/org/globex","name":"Globex","createdAt":"2026-10-20T00:00:00Z"}`))
 	}))
 	t.Cleanup(srv.Close)
 	signedInTo(t, srv.URL)
@@ -333,7 +333,7 @@ func TestInvitationsCreate_WritesTheTokenToAFileAlone(t *testing.T) {
 		assert.Equal(t, "/api/orgs/acme/invitations", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"token":"` + token + `","orgGrn":"grn:root:default:org:acme","role":"member",` +
+		_, _ = w.Write([]byte(`{"token":"` + token + `","orgGrn":"grn:root/iam/org/acme","role":"member",` +
 			`"expiresAt":"2026-10-27T00:00:00Z","createdAt":"2026-10-20T00:00:00Z"}`))
 	}))
 	t.Cleanup(srv.Close)
@@ -359,7 +359,7 @@ func TestInvitationsGet_SendsNoSession(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		presented[r.URL.Path] = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"org":"grn:root:default:org:acme","orgName":"Acme","role":"member","state":"pending","expiresAt":"2026-10-27T00:00:00Z"}`))
+		_, _ = w.Write([]byte(`{"org":"grn:root/iam/org/acme","orgName":"Acme","role":"member","state":"pending","expiresAt":"2026-10-27T00:00:00Z"}`))
 	}))
 	t.Cleanup(srv.Close)
 	signedInTo(t, srv.URL)

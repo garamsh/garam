@@ -48,7 +48,7 @@ function currentStep() {
 
 const CONTROL = {
   ...fieldOne,
-  grn: "grn:acme:default:operator:field-one-control",
+  grn: "grn:acme/iam/operator/field-one-control",
   name: "field-one-control",
   manager: fieldOne.grn,
 };
@@ -122,7 +122,7 @@ describe("connect operator page", () => {
     pairedWithControlService();
     server.use(
       answerPermissionChecks((action) =>
-        action === "operator:register" || action === "operator:reissue"
+        action === "iam:operator.register" || action === "iam:operator.reissue"
           ? "deny"
           : "allow",
       ),
@@ -171,7 +171,7 @@ describe("connect operator page", () => {
     keysAre();
     server.use(
       answerPermissionChecks((action) =>
-        action === "operator:register" ? "deny" : "allow",
+        action === "iam:operator.register" ? "deny" : "allow",
       ),
     );
 
@@ -186,7 +186,7 @@ describe("connect operator page", () => {
     keysAre();
     server.use(
       answerPermissionChecks((action) =>
-        action === "operator:register" || action === "operator:reissue"
+        action === "iam:operator.register" || action === "iam:operator.reissue"
           ? "deny"
           : "allow",
       ),

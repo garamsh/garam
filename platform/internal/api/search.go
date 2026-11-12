@@ -121,7 +121,7 @@ func (s *Server) searchPeople(r *http.Request, c *caller, n listfilter.Needle) (
 }
 
 // searchAgents finds the org's agents by their identifier or name,
-// leaving out each one whose agent:read c is denied, as listAgents
+// leaving out each one whose iam:agent.read c is denied, as listAgents
 // does.
 func (s *Server) searchAgents(r *http.Request, c *caller, n listfilter.Needle) ([]apigen.FoundObject, error) {
 	agents, err := s.agents.SearchByOrg(r.Context(), c.org, n)
@@ -147,7 +147,7 @@ func (s *Server) searchAgents(r *http.Request, c *caller, n listfilter.Needle) (
 }
 
 // searchTeams finds the org's groups by name or identifier, leaving out
-// each one whose group:read c is denied, as listGroups does.
+// each one whose iam:group.read c is denied, as listGroups does.
 func (s *Server) searchTeams(r *http.Request, c *caller, n listfilter.Needle) ([]apigen.FoundObject, error) {
 	groups, err := s.orgs.SearchGroups(r.Context(), c.org, n)
 	if err != nil {
@@ -167,8 +167,8 @@ func (s *Server) searchTeams(r *http.Request, c *caller, n listfilter.Needle) ([
 }
 
 // searchPolicies finds the org's policies by name or identifier,
-// leaving out each one whose policy:read c is denied, as listPolicies
-// does.
+// leaving out each one whose iam:policy.read c is denied, as
+// listPolicies does.
 func (s *Server) searchPolicies(r *http.Request, c *caller, n listfilter.Needle) ([]apigen.FoundObject, error) {
 	policies, err := s.policies.SearchPolicies(r.Context(), c.org, n)
 	if err != nil {
@@ -186,8 +186,8 @@ func (s *Server) searchPolicies(r *http.Request, c *caller, n listfilter.Needle)
 }
 
 // searchProjects finds the org's projects by name or identifier,
-// leaving out each one whose project:read c is denied, as listProjects
-// does.
+// leaving out each one whose iam:project.read c is denied, as
+// listProjects does.
 func (s *Server) searchProjects(r *http.Request, c *caller, n listfilter.Needle) ([]apigen.FoundObject, error) {
 	projects, err := s.orgs.SearchProjects(r.Context(), c.org, n)
 	if err != nil {

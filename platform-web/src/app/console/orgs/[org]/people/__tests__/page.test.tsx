@@ -42,7 +42,7 @@ vi.stubGlobal(
 /** The two people the list test acts on, as the page decides them. */
 const ALICE_ROW: MemberRow = {
   kind: "person",
-  grn: "grn:root:default:user:alice",
+  grn: "grn:root/iam/user/alice",
   identifier: "alice",
   name: "Alice",
   href: "/console/orgs/acme/people/alice",
@@ -53,7 +53,7 @@ const ALICE_ROW: MemberRow = {
 };
 const BOB_ROW: MemberRow = {
   ...ALICE_ROW,
-  grn: "grn:root:default:user:bob",
+  grn: "grn:root/iam/user/bob",
   identifier: "bob",
   name: "Bob",
   href: "/console/orgs/acme/people/bob",
@@ -136,7 +136,7 @@ describe("people", () => {
   it("keeps inviting on the page, inactive with its reason, where the server denies it", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "org:invite" ? "deny" : "allow",
+        action === "iam:org.invite" ? "deny" : "allow",
       ),
     );
 
@@ -205,7 +205,7 @@ describe("people", () => {
     });
 
     it("names an inviter who left by their identifier", async () => {
-      server.use(pendingOne("grn:root:default:user:gone"));
+      server.use(pendingOne("grn:root/iam/user/gone"));
 
       await renderPeople();
 
@@ -224,7 +224,7 @@ describe("people", () => {
       let read = false;
       server.use(
         answerPermissionChecks((action) =>
-          action === "org:invite" ? "deny" : "allow",
+          action === "iam:org.invite" ? "deny" : "allow",
         ),
         http.get(`${API_URL}/orgs/acme/invitations`, () => {
           read = true;
@@ -315,15 +315,15 @@ describe("people", () => {
 
     expect(await screen.findByText("Added 2 members")).toBeInTheDocument();
     expect(added).toEqual([
-      "eng grn:root:default:user:alice",
-      "eng grn:root:default:user:bob",
+      "eng grn:root/iam/user/alice",
+      "eng grn:root/iam/user/bob",
     ]);
   });
 
   it("offers no team the server denies adding to", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "group:member-add" ? "deny" : "allow",
+        action === "iam:group.member-add" ? "deny" : "allow",
       ),
     );
 

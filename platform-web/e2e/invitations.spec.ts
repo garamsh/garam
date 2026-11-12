@@ -241,7 +241,7 @@ test.describe("organization mutations", () => {
     // The browser still holds a cookie, so the proxy lets the request
     // through; the backend no longer honours the session behind it.
     const stale = await seedExpiredSession(
-      `grn:root:default:user:local-${username}`,
+      `grn:root/iam/user/local-${username}`,
     );
     const context = await browser.newContext({ baseURL });
     await holdSession(context, baseURL, stale);

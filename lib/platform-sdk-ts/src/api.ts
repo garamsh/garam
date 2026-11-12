@@ -230,6 +230,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/.well-known/openid-configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read garam's issuer metadata.
+         * @description The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+         */
+        get: operations["getIssuerConfiguration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/jwks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the keys garam's tokens verify with.
+         * @description The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+         */
+        get: operations["getIssuerKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a CLI session's access token for a signed token.
+         * @description RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+         *     The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+         */
+        post: operations["exchangeSessionToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/sessions": {
         parameters: {
             query?: never;
@@ -279,6 +340,46 @@ export interface paths {
         };
         /** Return the signed-in user. */
         get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the services, their types and their actions. Requires a signed-in caller.
+         * @description What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+         */
+        get: operations["getRegistry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/grn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+         * @description Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+         */
+        get: operations["describeGrn"];
         put?: never;
         post?: never;
         delete?: never;
@@ -364,7 +465,7 @@ export interface paths {
          * Ask whether the signed-in caller may take each of a list of actions. Requires membership.
          * @description Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
          *
-         *     Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+         *     Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
          *
          *     A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
          *
@@ -390,7 +491,7 @@ export interface paths {
          *
          *     Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
          *
-         *     A policy statement is named only where the caller holds `policy:read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+         *     A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
          *
          *     The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
          *
@@ -413,10 +514,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the members and agents the engine allows one action. Requires `org:member-list`.
+         * List the members and agents the engine allows one action. Requires `iam:org.member-list`.
          * @description Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
          *
-         *     It requires `org:member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `agent:read` on the organization, the check `listAgents` makes; otherwise none is listed.
+         *     It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
          *
          *     The candidates are the organization's members in ascending GRN order followed by its agents in ascending GRN order. A page asks `limit` of them from `offset`, at most fifty, and answers those the engine allows, so a page may hold fewer holders than it asked candidates, none at all among them. `nextOffset` is where the next page starts, and absent on the last.
          *
@@ -442,7 +543,7 @@ export interface paths {
          * Find an organization's people, agents, teams, policies and projects by name. Requires the `member` role.
          * @description Answers, for each kind the caller may list, the objects of that kind whose name or identifier holds `q`, case aside. `q` matches as typed: `%` and `_` match only themselves.
          *
-         *     Each kind is authorized as its list is: people on `org:member-list`, as `listOrgMembers` is; agents on `agent:read`, teams on `group:read`, policies on `policy:read` and projects on `project:read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
+         *     Each kind is authorized as its list is: people on `iam:org.member-list`, as `listOrgMembers` is; agents on `iam:agent.read`, teams on `iam:group.read`, policies on `iam:policy.read` and projects on `iam:project.read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
          *
          *     A person is found by nickname or identifier, and an agent by its identifier. Each kind answers its first `limit` objects in the order its list gives them, and how many more it found past those.
          */
@@ -481,7 +582,7 @@ export interface paths {
         };
         /**
          * List an organization's groups. Requires the `member` role.
-         * @description Authorized on `group:read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `group:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+         * @description Authorized on `iam:group.read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `iam:group.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
          */
         get: operations["listGroups"];
         put?: never;
@@ -562,7 +663,7 @@ export interface paths {
         };
         /**
          * List an organization's projects. Requires the `member` role.
-         * @description Authorized on `project:read` on the organization. Leaves out each project whose own `project:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+         * @description Authorized on `iam:project.read` on the organization. Leaves out each project whose own `iam:project.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
          */
         get: operations["listProjects"];
         put?: never;
@@ -643,7 +744,7 @@ export interface paths {
         };
         /**
          * List an organization's agents. Requires the `member` role.
-         * @description Authorized on `agent:read` on the organization. Leaves out each agent whose own `agent:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+         * @description Authorized on `iam:agent.read` on the organization. Leaves out each agent whose own `iam:agent.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
          */
         get: operations["listAgents"];
         put?: never;
@@ -669,8 +770,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename an agent. Requires `agent:rename`.
-         * @description Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+         * Rename an agent. Requires `iam:agent.rename`.
+         * @description Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
          */
         patch: operations["renameAgent"];
         trace?: never;
@@ -683,8 +784,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Watch an agent work. Requires the `agent:watch` action.
-         * @description What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `agent:read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
+         * Watch an agent work. Requires the `iam:agent.watch` action.
+         * @description What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `iam:agent.read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
          *     It is best effort and never a record. It begins when it is opened and replays nothing, because nothing was kept; the stream it rests on drops events for a subscriber that falls behind and marks no gap, so a gap here cannot be told from an agent that said nothing. What has to be true afterwards — what an agent did, which messages it consumed — comes from the queue instead.
          *     Each event carries the platform's own name for it and the event as the platform emitted it. garam writes a comment line on a fixed interval besides, so a caller can tell a live stream with nothing on it from one that is no longer connected. garam never ends the stream to report that the agent has finished: nothing here knows that, and an end that meant it would be the one reading a person could not check.
          */
@@ -705,17 +806,17 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the organization's standalone approvals. Requires `agent:read`.
+         * List the organization's standalone approvals. Requires `iam:agent.read`.
          * @description Lists every approval the organization holds, oldest first: pending, spent, withdrawn and expired, for standalone and direct placement alike (ADR-0082, ADR-0111). `state` is where each stands when this answers; an unspent approval past `expiresAt` is `expired` and never revived.
          *
          *     An entry names what the approval binds and what spending it made, and nothing a host spends or proves with: no bootstrap secret or its hash, no key fingerprint, no request digest, no certificate and no credential.
          *
-         *     Authorization is `agent:read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
+         *     Authorization is `iam:agent.read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
          */
         get: operations["listAgentEnrollments"];
         put?: never;
         /**
-         * Approve a standalone host's enrollment. Requires current `agent:enroll`.
+         * Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
          * @description Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
          *     A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
          *     Repeating a `requestId` with the same request answers the same approval with 200, spent or not, while it is neither withdrawn nor expired; any other request under it is refused with 409, and a withdrawn or expired one is never revived.
@@ -738,7 +839,7 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+         * Withdraw an unspent standalone approval. Requires current `iam:agent.enroll`.
          * @description Withdraws an approval no host has spent. Spending it afterwards is refused as an unknown bootstrap would be, and a withdrawal and a spending of one approval never both take effect. A withdrawn one answers 204 again; a spent one is refused with 409, because what it registered is ended by `revokeAgentSupervisor`.
          */
         delete: operations["withdrawAgentEnrollment"];
@@ -755,7 +856,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the organization's standalone supervisors. Requires `agent:read`.
+         * List the organization's standalone supervisors. Requires `iam:agent.read`.
          * @description Lists every supervisor registration the organization holds, oldest first: `active` while current, `revoked` once ended by `revokeAgentSupervisor` or by a replacement taking its agent (ADR-0082). Each names its host, its agent, the epoch its enrollment assigned and when its agent last activated at that epoch, absent where it never did.
          *
          *     No certificate, serial, credential or token is answered. Authorization and paging are `listAgentEnrollments`'.
@@ -780,7 +881,7 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+         * Revoke a standalone host's supervisor. Requires current `iam:agent.enroll`.
          * @description Ends the supervisor's registration, the agent's current activation and every unspent approval for that agent, in one transaction under the agent's execution lock (ADR-0082). The supervisor's credential and every token exchanged for it are refused from the next request; the agent's protected writes are refused from its next request, because no activation admits them. The agent, its GRN and the memory its host keeps are untouched, and only a new approval stands a supervisor up for it again. Authorization is decided on the agent. A supervisor the organization holds no current registration of answers 404.
          */
         delete: operations["revokeAgentSupervisor"];
@@ -804,7 +905,7 @@ export interface paths {
          *
          *     `replay` is an answer that repeated what an identical earlier request issued, which issued nothing new. A refusal is recorded only where garam could attribute the request to the subject: an enrollment whose token or bootstrap secret did not resolve names none, and a refusal of the member asking, before the subject's credential was reached, is the member's and not the subject's.
          *
-         *     It is authorized on the subject's own read: `operator:read` on the organization for an operator, `agent:read` on the agent for an agent, and `agent:read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
+         *     It is authorized on the subject's own read: `iam:operator.read` on the organization for an operator, `iam:agent.read` on the agent for an agent, and `iam:agent.read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
          */
         get: operations["listCredentialEvents"];
         put?: never;
@@ -866,7 +967,7 @@ export interface paths {
         /**
          * Rename or describe an operator. Requires the `admin` role.
          * @description Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-         *     It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+         *     It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
          */
         patch: operations["updateOperator"];
         trace?: never;
@@ -887,7 +988,7 @@ export interface paths {
         /**
          * Issue a registered operator a private key, shown once.
          * @description Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-         *     It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+         *     It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
          *     `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
          *     One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
          */
@@ -909,7 +1010,7 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+         * Withdraw an operator's key and every token exchanged under it. Requires `iam:operator.reissue`.
          * @description Withdraws the key (ADR-0102). **It stops verifying assertions, and every token exchanged under it stops authenticating, at the moment this returns**: the next request presenting one is refused, on a connection already open too, and an exchange racing the withdrawal either finishes first and has its token withdrawn here, or finds the key withdrawn and obtains nothing. The key's record stays, listed as `revoked`. Withdrawing a key already withdrawn answers 204 again.
          */
         delete: operations["revokeOperatorKey"];
@@ -931,13 +1032,13 @@ export interface paths {
          */
         get: operations["getOperatorDelegation"];
         /**
-         * Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+         * Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
          * @description Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
          */
         put: operations["writeOperatorDelegation"];
         post?: never;
         /**
-         * Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+         * Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
          * @description Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
          */
         delete: operations["endOperatorDelegation"];
@@ -955,7 +1056,7 @@ export interface paths {
         };
         get?: never;
         /**
-         * Link a control service to its cluster manager, once. Requires `operator:register`.
+         * Link a control service to its cluster manager, once. Requires `iam:operator.register`.
          * @description Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
          */
         put: operations["setOperatorManager"];
@@ -975,13 +1076,13 @@ export interface paths {
         };
         get?: never;
         /**
-         * Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+         * Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
          * @description Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
          */
         put: operations["setOperatorControlEndpoint"];
         post?: never;
         /**
-         * Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+         * Clear a hosted operator's control endpoint. Requires current `iam:operator.delegate`.
          * @description The console then reaches no control service for this operator. Clearing one already clear answers the same.
          */
         delete: operations["clearOperatorControlEndpoint"];
@@ -1003,7 +1104,7 @@ export interface paths {
          * Hand a delegated operator one operation. Requires the operation's action, decided now.
          * @description Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
          *
-         *     `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+         *     `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
          *
          *     Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
          *
@@ -1025,7 +1126,7 @@ export interface paths {
         };
         /**
          * List an organization's policies. Requires the `admin` role.
-         * @description Authorized on `policy:read` on the organization. Leaves out each policy whose own `policy:read` the caller is denied.
+         * @description Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
          */
         get: operations["listPolicies"];
         put?: never;
@@ -1093,7 +1194,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a policy. Requires the `admin` role.
-         * @description Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `policy:delete`.
+         * @description Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
          */
         delete: operations["deletePolicy"];
         options?: never;
@@ -1214,7 +1315,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the invitations that can still be accepted. Requires `org:invite`.
+         * List the invitations that can still be accepted. Requires `iam:org.invite`.
          * @description Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
          */
         get: operations["listInvitations"];
@@ -1241,7 +1342,7 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Revoke an invitation no one has used. Requires `org:invite`.
+         * Revoke an invitation no one has used. Requires `iam:org.invite`.
          * @description Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
          */
         delete: operations["revokeInvitation"];
@@ -1349,13 +1450,77 @@ export interface components {
             /** @description Seconds the refresh token is accepted for. */
             refresh_token_expires_in: number;
         };
+        /** @description The OIDC discovery document of garam as an issuer (ADR-0141). Every URL is the `issuer` followed by the path the operation of this file is served at. */
+        IssuerConfiguration: {
+            /**
+             * @description The configured `GARAM_IDENTITY_ISSUER`, which every token's `iss` equals byte for byte.
+             * @example https://garam.example/api
+             */
+            issuer: string;
+            jwks_uri: string;
+            token_endpoint: string;
+            grant_types_supported: "urn:ietf:params:oauth:grant-type:token-exchange"[];
+            /** @description Empty, because the issuer has no authorization endpoint. */
+            response_types_supported: string[];
+            subject_types_supported: "public"[];
+            /** @description Only `RS256`. */
+            id_token_signing_alg_values_supported: string[];
+            /** @description `none`: the exchange is authenticated by its subject token. */
+            token_endpoint_auth_methods_supported: "none"[];
+        };
+        /** @description RFC 7517's key set holding the issuer's one public key. */
+        IssuerKeySet: {
+            keys: components["schemas"]["IssuerKey"][];
+        };
+        IssuerKey: {
+            /** @enum {string} */
+            kty: "RSA";
+            /** @enum {string} */
+            use: "sig";
+            /** @description Always `RS256`. */
+            alg: string;
+            /** @description The key's RFC 7638 thumbprint, which a token's header names. */
+            kid: string;
+            n: string;
+            e: string;
+        };
+        /** @description RFC 8693's token exchange request (ADR-0141). */
+        TokenExchangeRequest: {
+            /** @enum {string} */
+            grant_type: "urn:ietf:params:oauth:grant-type:token-exchange";
+            /** @description The access token of a live CLI session. */
+            subject_token: string;
+            /** @enum {string} */
+            subject_token_type: "urn:ietf:params:oauth:token-type:access_token";
+            /**
+             * @description The one service the token is for.
+             * @enum {string}
+             */
+            audience: "policy" | "codehub";
+            /**
+             * @description Absent is the same.
+             * @enum {string}
+             */
+            requested_token_type?: "urn:ietf:params:oauth:token-type:jwt";
+        };
+        /** @description RFC 8693's successful response (ADR-0141). */
+        TokenExchangeResponse: {
+            /** @description The compact RS256 JWT. */
+            access_token: string;
+            /** @enum {string} */
+            issued_token_type: "urn:ietf:params:oauth:token-type:access_token";
+            /** @description Always `Bearer`. */
+            token_type: string;
+            /** @description Seconds the token lives: at most 300, and no more than the session has left. */
+            expires_in: number;
+        };
         /** @description RFC 6749's error response, with RFC 8628's codes (ADR-0120). */
         OAuthError: {
             /**
-             * @description `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+             * @description `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
              * @enum {string}
              */
-            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unsupported_grant_type" | "authorization_pending" | "slow_down" | "access_denied" | "expired_token";
+            error: "invalid_request" | "invalid_client" | "invalid_grant" | "invalid_target" | "unsupported_grant_type" | "authorization_pending" | "slow_down" | "access_denied" | "expired_token";
             error_description?: string;
             /** @description With `slow_down`, the seconds to wait between polls from here. */
             interval?: number;
@@ -1384,9 +1549,75 @@ export interface components {
             current: boolean;
         };
         User: {
-            /** @example grn:garam:default:user:117421510527410544321 */
+            /** @example grn:garam/iam/user/117421510527410544321 */
             grn: string;
             nickname: string;
+        };
+        Registry: {
+            services: components["schemas"]["RegistryService"][];
+        };
+        RegistryService: {
+            /**
+             * @description The service's one name, the `service` segment of its GRNs.
+             * @example cowork
+             */
+            name: string;
+            /** @description The entity types a GRN of this service names, sorted by `name`. */
+            types: components["schemas"]["RegistryType"][];
+            /** @description The service's actions, sorted by `name`. */
+            actions: components["schemas"]["RegistryAction"][];
+        };
+        RegistryType: {
+            /**
+             * @description The `type` segment of a GRN of this type.
+             * @example channel
+             */
+            name: string;
+            /**
+             * @description The qualified entity type the name is written as.
+             * @example Cowork::Channel
+             */
+            entityType: string;
+            /** @description The qualified types an entity of this type may be a member of. */
+            parents: string[];
+        };
+        RegistryAction: {
+            /**
+             * @description The action as it is written on the wire, `<service>:<type>.<verb>`.
+             * @example cowork:channel.post
+             */
+            name: string;
+            /** @description The qualified types that may take the action. */
+            principals: string[];
+            /** @description The qualified types the action applies to. */
+            resources: string[];
+        };
+        GrnDescription: {
+            /** @description The name as asked, locator included. */
+            grn: string;
+            /** @description False where the name's service or type is declared by no manifest. Every property below is absent then. */
+            known: boolean;
+            /** @example cowork */
+            service?: string;
+            /**
+             * @description The name's last type segment.
+             * @example channel
+             */
+            type?: string;
+            /**
+             * @description The qualified entity type the name is written as.
+             * @example Cowork::Channel
+             */
+            entityType?: string;
+            /**
+             * @description The name with its last type and id pair removed. Absent for a name of one pair.
+             * @example grn:acme/cowork/project/frontend
+             */
+            parent?: string;
+            /** @description The place inside the resource, as written after `#`. */
+            locator?: string;
+            /** @description The names of the actions whose resource types name `entityType`, sorted. `getRegistry` says what each applies to. */
+            actions?: string[];
         };
         PasswordLogin: {
             /** @example alice */
@@ -1424,7 +1655,7 @@ export interface components {
             password: string;
         };
         Organization: {
-            /** @example grn:garam:default:org:acme */
+            /** @example grn:garam/iam/org/acme */
             grn: string;
             name: string;
             /** Format: date-time */
@@ -1437,7 +1668,7 @@ export interface components {
             name?: string;
         };
         Group: {
-            /** @example grn:acme:default:group:eng */
+            /** @example grn:acme/iam/group/eng */
             grn: string;
             name: string;
             orgGrn: string;
@@ -1452,7 +1683,7 @@ export interface components {
             roles?: components["schemas"]["ScopedRoles"];
         };
         Project: {
-            /** @example grn:acme:default:project:frontend */
+            /** @example grn:acme/iam/project/frontend */
             grn: string;
             name: string;
             orgGrn: string;
@@ -1468,7 +1699,7 @@ export interface components {
         };
         /** @description A group or project member, addressed by GRN. */
         MemberRef: {
-            /** @example grn:acme:default:user:alice */
+            /** @example grn:acme/iam/user/alice */
             memberGrn: string;
         };
         /** @enum {string} */
@@ -1493,7 +1724,7 @@ export interface components {
             checks: components["schemas"]["PermissionCheck"][];
         };
         PermissionCheck: {
-            /** @example operator:register */
+            /** @example iam:operator.register */
             action: string;
             resource?: components["schemas"]["PermissionResource"];
         };
@@ -1604,7 +1835,7 @@ export interface components {
         };
         /** @description One organization's view of a cross-organization consent relation (ADR-0035), from the side the path names: `orgGrn` is the other organization, and each half says whether that side's grant stands. `stands` is both halves at once — the only state under which a message crosses. */
         OrgConsent: {
-            /** @example grn:root:default:org:globex */
+            /** @example grn:root/iam/org/globex */
             orgGrn: string;
             /** @description The path organization's half stands. */
             grantedHere: boolean;
@@ -1676,10 +1907,10 @@ export interface components {
          *           "Sid": "AllowOrgRead",
          *           "Effect": "Allow",
          *           "Action": [
-         *             "org:read"
+         *             "iam:org.read"
          *           ],
          *           "Resource": [
-         *             "grn:acme:*"
+         *             "grn:acme/*"
          *           ]
          *         }
          *       ]
@@ -1692,7 +1923,7 @@ export interface components {
          */
         PolicyStatus: "draft" | "active";
         Policy: {
-            /** @example grn:acme:default:policy:9f2ac1b40d8e7a35 */
+            /** @example grn:acme/iam/policy/9f2ac1b40d8e7a35 */
             grn: string;
             orgGrn: string;
             name: string;
@@ -1728,14 +1959,14 @@ export interface components {
         };
         PolicyAttachment: {
             policyGrn: string;
-            /** @example grn:acme:default:group:eng */
+            /** @example grn:acme/iam/group/eng */
             subjectGrn: string;
             /** Format: date-time */
             createdAt: string;
         };
         /** @description The user or group the policy applies to. */
         PolicyAttachmentCreate: {
-            /** @example grn:acme:default:group:eng */
+            /** @example grn:acme/iam/group/eng */
             subjectGrn: string;
         };
         /**
@@ -1840,7 +2071,7 @@ export interface components {
         };
         /** @description What holds an agent, at the epoch that binding is on: an operator, or the supervisor of a standalone host (ADR-0082). Every assignment raises the epoch and fences the assignee it replaced. */
         AgentAssignment: {
-            /** @example grn:acme:default:operator:field-one */
+            /** @example grn:acme/iam/operator/field-one */
             assigneeGrn: string;
             epoch: number;
             /**
@@ -1855,7 +2086,7 @@ export interface components {
         };
         /** @description An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it. */
         Agent: {
-            /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
+            /** @example grn:acme/iam/agent/9f2ac1b40d8e7a35 */
             grn: string;
             /** @description What the organization calls the agent (ADR-0119). Absent where it calls it nothing, and a client shows the identifier, the GRN's last segment, instead. */
             name?: string;
@@ -1896,7 +2127,7 @@ export interface components {
         };
         /** @description An operator this organization has registered. The record grants nothing and admits nothing (ADR-0045), and nothing on it is a report from the operator. */
         Operator: {
-            /** @example grn:acme:default:operator:field-one */
+            /** @example grn:acme/iam/operator/field-one */
             grn: string;
             /**
              * @description What the organization calls the operator. It is not unique and not an identity: two operators may share one, and the GRN is what tells them apart. A registration that named none, including every one made before names existed, is called by its identifier.
@@ -1917,7 +2148,7 @@ export interface components {
             controlEndpoint?: string;
             /**
              * @description The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator`, or once by `setOperatorManager` on a record naming none, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
-             * @example grn:acme:default:operator:field-one
+             * @example grn:acme/iam/operator/field-one
              */
             manager?: string;
         };
@@ -1936,7 +2167,7 @@ export interface components {
             privateKeyPem: string;
             /**
              * @description The operator's canonical GRN, which its assertions name as `iss`, `sub` and `client_id`.
-             * @example grn:acme:default:operator:controller
+             * @example grn:acme/iam/operator/controller
              */
             clientId: string;
             /**
@@ -1989,7 +2220,7 @@ export interface components {
             description?: components["schemas"]["OperatorDescription"];
             /**
              * @description Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). It is how a control service joins a manager registered on its own, as every pair made before `controlService` was. Not given with `controlService`.
-             * @example grn:acme:default:operator:field-one
+             * @example grn:acme/iam/operator/field-one
              */
             manager?: string;
             /** @description Registers this operator as a manager together with its control service, which names it, in one transaction (ADR-0124): both are recorded or neither is. The answer is the manager; the control service is the operator under this identifier, and each is issued its own key. Not given with `manager`. */
@@ -2031,7 +2262,7 @@ export interface components {
         OperatorManagerWrite: {
             /**
              * @description The GRN of the cluster manager this operator is the control service of: another operator of this organization.
-             * @example grn:acme:default:operator:field-one
+             * @example grn:acme/iam/operator/field-one
              */
             manager: string;
         };
@@ -2055,24 +2286,24 @@ export interface components {
             grantedAt: string;
         };
         /**
-         * @description `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
+         * @description `iam:agent.activate` bounds the hosted operator's own lifecycle authority; no user mints it. `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
          * @enum {string}
          */
-        DelegatedOperation: "agent:create" | "agent:configure" | "agent:activate" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read" | "operator:read" | "agent:replace";
+        DelegatedOperation: "iam:agent.create" | "iam:agent.configure" | "iam:agent.activate" | "iam:agent.recover" | "iam:agent-template.read" | "iam:agent-template.publish" | "iam:execution-profile.read" | "iam:agent.execution-read" | "iam:operator.read" | "iam:agent.replace";
         RequestId: string;
         OperationAuthorityRequest: {
             /** @description GRN of the hosted operator that will act. */
             audience: string;
             /** @enum {string} */
-            operation: "agent:create" | "agent:configure" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read" | "operator:read" | "agent:replace";
-            /** @description Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`. */
+            operation: "iam:agent.create" | "iam:agent.configure" | "iam:agent.recover" | "iam:agent-template.read" | "iam:agent-template.publish" | "iam:execution-profile.read" | "iam:agent.execution-read" | "iam:operator.read" | "iam:agent.replace";
+            /** @description Controller GRN for `iam:agent.create`; agent GRN for `iam:agent.configure`, `iam:agent.recover`, `iam:agent.execution-read` and `iam:agent.replace`; this organization's GRN for `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read`. */
             target: string;
             requestId: components["schemas"]["RequestId"];
             /** @description Lowercase hexadecimal SHA-256 of the exact request body the Operator receives; for a GET, that of the empty body. */
             bodySha256: string;
-            /** @description Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing. */
+            /** @description Required for `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read`, `iam:agent.execution-read` and `iam:operator.read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing. */
             requestTarget?: string;
-            /** @description Required for `agent:replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107). */
+            /** @description Required for `iam:agent.replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107). */
             destination?: string;
         };
         OperationAuthority: {
@@ -2472,6 +2703,93 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    getIssuerConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The issuer's metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuerConfiguration"];
+                };
+            };
+            /** @description The issuer is not configured here. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getIssuerKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The key set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuerKeySet"];
+                };
+            };
+            /** @description The issuer is not configured here. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exchangeSessionToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["TokenExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description The signed token. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenExchangeResponse"];
+                };
+            };
+            400: components["responses"]["OAuthError"];
+            /** @description The issuer is not configured here. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listMySessions: {
         parameters: {
             query?: never;
@@ -2533,6 +2851,52 @@ export interface operations {
                     "application/json": components["schemas"]["User"];
                 };
             };
+            401: components["responses"]["Error"];
+        };
+    };
+    getRegistry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The services the manifests declare, sorted by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Registry"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    describeGrn: {
+        parameters: {
+            query: {
+                /** @description The name to describe. */
+                grn: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the name is, or that no manifest declares it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrnDescription"];
+                };
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
         };
     };

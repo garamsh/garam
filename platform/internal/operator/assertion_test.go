@@ -26,8 +26,8 @@ import (
 const endpoint = "https://machine.garam.test/oauth/token"
 
 var (
-	client   = grn.New("acme", grn.DefaultProject, operator.ServiceType, "controller")
-	stranger = grn.New("acme", grn.DefaultProject, operator.ServiceType, "control")
+	client   = grn.New("acme", operator.ServiceType, "controller")
+	stranger = grn.New("acme", operator.ServiceType, "control")
 )
 
 var (
@@ -117,7 +117,7 @@ func verify(compact string, key operator.Key) (operator.VerifiedAssertion, error
 // verifies. A JWT the same key signs with another algorithm is the
 // control on the pin: it is refused.
 func TestClientAssertion_AStockJOSESignatureOverTheIssuedPEMVerifies(t *testing.T) {
-	issued, err := operator.NewIssuedKey(client, grn.New("acme", grn.DefaultProject, "user", "ada"))
+	issued, err := operator.NewIssuedKey(client, grn.New("acme", "user", "ada"))
 	require.NoError(t, err)
 	block, rest := pem.Decode(issued.PrivatePEM())
 	require.NotNil(t, block)

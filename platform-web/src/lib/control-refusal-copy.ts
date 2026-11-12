@@ -78,7 +78,7 @@ const BY_OPERATION: Partial<
 > = {
   // A create copies a published version, so what is wrong with its
   // model is fixed by publishing another version, not here.
-  "agent:create": {
+  "iam:agent.create": {
     embedding_required:
       "This template version names a model without an embeddings endpoint, so no agent can start from it. Publish a version that names one, then create the agent from that version.",
     invalid_api_key_ref:
@@ -90,7 +90,7 @@ const BY_OPERATION: Partial<
     "409":
       "The control service holds an agent or request that conflicts with this one. Reload the page; an agent that was created is listed there.",
   },
-  "agent-template:publish": {
+  "iam:agent-template.publish": {
     "400":
       "The control service couldn't read this version. Check every field, then publish again.",
     "404":
@@ -98,11 +98,11 @@ const BY_OPERATION: Partial<
     "409":
       "This conflicts with a publication the control service already recorded. Publish again.",
   },
-  "agent-template:read": {
+  "iam:agent-template.read": {
     "404":
       "That template version isn't published here any more. Reload the page to see what is.",
   },
-  "agent:execution-read": {
+  "iam:agent.execution-read": {
     "404":
       "The control service holds no revision for this agent, so it has no execution to show. Reload the page to check again.",
   },

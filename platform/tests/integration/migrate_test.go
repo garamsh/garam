@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4/source"
@@ -19,6 +20,21 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/platform/internal/cli"
 )
+
+// formerGRN writes a name in the five-segment form that schemas before
+// migration 000069 read at fixed positions. A test that migrates to
+// such a version must insert rows those versions accept, so it builds
+// the form here, from parts, and nowhere else: the form is refused by
+// lib/grn and is not a name any current code writes.
+func formerGRN(org, typ, id string) string {
+	return strings.Join([]string{"grn", org, "default", typ, id}, ":")
+}
+
+// pathEscape escapes a GRN for use as one URL path segment: its '/'
+// would otherwise split the route.
+func pathEscape(g string) string {
+	return url.PathEscape(g)
+}
 
 // isolatedSchema creates an empty schema of its own and returns a
 // database URL that resolves to it. golang-migrate keeps

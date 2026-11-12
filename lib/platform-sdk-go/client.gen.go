@@ -239,40 +239,40 @@ func (e CredentialEventOutcome) Valid() bool {
 
 // Defines values for DelegatedOperation.
 const (
-	DelegatedOperationAgentActivate        DelegatedOperation = "agent:activate"
-	DelegatedOperationAgentConfigure       DelegatedOperation = "agent:configure"
-	DelegatedOperationAgentCreate          DelegatedOperation = "agent:create"
-	DelegatedOperationAgentExecutionRead   DelegatedOperation = "agent:execution-read"
-	DelegatedOperationAgentRecover         DelegatedOperation = "agent:recover"
-	DelegatedOperationAgentReplace         DelegatedOperation = "agent:replace"
-	DelegatedOperationAgentTemplatePublish DelegatedOperation = "agent-template:publish"
-	DelegatedOperationAgentTemplateRead    DelegatedOperation = "agent-template:read"
-	DelegatedOperationExecutionProfileRead DelegatedOperation = "execution-profile:read"
-	DelegatedOperationOperatorRead         DelegatedOperation = "operator:read"
+	DelegatedOperationIamAgentActivate        DelegatedOperation = "iam:agent.activate"
+	DelegatedOperationIamAgentConfigure       DelegatedOperation = "iam:agent.configure"
+	DelegatedOperationIamAgentCreate          DelegatedOperation = "iam:agent.create"
+	DelegatedOperationIamAgentExecutionRead   DelegatedOperation = "iam:agent.execution-read"
+	DelegatedOperationIamAgentRecover         DelegatedOperation = "iam:agent.recover"
+	DelegatedOperationIamAgentReplace         DelegatedOperation = "iam:agent.replace"
+	DelegatedOperationIamAgentTemplatePublish DelegatedOperation = "iam:agent-template.publish"
+	DelegatedOperationIamAgentTemplateRead    DelegatedOperation = "iam:agent-template.read"
+	DelegatedOperationIamExecutionProfileRead DelegatedOperation = "iam:execution-profile.read"
+	DelegatedOperationIamOperatorRead         DelegatedOperation = "iam:operator.read"
 )
 
 // Valid indicates whether the value is a known member of the DelegatedOperation enum.
 func (e DelegatedOperation) Valid() bool {
 	switch e {
-	case DelegatedOperationAgentActivate:
+	case DelegatedOperationIamAgentActivate:
 		return true
-	case DelegatedOperationAgentConfigure:
+	case DelegatedOperationIamAgentConfigure:
 		return true
-	case DelegatedOperationAgentCreate:
+	case DelegatedOperationIamAgentCreate:
 		return true
-	case DelegatedOperationAgentExecutionRead:
+	case DelegatedOperationIamAgentExecutionRead:
 		return true
-	case DelegatedOperationAgentRecover:
+	case DelegatedOperationIamAgentRecover:
 		return true
-	case DelegatedOperationAgentReplace:
+	case DelegatedOperationIamAgentReplace:
 		return true
-	case DelegatedOperationAgentTemplatePublish:
+	case DelegatedOperationIamAgentTemplatePublish:
 		return true
-	case DelegatedOperationAgentTemplateRead:
+	case DelegatedOperationIamAgentTemplateRead:
 		return true
-	case DelegatedOperationExecutionProfileRead:
+	case DelegatedOperationIamExecutionProfileRead:
 		return true
-	case DelegatedOperationOperatorRead:
+	case DelegatedOperationIamOperatorRead:
 		return true
 	default:
 		return false
@@ -462,6 +462,81 @@ func (e InvitationPreviewState) Valid() bool {
 	}
 }
 
+// Defines values for IssuerConfigurationGrantTypesSupported.
+const (
+	IssuerConfigurationGrantTypesSupportedUrnIetfParamsOauthGrantTypeTokenExchange IssuerConfigurationGrantTypesSupported = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationGrantTypesSupported enum.
+func (e IssuerConfigurationGrantTypesSupported) Valid() bool {
+	switch e {
+	case IssuerConfigurationGrantTypesSupportedUrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerConfigurationSubjectTypesSupported.
+const (
+	Public IssuerConfigurationSubjectTypesSupported = "public"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationSubjectTypesSupported enum.
+func (e IssuerConfigurationSubjectTypesSupported) Valid() bool {
+	switch e {
+	case Public:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerConfigurationTokenEndpointAuthMethodsSupported.
+const (
+	None IssuerConfigurationTokenEndpointAuthMethodsSupported = "none"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationTokenEndpointAuthMethodsSupported enum.
+func (e IssuerConfigurationTokenEndpointAuthMethodsSupported) Valid() bool {
+	switch e {
+	case None:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerKeyKty.
+const (
+	RSA IssuerKeyKty = "RSA"
+)
+
+// Valid indicates whether the value is a known member of the IssuerKeyKty enum.
+func (e IssuerKeyKty) Valid() bool {
+	switch e {
+	case RSA:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerKeyUse.
+const (
+	Sig IssuerKeyUse = "sig"
+)
+
+// Valid indicates whether the value is a known member of the IssuerKeyUse enum.
+func (e IssuerKeyUse) Valid() bool {
+	switch e {
+	case Sig:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LoginReturnPathApp.
 const (
 	Console LoginReturnPathApp = "console"
@@ -488,6 +563,7 @@ const (
 	InvalidClient        OAuthErrorError = "invalid_client"
 	InvalidGrant         OAuthErrorError = "invalid_grant"
 	InvalidRequest       OAuthErrorError = "invalid_request"
+	InvalidTarget        OAuthErrorError = "invalid_target"
 	SlowDown             OAuthErrorError = "slow_down"
 	UnsupportedGrantType OAuthErrorError = "unsupported_grant_type"
 )
@@ -507,6 +583,8 @@ func (e OAuthErrorError) Valid() bool {
 		return true
 	case InvalidRequest:
 		return true
+	case InvalidTarget:
+		return true
 	case SlowDown:
 		return true
 	case UnsupportedGrantType:
@@ -518,37 +596,37 @@ func (e OAuthErrorError) Valid() bool {
 
 // Defines values for OperationAuthorityRequestOperation.
 const (
-	OperationAuthorityRequestOperationAgentConfigure       OperationAuthorityRequestOperation = "agent:configure"
-	OperationAuthorityRequestOperationAgentCreate          OperationAuthorityRequestOperation = "agent:create"
-	OperationAuthorityRequestOperationAgentExecutionRead   OperationAuthorityRequestOperation = "agent:execution-read"
-	OperationAuthorityRequestOperationAgentRecover         OperationAuthorityRequestOperation = "agent:recover"
-	OperationAuthorityRequestOperationAgentReplace         OperationAuthorityRequestOperation = "agent:replace"
-	OperationAuthorityRequestOperationAgentTemplatePublish OperationAuthorityRequestOperation = "agent-template:publish"
-	OperationAuthorityRequestOperationAgentTemplateRead    OperationAuthorityRequestOperation = "agent-template:read"
-	OperationAuthorityRequestOperationExecutionProfileRead OperationAuthorityRequestOperation = "execution-profile:read"
-	OperationAuthorityRequestOperationOperatorRead         OperationAuthorityRequestOperation = "operator:read"
+	OperationAuthorityRequestOperationIamAgentConfigure       OperationAuthorityRequestOperation = "iam:agent.configure"
+	OperationAuthorityRequestOperationIamAgentCreate          OperationAuthorityRequestOperation = "iam:agent.create"
+	OperationAuthorityRequestOperationIamAgentExecutionRead   OperationAuthorityRequestOperation = "iam:agent.execution-read"
+	OperationAuthorityRequestOperationIamAgentRecover         OperationAuthorityRequestOperation = "iam:agent.recover"
+	OperationAuthorityRequestOperationIamAgentReplace         OperationAuthorityRequestOperation = "iam:agent.replace"
+	OperationAuthorityRequestOperationIamAgentTemplatePublish OperationAuthorityRequestOperation = "iam:agent-template.publish"
+	OperationAuthorityRequestOperationIamAgentTemplateRead    OperationAuthorityRequestOperation = "iam:agent-template.read"
+	OperationAuthorityRequestOperationIamExecutionProfileRead OperationAuthorityRequestOperation = "iam:execution-profile.read"
+	OperationAuthorityRequestOperationIamOperatorRead         OperationAuthorityRequestOperation = "iam:operator.read"
 )
 
 // Valid indicates whether the value is a known member of the OperationAuthorityRequestOperation enum.
 func (e OperationAuthorityRequestOperation) Valid() bool {
 	switch e {
-	case OperationAuthorityRequestOperationAgentConfigure:
+	case OperationAuthorityRequestOperationIamAgentConfigure:
 		return true
-	case OperationAuthorityRequestOperationAgentCreate:
+	case OperationAuthorityRequestOperationIamAgentCreate:
 		return true
-	case OperationAuthorityRequestOperationAgentExecutionRead:
+	case OperationAuthorityRequestOperationIamAgentExecutionRead:
 		return true
-	case OperationAuthorityRequestOperationAgentRecover:
+	case OperationAuthorityRequestOperationIamAgentRecover:
 		return true
-	case OperationAuthorityRequestOperationAgentReplace:
+	case OperationAuthorityRequestOperationIamAgentReplace:
 		return true
-	case OperationAuthorityRequestOperationAgentTemplatePublish:
+	case OperationAuthorityRequestOperationIamAgentTemplatePublish:
 		return true
-	case OperationAuthorityRequestOperationAgentTemplateRead:
+	case OperationAuthorityRequestOperationIamAgentTemplateRead:
 		return true
-	case OperationAuthorityRequestOperationExecutionProfileRead:
+	case OperationAuthorityRequestOperationIamExecutionProfileRead:
 		return true
-	case OperationAuthorityRequestOperationOperatorRead:
+	case OperationAuthorityRequestOperationIamOperatorRead:
 		return true
 	default:
 		return false
@@ -777,6 +855,84 @@ func (e SessionTokenTokenType) Valid() bool {
 	}
 }
 
+// Defines values for TokenExchangeRequestAudience.
+const (
+	TokenExchangeRequestAudienceCodehub TokenExchangeRequestAudience = "codehub"
+	TokenExchangeRequestAudiencePolicy  TokenExchangeRequestAudience = "policy"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestAudience enum.
+func (e TokenExchangeRequestAudience) Valid() bool {
+	switch e {
+	case TokenExchangeRequestAudienceCodehub:
+		return true
+	case TokenExchangeRequestAudiencePolicy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestGrantType.
+const (
+	TokenExchangeRequestGrantTypeUrnIetfParamsOauthGrantTypeTokenExchange TokenExchangeRequestGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestGrantType enum.
+func (e TokenExchangeRequestGrantType) Valid() bool {
+	switch e {
+	case TokenExchangeRequestGrantTypeUrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestRequestedTokenType.
+const (
+	UrnIetfParamsOauthTokenTypeJwt TokenExchangeRequestRequestedTokenType = "urn:ietf:params:oauth:token-type:jwt"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestRequestedTokenType enum.
+func (e TokenExchangeRequestRequestedTokenType) Valid() bool {
+	switch e {
+	case UrnIetfParamsOauthTokenTypeJwt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestSubjectTokenType.
+const (
+	TokenExchangeRequestSubjectTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenExchangeRequestSubjectTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestSubjectTokenType enum.
+func (e TokenExchangeRequestSubjectTokenType) Valid() bool {
+	switch e {
+	case TokenExchangeRequestSubjectTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeResponseIssuedTokenType.
+const (
+	TokenExchangeResponseIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenExchangeResponseIssuedTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeResponseIssuedTokenType enum.
+func (e TokenExchangeResponseIssuedTokenType) Valid() bool {
+	switch e {
+	case TokenExchangeResponseIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListGroupsParamsMember.
 const (
 	GroupMemberMe ListGroupsParamsMember = "me"
@@ -973,7 +1129,7 @@ type CredentialEventCredential string
 // CredentialEventOutcome defines model for CredentialEvent.Outcome.
 type CredentialEventOutcome string
 
-// DelegatedOperation `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
+// DelegatedOperation `iam:agent.activate` bounds the hosted operator's own lifecycle authority; no user mints it. `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
 type DelegatedOperation string
 
 // Delegation defines model for Delegation.
@@ -1127,6 +1283,31 @@ type FoundObject struct {
 	Name *string `json:"name,omitempty"`
 }
 
+// GrnDescription defines model for GrnDescription.
+type GrnDescription struct {
+	// Actions The names of the actions whose resource types name `entityType`, sorted. `getRegistry` says what each applies to.
+	Actions *[]string `json:"actions,omitempty"`
+
+	// EntityType The qualified entity type the name is written as.
+	EntityType *string `json:"entityType,omitempty"`
+
+	// Grn The name as asked, locator included.
+	Grn string `json:"grn"`
+
+	// Known False where the name's service or type is declared by no manifest. Every property below is absent then.
+	Known bool `json:"known"`
+
+	// Locator The place inside the resource, as written after `#`.
+	Locator *string `json:"locator,omitempty"`
+
+	// Parent The name with its last type and id pair removed. Absent for a name of one pair.
+	Parent  *string `json:"parent,omitempty"`
+	Service *string `json:"service,omitempty"`
+
+	// Type The name's last type segment.
+	Type *string `json:"type,omitempty"`
+}
+
 // Group defines model for Group.
 type Group struct {
 	Grn    string `json:"grn"`
@@ -1206,6 +1387,59 @@ type IssuedOperatorKey struct {
 	TokenUrl string `json:"tokenUrl"`
 }
 
+// IssuerConfiguration The OIDC discovery document of garam as an issuer (ADR-0141). Every URL is the `issuer` followed by the path the operation of this file is served at.
+type IssuerConfiguration struct {
+	GrantTypesSupported []IssuerConfigurationGrantTypesSupported `json:"grant_types_supported"`
+
+	// IdTokenSigningAlgValuesSupported Only `RS256`.
+	IdTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"`
+
+	// Issuer The configured `GARAM_IDENTITY_ISSUER`, which every token's `iss` equals byte for byte.
+	Issuer  string `json:"issuer"`
+	JwksUri string `json:"jwks_uri"`
+
+	// ResponseTypesSupported Empty, because the issuer has no authorization endpoint.
+	ResponseTypesSupported []string                                   `json:"response_types_supported"`
+	SubjectTypesSupported  []IssuerConfigurationSubjectTypesSupported `json:"subject_types_supported"`
+	TokenEndpoint          string                                     `json:"token_endpoint"`
+
+	// TokenEndpointAuthMethodsSupported `none`: the exchange is authenticated by its subject token.
+	TokenEndpointAuthMethodsSupported []IssuerConfigurationTokenEndpointAuthMethodsSupported `json:"token_endpoint_auth_methods_supported"`
+}
+
+// IssuerConfigurationGrantTypesSupported defines model for IssuerConfiguration.GrantTypesSupported.
+type IssuerConfigurationGrantTypesSupported string
+
+// IssuerConfigurationSubjectTypesSupported defines model for IssuerConfiguration.SubjectTypesSupported.
+type IssuerConfigurationSubjectTypesSupported string
+
+// IssuerConfigurationTokenEndpointAuthMethodsSupported defines model for IssuerConfiguration.TokenEndpointAuthMethodsSupported.
+type IssuerConfigurationTokenEndpointAuthMethodsSupported string
+
+// IssuerKey defines model for IssuerKey.
+type IssuerKey struct {
+	// Alg Always `RS256`.
+	Alg string `json:"alg"`
+	E   string `json:"e"`
+
+	// Kid The key's RFC 7638 thumbprint, which a token's header names.
+	Kid string       `json:"kid"`
+	Kty IssuerKeyKty `json:"kty"`
+	N   string       `json:"n"`
+	Use IssuerKeyUse `json:"use"`
+}
+
+// IssuerKeyKty defines model for IssuerKey.Kty.
+type IssuerKeyKty string
+
+// IssuerKeyUse defines model for IssuerKey.Use.
+type IssuerKeyUse string
+
+// IssuerKeySet RFC 7517's key set holding the issuer's one public key.
+type IssuerKeySet struct {
+	Keys []IssuerKey `json:"keys"`
+}
+
 // LoginReturnPath defines model for LoginReturnPath.
 type LoginReturnPath struct {
 	// App The app the sign-in is for; the console where absent.
@@ -1234,7 +1468,7 @@ type MemberRef struct {
 
 // OAuthError RFC 6749's error response, with RFC 8628's codes (ADR-0120).
 type OAuthError struct {
-	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 
@@ -1242,7 +1476,7 @@ type OAuthError struct {
 	Interval *int `json:"interval,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
 type OAuthErrorError string
 
 // OperationAuthority defines model for OperationAuthority.
@@ -1264,15 +1498,15 @@ type OperationAuthorityRequest struct {
 	// BodySha256 Lowercase hexadecimal SHA-256 of the exact request body the Operator receives; for a GET, that of the empty body.
 	BodySha256 string `json:"bodySha256"`
 
-	// Destination Required for `agent:replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107).
+	// Destination Required for `iam:agent.replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107).
 	Destination *string                            `json:"destination,omitempty"`
 	Operation   OperationAuthorityRequestOperation `json:"operation"`
 	RequestId   RequestId                          `json:"requestId"`
 
-	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
+	// RequestTarget Required for `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read`, `iam:agent.execution-read` and `iam:operator.read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
+	// Target Controller GRN for `iam:agent.create`; agent GRN for `iam:agent.configure`, `iam:agent.recover`, `iam:agent.execution-read` and `iam:agent.replace`; this organization's GRN for `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read`.
 	Target string `json:"target"`
 }
 
@@ -1667,6 +1901,47 @@ type ProjectPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
+// Registry defines model for Registry.
+type Registry struct {
+	Services []RegistryService `json:"services"`
+}
+
+// RegistryAction defines model for RegistryAction.
+type RegistryAction struct {
+	// Name The action as it is written on the wire, `<service>:<type>.<verb>`.
+	Name string `json:"name"`
+
+	// Principals The qualified types that may take the action.
+	Principals []string `json:"principals"`
+
+	// Resources The qualified types the action applies to.
+	Resources []string `json:"resources"`
+}
+
+// RegistryService defines model for RegistryService.
+type RegistryService struct {
+	// Actions The service's actions, sorted by `name`.
+	Actions []RegistryAction `json:"actions"`
+
+	// Name The service's one name, the `service` segment of its GRNs.
+	Name string `json:"name"`
+
+	// Types The entity types a GRN of this service names, sorted by `name`.
+	Types []RegistryType `json:"types"`
+}
+
+// RegistryType defines model for RegistryType.
+type RegistryType struct {
+	// EntityType The qualified entity type the name is written as.
+	EntityType string `json:"entityType"`
+
+	// Name The `type` segment of a GRN of this type.
+	Name string `json:"name"`
+
+	// Parents The qualified types an entity of this type may be a member of.
+	Parents []string `json:"parents"`
+}
+
 // RequestId defines model for RequestId.
 type RequestId = string
 
@@ -1731,6 +2006,48 @@ type SessionToken struct {
 
 // SessionTokenTokenType defines model for SessionToken.TokenType.
 type SessionTokenTokenType string
+
+// TokenExchangeRequest RFC 8693's token exchange request (ADR-0141).
+type TokenExchangeRequest struct {
+	// Audience The one service the token is for.
+	Audience  TokenExchangeRequestAudience  `json:"audience"`
+	GrantType TokenExchangeRequestGrantType `json:"grant_type"`
+
+	// RequestedTokenType Absent is the same.
+	RequestedTokenType *TokenExchangeRequestRequestedTokenType `json:"requested_token_type,omitempty"`
+
+	// SubjectToken The access token of a live CLI session.
+	SubjectToken     string                               `json:"subject_token"`
+	SubjectTokenType TokenExchangeRequestSubjectTokenType `json:"subject_token_type"`
+}
+
+// TokenExchangeRequestAudience The one service the token is for.
+type TokenExchangeRequestAudience string
+
+// TokenExchangeRequestGrantType defines model for TokenExchangeRequest.GrantType.
+type TokenExchangeRequestGrantType string
+
+// TokenExchangeRequestRequestedTokenType Absent is the same.
+type TokenExchangeRequestRequestedTokenType string
+
+// TokenExchangeRequestSubjectTokenType defines model for TokenExchangeRequest.SubjectTokenType.
+type TokenExchangeRequestSubjectTokenType string
+
+// TokenExchangeResponse RFC 8693's successful response (ADR-0141).
+type TokenExchangeResponse struct {
+	// AccessToken The compact RS256 JWT.
+	AccessToken string `json:"access_token"`
+
+	// ExpiresIn Seconds the token lives: at most 300, and no more than the session has left.
+	ExpiresIn       int                                  `json:"expires_in"`
+	IssuedTokenType TokenExchangeResponseIssuedTokenType `json:"issued_token_type"`
+
+	// TokenType Always `Bearer`.
+	TokenType string `json:"token_type"`
+}
+
+// TokenExchangeResponseIssuedTokenType defines model for TokenExchangeResponse.IssuedTokenType.
+type TokenExchangeResponseIssuedTokenType string
 
 // User defines model for User.
 type User struct {
@@ -1933,6 +2250,12 @@ type SearchOrgParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// DescribeGrnParams defines parameters for DescribeGrn.
+type DescribeGrnParams struct {
+	// Grn The name to describe.
+	Grn string `form:"grn" json:"grn"`
+}
+
 // RequestDeviceCodeFormdataRequestBody defines body for RequestDeviceCode for application/x-www-form-urlencoded ContentType.
 type RequestDeviceCodeFormdataRequestBody = DeviceCodeRequest
 
@@ -1956,6 +2279,9 @@ type LoginPasswordJSONRequestBody = PasswordLogin
 
 // RegisterPasswordJSONRequestBody defines body for RegisterPassword for application/json ContentType.
 type RegisterPasswordJSONRequestBody = PasswordRegistration
+
+// ExchangeSessionTokenFormdataRequestBody defines body for ExchangeSessionToken for application/x-www-form-urlencoded ContentType.
+type ExchangeSessionTokenFormdataRequestBody = TokenExchangeRequest
 
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = OrganizationCreate
@@ -2102,6 +2428,13 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// GetIssuerConfiguration Read garam's issuer metadata.
+	//
+	// The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+	//
+	// Corresponds with GET /.well-known/openid-configuration (the `GetIssuerConfiguration` operationId).
+	GetIssuerConfiguration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// OauthCallback Complete the OAuth authorization code flow.
 	//
@@ -2316,6 +2649,33 @@ type ClientInterface interface {
 	// Corresponds with DELETE /me/sessions/{session} (the `RevokeMySession` operationId).
 	RevokeMySession(ctx context.Context, session string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetIssuerKeys Read the keys garam's tokens verify with.
+	//
+	// The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+	//
+	// Corresponds with GET /oauth/jwks (the `GetIssuerKeys` operationId).
+	GetIssuerKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExchangeSessionTokenWithBody Exchange a CLI session's access token for a signed token.
+	//
+	// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+	// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+	ExchangeSessionTokenWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExchangeSessionTokenWithFormdataBody Exchange a CLI session's access token for a signed token.
+	//
+	// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+	// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type.
+	//
+	// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+	ExchangeSessionTokenWithFormdataBody(ctx context.Context, body ExchangeSessionTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListOrgs List organizations the caller belongs to.
 	//
 	// Corresponds with GET /orgs (the `ListOrgs` operationId).
@@ -2363,18 +2723,18 @@ type ClientInterface interface {
 	// Corresponds with PATCH /orgs/{org} (the `UpdateOrg` operationId).
 	UpdateOrg(ctx context.Context, org Org, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListAgentEnrollments List the organization's standalone approvals. Requires `agent:read`.
+	// ListAgentEnrollments List the organization's standalone approvals. Requires `iam:agent.read`.
 	//
 	// Lists every approval the organization holds, oldest first: pending, spent, withdrawn and expired, for standalone and direct placement alike (ADR-0082, ADR-0111). `state` is where each stands when this answers; an unspent approval past `expiresAt` is `expired` and never revived.
 	//
 	// An entry names what the approval binds and what spending it made, and nothing a host spends or proves with: no bootstrap secret or its hash, no key fingerprint, no request digest, no certificate and no credential.
 	//
-	// Authorization is `agent:read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
+	// Authorization is `iam:agent.read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
 	//
 	// Corresponds with GET /orgs/{org}/agent-enrollments (the `ListAgentEnrollments` operationId).
 	ListAgentEnrollments(ctx context.Context, org Org, params *ListAgentEnrollmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ApproveAgentEnrollmentWithBody Approve a standalone host's enrollment. Requires current `agent:enroll`.
+	// ApproveAgentEnrollmentWithBody Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 	//
 	// Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
 	// A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
@@ -2385,7 +2745,7 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/agent-enrollments (the `ApproveAgentEnrollment` operationId).
 	ApproveAgentEnrollmentWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `agent:enroll`.
+	// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 	//
 	// Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
 	// A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
@@ -2396,14 +2756,14 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/agent-enrollments (the `ApproveAgentEnrollment` operationId).
 	ApproveAgentEnrollment(ctx context.Context, org Org, body ApproveAgentEnrollmentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+	// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `iam:agent.enroll`.
 	//
 	// Withdraws an approval no host has spent. Spending it afterwards is refused as an unknown bootstrap would be, and a withdrawal and a spending of one approval never both take effect. A withdrawn one answers 204 again; a spent one is refused with 409, because what it registered is ended by `revokeAgentSupervisor`.
 	//
 	// Corresponds with DELETE /orgs/{org}/agent-enrollments/{enrollment} (the `WithdrawAgentEnrollment` operationId).
 	WithdrawAgentEnrollment(ctx context.Context, org Org, enrollmentID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListAgentSupervisors List the organization's standalone supervisors. Requires `agent:read`.
+	// ListAgentSupervisors List the organization's standalone supervisors. Requires `iam:agent.read`.
 	//
 	// Lists every supervisor registration the organization holds, oldest first: `active` while current, `revoked` once ended by `revokeAgentSupervisor` or by a replacement taking its agent (ADR-0082). Each names its host, its agent, the epoch its enrollment assigned and when its agent last activated at that epoch, absent where it never did.
 	//
@@ -2412,7 +2772,7 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/agent-supervisors (the `ListAgentSupervisors` operationId).
 	ListAgentSupervisors(ctx context.Context, org Org, params *ListAgentSupervisorsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+	// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `iam:agent.enroll`.
 	//
 	// Ends the supervisor's registration, the agent's current activation and every unspent approval for that agent, in one transaction under the agent's execution lock (ADR-0082). The supervisor's credential and every token exchanged for it are refused from the next request; the agent's protected writes are refused from its next request, because no activation admits them. The agent, its GRN and the memory its host keeps are untouched, and only a new approval stands a supervisor up for it again. Authorization is decided on the agent. A supervisor the organization holds no current registration of answers 404.
 	//
@@ -2421,7 +2781,7 @@ type ClientInterface interface {
 
 	// ListAgents List an organization's agents. Requires the `member` role.
 	//
-	// Authorized on `agent:read` on the organization. Leaves out each agent whose own `agent:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+	// Authorized on `iam:agent.read` on the organization. Leaves out each agent whose own `iam:agent.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 	//
 	// Corresponds with GET /orgs/{org}/agents (the `ListAgents` operationId).
 	ListAgents(ctx context.Context, org Org, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2431,27 +2791,27 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/agents/{agent} (the `GetAgent` operationId).
 	GetAgent(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RenameAgentWithBody Rename an agent. Requires `agent:rename`.
+	// RenameAgentWithBody Rename an agent. Requires `iam:agent.rename`.
 	//
-	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
 	RenameAgentWithBody(ctx context.Context, org Org, agentSlug AgentSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RenameAgent Rename an agent. Requires `agent:rename`.
+	// RenameAgent Rename an agent. Requires `iam:agent.rename`.
 	//
-	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
 	RenameAgent(ctx context.Context, org Org, agentSlug AgentSlug, body RenameAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// WatchAgent Watch an agent work. Requires the `agent:watch` action.
+	// WatchAgent Watch an agent work. Requires the `iam:agent.watch` action.
 	//
-	// What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `agent:read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
+	// What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `iam:agent.read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
 	// It is best effort and never a record. It begins when it is opened and replays nothing, because nothing was kept; the stream it rests on drops events for a subscriber that falls behind and marks no gap, so a gap here cannot be told from an agent that said nothing. What has to be true afterwards — what an agent did, which messages it consumed — comes from the queue instead.
 	// Each event carries the platform's own name for it and the event as the platform emitted it. garam writes a comment line on a fixed interval besides, so a caller can tell a live stream with nothing on it from one that is no longer connected. garam never ends the stream to report that the agent has finished: nothing here knows that, and an end that meant it would be the one reading a person could not check.
 	//
@@ -2487,7 +2847,7 @@ type ClientInterface interface {
 	//
 	// `replay` is an answer that repeated what an identical earlier request issued, which issued nothing new. A refusal is recorded only where garam could attribute the request to the subject: an enrollment whose token or bootstrap secret did not resolve names none, and a refusal of the member asking, before the subject's credential was reached, is the member's and not the subject's.
 	//
-	// It is authorized on the subject's own read: `operator:read` on the organization for an operator, `agent:read` on the agent for an agent, and `agent:read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
+	// It is authorized on the subject's own read: `iam:operator.read` on the organization for an operator, `iam:agent.read` on the agent for an agent, and `iam:agent.read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
 	//
 	// Corresponds with GET /orgs/{org}/credential-events (the `ListCredentialEvents` operationId).
 	ListCredentialEvents(ctx context.Context, org Org, params *ListCredentialEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2505,7 +2865,7 @@ type ClientInterface interface {
 
 	// ListGroups List an organization's groups. Requires the `member` role.
 	//
-	// Authorized on `group:read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `group:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+	// Authorized on `iam:group.read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `iam:group.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 	//
 	// Corresponds with GET /orgs/{org}/groups (the `ListGroups` operationId).
 	ListGroups(ctx context.Context, org Org, params *ListGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2578,7 +2938,7 @@ type ClientInterface interface {
 	// Corresponds with DELETE /orgs/{org}/groups/{group}/members/{member} (the `RemoveGroupMember` operationId).
 	RemoveGroupMember(ctx context.Context, org Org, groupSlug GroupSlug, memberGrn MemberGrn, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListInvitations List the invitations that can still be accepted. Requires `org:invite`.
+	// ListInvitations List the invitations that can still be accepted. Requires `iam:org.invite`.
 	//
 	// Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
 	//
@@ -2603,7 +2963,7 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
 	CreateInvitation(ctx context.Context, org Org, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RevokeInvitation Revoke an invitation no one has used. Requires `org:invite`.
+	// RevokeInvitation Revoke an invitation no one has used. Requires `iam:org.invite`.
 	//
 	// Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
 	//
@@ -2619,7 +2979,7 @@ type ClientInterface interface {
 	//
 	// Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
 	//
-	// `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+	// `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
 	//
 	// Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
 	//
@@ -2634,7 +2994,7 @@ type ClientInterface interface {
 	//
 	// Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
 	//
-	// `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+	// `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
 	//
 	// Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
 	//
@@ -2692,7 +3052,7 @@ type ClientInterface interface {
 	// UpdateOperatorWithBody Rename or describe an operator. Requires the `admin` role.
 	//
 	// Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-	// It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+	// It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2702,21 +3062,21 @@ type ClientInterface interface {
 	// UpdateOperator Rename or describe an operator. Requires the `admin` role.
 	//
 	// Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-	// It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+	// It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /orgs/{org}/operators/{operator} (the `UpdateOperator` operationId).
 	UpdateOperator(ctx context.Context, org Org, operatorSlug OperatorSlug, body UpdateOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ClearOperatorControlEndpoint Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+	// ClearOperatorControlEndpoint Clear a hosted operator's control endpoint. Requires current `iam:operator.delegate`.
 	//
 	// The console then reaches no control service for this operator. Clearing one already clear answers the same.
 	//
 	// Corresponds with DELETE /orgs/{org}/operators/{operator}/control-endpoint (the `ClearOperatorControlEndpoint` operationId).
 	ClearOperatorControlEndpoint(ctx context.Context, org Org, operatorSlug OperatorSlug, params *ClearOperatorControlEndpointParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOperatorControlEndpointWithBody Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+	// SetOperatorControlEndpointWithBody Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 	//
 	// Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
 	//
@@ -2725,7 +3085,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/operators/{operator}/control-endpoint (the `SetOperatorControlEndpoint` operationId).
 	SetOperatorControlEndpointWithBody(ctx context.Context, org Org, operatorSlug OperatorSlug, params *SetOperatorControlEndpointParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+	// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 	//
 	// Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
 	//
@@ -2734,7 +3094,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/operators/{operator}/control-endpoint (the `SetOperatorControlEndpoint` operationId).
 	SetOperatorControlEndpoint(ctx context.Context, org Org, operatorSlug OperatorSlug, params *SetOperatorControlEndpointParams, body SetOperatorControlEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// EndOperatorDelegationWithBody Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+	// EndOperatorDelegationWithBody Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	//
 	// Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
 	//
@@ -2743,7 +3103,7 @@ type ClientInterface interface {
 	// Corresponds with DELETE /orgs/{org}/operators/{operator}/delegation (the `EndOperatorDelegation` operationId).
 	EndOperatorDelegationWithBody(ctx context.Context, org Org, operatorSlug OperatorSlug, params *EndOperatorDelegationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	//
 	// Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
 	//
@@ -2759,7 +3119,7 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/operators/{operator}/delegation (the `GetOperatorDelegation` operationId).
 	GetOperatorDelegation(ctx context.Context, org Org, operatorSlug OperatorSlug, params *GetOperatorDelegationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// WriteOperatorDelegationWithBody Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+	// WriteOperatorDelegationWithBody Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	//
 	// Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
 	//
@@ -2768,7 +3128,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/operators/{operator}/delegation (the `WriteOperatorDelegation` operationId).
 	WriteOperatorDelegationWithBody(ctx context.Context, org Org, operatorSlug OperatorSlug, params *WriteOperatorDelegationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+	// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	//
 	// Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
 	//
@@ -2787,7 +3147,7 @@ type ClientInterface interface {
 	// IssueOperatorKeyWithBody Issue a registered operator a private key, shown once.
 	//
 	// Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-	// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+	// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
 	// `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
 	// One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
 	//
@@ -2799,7 +3159,7 @@ type ClientInterface interface {
 	// IssueOperatorKey Issue a registered operator a private key, shown once.
 	//
 	// Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-	// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+	// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
 	// `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
 	// One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
 	//
@@ -2808,14 +3168,14 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/operators/{operator}/keys (the `IssueOperatorKey` operationId).
 	IssueOperatorKey(ctx context.Context, org Org, operatorSlug OperatorSlug, body IssueOperatorKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `iam:operator.reissue`.
 	//
 	// Withdraws the key (ADR-0102). **It stops verifying assertions, and every token exchanged under it stops authenticating, at the moment this returns**: the next request presenting one is refused, on a connection already open too, and an exchange racing the withdrawal either finishes first and has its token withdrawn here, or finds the key withdrawn and obtains nothing. The key's record stays, listed as `revoked`. Withdrawing a key already withdrawn answers 204 again.
 	//
 	// Corresponds with DELETE /orgs/{org}/operators/{operator}/keys/{kid} (the `RevokeOperatorKey` operationId).
 	RevokeOperatorKey(ctx context.Context, org Org, operatorSlug OperatorSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOperatorManagerWithBody Link a control service to its cluster manager, once. Requires `operator:register`.
+	// SetOperatorManagerWithBody Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 	//
 	// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
 	//
@@ -2824,7 +3184,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
 	SetOperatorManagerWithBody(ctx context.Context, org Org, operatorSlug OperatorSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOperatorManager Link a control service to its cluster manager, once. Requires `operator:register`.
+	// SetOperatorManager Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 	//
 	// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
 	//
@@ -2837,7 +3197,7 @@ type ClientInterface interface {
 	//
 	// Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
 	//
-	// Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+	// Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
 	//
 	// A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
 	//
@@ -2852,7 +3212,7 @@ type ClientInterface interface {
 	//
 	// Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
 	//
-	// Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+	// Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
 	//
 	// A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
 	//
@@ -2869,7 +3229,7 @@ type ClientInterface interface {
 	//
 	// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
 	//
-	// A policy statement is named only where the caller holds `policy:read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+	// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
 	//
 	// The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
 	//
@@ -2878,11 +3238,11 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/permission-explanation (the `ExplainPermission` operationId).
 	ExplainPermission(ctx context.Context, org Org, params *ExplainPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListPermissionHolders List the members and agents the engine allows one action. Requires `org:member-list`.
+	// ListPermissionHolders List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 	//
 	// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
 	//
-	// It requires `org:member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `agent:read` on the organization, the check `listAgents` makes; otherwise none is listed.
+	// It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
 	//
 	// The candidates are the organization's members in ascending GRN order followed by its agents in ascending GRN order. A page asks `limit` of them from `offset`, at most fifty, and answers those the engine allows, so a page may hold fewer holders than it asked candidates, none at all among them. `nextOffset` is where the next page starts, and absent on the last.
 	//
@@ -2893,7 +3253,7 @@ type ClientInterface interface {
 
 	// ListPolicies List an organization's policies. Requires the `admin` role.
 	//
-	// Authorized on `policy:read` on the organization. Leaves out each policy whose own `policy:read` the caller is denied.
+	// Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
 	//
 	// Corresponds with GET /orgs/{org}/policies (the `ListPolicies` operationId).
 	ListPolicies(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2918,7 +3278,7 @@ type ClientInterface interface {
 
 	// DeletePolicy Delete a policy. Requires the `admin` role.
 	//
-	// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `policy:delete`.
+	// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
 	//
 	// Corresponds with DELETE /orgs/{org}/policies/{policy} (the `DeletePolicy` operationId).
 	DeletePolicy(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3003,7 +3363,7 @@ type ClientInterface interface {
 
 	// ListProjects List an organization's projects. Requires the `member` role.
 	//
-	// Authorized on `project:read` on the organization. Leaves out each project whose own `project:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+	// Authorized on `iam:project.read` on the organization. Leaves out each project whose own `iam:project.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 	//
 	// Corresponds with GET /orgs/{org}/projects (the `ListProjects` operationId).
 	ListProjects(ctx context.Context, org Org, params *ListProjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3080,12 +3440,43 @@ type ClientInterface interface {
 	//
 	// Answers, for each kind the caller may list, the objects of that kind whose name or identifier holds `q`, case aside. `q` matches as typed: `%` and `_` match only themselves.
 	//
-	// Each kind is authorized as its list is: people on `org:member-list`, as `listOrgMembers` is; agents on `agent:read`, teams on `group:read`, policies on `policy:read` and projects on `project:read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
+	// Each kind is authorized as its list is: people on `iam:org.member-list`, as `listOrgMembers` is; agents on `iam:agent.read`, teams on `iam:group.read`, policies on `iam:policy.read` and projects on `iam:project.read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
 	//
 	// A person is found by nickname or identifier, and an agent by its identifier. Each kind answers its first `limit` objects in the order its list gives them, and how many more it found past those.
 	//
 	// Corresponds with GET /orgs/{org}/search (the `SearchOrg` operationId).
 	SearchOrg(ctx context.Context, org Org, params *SearchOrgParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRegistry List the services, their types and their actions. Requires a signed-in caller.
+	//
+	// What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+	//
+	// Corresponds with GET /registry (the `GetRegistry` operationId).
+	GetRegistry(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DescribeGrn Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+	//
+	// Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+	//
+	// Corresponds with GET /registry/grn (the `DescribeGrn` operationId).
+	DescribeGrn(ctx context.Context, params *DescribeGrnParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// GetIssuerConfiguration Read garam's issuer metadata.
+//
+// The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+//
+// Corresponds with GET /.well-known/openid-configuration (the `GetIssuerConfiguration` operationId).
+func (c *Client) GetIssuerConfiguration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetIssuerConfigurationRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // OauthCallback Complete the OAuth authorization code flow.
@@ -3551,6 +3942,63 @@ func (c *Client) RevokeMySession(ctx context.Context, session string, reqEditors
 	return c.Client.Do(req)
 }
 
+// GetIssuerKeys Read the keys garam's tokens verify with.
+//
+// The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+//
+// Corresponds with GET /oauth/jwks (the `GetIssuerKeys` operationId).
+func (c *Client) GetIssuerKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetIssuerKeysRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExchangeSessionTokenWithBody Exchange a CLI session's access token for a signed token.
+//
+// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+func (c *Client) ExchangeSessionTokenWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeSessionTokenRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExchangeSessionTokenWithFormdataBody Exchange a CLI session's access token for a signed token.
+//
+// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type.
+//
+// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+func (c *Client) ExchangeSessionTokenWithFormdataBody(ctx context.Context, body ExchangeSessionTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeSessionTokenRequestWithFormdataBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListOrgs List organizations the caller belongs to.
 //
 // Corresponds with GET /orgs (the `ListOrgs` operationId).
@@ -3668,13 +4116,13 @@ func (c *Client) UpdateOrg(ctx context.Context, org Org, body UpdateOrgJSONReque
 	return c.Client.Do(req)
 }
 
-// ListAgentEnrollments List the organization's standalone approvals. Requires `agent:read`.
+// ListAgentEnrollments List the organization's standalone approvals. Requires `iam:agent.read`.
 //
 // Lists every approval the organization holds, oldest first: pending, spent, withdrawn and expired, for standalone and direct placement alike (ADR-0082, ADR-0111). `state` is where each stands when this answers; an unspent approval past `expiresAt` is `expired` and never revived.
 //
 // An entry names what the approval binds and what spending it made, and nothing a host spends or proves with: no bootstrap secret or its hash, no key fingerprint, no request digest, no certificate and no credential.
 //
-// Authorization is `agent:read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
+// Authorization is `iam:agent.read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
 //
 // Corresponds with GET /orgs/{org}/agent-enrollments (the `ListAgentEnrollments` operationId).
 func (c *Client) ListAgentEnrollments(ctx context.Context, org Org, params *ListAgentEnrollmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3689,7 +4137,7 @@ func (c *Client) ListAgentEnrollments(ctx context.Context, org Org, params *List
 	return c.Client.Do(req)
 }
 
-// ApproveAgentEnrollmentWithBody Approve a standalone host's enrollment. Requires current `agent:enroll`.
+// ApproveAgentEnrollmentWithBody Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 //
 // Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
 // A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
@@ -3710,7 +4158,7 @@ func (c *Client) ApproveAgentEnrollmentWithBody(ctx context.Context, org Org, co
 	return c.Client.Do(req)
 }
 
-// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `agent:enroll`.
+// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 //
 // Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
 // A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
@@ -3731,7 +4179,7 @@ func (c *Client) ApproveAgentEnrollment(ctx context.Context, org Org, body Appro
 	return c.Client.Do(req)
 }
 
-// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `iam:agent.enroll`.
 //
 // Withdraws an approval no host has spent. Spending it afterwards is refused as an unknown bootstrap would be, and a withdrawal and a spending of one approval never both take effect. A withdrawn one answers 204 again; a spent one is refused with 409, because what it registered is ended by `revokeAgentSupervisor`.
 //
@@ -3748,7 +4196,7 @@ func (c *Client) WithdrawAgentEnrollment(ctx context.Context, org Org, enrollmen
 	return c.Client.Do(req)
 }
 
-// ListAgentSupervisors List the organization's standalone supervisors. Requires `agent:read`.
+// ListAgentSupervisors List the organization's standalone supervisors. Requires `iam:agent.read`.
 //
 // Lists every supervisor registration the organization holds, oldest first: `active` while current, `revoked` once ended by `revokeAgentSupervisor` or by a replacement taking its agent (ADR-0082). Each names its host, its agent, the epoch its enrollment assigned and when its agent last activated at that epoch, absent where it never did.
 //
@@ -3767,7 +4215,7 @@ func (c *Client) ListAgentSupervisors(ctx context.Context, org Org, params *List
 	return c.Client.Do(req)
 }
 
-// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `iam:agent.enroll`.
 //
 // Ends the supervisor's registration, the agent's current activation and every unspent approval for that agent, in one transaction under the agent's execution lock (ADR-0082). The supervisor's credential and every token exchanged for it are refused from the next request; the agent's protected writes are refused from its next request, because no activation admits them. The agent, its GRN and the memory its host keeps are untouched, and only a new approval stands a supervisor up for it again. Authorization is decided on the agent. A supervisor the organization holds no current registration of answers 404.
 //
@@ -3786,7 +4234,7 @@ func (c *Client) RevokeAgentSupervisor(ctx context.Context, org Org, supervisorS
 
 // ListAgents List an organization's agents. Requires the `member` role.
 //
-// Authorized on `agent:read` on the organization. Leaves out each agent whose own `agent:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+// Authorized on `iam:agent.read` on the organization. Leaves out each agent whose own `iam:agent.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 //
 // Corresponds with GET /orgs/{org}/agents (the `ListAgents` operationId).
 func (c *Client) ListAgents(ctx context.Context, org Org, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3816,9 +4264,9 @@ func (c *Client) GetAgent(ctx context.Context, org Org, agentSlug AgentSlug, req
 	return c.Client.Do(req)
 }
 
-// RenameAgentWithBody Rename an agent. Requires `agent:rename`.
+// RenameAgentWithBody Rename an agent. Requires `iam:agent.rename`.
 //
-// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3835,9 +4283,9 @@ func (c *Client) RenameAgentWithBody(ctx context.Context, org Org, agentSlug Age
 	return c.Client.Do(req)
 }
 
-// RenameAgent Rename an agent. Requires `agent:rename`.
+// RenameAgent Rename an agent. Requires `iam:agent.rename`.
 //
-// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3854,9 +4302,9 @@ func (c *Client) RenameAgent(ctx context.Context, org Org, agentSlug AgentSlug, 
 	return c.Client.Do(req)
 }
 
-// WatchAgent Watch an agent work. Requires the `agent:watch` action.
+// WatchAgent Watch an agent work. Requires the `iam:agent.watch` action.
 //
-// What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `agent:read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
+// What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `iam:agent.read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
 // It is best effort and never a record. It begins when it is opened and replays nothing, because nothing was kept; the stream it rests on drops events for a subscriber that falls behind and marks no gap, so a gap here cannot be told from an agent that said nothing. What has to be true afterwards — what an agent did, which messages it consumed — comes from the queue instead.
 // Each event carries the platform's own name for it and the event as the platform emitted it. garam writes a comment line on a fixed interval besides, so a caller can tell a live stream with nothing on it from one that is no longer connected. garam never ends the stream to report that the agent has finished: nothing here knows that, and an end that meant it would be the one reading a person could not check.
 //
@@ -3932,7 +4380,7 @@ func (c *Client) GrantOrgConsent(ctx context.Context, org Org, otherSlug OtherSl
 //
 // `replay` is an answer that repeated what an identical earlier request issued, which issued nothing new. A refusal is recorded only where garam could attribute the request to the subject: an enrollment whose token or bootstrap secret did not resolve names none, and a refusal of the member asking, before the subject's credential was reached, is the member's and not the subject's.
 //
-// It is authorized on the subject's own read: `operator:read` on the organization for an operator, `agent:read` on the agent for an agent, and `agent:read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
+// It is authorized on the subject's own read: `iam:operator.read` on the organization for an operator, `iam:agent.read` on the agent for an agent, and `iam:agent.read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
 //
 // Corresponds with GET /orgs/{org}/credential-events (the `ListCredentialEvents` operationId).
 func (c *Client) ListCredentialEvents(ctx context.Context, org Org, params *ListCredentialEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3970,7 +4418,7 @@ func (c *Client) GetOrgDeletionPreview(ctx context.Context, org Org, reqEditors 
 
 // ListGroups List an organization's groups. Requires the `member` role.
 //
-// Authorized on `group:read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `group:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+// Authorized on `iam:group.read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `iam:group.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 //
 // Corresponds with GET /orgs/{org}/groups (the `ListGroups` operationId).
 func (c *Client) ListGroups(ctx context.Context, org Org, params *ListGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4153,7 +4601,7 @@ func (c *Client) RemoveGroupMember(ctx context.Context, org Org, groupSlug Group
 	return c.Client.Do(req)
 }
 
-// ListInvitations List the invitations that can still be accepted. Requires `org:invite`.
+// ListInvitations List the invitations that can still be accepted. Requires `iam:org.invite`.
 //
 // Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
 //
@@ -4208,7 +4656,7 @@ func (c *Client) CreateInvitation(ctx context.Context, org Org, body CreateInvit
 	return c.Client.Do(req)
 }
 
-// RevokeInvitation Revoke an invitation no one has used. Requires `org:invite`.
+// RevokeInvitation Revoke an invitation no one has used. Requires `iam:org.invite`.
 //
 // Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
 //
@@ -4244,7 +4692,7 @@ func (c *Client) ListOrgMembers(ctx context.Context, org Org, reqEditors ...Requ
 //
 // Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
 //
-// `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+// `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
 //
 // Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
 //
@@ -4269,7 +4717,7 @@ func (c *Client) MintOperationAuthorityWithBody(ctx context.Context, org Org, pa
 //
 // Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
 //
-// `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+// `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
 //
 // Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
 //
@@ -4387,7 +4835,7 @@ func (c *Client) GetOperator(ctx context.Context, org Org, operatorSlug Operator
 // UpdateOperatorWithBody Rename or describe an operator. Requires the `admin` role.
 //
 // Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-// It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+// It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4407,7 +4855,7 @@ func (c *Client) UpdateOperatorWithBody(ctx context.Context, org Org, operatorSl
 // UpdateOperator Rename or describe an operator. Requires the `admin` role.
 //
 // Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-// It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+// It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4424,7 +4872,7 @@ func (c *Client) UpdateOperator(ctx context.Context, org Org, operatorSlug Opera
 	return c.Client.Do(req)
 }
 
-// ClearOperatorControlEndpoint Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+// ClearOperatorControlEndpoint Clear a hosted operator's control endpoint. Requires current `iam:operator.delegate`.
 //
 // The console then reaches no control service for this operator. Clearing one already clear answers the same.
 //
@@ -4441,7 +4889,7 @@ func (c *Client) ClearOperatorControlEndpoint(ctx context.Context, org Org, oper
 	return c.Client.Do(req)
 }
 
-// SetOperatorControlEndpointWithBody Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+// SetOperatorControlEndpointWithBody Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 //
 // Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
 //
@@ -4460,7 +4908,7 @@ func (c *Client) SetOperatorControlEndpointWithBody(ctx context.Context, org Org
 	return c.Client.Do(req)
 }
 
-// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 //
 // Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
 //
@@ -4479,7 +4927,7 @@ func (c *Client) SetOperatorControlEndpoint(ctx context.Context, org Org, operat
 	return c.Client.Do(req)
 }
 
-// EndOperatorDelegationWithBody Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+// EndOperatorDelegationWithBody Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 //
 // Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
 //
@@ -4498,7 +4946,7 @@ func (c *Client) EndOperatorDelegationWithBody(ctx context.Context, org Org, ope
 	return c.Client.Do(req)
 }
 
-// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 //
 // Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
 //
@@ -4534,7 +4982,7 @@ func (c *Client) GetOperatorDelegation(ctx context.Context, org Org, operatorSlu
 	return c.Client.Do(req)
 }
 
-// WriteOperatorDelegationWithBody Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+// WriteOperatorDelegationWithBody Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 //
 // Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
 //
@@ -4553,7 +5001,7 @@ func (c *Client) WriteOperatorDelegationWithBody(ctx context.Context, org Org, o
 	return c.Client.Do(req)
 }
 
-// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 //
 // Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
 //
@@ -4592,7 +5040,7 @@ func (c *Client) ListOperatorKeys(ctx context.Context, org Org, operatorSlug Ope
 // IssueOperatorKeyWithBody Issue a registered operator a private key, shown once.
 //
 // Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
 // `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
 // One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
 //
@@ -4614,7 +5062,7 @@ func (c *Client) IssueOperatorKeyWithBody(ctx context.Context, org Org, operator
 // IssueOperatorKey Issue a registered operator a private key, shown once.
 //
 // Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
 // `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
 // One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
 //
@@ -4633,7 +5081,7 @@ func (c *Client) IssueOperatorKey(ctx context.Context, org Org, operatorSlug Ope
 	return c.Client.Do(req)
 }
 
-// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `iam:operator.reissue`.
 //
 // Withdraws the key (ADR-0102). **It stops verifying assertions, and every token exchanged under it stops authenticating, at the moment this returns**: the next request presenting one is refused, on a connection already open too, and an exchange racing the withdrawal either finishes first and has its token withdrawn here, or finds the key withdrawn and obtains nothing. The key's record stays, listed as `revoked`. Withdrawing a key already withdrawn answers 204 again.
 //
@@ -4650,7 +5098,7 @@ func (c *Client) RevokeOperatorKey(ctx context.Context, org Org, operatorSlug Op
 	return c.Client.Do(req)
 }
 
-// SetOperatorManagerWithBody Link a control service to its cluster manager, once. Requires `operator:register`.
+// SetOperatorManagerWithBody Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 //
 // Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
 //
@@ -4669,7 +5117,7 @@ func (c *Client) SetOperatorManagerWithBody(ctx context.Context, org Org, operat
 	return c.Client.Do(req)
 }
 
-// SetOperatorManager Link a control service to its cluster manager, once. Requires `operator:register`.
+// SetOperatorManager Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 //
 // Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
 //
@@ -4692,7 +5140,7 @@ func (c *Client) SetOperatorManager(ctx context.Context, org Org, operatorSlug O
 //
 // Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
 //
-// Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+// Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
 //
 // A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
 //
@@ -4717,7 +5165,7 @@ func (c *Client) CheckPermissionsWithBody(ctx context.Context, org Org, contentT
 //
 // Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
 //
-// Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+// Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
 //
 // A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
 //
@@ -4744,7 +5192,7 @@ func (c *Client) CheckPermissions(ctx context.Context, org Org, body CheckPermis
 //
 // Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
 //
-// A policy statement is named only where the caller holds `policy:read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
 //
 // The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
 //
@@ -4763,11 +5211,11 @@ func (c *Client) ExplainPermission(ctx context.Context, org Org, params *Explain
 	return c.Client.Do(req)
 }
 
-// ListPermissionHolders List the members and agents the engine allows one action. Requires `org:member-list`.
+// ListPermissionHolders List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 //
 // Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
 //
-// It requires `org:member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `agent:read` on the organization, the check `listAgents` makes; otherwise none is listed.
+// It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
 //
 // The candidates are the organization's members in ascending GRN order followed by its agents in ascending GRN order. A page asks `limit` of them from `offset`, at most fifty, and answers those the engine allows, so a page may hold fewer holders than it asked candidates, none at all among them. `nextOffset` is where the next page starts, and absent on the last.
 //
@@ -4788,7 +5236,7 @@ func (c *Client) ListPermissionHolders(ctx context.Context, org Org, params *Lis
 
 // ListPolicies List an organization's policies. Requires the `admin` role.
 //
-// Authorized on `policy:read` on the organization. Leaves out each policy whose own `policy:read` the caller is denied.
+// Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
 //
 // Corresponds with GET /orgs/{org}/policies (the `ListPolicies` operationId).
 func (c *Client) ListPolicies(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4843,7 +5291,7 @@ func (c *Client) CreatePolicy(ctx context.Context, org Org, body CreatePolicyJSO
 
 // DeletePolicy Delete a policy. Requires the `admin` role.
 //
-// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `policy:delete`.
+// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
 //
 // Corresponds with DELETE /orgs/{org}/policies/{policy} (the `DeletePolicy` operationId).
 func (c *Client) DeletePolicy(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5038,7 +5486,7 @@ func (c *Client) AddPolicyVersion(ctx context.Context, org Org, policySlug Polic
 
 // ListProjects List an organization's projects. Requires the `member` role.
 //
-// Authorized on `project:read` on the organization. Leaves out each project whose own `project:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+// Authorized on `iam:project.read` on the organization. Leaves out each project whose own `iam:project.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 //
 // Corresponds with GET /orgs/{org}/projects (the `ListProjects` operationId).
 func (c *Client) ListProjects(ctx context.Context, org Org, params *ListProjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5225,7 +5673,7 @@ func (c *Client) RemoveProjectMember(ctx context.Context, org Org, projectSlug P
 //
 // Answers, for each kind the caller may list, the objects of that kind whose name or identifier holds `q`, case aside. `q` matches as typed: `%` and `_` match only themselves.
 //
-// Each kind is authorized as its list is: people on `org:member-list`, as `listOrgMembers` is; agents on `agent:read`, teams on `group:read`, policies on `policy:read` and projects on `project:read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
+// Each kind is authorized as its list is: people on `iam:org.member-list`, as `listOrgMembers` is; agents on `iam:agent.read`, teams on `iam:group.read`, policies on `iam:policy.read` and projects on `iam:project.read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
 //
 // A person is found by nickname or identifier, and an agent by its identifier. Each kind answers its first `limit` objects in the order its list gives them, and how many more it found past those.
 //
@@ -5240,6 +5688,67 @@ func (c *Client) SearchOrg(ctx context.Context, org Org, params *SearchOrgParams
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// GetRegistry List the services, their types and their actions. Requires a signed-in caller.
+//
+// What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+//
+// Corresponds with GET /registry (the `GetRegistry` operationId).
+func (c *Client) GetRegistry(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRegistryRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DescribeGrn Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+//
+// Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+//
+// Corresponds with GET /registry/grn (the `DescribeGrn` operationId).
+func (c *Client) DescribeGrn(ctx context.Context, params *DescribeGrnParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDescribeGrnRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// NewGetIssuerConfigurationRequest constructs an http.Request for the GetIssuerConfiguration method
+func NewGetIssuerConfigurationRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/.well-known/openid-configuration")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewOauthCallbackRequest constructs an http.Request for the OauthCallback method
@@ -5874,6 +6383,73 @@ func NewRevokeMySessionRequest(server string, session string) (*http.Request, er
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewGetIssuerKeysRequest constructs an http.Request for the GetIssuerKeys method
+func NewGetIssuerKeysRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/oauth/jwks")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewExchangeSessionTokenRequestWithFormdataBody calls the generic ExchangeSessionToken builder with application/x-www-form-urlencoded body
+func NewExchangeSessionTokenRequestWithFormdataBody(server string, body ExchangeSessionTokenFormdataRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	bodyStr, err := runtime.MarshalForm(body, nil)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = strings.NewReader(bodyStr.Encode())
+	return NewExchangeSessionTokenRequestWithBody(server, "application/x-www-form-urlencoded", bodyReader)
+}
+
+// NewExchangeSessionTokenRequestWithBody constructs an http.Request for the ExchangeSessionToken method, with any body, and a specified content type
+func NewExchangeSessionTokenRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/oauth/token")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -9359,6 +9935,83 @@ func NewSearchOrgRequest(server string, org Org, params *SearchOrgParams) (*http
 	return req, nil
 }
 
+// NewGetRegistryRequest constructs an http.Request for the GetRegistry method
+func NewGetRegistryRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/registry")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDescribeGrnRequest constructs an http.Request for the DescribeGrn method
+func NewDescribeGrnRequest(server string, params *DescribeGrnParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/registry/grn")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "grn", params.Grn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -9402,6 +10055,15 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+
+	// GetIssuerConfigurationWithResponse Read garam's issuer metadata.
+	//
+	// The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /.well-known/openid-configuration (the `GetIssuerConfiguration` operationId).
+	GetIssuerConfigurationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetIssuerConfigurationResponse, error)
 
 	// OauthCallbackWithResponse Complete the OAuth authorization code flow.
 	//
@@ -9634,6 +10296,35 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /me/sessions/{session} (the `RevokeMySession` operationId).
 	RevokeMySessionWithResponse(ctx context.Context, session string, reqEditors ...RequestEditorFn) (*RevokeMySessionResponse, error)
 
+	// GetIssuerKeysWithResponse Read the keys garam's tokens verify with.
+	//
+	// The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /oauth/jwks (the `GetIssuerKeys` operationId).
+	GetIssuerKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetIssuerKeysResponse, error)
+
+	// ExchangeSessionTokenWithBodyWithResponse Exchange a CLI session's access token for a signed token.
+	//
+	// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+	// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+	ExchangeSessionTokenWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExchangeSessionTokenResponse, error)
+
+	// ExchangeSessionTokenWithFormdataBodyWithResponse Exchange a CLI session's access token for a signed token.
+	//
+	// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+	// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+	ExchangeSessionTokenWithFormdataBodyWithResponse(ctx context.Context, body ExchangeSessionTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*ExchangeSessionTokenResponse, error)
+
 	// ListOrgsWithResponse List organizations the caller belongs to.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -9687,20 +10378,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /orgs/{org} (the `UpdateOrg` operationId).
 	UpdateOrgWithResponse(ctx context.Context, org Org, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgResponse, error)
 
-	// ListAgentEnrollmentsWithResponse List the organization's standalone approvals. Requires `agent:read`.
+	// ListAgentEnrollmentsWithResponse List the organization's standalone approvals. Requires `iam:agent.read`.
 	//
 	// Lists every approval the organization holds, oldest first: pending, spent, withdrawn and expired, for standalone and direct placement alike (ADR-0082, ADR-0111). `state` is where each stands when this answers; an unspent approval past `expiresAt` is `expired` and never revived.
 	//
 	// An entry names what the approval binds and what spending it made, and nothing a host spends or proves with: no bootstrap secret or its hash, no key fingerprint, no request digest, no certificate and no credential.
 	//
-	// Authorization is `agent:read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
+	// Authorization is `iam:agent.read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/agent-enrollments (the `ListAgentEnrollments` operationId).
 	ListAgentEnrollmentsWithResponse(ctx context.Context, org Org, params *ListAgentEnrollmentsParams, reqEditors ...RequestEditorFn) (*ListAgentEnrollmentsResponse, error)
 
-	// ApproveAgentEnrollmentWithBodyWithResponse Approve a standalone host's enrollment. Requires current `agent:enroll`.
+	// ApproveAgentEnrollmentWithBodyWithResponse Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 	//
 	// Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
 	// A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
@@ -9711,7 +10402,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/agent-enrollments (the `ApproveAgentEnrollment` operationId).
 	ApproveAgentEnrollmentWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApproveAgentEnrollmentResponse, error)
 
-	// ApproveAgentEnrollmentWithResponse Approve a standalone host's enrollment. Requires current `agent:enroll`.
+	// ApproveAgentEnrollmentWithResponse Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 	//
 	// Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
 	// A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
@@ -9722,7 +10413,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/agent-enrollments (the `ApproveAgentEnrollment` operationId).
 	ApproveAgentEnrollmentWithResponse(ctx context.Context, org Org, body ApproveAgentEnrollmentJSONRequestBody, reqEditors ...RequestEditorFn) (*ApproveAgentEnrollmentResponse, error)
 
-	// WithdrawAgentEnrollmentWithResponse Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+	// WithdrawAgentEnrollmentWithResponse Withdraw an unspent standalone approval. Requires current `iam:agent.enroll`.
 	//
 	// Withdraws an approval no host has spent. Spending it afterwards is refused as an unknown bootstrap would be, and a withdrawal and a spending of one approval never both take effect. A withdrawn one answers 204 again; a spent one is refused with 409, because what it registered is ended by `revokeAgentSupervisor`.
 	//
@@ -9731,7 +10422,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/agent-enrollments/{enrollment} (the `WithdrawAgentEnrollment` operationId).
 	WithdrawAgentEnrollmentWithResponse(ctx context.Context, org Org, enrollmentID openapi_types.UUID, reqEditors ...RequestEditorFn) (*WithdrawAgentEnrollmentResponse, error)
 
-	// ListAgentSupervisorsWithResponse List the organization's standalone supervisors. Requires `agent:read`.
+	// ListAgentSupervisorsWithResponse List the organization's standalone supervisors. Requires `iam:agent.read`.
 	//
 	// Lists every supervisor registration the organization holds, oldest first: `active` while current, `revoked` once ended by `revokeAgentSupervisor` or by a replacement taking its agent (ADR-0082). Each names its host, its agent, the epoch its enrollment assigned and when its agent last activated at that epoch, absent where it never did.
 	//
@@ -9742,7 +10433,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/agent-supervisors (the `ListAgentSupervisors` operationId).
 	ListAgentSupervisorsWithResponse(ctx context.Context, org Org, params *ListAgentSupervisorsParams, reqEditors ...RequestEditorFn) (*ListAgentSupervisorsResponse, error)
 
-	// RevokeAgentSupervisorWithResponse Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+	// RevokeAgentSupervisorWithResponse Revoke a standalone host's supervisor. Requires current `iam:agent.enroll`.
 	//
 	// Ends the supervisor's registration, the agent's current activation and every unspent approval for that agent, in one transaction under the agent's execution lock (ADR-0082). The supervisor's credential and every token exchanged for it are refused from the next request; the agent's protected writes are refused from its next request, because no activation admits them. The agent, its GRN and the memory its host keeps are untouched, and only a new approval stands a supervisor up for it again. Authorization is decided on the agent. A supervisor the organization holds no current registration of answers 404.
 	//
@@ -9753,7 +10444,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListAgentsWithResponse List an organization's agents. Requires the `member` role.
 	//
-	// Authorized on `agent:read` on the organization. Leaves out each agent whose own `agent:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+	// Authorized on `iam:agent.read` on the organization. Leaves out each agent whose own `iam:agent.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9767,27 +10458,27 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/agents/{agent} (the `GetAgent` operationId).
 	GetAgentWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*GetAgentResponse, error)
 
-	// RenameAgentWithBodyWithResponse Rename an agent. Requires `agent:rename`.
+	// RenameAgentWithBodyWithResponse Rename an agent. Requires `iam:agent.rename`.
 	//
-	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
 	RenameAgentWithBodyWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RenameAgentResponse, error)
 
-	// RenameAgentWithResponse Rename an agent. Requires `agent:rename`.
+	// RenameAgentWithResponse Rename an agent. Requires `iam:agent.rename`.
 	//
-	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
 	RenameAgentWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, body RenameAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*RenameAgentResponse, error)
 
-	// WatchAgentWithResponse Watch an agent work. Requires the `agent:watch` action.
+	// WatchAgentWithResponse Watch an agent work. Requires the `iam:agent.watch` action.
 	//
-	// What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `agent:read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
+	// What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `iam:agent.read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
 	// It is best effort and never a record. It begins when it is opened and replays nothing, because nothing was kept; the stream it rests on drops events for a subscriber that falls behind and marks no gap, so a gap here cannot be told from an agent that said nothing. What has to be true afterwards — what an agent did, which messages it consumed — comes from the queue instead.
 	// Each event carries the platform's own name for it and the event as the platform emitted it. garam writes a comment line on a fixed interval besides, so a caller can tell a live stream with nothing on it from one that is no longer connected. garam never ends the stream to report that the agent has finished: nothing here knows that, and an end that meant it would be the one reading a person could not check.
 	//
@@ -9831,7 +10522,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// `replay` is an answer that repeated what an identical earlier request issued, which issued nothing new. A refusal is recorded only where garam could attribute the request to the subject: an enrollment whose token or bootstrap secret did not resolve names none, and a refusal of the member asking, before the subject's credential was reached, is the member's and not the subject's.
 	//
-	// It is authorized on the subject's own read: `operator:read` on the organization for an operator, `agent:read` on the agent for an agent, and `agent:read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
+	// It is authorized on the subject's own read: `iam:operator.read` on the organization for an operator, `iam:agent.read` on the agent for an agent, and `iam:agent.read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9853,7 +10544,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListGroupsWithResponse List an organization's groups. Requires the `member` role.
 	//
-	// Authorized on `group:read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `group:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+	// Authorized on `iam:group.read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `iam:group.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9936,7 +10627,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/groups/{group}/members/{member} (the `RemoveGroupMember` operationId).
 	RemoveGroupMemberWithResponse(ctx context.Context, org Org, groupSlug GroupSlug, memberGrn MemberGrn, reqEditors ...RequestEditorFn) (*RemoveGroupMemberResponse, error)
 
-	// ListInvitationsWithResponse List the invitations that can still be accepted. Requires `org:invite`.
+	// ListInvitationsWithResponse List the invitations that can still be accepted. Requires `iam:org.invite`.
 	//
 	// Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
 	//
@@ -9963,7 +10654,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
 	CreateInvitationWithResponse(ctx context.Context, org Org, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInvitationResponse, error)
 
-	// RevokeInvitationWithResponse Revoke an invitation no one has used. Requires `org:invite`.
+	// RevokeInvitationWithResponse Revoke an invitation no one has used. Requires `iam:org.invite`.
 	//
 	// Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
 	//
@@ -9983,7 +10674,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
 	//
-	// `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+	// `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
 	//
 	// Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
 	//
@@ -9998,7 +10689,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
 	//
-	// `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+	// `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
 	//
 	// Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
 	//
@@ -10062,7 +10753,7 @@ type ClientWithResponsesInterface interface {
 	// UpdateOperatorWithBodyWithResponse Rename or describe an operator. Requires the `admin` role.
 	//
 	// Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-	// It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+	// It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10072,14 +10763,14 @@ type ClientWithResponsesInterface interface {
 	// UpdateOperatorWithResponse Rename or describe an operator. Requires the `admin` role.
 	//
 	// Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-	// It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+	// It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /orgs/{org}/operators/{operator} (the `UpdateOperator` operationId).
 	UpdateOperatorWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, body UpdateOperatorJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOperatorResponse, error)
 
-	// ClearOperatorControlEndpointWithResponse Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+	// ClearOperatorControlEndpointWithResponse Clear a hosted operator's control endpoint. Requires current `iam:operator.delegate`.
 	//
 	// The console then reaches no control service for this operator. Clearing one already clear answers the same.
 	//
@@ -10088,7 +10779,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/operators/{operator}/control-endpoint (the `ClearOperatorControlEndpoint` operationId).
 	ClearOperatorControlEndpointWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, params *ClearOperatorControlEndpointParams, reqEditors ...RequestEditorFn) (*ClearOperatorControlEndpointResponse, error)
 
-	// SetOperatorControlEndpointWithBodyWithResponse Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+	// SetOperatorControlEndpointWithBodyWithResponse Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 	//
 	// Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
 	//
@@ -10097,7 +10788,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/operators/{operator}/control-endpoint (the `SetOperatorControlEndpoint` operationId).
 	SetOperatorControlEndpointWithBodyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, params *SetOperatorControlEndpointParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOperatorControlEndpointResponse, error)
 
-	// SetOperatorControlEndpointWithResponse Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+	// SetOperatorControlEndpointWithResponse Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 	//
 	// Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
 	//
@@ -10106,7 +10797,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/operators/{operator}/control-endpoint (the `SetOperatorControlEndpoint` operationId).
 	SetOperatorControlEndpointWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, params *SetOperatorControlEndpointParams, body SetOperatorControlEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOperatorControlEndpointResponse, error)
 
-	// EndOperatorDelegationWithBodyWithResponse Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+	// EndOperatorDelegationWithBodyWithResponse Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	//
 	// Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
 	//
@@ -10115,7 +10806,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/operators/{operator}/delegation (the `EndOperatorDelegation` operationId).
 	EndOperatorDelegationWithBodyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, params *EndOperatorDelegationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EndOperatorDelegationResponse, error)
 
-	// EndOperatorDelegationWithResponse Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+	// EndOperatorDelegationWithResponse Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	//
 	// Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
 	//
@@ -10133,7 +10824,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/operators/{operator}/delegation (the `GetOperatorDelegation` operationId).
 	GetOperatorDelegationWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, params *GetOperatorDelegationParams, reqEditors ...RequestEditorFn) (*GetOperatorDelegationResponse, error)
 
-	// WriteOperatorDelegationWithBodyWithResponse Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+	// WriteOperatorDelegationWithBodyWithResponse Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	//
 	// Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
 	//
@@ -10142,7 +10833,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/operators/{operator}/delegation (the `WriteOperatorDelegation` operationId).
 	WriteOperatorDelegationWithBodyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, params *WriteOperatorDelegationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*WriteOperatorDelegationResponse, error)
 
-	// WriteOperatorDelegationWithResponse Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+	// WriteOperatorDelegationWithResponse Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	//
 	// Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
 	//
@@ -10163,7 +10854,7 @@ type ClientWithResponsesInterface interface {
 	// IssueOperatorKeyWithBodyWithResponse Issue a registered operator a private key, shown once.
 	//
 	// Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-	// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+	// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
 	// `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
 	// One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
 	//
@@ -10175,7 +10866,7 @@ type ClientWithResponsesInterface interface {
 	// IssueOperatorKeyWithResponse Issue a registered operator a private key, shown once.
 	//
 	// Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-	// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+	// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
 	// `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
 	// One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
 	//
@@ -10184,7 +10875,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/operators/{operator}/keys (the `IssueOperatorKey` operationId).
 	IssueOperatorKeyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, body IssueOperatorKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueOperatorKeyResponse, error)
 
-	// RevokeOperatorKeyWithResponse Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+	// RevokeOperatorKeyWithResponse Withdraw an operator's key and every token exchanged under it. Requires `iam:operator.reissue`.
 	//
 	// Withdraws the key (ADR-0102). **It stops verifying assertions, and every token exchanged under it stops authenticating, at the moment this returns**: the next request presenting one is refused, on a connection already open too, and an exchange racing the withdrawal either finishes first and has its token withdrawn here, or finds the key withdrawn and obtains nothing. The key's record stays, listed as `revoked`. Withdrawing a key already withdrawn answers 204 again.
 	//
@@ -10193,7 +10884,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/operators/{operator}/keys/{kid} (the `RevokeOperatorKey` operationId).
 	RevokeOperatorKeyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*RevokeOperatorKeyResponse, error)
 
-	// SetOperatorManagerWithBodyWithResponse Link a control service to its cluster manager, once. Requires `operator:register`.
+	// SetOperatorManagerWithBodyWithResponse Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 	//
 	// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
 	//
@@ -10202,7 +10893,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
 	SetOperatorManagerWithBodyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOperatorManagerResponse, error)
 
-	// SetOperatorManagerWithResponse Link a control service to its cluster manager, once. Requires `operator:register`.
+	// SetOperatorManagerWithResponse Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 	//
 	// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
 	//
@@ -10215,7 +10906,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
 	//
-	// Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+	// Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
 	//
 	// A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
 	//
@@ -10230,7 +10921,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
 	//
-	// Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+	// Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
 	//
 	// A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
 	//
@@ -10247,7 +10938,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
 	//
-	// A policy statement is named only where the caller holds `policy:read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+	// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
 	//
 	// The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
 	//
@@ -10258,11 +10949,11 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/permission-explanation (the `ExplainPermission` operationId).
 	ExplainPermissionWithResponse(ctx context.Context, org Org, params *ExplainPermissionParams, reqEditors ...RequestEditorFn) (*ExplainPermissionResponse, error)
 
-	// ListPermissionHoldersWithResponse List the members and agents the engine allows one action. Requires `org:member-list`.
+	// ListPermissionHoldersWithResponse List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 	//
 	// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
 	//
-	// It requires `org:member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `agent:read` on the organization, the check `listAgents` makes; otherwise none is listed.
+	// It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
 	//
 	// The candidates are the organization's members in ascending GRN order followed by its agents in ascending GRN order. A page asks `limit` of them from `offset`, at most fifty, and answers those the engine allows, so a page may hold fewer holders than it asked candidates, none at all among them. `nextOffset` is where the next page starts, and absent on the last.
 	//
@@ -10275,7 +10966,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListPoliciesWithResponse List an organization's policies. Requires the `admin` role.
 	//
-	// Authorized on `policy:read` on the organization. Leaves out each policy whose own `policy:read` the caller is denied.
+	// Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10302,7 +10993,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeletePolicyWithResponse Delete a policy. Requires the `admin` role.
 	//
-	// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `policy:delete`.
+	// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10397,7 +11088,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListProjectsWithResponse List an organization's projects. Requires the `member` role.
 	//
-	// Authorized on `project:read` on the organization. Leaves out each project whose own `project:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+	// Authorized on `iam:project.read` on the organization. Leaves out each project whose own `iam:project.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10484,7 +11175,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Answers, for each kind the caller may list, the objects of that kind whose name or identifier holds `q`, case aside. `q` matches as typed: `%` and `_` match only themselves.
 	//
-	// Each kind is authorized as its list is: people on `org:member-list`, as `listOrgMembers` is; agents on `agent:read`, teams on `group:read`, policies on `policy:read` and projects on `project:read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
+	// Each kind is authorized as its list is: people on `iam:org.member-list`, as `listOrgMembers` is; agents on `iam:agent.read`, teams on `iam:group.read`, policies on `iam:policy.read` and projects on `iam:project.read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
 	//
 	// A person is found by nickname or identifier, and an agent by its identifier. Each kind answers its first `limit` objects in the order its list gives them, and how many more it found past those.
 	//
@@ -10492,6 +11183,65 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/search (the `SearchOrg` operationId).
 	SearchOrgWithResponse(ctx context.Context, org Org, params *SearchOrgParams, reqEditors ...RequestEditorFn) (*SearchOrgResponse, error)
+
+	// GetRegistryWithResponse List the services, their types and their actions. Requires a signed-in caller.
+	//
+	// What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /registry (the `GetRegistry` operationId).
+	GetRegistryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRegistryResponse, error)
+
+	// DescribeGrnWithResponse Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+	//
+	// Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /registry/grn (the `DescribeGrn` operationId).
+	DescribeGrnWithResponse(ctx context.Context, params *DescribeGrnParams, reqEditors ...RequestEditorFn) (*DescribeGrnResponse, error)
+}
+
+type GetIssuerConfigurationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IssuerConfiguration
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetIssuerConfigurationResponse) GetJSON200() *IssuerConfiguration {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetIssuerConfigurationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetIssuerConfigurationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetIssuerConfigurationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetIssuerConfigurationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 // OauthCallbackResponse302Headers the declared response headers of an HTTP 302 response for OauthCallback
@@ -11402,6 +12152,102 @@ func (r RevokeMySessionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RevokeMySessionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetIssuerKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IssuerKeySet
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetIssuerKeysResponse) GetJSON200() *IssuerKeySet {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetIssuerKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetIssuerKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetIssuerKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetIssuerKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ExchangeSessionTokenResponse200Headers the declared response headers of an HTTP 200 response for ExchangeSessionToken
+type ExchangeSessionTokenResponse200Headers struct {
+	CacheControl *string
+}
+
+type ExchangeSessionTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TokenExchangeResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *OAuthError
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ExchangeSessionTokenResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ExchangeSessionTokenResponse) GetJSON200() *TokenExchangeResponse {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ExchangeSessionTokenResponse) GetJSON400() *OAuthError {
+	return r.JSON400
+}
+
+// GetBody returns the raw response body bytes
+func (r ExchangeSessionTokenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExchangeSessionTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExchangeSessionTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExchangeSessionTokenResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16086,6 +16932,124 @@ func (r SearchOrgResponse) ContentType() string {
 	return ""
 }
 
+type GetRegistryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Registry
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRegistryResponse) GetJSON200() *Registry {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetRegistryResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRegistryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRegistryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRegistryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRegistryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DescribeGrnResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GrnDescription
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DescribeGrnResponse) GetJSON200() *GrnDescription {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DescribeGrnResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DescribeGrnResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetBody returns the raw response body bytes
+func (r DescribeGrnResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DescribeGrnResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DescribeGrnResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DescribeGrnResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetIssuerConfigurationWithResponse Read garam's issuer metadata.
+//
+// The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /.well-known/openid-configuration (the `GetIssuerConfiguration` operationId).
+func (c *ClientWithResponses) GetIssuerConfigurationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetIssuerConfigurationResponse, error) {
+	rsp, err := c.GetIssuerConfiguration(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetIssuerConfigurationResponse(rsp)
+}
+
 // OauthCallbackWithResponse Complete the OAuth authorization code flow.
 //
 // Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
@@ -16467,6 +17431,53 @@ func (c *ClientWithResponses) RevokeMySessionWithResponse(ctx context.Context, s
 	return ParseRevokeMySessionResponse(rsp)
 }
 
+// GetIssuerKeysWithResponse Read the keys garam's tokens verify with.
+//
+// The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /oauth/jwks (the `GetIssuerKeys` operationId).
+func (c *ClientWithResponses) GetIssuerKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetIssuerKeysResponse, error) {
+	rsp, err := c.GetIssuerKeys(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetIssuerKeysResponse(rsp)
+}
+
+// ExchangeSessionTokenWithBodyWithResponse Exchange a CLI session's access token for a signed token.
+//
+// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+func (c *ClientWithResponses) ExchangeSessionTokenWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExchangeSessionTokenResponse, error) {
+	rsp, err := c.ExchangeSessionTokenWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeSessionTokenResponse(rsp)
+}
+
+// ExchangeSessionTokenWithFormdataBodyWithResponse Exchange a CLI session's access token for a signed token.
+//
+// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+func (c *ClientWithResponses) ExchangeSessionTokenWithFormdataBodyWithResponse(ctx context.Context, body ExchangeSessionTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*ExchangeSessionTokenResponse, error) {
+	rsp, err := c.ExchangeSessionTokenWithFormdataBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeSessionTokenResponse(rsp)
+}
+
 // ListOrgsWithResponse List organizations the caller belongs to.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -16562,13 +17573,13 @@ func (c *ClientWithResponses) UpdateOrgWithResponse(ctx context.Context, org Org
 	return ParseUpdateOrgResponse(rsp)
 }
 
-// ListAgentEnrollmentsWithResponse List the organization's standalone approvals. Requires `agent:read`.
+// ListAgentEnrollmentsWithResponse List the organization's standalone approvals. Requires `iam:agent.read`.
 //
 // Lists every approval the organization holds, oldest first: pending, spent, withdrawn and expired, for standalone and direct placement alike (ADR-0082, ADR-0111). `state` is where each stands when this answers; an unspent approval past `expiresAt` is `expired` and never revived.
 //
 // An entry names what the approval binds and what spending it made, and nothing a host spends or proves with: no bootstrap secret or its hash, no key fingerprint, no request digest, no certificate and no credential.
 //
-// Authorization is `agent:read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
+// Authorization is `iam:agent.read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16581,7 +17592,7 @@ func (c *ClientWithResponses) ListAgentEnrollmentsWithResponse(ctx context.Conte
 	return ParseListAgentEnrollmentsResponse(rsp)
 }
 
-// ApproveAgentEnrollmentWithBodyWithResponse Approve a standalone host's enrollment. Requires current `agent:enroll`.
+// ApproveAgentEnrollmentWithBodyWithResponse Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 //
 // Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
 // A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
@@ -16598,7 +17609,7 @@ func (c *ClientWithResponses) ApproveAgentEnrollmentWithBodyWithResponse(ctx con
 	return ParseApproveAgentEnrollmentResponse(rsp)
 }
 
-// ApproveAgentEnrollmentWithResponse Approve a standalone host's enrollment. Requires current `agent:enroll`.
+// ApproveAgentEnrollmentWithResponse Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 //
 // Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
 // A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
@@ -16615,7 +17626,7 @@ func (c *ClientWithResponses) ApproveAgentEnrollmentWithResponse(ctx context.Con
 	return ParseApproveAgentEnrollmentResponse(rsp)
 }
 
-// WithdrawAgentEnrollmentWithResponse Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+// WithdrawAgentEnrollmentWithResponse Withdraw an unspent standalone approval. Requires current `iam:agent.enroll`.
 //
 // Withdraws an approval no host has spent. Spending it afterwards is refused as an unknown bootstrap would be, and a withdrawal and a spending of one approval never both take effect. A withdrawn one answers 204 again; a spent one is refused with 409, because what it registered is ended by `revokeAgentSupervisor`.
 //
@@ -16630,7 +17641,7 @@ func (c *ClientWithResponses) WithdrawAgentEnrollmentWithResponse(ctx context.Co
 	return ParseWithdrawAgentEnrollmentResponse(rsp)
 }
 
-// ListAgentSupervisorsWithResponse List the organization's standalone supervisors. Requires `agent:read`.
+// ListAgentSupervisorsWithResponse List the organization's standalone supervisors. Requires `iam:agent.read`.
 //
 // Lists every supervisor registration the organization holds, oldest first: `active` while current, `revoked` once ended by `revokeAgentSupervisor` or by a replacement taking its agent (ADR-0082). Each names its host, its agent, the epoch its enrollment assigned and when its agent last activated at that epoch, absent where it never did.
 //
@@ -16647,7 +17658,7 @@ func (c *ClientWithResponses) ListAgentSupervisorsWithResponse(ctx context.Conte
 	return ParseListAgentSupervisorsResponse(rsp)
 }
 
-// RevokeAgentSupervisorWithResponse Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+// RevokeAgentSupervisorWithResponse Revoke a standalone host's supervisor. Requires current `iam:agent.enroll`.
 //
 // Ends the supervisor's registration, the agent's current activation and every unspent approval for that agent, in one transaction under the agent's execution lock (ADR-0082). The supervisor's credential and every token exchanged for it are refused from the next request; the agent's protected writes are refused from its next request, because no activation admits them. The agent, its GRN and the memory its host keeps are untouched, and only a new approval stands a supervisor up for it again. Authorization is decided on the agent. A supervisor the organization holds no current registration of answers 404.
 //
@@ -16664,7 +17675,7 @@ func (c *ClientWithResponses) RevokeAgentSupervisorWithResponse(ctx context.Cont
 
 // ListAgentsWithResponse List an organization's agents. Requires the `member` role.
 //
-// Authorized on `agent:read` on the organization. Leaves out each agent whose own `agent:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+// Authorized on `iam:agent.read` on the organization. Leaves out each agent whose own `iam:agent.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16690,9 +17701,9 @@ func (c *ClientWithResponses) GetAgentWithResponse(ctx context.Context, org Org,
 	return ParseGetAgentResponse(rsp)
 }
 
-// RenameAgentWithBodyWithResponse Rename an agent. Requires `agent:rename`.
+// RenameAgentWithBodyWithResponse Rename an agent. Requires `iam:agent.rename`.
 //
-// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16705,9 +17716,9 @@ func (c *ClientWithResponses) RenameAgentWithBodyWithResponse(ctx context.Contex
 	return ParseRenameAgentResponse(rsp)
 }
 
-// RenameAgentWithResponse Rename an agent. Requires `agent:rename`.
+// RenameAgentWithResponse Rename an agent. Requires `iam:agent.rename`.
 //
-// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `iam:agent.rename` on that agent refuses it (ADR-0115).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16720,9 +17731,9 @@ func (c *ClientWithResponses) RenameAgentWithResponse(ctx context.Context, org O
 	return ParseRenameAgentResponse(rsp)
 }
 
-// WatchAgentWithResponse Watch an agent work. Requires the `agent:watch` action.
+// WatchAgentWithResponse Watch an agent work. Requires the `iam:agent.watch` action.
 //
-// What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `agent:read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
+// What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `iam:agent.read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
 // It is best effort and never a record. It begins when it is opened and replays nothing, because nothing was kept; the stream it rests on drops events for a subscriber that falls behind and marks no gap, so a gap here cannot be told from an agent that said nothing. What has to be true afterwards — what an agent did, which messages it consumed — comes from the queue instead.
 // Each event carries the platform's own name for it and the event as the platform emitted it. garam writes a comment line on a fixed interval besides, so a caller can tell a live stream with nothing on it from one that is no longer connected. garam never ends the stream to report that the agent has finished: nothing here knows that, and an end that meant it would be the one reading a person could not check.
 //
@@ -16790,7 +17801,7 @@ func (c *ClientWithResponses) GrantOrgConsentWithResponse(ctx context.Context, o
 //
 // `replay` is an answer that repeated what an identical earlier request issued, which issued nothing new. A refusal is recorded only where garam could attribute the request to the subject: an enrollment whose token or bootstrap secret did not resolve names none, and a refusal of the member asking, before the subject's credential was reached, is the member's and not the subject's.
 //
-// It is authorized on the subject's own read: `operator:read` on the organization for an operator, `agent:read` on the agent for an agent, and `agent:read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
+// It is authorized on the subject's own read: `iam:operator.read` on the organization for an operator, `iam:agent.read` on the agent for an agent, and `iam:agent.read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16824,7 +17835,7 @@ func (c *ClientWithResponses) GetOrgDeletionPreviewWithResponse(ctx context.Cont
 
 // ListGroupsWithResponse List an organization's groups. Requires the `member` role.
 //
-// Authorized on `group:read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `group:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+// Authorized on `iam:group.read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `iam:group.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16973,7 +17984,7 @@ func (c *ClientWithResponses) RemoveGroupMemberWithResponse(ctx context.Context,
 	return ParseRemoveGroupMemberResponse(rsp)
 }
 
-// ListInvitationsWithResponse List the invitations that can still be accepted. Requires `org:invite`.
+// ListInvitationsWithResponse List the invitations that can still be accepted. Requires `iam:org.invite`.
 //
 // Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
 //
@@ -17018,7 +18029,7 @@ func (c *ClientWithResponses) CreateInvitationWithResponse(ctx context.Context, 
 	return ParseCreateInvitationResponse(rsp)
 }
 
-// RevokeInvitationWithResponse Revoke an invitation no one has used. Requires `org:invite`.
+// RevokeInvitationWithResponse Revoke an invitation no one has used. Requires `iam:org.invite`.
 //
 // Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
 //
@@ -17050,7 +18061,7 @@ func (c *ClientWithResponses) ListOrgMembersWithResponse(ctx context.Context, or
 //
 // Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
 //
-// `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+// `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
 //
 // Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
 //
@@ -17071,7 +18082,7 @@ func (c *ClientWithResponses) MintOperationAuthorityWithBodyWithResponse(ctx con
 //
 // Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
 //
-// `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+// `iam:agent.create` targets the controller that will run the agent and is authorized on the organization; `iam:agent.configure` and `iam:agent.recover` target the agent, are authorized on it, and bind where it runs now. `iam:agent.recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `iam:agent.replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` target this organization and are authorized on it; `iam:operator.read` reads what the Operator reports for every operator of it (#1374). `iam:agent.execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `iam:agent.replace`, both the controller the agent is on and `destination`.
 //
 // Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
 //
@@ -17171,7 +18182,7 @@ func (c *ClientWithResponses) GetOperatorWithResponse(ctx context.Context, org O
 // UpdateOperatorWithBodyWithResponse Rename or describe an operator. Requires the `admin` role.
 //
 // Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-// It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+// It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17187,7 +18198,7 @@ func (c *ClientWithResponses) UpdateOperatorWithBodyWithResponse(ctx context.Con
 // UpdateOperatorWithResponse Rename or describe an operator. Requires the `admin` role.
 //
 // Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
-// It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+// It is authorized on an action of its own, `iam:operator.update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17200,7 +18211,7 @@ func (c *ClientWithResponses) UpdateOperatorWithResponse(ctx context.Context, or
 	return ParseUpdateOperatorResponse(rsp)
 }
 
-// ClearOperatorControlEndpointWithResponse Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+// ClearOperatorControlEndpointWithResponse Clear a hosted operator's control endpoint. Requires current `iam:operator.delegate`.
 //
 // The console then reaches no control service for this operator. Clearing one already clear answers the same.
 //
@@ -17215,7 +18226,7 @@ func (c *ClientWithResponses) ClearOperatorControlEndpointWithResponse(ctx conte
 	return ParseClearOperatorControlEndpointResponse(rsp)
 }
 
-// SetOperatorControlEndpointWithBodyWithResponse Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+// SetOperatorControlEndpointWithBodyWithResponse Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 //
 // Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
 //
@@ -17230,7 +18241,7 @@ func (c *ClientWithResponses) SetOperatorControlEndpointWithBodyWithResponse(ctx
 	return ParseSetOperatorControlEndpointResponse(rsp)
 }
 
-// SetOperatorControlEndpointWithResponse Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+// SetOperatorControlEndpointWithResponse Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 //
 // Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
 //
@@ -17245,7 +18256,7 @@ func (c *ClientWithResponses) SetOperatorControlEndpointWithResponse(ctx context
 	return ParseSetOperatorControlEndpointResponse(rsp)
 }
 
-// EndOperatorDelegationWithBodyWithResponse Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+// EndOperatorDelegationWithBodyWithResponse Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 //
 // Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
 //
@@ -17260,7 +18271,7 @@ func (c *ClientWithResponses) EndOperatorDelegationWithBodyWithResponse(ctx cont
 	return ParseEndOperatorDelegationResponse(rsp)
 }
 
-// EndOperatorDelegationWithResponse Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+// EndOperatorDelegationWithResponse Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 //
 // Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
 //
@@ -17290,7 +18301,7 @@ func (c *ClientWithResponses) GetOperatorDelegationWithResponse(ctx context.Cont
 	return ParseGetOperatorDelegationResponse(rsp)
 }
 
-// WriteOperatorDelegationWithBodyWithResponse Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+// WriteOperatorDelegationWithBodyWithResponse Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 //
 // Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
 //
@@ -17305,7 +18316,7 @@ func (c *ClientWithResponses) WriteOperatorDelegationWithBodyWithResponse(ctx co
 	return ParseWriteOperatorDelegationResponse(rsp)
 }
 
-// WriteOperatorDelegationWithResponse Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+// WriteOperatorDelegationWithResponse Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 //
 // Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
 //
@@ -17338,7 +18349,7 @@ func (c *ClientWithResponses) ListOperatorKeysWithResponse(ctx context.Context, 
 // IssueOperatorKeyWithBodyWithResponse Issue a registered operator a private key, shown once.
 //
 // Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
 // `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
 // One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
 //
@@ -17356,7 +18367,7 @@ func (c *ClientWithResponses) IssueOperatorKeyWithBodyWithResponse(ctx context.C
 // IssueOperatorKeyWithResponse Issue a registered operator a private key, shown once.
 //
 // Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. Keys are issued per registered operator identity: an Operator has two, its manager and its control service, and each is issued its own key here.
-// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `operator:reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
+// It is the one route that issues a key; registering issues none. The first key of an operator that has never been issued one is authorized by `iam:operator.register`, as registering it was. Any other — beside or in place of a live key, or after every key was withdrawn — is `iam:operator.reissue`, and a caller holding only the first finds an operator that was ever keyed refused with 403.
 // `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
 // One process issues at most 3 keys per registered operator identity and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 409 `failed_precondition` with the reason `key_issuance_unconfigured`: an assertion could name no audience garam accepts, and the state holds until the deployment sets the URL.
 //
@@ -17371,7 +18382,7 @@ func (c *ClientWithResponses) IssueOperatorKeyWithResponse(ctx context.Context, 
 	return ParseIssueOperatorKeyResponse(rsp)
 }
 
-// RevokeOperatorKeyWithResponse Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+// RevokeOperatorKeyWithResponse Withdraw an operator's key and every token exchanged under it. Requires `iam:operator.reissue`.
 //
 // Withdraws the key (ADR-0102). **It stops verifying assertions, and every token exchanged under it stops authenticating, at the moment this returns**: the next request presenting one is refused, on a connection already open too, and an exchange racing the withdrawal either finishes first and has its token withdrawn here, or finds the key withdrawn and obtains nothing. The key's record stays, listed as `revoked`. Withdrawing a key already withdrawn answers 204 again.
 //
@@ -17386,7 +18397,7 @@ func (c *ClientWithResponses) RevokeOperatorKeyWithResponse(ctx context.Context,
 	return ParseRevokeOperatorKeyResponse(rsp)
 }
 
-// SetOperatorManagerWithBodyWithResponse Link a control service to its cluster manager, once. Requires `operator:register`.
+// SetOperatorManagerWithBodyWithResponse Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 //
 // Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
 //
@@ -17401,7 +18412,7 @@ func (c *ClientWithResponses) SetOperatorManagerWithBodyWithResponse(ctx context
 	return ParseSetOperatorManagerResponse(rsp)
 }
 
-// SetOperatorManagerWithResponse Link a control service to its cluster manager, once. Requires `operator:register`.
+// SetOperatorManagerWithResponse Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 //
 // Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
 //
@@ -17420,7 +18431,7 @@ func (c *ClientWithResponses) SetOperatorManagerWithResponse(ctx context.Context
 //
 // Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
 //
-// Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+// Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
 //
 // A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
 //
@@ -17441,7 +18452,7 @@ func (c *ClientWithResponses) CheckPermissionsWithBodyWithResponse(ctx context.C
 //
 // Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
 //
-// Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+// Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
 //
 // A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
 //
@@ -17464,7 +18475,7 @@ func (c *ClientWithResponses) CheckPermissionsWithResponse(ctx context.Context, 
 //
 // Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
 //
-// A policy statement is named only where the caller holds `policy:read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
 //
 // The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
 //
@@ -17481,11 +18492,11 @@ func (c *ClientWithResponses) ExplainPermissionWithResponse(ctx context.Context,
 	return ParseExplainPermissionResponse(rsp)
 }
 
-// ListPermissionHoldersWithResponse List the members and agents the engine allows one action. Requires `org:member-list`.
+// ListPermissionHoldersWithResponse List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 //
 // Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
 //
-// It requires `org:member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `agent:read` on the organization, the check `listAgents` makes; otherwise none is listed.
+// It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
 //
 // The candidates are the organization's members in ascending GRN order followed by its agents in ascending GRN order. A page asks `limit` of them from `offset`, at most fifty, and answers those the engine allows, so a page may hold fewer holders than it asked candidates, none at all among them. `nextOffset` is where the next page starts, and absent on the last.
 //
@@ -17504,7 +18515,7 @@ func (c *ClientWithResponses) ListPermissionHoldersWithResponse(ctx context.Cont
 
 // ListPoliciesWithResponse List an organization's policies. Requires the `admin` role.
 //
-// Authorized on `policy:read` on the organization. Leaves out each policy whose own `policy:read` the caller is denied.
+// Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17549,7 +18560,7 @@ func (c *ClientWithResponses) CreatePolicyWithResponse(ctx context.Context, org 
 
 // DeletePolicyWithResponse Delete a policy. Requires the `admin` role.
 //
-// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `policy:delete`.
+// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17710,7 +18721,7 @@ func (c *ClientWithResponses) AddPolicyVersionWithResponse(ctx context.Context, 
 
 // ListProjectsWithResponse List an organization's projects. Requires the `member` role.
 //
-// Authorized on `project:read` on the organization. Leaves out each project whose own `project:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+// Authorized on `iam:project.read` on the organization. Leaves out each project whose own `iam:project.read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17863,7 +18874,7 @@ func (c *ClientWithResponses) RemoveProjectMemberWithResponse(ctx context.Contex
 //
 // Answers, for each kind the caller may list, the objects of that kind whose name or identifier holds `q`, case aside. `q` matches as typed: `%` and `_` match only themselves.
 //
-// Each kind is authorized as its list is: people on `org:member-list`, as `listOrgMembers` is; agents on `agent:read`, teams on `group:read`, policies on `policy:read` and projects on `project:read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
+// Each kind is authorized as its list is: people on `iam:org.member-list`, as `listOrgMembers` is; agents on `iam:agent.read`, teams on `iam:group.read`, policies on `iam:policy.read` and projects on `iam:project.read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
 //
 // A person is found by nickname or identifier, and an agent by its identifier. Each kind answers its first `limit` objects in the order its list gives them, and how many more it found past those.
 //
@@ -17876,6 +18887,65 @@ func (c *ClientWithResponses) SearchOrgWithResponse(ctx context.Context, org Org
 		return nil, err
 	}
 	return ParseSearchOrgResponse(rsp)
+}
+
+// GetRegistryWithResponse List the services, their types and their actions. Requires a signed-in caller.
+//
+// What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /registry (the `GetRegistry` operationId).
+func (c *ClientWithResponses) GetRegistryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRegistryResponse, error) {
+	rsp, err := c.GetRegistry(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRegistryResponse(rsp)
+}
+
+// DescribeGrnWithResponse Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+//
+// Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /registry/grn (the `DescribeGrn` operationId).
+func (c *ClientWithResponses) DescribeGrnWithResponse(ctx context.Context, params *DescribeGrnParams, reqEditors ...RequestEditorFn) (*DescribeGrnResponse, error) {
+	rsp, err := c.DescribeGrn(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDescribeGrnResponse(rsp)
+}
+
+// ParseGetIssuerConfigurationResponse parses an HTTP response from a GetIssuerConfigurationWithResponse call
+func ParseGetIssuerConfigurationResponse(rsp *http.Response) (*GetIssuerConfigurationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetIssuerConfigurationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IssuerConfiguration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
 }
 
 // ParseOauthCallbackResponse parses an HTTP response from a OauthCallbackWithResponse call
@@ -18583,6 +19653,84 @@ func ParseRevokeMySessionResponse(rsp *http.Response) (*RevokeMySessionResponse,
 		}
 		response.JSON404 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetIssuerKeysResponse parses an HTTP response from a GetIssuerKeysWithResponse call
+func ParseGetIssuerKeysResponse(rsp *http.Response) (*GetIssuerKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetIssuerKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IssuerKeySet
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
+// ParseExchangeSessionTokenResponse parses an HTTP response from a ExchangeSessionTokenWithResponse call
+func ParseExchangeSessionTokenResponse(rsp *http.Response) (*ExchangeSessionTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExchangeSessionTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TokenExchangeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest OAuthError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ExchangeSessionTokenResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
 	}
 
 	return response, nil
@@ -22411,6 +23559,79 @@ func ParseSearchOrgResponse(rsp *http.Response) (*SearchOrgResponse, error) {
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRegistryResponse parses an HTTP response from a GetRegistryWithResponse call
+func ParseGetRegistryResponse(rsp *http.Response) (*GetRegistryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRegistryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Registry
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDescribeGrnResponse parses an HTTP response from a DescribeGrnWithResponse call
+func ParseDescribeGrnResponse(rsp *http.Response) (*DescribeGrnResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DescribeGrnResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GrnDescription
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 

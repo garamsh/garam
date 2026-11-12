@@ -61,7 +61,7 @@ func adapterKeyMaterial(t *testing.T) (serverRootFile, notARoot string) {
 func tokenAdapter(t *testing.T, serverRootFile string) adapterEnv {
 	t.Helper()
 	return adapterEnv{
-		"GARAM_ADAPTER_AGENT":                grn.New("acme", grn.DefaultProject, "agent", "bot-1").String(),
+		"GARAM_ADAPTER_AGENT":                grn.New("acme", "agent", "bot-1").String(),
 		"GARAM_ADAPTER_MACHINE_URL":          "https://garam.example:8443",
 		"GARAM_ADAPTER_TOKEN_FILE":           filepath.Join(t.TempDir(), "agent-token"),
 		"GARAM_ADAPTER_CONTROL_TOKEN_FILE":   filepath.Join(t.TempDir(), "control-token"),

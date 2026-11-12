@@ -13,7 +13,7 @@ export function PolicyAttachments() {
     <figure className="overflow-hidden rounded-xl border border-border bg-card">
       <figcaption className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-2.5">
         <span className="truncate font-mono text-xs text-muted-foreground">
-          grn:acme:default:policy:a1b2c3d4
+          grn:acme/iam/policy/a1b2c3d4
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           <Badge variant="outline" className="font-mono">
@@ -28,8 +28,8 @@ export function PolicyAttachments() {
         </span>
         <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-xs">
           <span className="text-brand">Allow</span>
-          <span>project:read</span>
-          <span className="text-muted-foreground">grn:acme:*</span>
+          <span>project.read</span>
+          <span className="text-muted-foreground">grn:acme/*</span>
         </span>
       </div>
       <div className="flex flex-col gap-2 px-4 py-4">

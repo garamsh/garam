@@ -200,7 +200,7 @@ func TestOperatorRegister_RecordsAndListsTheManager(t *testing.T) {
 	for name, named := range map[string]string{
 		"not a grn":                    "aurora",
 		"another organization's":       operatorGRNOf("globex", "aurora").String(),
-		"not an operator":              grn.New(slug, grn.DefaultProject, "agent", "aurora").String(),
+		"not an operator":              grn.New(slug, "agent", "aurora").String(),
 		"the registration it is about": operatorGRNOf(slug, "self").String(),
 	} {
 		rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"self","manager":"`+named+`"}`, admin)
@@ -270,11 +270,11 @@ func fieldsOf(t *testing.T, object map[string]json.RawMessage) []string {
 // ADR-0070 gives it an action of its own, so a member permitted to
 // register is not thereby permitted to stop an operator.
 //
-// The registrar is that control. It is permitted `operator:register`
-// and refused here, and its own registration is answered, so what
-// refuses its delete is the action rather than the membership or the
-// session. The outsider and the signed-out caller isolate the other
-// two halves the same way.
+// The registrar is that control. It is permitted
+// `iam:operator.register` and refused here, and its own registration is
+// answered, so what refuses its delete is the action rather than the
+// membership or the session. The outsider and the signed-out caller
+// isolate the other two halves the same way.
 func TestOperatorDelete_AdminDeletesWhereOthersAreRefused(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -418,10 +418,10 @@ func TestOperatorGet_AnswersOneOperatorOfThisOrg(t *testing.T) {
 // TestOperatorUpdate_AdminUpdatesWhereOthersAreRefused holds the update
 // to an action of its own (ADR-0074). The registrar is permitted both
 // actions that register and delete and is refused here, so what
-// refuses it is the missing `operator:update` and not the membership;
-// the outsider holds that action in another org, so what refuses it is
-// the org. The admin's update is the control for both, and the
-// signed-out call beside it isolates the session.
+// refuses it is the missing `iam:operator.update` and not the
+// membership; the outsider holds that action in another org, so what
+// refuses it is the org. The admin's update is the control for both,
+// and the signed-out call beside it isolates the session.
 func TestOperatorUpdate_AdminUpdatesWhereOthersAreRefused(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")

@@ -38,7 +38,7 @@ func TestPasswordCredentialStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	users := userpg.New(p)
-	alice := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-alice")
+	alice := grn.New(grn.RootOwner, user.ServiceType, "local-alice")
 	require.NoError(t, users.Create(ctx, user.New(alice, "alice")))
 
 	credentials := authnpg.NewPasswordCredentialStore(p)
@@ -84,7 +84,7 @@ func TestPasswordCredentialStore_ClassifiesWhatTheSchemaRefuses(t *testing.T) {
 	ctx := context.Background()
 
 	users := userpg.New(p)
-	alice := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-alice")
+	alice := grn.New(grn.RootOwner, user.ServiceType, "local-alice")
 	require.NoError(t, users.Create(ctx, user.New(alice, "alice")))
 
 	verifier, err := authn.NewVerifier(integrationPassword)
@@ -99,7 +99,7 @@ func TestPasswordCredentialStore_ClassifiesWhatTheSchemaRefuses(t *testing.T) {
 		"a second credential for one user is a conflict, not an outage")
 
 	// 23503 on its reference to users: there is nobody to hold it.
-	ghost := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-ghost")
+	ghost := grn.New(grn.RootOwner, user.ServiceType, "local-ghost")
 	err = credentials.Create(ctx, ghost, verifier)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound),
@@ -175,7 +175,7 @@ func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
 
 	users := userpg.New(p)
 	orgs := orgpg.New(p)
-	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
+	owner := grn.New(grn.RootOwner, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
 	acme := grn.Org("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
@@ -217,7 +217,7 @@ func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
 			"the response names something only Postgres and the schema know")
 	}
 	assert.Equal(t, 1, countRows(t, p, "SELECT count(*) FROM users WHERE grn = $1",
-		"grn:root:default:user:local-alice"), "the refused registration wrote no second row")
+		"grn:root/iam/user/local-alice"), "the refused registration wrote no second row")
 }
 
 // TestPasswordSignIn_RoundTripAgainstPostgres walks the whole route
@@ -234,7 +234,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 
 	users := userpg.New(p)
 	orgs := orgpg.New(p)
-	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
+	owner := grn.New(grn.RootOwner, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
 	acme := grn.Org("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
@@ -263,7 +263,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 	assert.Equal(t, 1, countRows(t, p, "SELECT count(*) FROM password_credentials"))
 	assert.Equal(t, 1, countRows(t, p,
-		"SELECT count(*) FROM org_members WHERE user_grn = $1", "grn:root:default:user:local-alice"))
+		"SELECT count(*) FROM org_members WHERE user_grn = $1", "grn:root/iam/user/local-alice"))
 	assert.Equal(t, 1, countRows(t, p,
 		"SELECT count(*) FROM invitations WHERE token = $1 AND accepted_at IS NOT NULL", token))
 

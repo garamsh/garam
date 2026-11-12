@@ -22,13 +22,13 @@ func binding() delivery.Binding {
 func TestRequestID_IsOneIdentifierPerIntent(t *testing.T) {
 	id := delivery.RequestID(delivery.TokenExecutionContract, binding(), "placement-1")
 	assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`), id)
-	assert.Equal(t, "06534536-9482-802a-8e07-b55100adc50b", id,
+	assert.Equal(t, "adc5649c-475f-8945-a46d-bca4be49eee6", id,
 		"agent-execution.v2 is the first field, so the same binding is new intent (ADR-0100); computed apart from this code")
 	assert.Equal(t, id, delivery.RequestID(delivery.TokenExecutionContract, binding(), "placement-1"), "the same intent is the same request")
 	assert.NotContains(t, id, "placement-1")
-	assert.Equal(t, "737a3319-e377-8fab-ba8c-fe01762adb62",
+	assert.Equal(t, "4e0aafc0-27d8-8037-ba34-d8d62580a6e5",
 		delivery.RequestID("agent-execution.v1", binding(), "placement-1"),
-		"the vector ADR-0084 records, computed apart from this code from the ADR's text")
+		"ADR-0084's derivation over the name in ADR-0142's grammar, computed apart from this code; the ADR's own vector, 737a3319-e377-8fab-ba8c-fe01762adb62, is over the former name")
 
 	changes := map[string]func(b *delivery.Binding, token *string){
 		"another agent":      func(b *delivery.Binding, _ *string) { b.Agent = senderGRN() },

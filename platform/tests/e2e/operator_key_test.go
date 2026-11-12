@@ -20,6 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
+
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // The client assertion type of RFC 7523, spelled here for the reason
@@ -124,7 +126,7 @@ func TestOperatorKey_TheBuiltBinariesIssueAKeyAndExchangeItsAssertion(t *testing
 	require.Equal(t, http.StatusCreated, status, body)
 	var key issuedKey
 	require.NoError(t, json.Unmarshal([]byte(body), &key))
-	assert.Equal(t, "grn:"+slug+":default:operator:controller", key.ClientID)
+	assert.Equal(t, grn.New(slug, "operator", "controller").String(), key.ClientID)
 	assert.Equal(t, tokenURL, key.TokenURL)
 
 	// The listener is verified against the server root, as an operator

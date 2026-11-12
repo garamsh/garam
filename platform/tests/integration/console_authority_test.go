@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/org"
@@ -23,8 +24,8 @@ import (
 // consoleOperations is every operation a console read or publication is
 // minted for (#1170), granted beside create.
 var consoleOperations = []string{
-	"agent:create", "agent-template:read", "agent-template:publish",
-	"execution-profile:read", "agent:execution-read",
+	"iam:agent.create", "iam:agent-template.read", "iam:agent-template.publish",
+	"iam:execution-profile.read", "iam:agent.execution-read",
 }
 
 // mintTarget asks for an authority binding requestTarget, or none where
@@ -72,7 +73,7 @@ func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T
 	orgTarget := s.acme.String()
 	const templates = "/prefix/v1/orgs/acme/templates?after=web%20agent"
 
-	status, got := s.mintTarget(t, s.member, "agent-template:read", orgTarget, "read-1", templates)
+	status, got := s.mintTarget(t, s.member, "iam:agent-template.read", orgTarget, "read-1", templates)
 	require.Equal(t, http.StatusCreated, status, got)
 	read := authorityOf(t, got)
 	status, got = s.introspect(t, s.hostedTLS, read.Authority)
@@ -80,42 +81,42 @@ func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T
 	b := bindingOf(t, got)
 	require.NotNil(t, b.RequestTarget)
 	assert.Equal(t, templates, *b.RequestTarget, "bound byte for byte, escapes and query kept")
-	assert.Equal(t, machinegen.OperationBindingOperation("agent-template:read"), b.Operation)
+	assert.Equal(t, machinegen.OperationBindingOperation("iam:agent-template.read"), b.Operation)
 	assert.Equal(t, orgTarget, b.TargetGrn)
 	assert.Equal(t, emptyBodySHA256, b.BodySha256)
 	assert.Nil(t, b.Assignment, "an organization operation binds no placement")
 
-	status, got = s.mintTarget(t, s.member, "agent-template:read", orgTarget, "read-2", "")
+	status, got = s.mintTarget(t, s.member, "iam:agent-template.read", orgTarget, "read-2", "")
 	assert.Equal(t, http.StatusBadRequest, status, "a read without its request target: %s", got)
-	status, got = s.mintTarget(t, s.member, "agent:create", s.controller.String(), "create-1", templates)
+	status, got = s.mintTarget(t, s.member, "iam:agent.create", s.controller.String(), "create-1", templates)
 	assert.Equal(t, http.StatusBadRequest, status, "create binds no request target: %s", got)
-	status, got = s.mintTarget(t, s.member, "agent:create", s.controller.String(), "create-1", "")
+	status, got = s.mintTarget(t, s.member, "iam:agent.create", s.controller.String(), "create-1", "")
 	assert.Equal(t, http.StatusCreated, status, "the create control: %s", got)
-	status, got = s.mintTarget(t, s.member, "agent-template:read", s.controller.String(), "read-3", templates)
+	status, got = s.mintTarget(t, s.member, "iam:agent-template.read", s.controller.String(), "read-3", templates)
 	assert.Equal(t, http.StatusBadRequest, status, "an organization operation targets the organization: %s", got)
-	status, got = s.mintTarget(t, s.member, "agent-template:read", orgTarget, "read-4", "https://control.example.com"+templates)
+	status, got = s.mintTarget(t, s.member, "iam:agent-template.read", orgTarget, "read-4", "https://control.example.com"+templates)
 	assert.Equal(t, http.StatusBadRequest, status, "a request target carries no origin: %s", got)
 
-	status, got = s.mintTarget(t, s.member, "agent-template:read", orgTarget, "read-1", templates+"&x=1")
+	status, got = s.mintTarget(t, s.member, "iam:agent-template.read", orgTarget, "read-1", templates+"&x=1")
 	assert.Equal(t, http.StatusConflict, status, "the request id is bound to another query: %s", got)
-	status, got = s.mintTarget(t, s.member, "agent-template:read", orgTarget, "read-1", templates)
+	status, got = s.mintTarget(t, s.member, "iam:agent-template.read", orgTarget, "read-1", templates)
 	require.Equal(t, http.StatusCreated, status, "the same binding remints: %s", got)
 	assert.Equal(t, read.OperationRef, authorityOf(t, got).OperationRef)
 
-	status, got = s.mintTarget(t, s.member, "execution-profile:read", orgTarget, "profiles-1", "/v1/orgs/acme/profiles")
+	status, got = s.mintTarget(t, s.member, "iam:execution-profile.read", orgTarget, "profiles-1", "/v1/orgs/acme/profiles")
 	assert.Equal(t, http.StatusCreated, status, "a member reads profiles: %s", got)
 
 	const publish = "/v1/orgs/acme/templates/web/versions"
-	status, got = s.mintTarget(t, s.member, "agent-template:publish", orgTarget, "publish-1", publish)
+	status, got = s.mintTarget(t, s.member, "iam:agent-template.publish", orgTarget, "publish-1", publish)
 	assert.Equal(t, http.StatusForbidden, status, "a member does not publish: %s", got)
-	status, got = s.mintTarget(t, s.owner, "agent-template:publish", orgTarget, "publish-1", publish)
+	status, got = s.mintTarget(t, s.owner, "iam:agent-template.publish", orgTarget, "publish-1", publish)
 	assert.Equal(t, http.StatusCreated, status, "the owner publishes: %s", got)
 
 	agentGRN := s.provisionAgent(t)
 	execution := "/v1/orgs/acme/agents/" + agentGRN + "/execution"
-	status, got = s.mintTarget(t, s.member, "agent:execution-read", agentGRN, "execution-1", execution)
-	assert.Equal(t, http.StatusForbidden, status, "agent:read is identity access, not execution: %s", got)
-	status, got = s.mintTarget(t, s.owner, "agent:execution-read", agentGRN, "execution-1", execution)
+	status, got = s.mintTarget(t, s.member, "iam:agent.execution-read", agentGRN, "execution-1", execution)
+	assert.Equal(t, http.StatusForbidden, status, "iam:agent.read is identity access, not execution: %s", got)
+	status, got = s.mintTarget(t, s.owner, "iam:agent.execution-read", agentGRN, "execution-1", execution)
 	require.Equal(t, http.StatusCreated, status, got)
 	status, got = s.introspect(t, s.hostedTLS, authorityOf(t, got).Authority)
 	require.Equal(t, http.StatusOK, status, got)
@@ -126,50 +127,50 @@ func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T
 }
 
 // TestConsoleAuthority_OperatorReadBindsTheOrganization holds #1374 at
-// garam's boundary. A member holding operator:read mints it for this
-// organization and the exact request target, and introspection answers
-// that binding. Each refusal sits beside an accepted call it differs
-// from in one thing:
+// garam's boundary. A member holding iam:operator.read mints it for
+// this organization and the exact request target, and introspection
+// answers that binding. Each refusal sits beside an accepted call it
+// differs from in one thing:
 //   - another target, or no request target;
-//   - a member a Deny takes operator:read from, beside the owner;
+//   - a member a Deny takes iam:operator.read from, beside the owner;
 //   - a grant that no longer lists the operation.
 func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
-	d := s.grant(t, "g-1", nil, "operator:read")
+	d := s.grant(t, "g-1", nil, "iam:operator.read")
 	orgTarget := s.acme.String()
 	const operators = "/v1/orgs/acme/operators"
 
-	status, got := s.mintTarget(t, s.member, "operator:read", orgTarget, "operators-1", operators)
-	require.Equal(t, http.StatusCreated, status, "a member holds operator:read: %s", got)
+	status, got := s.mintTarget(t, s.member, "iam:operator.read", orgTarget, "operators-1", operators)
+	require.Equal(t, http.StatusCreated, status, "a member holds iam:operator.read: %s", got)
 	status, got = s.introspect(t, s.hostedTLS, authorityOf(t, got).Authority)
 	require.Equal(t, http.StatusOK, status, got)
 	b := bindingOf(t, got)
-	assert.Equal(t, machinegen.OperatorRead, b.Operation)
+	assert.Equal(t, machinegen.IamOperatorRead, b.Operation)
 	assert.Equal(t, orgTarget, b.TargetGrn)
 	require.NotNil(t, b.RequestTarget)
 	assert.Equal(t, operators, *b.RequestTarget)
 	assert.Nil(t, b.Assignment, "an organization read binds no placement")
 
-	status, got = s.mintTarget(t, s.member, "operator:read", s.controller.String(), "operators-2", operators)
+	status, got = s.mintTarget(t, s.member, "iam:operator.read", s.controller.String(), "operators-2", operators)
 	assert.Equal(t, http.StatusBadRequest, status, "a controller is not this organization: %s", got)
-	status, got = s.mintTarget(t, s.member, "operator:read", s.provisionAgent(t), "operators-3", operators)
+	status, got = s.mintTarget(t, s.member, "iam:operator.read", s.provisionAgent(t), "operators-3", operators)
 	assert.Equal(t, http.StatusBadRequest, status, "an agent is not this organization: %s", got)
-	status, got = s.mintTarget(t, s.member, "operator:read", orgTarget, "operators-4", "")
+	status, got = s.mintTarget(t, s.member, "iam:operator.read", orgTarget, "operators-4", "")
 	assert.Equal(t, http.StatusBadRequest, status, "the read binds its request target: %s", got)
 
 	denied := activePolicy(t, policies, s.acme, "deny-operator-read",
 		statementDoc("deny-operator-read", wire.EffectDeny, org.ActionOperatorRead, s.acme.String()))
 	attachPolicy(t, policies, denied, s.memberGRN)
-	status, got = s.mintTarget(t, s.member, "operator:read", orgTarget, "operators-5", operators)
-	assert.Equal(t, http.StatusForbidden, status, "a caller without operator:read: %s", got)
-	status, got = s.mintTarget(t, s.owner, "operator:read", orgTarget, "operators-5", operators)
+	status, got = s.mintTarget(t, s.member, "iam:operator.read", orgTarget, "operators-5", operators)
+	assert.Equal(t, http.StatusForbidden, status, "a caller without iam:operator.read: %s", got)
+	status, got = s.mintTarget(t, s.owner, "iam:operator.read", orgTarget, "operators-5", operators)
 	assert.Equal(t, http.StatusCreated, status, "the owner, whom the Deny does not reach: %s", got)
 
-	s.grant(t, "g-2", &d.GrantId, "agent-template:read")
-	status, got = s.mintTarget(t, s.owner, "operator:read", orgTarget, "operators-6", operators)
-	assert.Equal(t, http.StatusForbidden, status, "a grant that does not list operator:read: %s", got)
+	s.grant(t, "g-2", &d.GrantId, "iam:agent-template.read")
+	status, got = s.mintTarget(t, s.owner, "iam:operator.read", orgTarget, "operators-6", operators)
+	assert.Equal(t, http.StatusForbidden, status, "a grant that does not list iam:operator.read: %s", got)
 }
 
 // TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind holds the
@@ -181,14 +182,14 @@ func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
-	s.grant(t, "g-1", nil, append([]string{"agent:configure", "agent:recover"}, consoleOperations...)...)
+	s.grant(t, "g-1", nil, append([]string{"iam:agent.configure", "iam:agent.recover"}, consoleOperations...)...)
 	agentGRN := s.provisionAgent(t)
 	const target = "/v1/orgs/acme/agents/x/revisions"
 
 	// A request identifier takes no colon, so each is the operation's
 	// name with its colon replaced.
 	id := func(prefix, operation string) string { return prefix + strings.ReplaceAll(operation, ":", "-") }
-	for _, operation := range []string{"agent:configure", "agent:recover"} {
+	for _, operation := range []string{"iam:agent.configure", "iam:agent.recover"} {
 		status, got := s.mintTarget(t, s.owner, operation, agentGRN, id("", operation), target)
 		assert.Equal(t, http.StatusBadRequest, status, "%s binds no request target: %s", operation, got)
 		assert.Contains(t, got, "binds no request_target", "refused for the target and not another field")
@@ -196,26 +197,26 @@ func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, status, "the %s control: %s", operation, got)
 	}
 
-	const globex = "grn:globex:default:operator:hosted"
-	for _, operation := range []string{"agent-template:read", "agent-template:publish", "execution-profile:read"} {
+	const globex = "grn:globex/iam/operator/hosted"
+	for _, operation := range []string{"iam:agent-template.read", "iam:agent-template.publish", "iam:execution-profile.read"} {
 		status, got := s.mintBound(t, s.owner, globex, operation, s.acme.String(), id("tenant-", operation), emptyBodySHA256, "/v1/orgs/acme/templates")
 		assert.Equal(t, http.StatusBadRequest, status, "%s for another organization's audience: %s", operation, got)
 		assert.Contains(t, got, "another organization", "refused for the audience and not another field")
 		status, got = s.mintBound(t, s.owner, s.hosted.String(), operation, s.acme.String(), id("tenant-", operation), emptyBodySHA256, "/v1/orgs/acme/templates")
 		assert.Equal(t, http.StatusCreated, status, "the %s control: %s", operation, got)
 	}
-	status, got := s.mintBound(t, s.owner, globex, "agent:execution-read", agentGRN, "tenant-execution", emptyBodySHA256, "/v1/orgs/acme/agents/x/execution")
+	status, got := s.mintBound(t, s.owner, globex, "iam:agent.execution-read", agentGRN, "tenant-execution", emptyBodySHA256, "/v1/orgs/acme/agents/x/execution")
 	assert.Equal(t, http.StatusBadRequest, status, "execution read for another organization's audience: %s", got)
 	assert.Contains(t, got, "another organization")
 
 	const publish = "/v1/orgs/acme/templates/web/versions"
 	first, other := strings.Repeat("a", 64), strings.Repeat("b", 64)
-	status, got = s.mintBound(t, s.owner, s.hosted.String(), "agent-template:publish", s.acme.String(), "publish-1", first, publish)
+	status, got = s.mintBound(t, s.owner, s.hosted.String(), "iam:agent-template.publish", s.acme.String(), "publish-1", first, publish)
 	require.Equal(t, http.StatusCreated, status, got)
 	ref := authorityOf(t, got).OperationRef
-	status, got = s.mintBound(t, s.owner, s.hosted.String(), "agent-template:publish", s.acme.String(), "publish-1", other, publish)
+	status, got = s.mintBound(t, s.owner, s.hosted.String(), "iam:agent-template.publish", s.acme.String(), "publish-1", other, publish)
 	assert.Equal(t, http.StatusConflict, status, "the request id is bound to another body: %s", got)
-	status, got = s.mintBound(t, s.owner, s.hosted.String(), "agent-template:publish", s.acme.String(), "publish-1", first, publish)
+	status, got = s.mintBound(t, s.owner, s.hosted.String(), "iam:agent-template.publish", s.acme.String(), "publish-1", first, publish)
 	require.Equal(t, http.StatusCreated, status, "the same body remints: %s", got)
 	assert.Equal(t, ref, authorityOf(t, got).OperationRef)
 }
@@ -228,14 +229,14 @@ func TestConsoleAuthority_EachReadNeedsItsOwnDelegation(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
-	d := s.grant(t, "g-1", nil, "agent:create", "agent:configure")
+	d := s.grant(t, "g-1", nil, "iam:agent.create", "iam:agent.configure")
 
-	status, got := s.mintTarget(t, s.owner, "agent-template:read", s.acme.String(), "read-1", "/v1/orgs/acme/templates")
+	status, got := s.mintTarget(t, s.owner, "iam:agent-template.read", s.acme.String(), "read-1", "/v1/orgs/acme/templates")
 	assert.Equal(t, http.StatusForbidden, status, "a create and configure grant covers no read: %s", got)
-	s.grant(t, "g-2", &d.GrantId, "agent:create", "agent:configure", "agent-template:read")
-	status, got = s.mintTarget(t, s.owner, "agent-template:read", s.acme.String(), "read-1", "/v1/orgs/acme/templates")
+	s.grant(t, "g-2", &d.GrantId, "iam:agent.create", "iam:agent.configure", "iam:agent-template.read")
+	status, got = s.mintTarget(t, s.owner, "iam:agent-template.read", s.acme.String(), "read-1", "/v1/orgs/acme/templates")
 	assert.Equal(t, http.StatusCreated, status, got)
-	status, got = s.mintTarget(t, s.owner, "agent-template:publish", s.acme.String(), "publish-1", "/v1/orgs/acme/templates/web/versions")
+	status, got = s.mintTarget(t, s.owner, "iam:agent-template.publish", s.acme.String(), "publish-1", "/v1/orgs/acme/templates/web/versions")
 	assert.Equal(t, http.StatusForbidden, status, "the read grant covers no publication: %s", got)
 }
 
@@ -253,7 +254,7 @@ func TestConsoleAuthority_RechecksBeforeTheOperatorAnswers(t *testing.T) {
 	s := newAuthorityStack(t, engine, p)
 	d := s.grant(t, "g-1", nil, consoleOperations...)
 	minted := func(cookie *http.Cookie, requestID string) string {
-		status, got := s.mintTarget(t, cookie, "agent-template:read", s.acme.String(), requestID, "/v1/orgs/acme/templates")
+		status, got := s.mintTarget(t, cookie, "iam:agent-template.read", s.acme.String(), requestID, "/v1/orgs/acme/templates")
 		require.Equal(t, http.StatusCreated, status, got)
 		a := authorityOf(t, got).Authority
 		status, got = s.introspect(t, s.hostedTLS, a)
@@ -275,7 +276,7 @@ func TestConsoleAuthority_RechecksBeforeTheOperatorAnswers(t *testing.T) {
 	require.Equal(t, http.StatusOK, status, "membership restored, so the refusal above was its: %s", got)
 
 	denied := activePolicy(t, policies, s.acme, "deny-template-read",
-		statementDoc("deny-template-read", wire.EffectDeny, "agent-template:read", s.acme.String()))
+		statementDoc("deny-template-read", wire.EffectDeny, "iam:agent-template.read", s.acme.String()))
 	attachPolicy(t, policies, denied, s.memberGRN)
 	status, _ = s.introspect(t, s.hostedTLS, byMember)
 	assert.Equal(t, http.StatusForbidden, status, "a Deny wins over the member default")
@@ -313,10 +314,10 @@ func plain(t *testing.T, method, url string, cookie *http.Cookie, body string) (
 
 // TestControlEndpoint_IsTheDelegatingActNotARename holds that the
 // endpoint receiving operation authority moves only under
-// operator:delegate. A member a policy lets rename the operator renames
-// it, which is the control, and cannot set or clear its endpoint; the
-// rename leaves the endpoint where the owner put it, and moving the
-// endpoint moves no audience an authority already names.
+// iam:operator.delegate. A member a policy lets rename the operator
+// renames it, which is the control, and cannot set or clear its
+// endpoint; the rename leaves the endpoint where the owner put it, and
+// moving the endpoint moves no audience an authority already names.
 func TestControlEndpoint_IsTheDelegatingActNotARename(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
@@ -333,7 +334,7 @@ func TestControlEndpoint_IsTheDelegatingActNotARename(t *testing.T) {
 	status, got = call(t, http.DefaultClient, http.MethodPut, endpointPath, s.member, `{"url":"https://evil.example.com"}`)
 	assert.Equal(t, http.StatusForbidden, status, "renaming is not the delegating act: %s", got)
 
-	status, got = s.mintTarget(t, s.member, "agent-template:read", s.acme.String(), "read-1", "/v1/orgs/acme/templates")
+	status, got = s.mintTarget(t, s.member, "iam:agent-template.read", s.acme.String(), "read-1", "/v1/orgs/acme/templates")
 	require.Equal(t, http.StatusCreated, status, got)
 	before := authorityOf(t, got)
 
@@ -382,14 +383,14 @@ func migrationRows(t *testing.T, p *pgxpool.Pool, schema string, operations []st
 		_, err := p.Exec(ctx, strings.ReplaceAll(sql, "§", schema+"."), args...)
 		return err
 	}
-	org := "grn:root:default:org:mig"
-	hosted := "grn:mig:default:operator:hosted"
+	org := grn.Org("mig").String()
+	hosted := grn.New("mig", "operator", "hosted").String()
 	require.NoError(t, exec(`INSERT INTO §orgs (grn, name, created_at, updated_at) VALUES ($1, 'mig', now(), now())`, org))
 	require.NoError(t, exec(`INSERT INTO §operators (grn, org_grn, registered_by, created_at, name)
-		VALUES ($1, $2, 'grn:root:default:user:ada', now(), 'hosted')`, hosted, org))
+		VALUES ($1, $2, '`+grn.New(grn.RootOwner, "user", "ada").String()+`', now(), 'hosted')`, hosted, org))
 	require.NoError(t, exec(`INSERT INTO §operator_delegations
 		(id, org_grn, operator_grn, request_id, operations, expires_at, granted_by, granted_at)
-		VALUES ('g-1', $1, $2, 'r-1', $3, now() + interval '1 day', 'grn:root:default:user:ada', now())`,
+		VALUES ('g-1', $1, $2, 'r-1', $3, now() + interval '1 day', '`+grn.New(grn.RootOwner, "user", "ada").String()+`', now())`,
 		org, hosted, operations))
 	return func(ref, operation, requestTarget string) error {
 		var target any
@@ -399,7 +400,7 @@ func migrationRows(t *testing.T, p *pgxpool.Pool, schema string, operations []st
 		return exec(`INSERT INTO §operation_authorities
 			(ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation, target_grn,
 			 body_sha256, request_target, token_hash, token_expires_at, created_at)
-			VALUES ($1, $2, $3, $1, 'g-1', 'grn:root:default:user:ada', $4, $2,
+			VALUES ($1, $2, $3, $1, 'g-1', '`+grn.New(grn.RootOwner, "user", "ada").String()+`', $4, $2,
 			        $5, $6, $1, now() + interval '5 minutes', now())`,
 			ref, org, hosted, operation, emptyBodySHA256, target)
 	}
@@ -430,8 +431,8 @@ func TestMigration000032_ReappliesOverRowsARollbackKept(t *testing.T) {
 	t.Cleanup(func() { _, _ = m.Close() })
 	require.NoError(t, m.Up())
 
-	store := migrationRows(t, p, schema, []string{"agent:create", "agent-template:read"})
-	require.NoError(t, store("kept", "agent-template:read", "/v1/orgs/mig/templates"))
+	store := migrationRows(t, p, schema, []string{"iam:agent.create", "iam:agent-template.read"})
+	require.NoError(t, store("kept", "iam:agent-template.read", "/v1/orgs/mig/templates"))
 
 	require.NoError(t, m.Migrate(31), "roll back to before 000032")
 	require.NoError(t, m.Migrate(32), "000032 applies again over the rows the rollback kept")
@@ -440,6 +441,8 @@ func TestMigration000032_ReappliesOverRowsARollbackKept(t *testing.T) {
 	assert.False(t, dirty)
 	assert.Equal(t, 1, storedRows(t, p, schema), "no row is deleted")
 
+	// The schema is at 000032 again, whose checks name an operation as
+	// it was before 000071, so these rows are written that way.
 	assert.Error(t, store("new-without", "agent-template:read", ""), "a new row breaking 000032's checks is refused")
 	assert.NoError(t, store("new-with", "agent-template:read", "/v1/orgs/mig/templates"),
 		"the control: a new row satisfying them")

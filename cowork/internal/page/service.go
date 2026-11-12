@@ -8,10 +8,10 @@ import (
 
 // Service is the page tree as a caller acts on it. Every method asks
 // the platform before it reads or writes (ADR-0127): reading the tree
-// needs cowork:page-read on the organization, and each page listed
-// cowork:page-read on that page; creating needs cowork:page-write on
+// needs cowork:page.read on the organization, and each page listed
+// cowork:page.read on that page; creating needs cowork:page.write on
 // the organization and on the parent; reading a page needs
-// cowork:page-read on it, and changing or deleting it cowork:page-write
+// cowork:page.read on it, and changing or deleting it cowork:page.write
 // on it and on any parent it moves under.
 type Service interface {
 	List(ctx context.Context, caller platform.Caller, org string) ([]Page, error)

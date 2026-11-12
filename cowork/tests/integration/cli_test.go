@@ -130,7 +130,7 @@ func TestCLI_WorksInAWorkspaceAsItsSession(t *testing.T) {
 
 	out, code := garam(t, "", "whoami", "-o", "json")
 	require.Equal(t, 0, code, out)
-	assert.Contains(t, out, `"grn": "grn:root:default:user:ada"`)
+	assert.Contains(t, out, `"grn": "grn:root/iam/user/ada"`)
 
 	out, code = garam(t, "", "orgs", "list")
 	require.Equal(t, 0, code, out)
@@ -179,7 +179,7 @@ func TestCLI_ExitsWithTheCodeOfWhatFailed(t *testing.T) {
 	assert.Equal(t, exitUnauthenticated, code)
 
 	s.signIn(t, "bob")
-	s.platform.denyCheck("bob cowork:page-read@" + id)
+	s.platform.denyCheck("bob cowork:page.read@" + id)
 	for _, read := range []string{"get", "read"} {
 		_, code = garam(t, "", "cowork", "pages", read, id)
 		assert.Equal(t, exitPermissionDenied, code, read)

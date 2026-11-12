@@ -1,11 +1,14 @@
 //! Holds an organization's policies: role assignments as links to the
-//! system tier's templates, and `forbid` guardrails. Versions are
-//! append-only, and only what the schema admits is written (ADR-0130).
+//! system tier's templates, `forbid` guardrails, and `permit` policies
+//! scoped to the organization. Versions are append-only, and only what
+//! the schema admits is written (ADR-0130, ADR-0144).
 
 mod body;
 mod error;
+mod permit_right;
 mod postgres;
 
 pub use body::Body;
 pub use error::Error;
+pub use permit_right::PermitRight;
 pub use postgres::{NewPolicy, PolicyStore, Status, Version};

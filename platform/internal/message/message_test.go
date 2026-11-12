@@ -13,11 +13,11 @@ import (
 )
 
 func recipientGRN() grn.GRN {
-	return grn.New("acme", grn.DefaultProject, "agent", "bot")
+	return grn.New("acme", "agent", "bot")
 }
 
 func senderGRN() grn.GRN {
-	return grn.New("acme", grn.DefaultProject, "user", "ada")
+	return grn.New("acme", "user", "ada")
 }
 
 func TestNew_CarriesWhatTheSenderSuppliedUnderAnIdentifierOfItsOwn(t *testing.T) {

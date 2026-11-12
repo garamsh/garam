@@ -305,11 +305,28 @@ listener.
 
 ## The issuer
 
-**Unbuilt.**
+**Built for a CLI session (#1757).**
 [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
 makes garam an OIDC and OAuth issuer, so a service that garam does
-not deploy can learn who is calling. Today a session is a server-side
-row only garam reads, and no endpoint turns one into anything else.
+not deploy can learn who is calling. A session stays a server-side row
+only garam reads, and the exchange is what turns one into anything
+else.
+
+- **What is built.** Only a CLI session's access token is accepted as
+  the subject: an agent's browser token (§Browser tokens) is unbuilt,
+  and a browser session's cookie is refused as any session that is not
+  a CLI's. A first-party service's principal
+  (`grn:<org>/iam/service/<name>`, one per organization, written and
+  removed with it) authenticates at introspection and at the exchange
+  from the public keys `GARAM_IDENTITY_SERVICE_KEYS_FILE` names, read
+  on every authentication, by an assertion whose jti is spent in the
+  database, so a replay reaching another replica is refused. Each
+  route bounds a
+  source by the operator exchange's constants, in a limiter of its own
+  in each process. No first-party service is an audience today, so
+  introspection has no caller a deployment can configure yet. The
+  signing key is the policy feed's `GARAM_POLICY_SIGNING_KEY_FILE`,
+  held by the machine listener too.
 
 - **An exchange, not a new credential.** A CLI session's access token
   or an agent's browser token (§Browser tokens) is presented as an RFC
@@ -352,13 +369,16 @@ Where its endpoints are served is
 
 ## cowork's principal
 
-**Unbuilt (#1664).**
+**Partly built (#1758); the rest is unbuilt (#1664).**
 [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
 adds a fourth kind of machine caller beside an operator, an agent and
-a supervisor. Today no service principal exists and cowork reaches no
-queue.
+a supervisor. Built: the record, written with the organization and by
+migration `000073` for each that existed, and an exchange that answers
+a principal the issuer's token for the policy service (§The issuer).
+Unbuilt: the hour-long machine token, its revocation and re-issue, and
+every machine operation it reaches, so cowork reaches no queue.
 
-- **One per organization.** `grn:<org>:default:service:cowork`, a
+- **One per organization.** `grn:<org>/iam/service/cowork`, a
   record the platform writes with the organization and a migration
   writes for each existing one. No route creates one, and the
   organization's deletion takes it by cascade.
@@ -366,13 +386,18 @@ queue.
   private half in an owner-only file. The listener is configured with
   the public JWKs of each first-party service, read per exchange, at
   most two per service for a rotation; nothing on either listener
-  issues or withdraws them.
+  issues or withdraws them. Built: the file is re-read and re-parsed
+  on every authentication, so removing a compromised key takes no
+  restart, and a file that is gone or no longer parses refuses every
+  principal as unavailable (503), not as a bad client.
 - **The exchange is `exchangeClientAssertion`** under
   `machine-token.v2`, with the organization's principal GRN as
   `client_id`, `iss` and `sub`, and the key found by `kid` among the
   service's configured keys (§Asymmetric Operator exchange holds the
-  rest of the profile). The token lives one hour and carries its own
-  prefix.
+  rest of the profile). Built for the request naming `audience`
+  `policy`, answered the issuer's JWT of at most 300 seconds; any
+  other audience is refused. The hour-long token with its own prefix
+  is unbuilt.
 - **Read on every request** joined to the principal's record and its
   incarnation, with the key still configured, so a revocation, a
   removed key or the organization's deletion refuses it from the next
@@ -508,25 +533,28 @@ agent, on the route tagged `enrollment`, authoritative for its wire and
 token alone. Each request rereads the caller's token and registration;
 each but creation and admission rereads its grant, or a supervisor's
 registration and assignment, and current policy too, and those reread
-the member's `agent:create` reference instead, or for a replacement the
-`agent:replace` reference whose grant must cover both the controller the
-agent is on and the one it moves to (ADR-0107). An agent's own token and
-a controller's are refused. Activation, deactivation, recovery, creation
-and admission are each bounded by a ten-second server deadline over both
-their authority reads and their write, and past it answer unavailable
-without saying whether the write committed (ADR-0080). Introspection
-answers a forwarded token's standing and a generation's from one
-snapshot; a 200 is a status answer, and only `credential` and
-`generation` both `current`, with the expected binding, is positive. The
-credential's GRN still answers who is calling; these answer whether that
-caller is still the one allowed to act.
+the member's `iam:agent.create` reference instead, or for a replacement
+the `iam:agent.replace` reference whose grant must cover both the
+controller the agent is on and the one it moves to (ADR-0107). An
+agent's own token and a controller's are refused. Activation,
+deactivation, recovery, creation and admission are each bounded by a
+ten-second server deadline over both their authority reads and their
+write, and past it answer unavailable without saying whether the write
+committed (ADR-0080). Introspection answers a forwarded token's standing
+and a generation's from one snapshot; a 200 is a status answer, and only
+`credential` and `generation` both `current`, with the expected binding,
+is positive. The credential's GRN still answers who is calling; these
+answer whether that caller is still the one allowed to act.
 
 ## codehub's principal
 
 **Unbuilt.** codehub, a service garam does not deploy, acts in an
-organization as `grn:<org>:default:service:codehub`, the form cowork's
-principal takes (§cowork's principal). It reaches the policy service as
-a direct caller owning a `Codehub` namespace
+organization as `grn:<org>/iam/service/codehub`, the form cowork's
+principal takes under the grammar
+[ADR-0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md).
+The repositories it stores are `grn:<org>/codehub/repo/<id>`. It
+reaches the policy service as a direct caller owning a `Codehub`
+namespace
 ([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)).
 Its row is built when codehub calls: the closed list of services holds
 no entry before a caller proves it.

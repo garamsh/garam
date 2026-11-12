@@ -30,7 +30,13 @@ func cliJSON(t *testing.T, into any, args ...string) {
 
 // identifierOf is a GRN's last segment, which a command names an
 // object by.
-func identifierOf(g string) string { return g[strings.LastIndex(g, ":")+1:] }
+func identifierOf(g string) string {
+	parsed, err := grn.Parse(g)
+	if err != nil {
+		panic(err)
+	}
+	return parsed.Identifier
+}
 
 // TestCLIOrgs_CreateAnOrgAndItsTeamsProjectsMembersAndInvitations
 // drives #1632's orgs group against the API as serve api composes it:
@@ -53,7 +59,7 @@ func TestCLIOrgs_CreateAnOrgAndItsTeamsProjectsMembersAndInvitations(t *testing.
 	var team struct{ Grn string }
 	cliJSON(t, &team, "groups", "create", "--name", "eng", "--org", globex)
 	eng := identifierOf(team.Grn)
-	ada := "grn:root:default:user:ada"
+	ada := "grn:root/iam/user/ada"
 	_, err = runCLI(t, io.Discard, "groups", "members", "add", eng, "--member-grn", ada, "--org", globex)
 	require.NoError(t, err)
 	out, err = runCLI(t, io.Discard, "groups", "members", "list", eng, "--org", globex)
@@ -100,7 +106,7 @@ func TestCLIOrgs_CreateAnOrgAndItsTeamsProjectsMembersAndInvitations(t *testing.
 	signInAs(t, endpoint, "ada")
 	out, err = runCLI(t, io.Discard, "members", "list", "--org", globex)
 	require.NoError(t, err)
-	assert.Contains(t, out, "grn:root:default:user:mel")
+	assert.Contains(t, out, "grn:root/iam/user/mel")
 
 	// A second invitation is listed by an id that is not its token,
 	// and revoking by that id stops the token admitting anyone. The
@@ -140,7 +146,7 @@ func signInAs(t *testing.T, endpoint, id string) {
 	// connect and not pool: pool truncates every table, which would
 	// take the organization this test is reading with it.
 	p := connect(t, os.Getenv("GARAM_TEST_DATABASE_URL"), nil)
-	g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+	g := grn.New(grn.RootOwner, user.ServiceType, id)
 	users := userpg.New(p)
 	if _, err := users.Get(ctx, g); err != nil {
 		require.NoError(t, users.Create(ctx, user.New(g, id)))

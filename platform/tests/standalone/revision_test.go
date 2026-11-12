@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -75,7 +76,7 @@ embedding:
 		if adapter == "" {
 			return ""
 		}
-		said, err := s.probeIn(adapter, "get", "http://127.0.0.1:8080/agents/"+agentGRN+"/status")
+		said, err := s.probeIn(adapter, "get", "http://127.0.0.1:8080/agents/"+url.PathEscape(agentGRN)+"/status")
 		if err != nil {
 			return ""
 		}
@@ -156,7 +157,7 @@ embedding:
 	assert.Equal(t, before.nonce, after.nonce)
 	assert.NotEqual(t, before.generation, after.generation, "a new generation")
 	state := func(id string) string {
-		said, _ := s.probeIn(h.container("adapter"), "get", "http://127.0.0.1:8080/agents/"+agentGRN+"/messages/"+id)
+		said, _ := s.probeIn(h.container("adapter"), "get", "http://127.0.0.1:8080/agents/"+url.PathEscape(agentGRN)+"/messages/"+id)
 		var m struct {
 			Status string `json:"status"`
 		}

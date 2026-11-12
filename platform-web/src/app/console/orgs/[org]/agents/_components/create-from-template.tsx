@@ -40,8 +40,8 @@ type Outcome =
  * Creates an agent from a template version the hosted operator's
  * control service published (#1170). The control service copies that
  * version into the agent's first revision once; publishing a later
- * version never reaches it. Creating needs `agent:create` and the
- * template list `agent-template:read`, and neither grants the other;
+ * version never reaches it. Creating needs `iam:agent.create` and the
+ * template list `iam:agent-template.read`, and neither grants the other;
  * the caller has already checked the grant carries both.
  */
 export function CreateFromTemplate({
@@ -67,7 +67,7 @@ export function CreateFromTemplate({
   const [controller, setController] = useState("");
   const templates = useControlRead(
     org,
-    "agent-template:read",
+    "iam:agent-template.read",
     {
       endpoint: hosted.endpoint,
       audience: hosted.grn,
@@ -98,7 +98,7 @@ export function CreateFromTemplate({
     return (
       <ControlNotice
         operatorsHref={orgHref(org, "operators")}
-        reason={controlFailureCopy(templates, "agent-template:read")}
+        reason={controlFailureCopy(templates, "iam:agent-template.read")}
         fix={NO_FIX}
       />
     );
@@ -143,7 +143,7 @@ export function CreateFromTemplate({
         requestId,
         org,
         audience: hosted.grn,
-        operation: "agent:create",
+        operation: "iam:agent.create",
         target: placedOn,
         parser: CreatedParser,
       },
@@ -156,7 +156,7 @@ export function CreateFromTemplate({
     }
     setOutcome({
       status: "refused",
-      message: controlFailureCopy(result, "agent:create"),
+      message: controlFailureCopy(result, "iam:agent.create"),
     });
   }
 

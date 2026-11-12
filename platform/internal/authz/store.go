@@ -37,8 +37,10 @@ type Store interface {
 	// version, or fails with ErrPolicyVersionNotFound.
 	SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, version int) (*Policy, error)
 
-	// AttachPolicy binds the policy to a subject of the same org
-	// (ADR-0008), narrowing it from an org-wide grant to that subject.
+	// AttachPolicy binds the policy to a subject, narrowing it from an
+	// org-wide grant to that subject. The caller has checked the
+	// subject's org against the policy's (ADR-0008): the schema no
+	// longer reads a GRN to refuse a crossing.
 	AttachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) (*PolicyAttachment, error)
 	// DetachPolicy removes one attachment, or fails with
 	// ErrAttachmentNotFound. Removing an active policy's last

@@ -86,7 +86,7 @@ func (g *tokenGaram) counts() (exchanged, minted int) {
 	return g.exchanged, g.minted
 }
 
-var testStandaloneAgent = grn.New("acme", grn.DefaultProject, "agent", "0a1b2c3d4e5f6071")
+var testStandaloneAgent = grn.New("acme", "agent", "0a1b2c3d4e5f6071")
 
 // testCredential is a supervisor credential as garam spells one.
 var testCredential = "garam_sc_" + strings.Repeat("c", 64)

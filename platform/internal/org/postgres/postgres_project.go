@@ -62,8 +62,9 @@ func (s *Store) ListProjects(ctx context.Context, orgGRN grn.GRN, f listfilter.F
 // holds n, ordered by GRN.
 func (s *Store) SearchProjects(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*org.Project, error) {
 	rows, err := s.q.SearchProjects(ctx, db.SearchProjectsParams{
-		OrgGrn:  orgGRN.String(),
-		Pattern: pgxtype.Contains(n.Text()),
+		OrgGrn:    orgGRN.String(),
+		Pattern:   pgxtype.Contains(n.Text()),
+		IDPattern: grn.New(orgGRN.Identifier, org.ServiceTypeProject, pgxtype.Contains(n.Text())).String(),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "search projects", nil, nil)

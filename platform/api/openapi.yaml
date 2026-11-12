@@ -36,8 +36,17 @@ info:
     breaking change out of it. The tag garam publishes its images under
     names a build and not this document (ADR-0039).
 tags:
+  - name: issuer
+    description: >-
+      garam as an OIDC issuer: its discovery document, its keys and the
+      exchange of a CLI session for a token a service verifies
+      (ADR-0141).
   - name: auth
     description: Sign-in, sign-out, and the current identity.
+  - name: registry
+    description: >-
+      What the service manifests declare: the services, their types and
+      their actions, and what a GRN is (ADR-0143).
   - name: org
     description: >-
       Organizations, memberships, invitations, and the groups and
@@ -431,6 +440,91 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /.well-known/openid-configuration:
+    get:
+      operationId: getIssuerConfiguration
+      tags: [issuer]
+      summary: Read garam's issuer metadata.
+      description: >-
+        The discovery document of garam as an OIDC issuer (ADR-0141): the
+        `issuer` identity, where its keys are published and where a
+        session is exchanged for a token. It carries no credential. It
+        is served, with the other two operations tagged `issuer`, only
+        where a deployment configured the issuer: a process with no
+        signing key or no `GARAM_IDENTITY_ISSUER` registers none of
+        them, and a request for one answers 404 as any unknown path
+        does.
+      security: []
+      responses:
+        '200':
+          description: The issuer's metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuerConfiguration'
+        '404':
+          description: The issuer is not configured here.
+  /oauth/jwks:
+    get:
+      operationId: getIssuerKeys
+      tags: [issuer]
+      summary: Read the keys garam's tokens verify with.
+      description: >-
+        The JSON Web Key Set of RFC 7517 holding the one public key the
+        issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e`
+        (ADR-0138 item 3). It carries no credential.
+      security: []
+      responses:
+        '200':
+          description: The key set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuerKeySet'
+        '404':
+          description: The issuer is not configured here.
+  /oauth/token:
+    post:
+      operationId: exchangeSessionToken
+      tags: [issuer]
+      summary: Exchange a CLI session's access token for a signed token.
+      description: >-
+        RFC 8693's token exchange (ADR-0141). The `subject_token` is the
+        access token of a live CLI session, named by `subject_token_type`
+        `urn:ietf:params:oauth:token-type:access_token`, and the exchange
+        answers an RS256 JWT for the one service named by `audience`,
+        `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's
+        GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session
+        it was exchanged from. It lives at most 300 seconds and no longer
+        than the session does, and `expires_in` says how long.
+
+        The exchange reads the session by its token, so a refresh token,
+        an ID token, a browser session's cookie and a machine token each
+        answer `invalid_grant`, as does a session revoked or expired. An
+        `audience` outside the list answers `invalid_target`. The
+        credential is the form's `subject_token` alone, and the form
+        takes no `scope`, `resource` or actor token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenExchangeRequest'
+      responses:
+        '200':
+          description: The signed token.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExchangeResponse'
+        '400':
+          $ref: '#/components/responses/OAuthError'
+        '404':
+          description: The issuer is not configured here.
   /me/sessions:
     get:
       operationId: listMySessions
@@ -485,6 +579,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Error'
+  /registry:
+    get:
+      operationId: getRegistry
+      tags: [registry]
+      summary: List the services, their types and their actions. Requires a signed-in caller.
+      description: >-
+        What the service manifests declare (ADR-0143): each service,
+        the entity types a GRN of it names, with each type's parent
+        types, and each action of it with the types it applies to. It
+        answers from the manifests the platform was built with and
+        reads no organization, so it holds nothing of one and asks the
+        caller for no permission beyond a session.
+      responses:
+        '200':
+          description: The services the manifests declare, sorted by name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Registry'
+        '401':
+          $ref: '#/components/responses/Error'
+  /registry/grn:
+    get:
+      operationId: describeGrn
+      tags: [registry]
+      summary: Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+      description: >-
+        Says what a name is, and never whether the thing it names
+        exists or whether the caller may act on it: it reads no entity
+        and no organization. A name of a declared service and type
+        answers `known` true with its service, its type, the entity type
+        it is written as, its parent (the name with its last type and id
+        pair removed, absent for a name of one pair), its locator where
+        it has one, and the actions whose resource types name its entity
+        type. A name whose service or type no manifest declares
+        answers `known` false and nothing else: it is a well-formed name
+        the registry has no declaration for, and not an error. A string
+        that is no GRN is refused with 400. The name is a query
+        parameter because a GRN holds `/`.
+      parameters:
+        - name: grn
+          in: query
+          required: true
+          description: The name to describe.
+          schema:
+            type: string
+            example: grn:acme/cowork/project/frontend/channel/general
+      responses:
+        '200':
+          description: What the name is, or that no manifest declares it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrnDescription'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
   /orgs:
@@ -649,9 +801,9 @@ paths:
 
 
         Some actions are decided by more than that `Check`.
-        `agent:create`, `agent:configure`, `agent:recover`,
-        `agent:replace`, `agent-template:publish`,
-        `execution-profile:read` and `agent:execution-read` are minted
+        `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`,
+        `iam:agent.replace`, `iam:agent-template.publish`,
+        `iam:execution-profile.read` and `iam:agent.execution-read` are minted
         through `mintOperationAuthority`, which reads a delegation grant
         to the operator (ADR-0078), holds the operation against it, and
         decides the caller's authority last. Each is put to that last
@@ -660,11 +812,11 @@ paths:
         Where it denies, the answer is `deny`, and the mint would
         refuse. Where it allows, the answer is `unknown`: this operation
         reads no grant, so the grant is left to decide.
-        `operator:delegate` is put to the check
+        `iam:operator.delegate` is put to the check
         `writeOperatorDelegation`, `endOperatorDelegation`,
         `setOperatorControlEndpoint` and `clearOperatorControlEndpoint`
         run, on the same current policy, and that check is all of their
-        authority, so it is answered `allow` or `deny`. `agent:enroll`
+        authority, so it is answered `allow` or `deny`. `iam:agent.enroll`
         is put to the check `approveAgentEnrollment`,
         `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on
         the same current policy, on the organization for a new host and
@@ -735,7 +887,7 @@ paths:
 
 
         A policy statement is named only where the caller holds
-        `policy:read` on that policy, the check `getPolicy` makes.
+        `iam:policy.read` on that policy, the check `getPolicy` makes.
         Every other one is answered once, as `unreadable-policy`, with
         its effect and nothing else: no policy, statement or path.
 
@@ -774,7 +926,7 @@ paths:
     get:
       operationId: listPermissionHolders
       tags: [org]
-      summary: List the members and agents the engine allows one action. Requires `org:member-list`.
+      summary: List the members and agents the engine allows one action. Requires `iam:org.member-list`.
       description: >-
         Answers which principals of the organization the policy engine
         allows `action` on the resource, each asked as enforcement asks
@@ -784,9 +936,9 @@ paths:
         role, with its groups and the policies reaching it.
 
 
-        It requires `org:member-list` on the organization, the check
+        It requires `iam:org.member-list` on the organization, the check
         `listOrgMembers` makes, since the answer names members. Agents
-        are asked only where the caller also holds `agent:read` on the
+        are asked only where the caller also holds `iam:agent.read` on the
         organization, the check `listAgents` makes; otherwise none is
         listed.
 
@@ -847,9 +999,9 @@ paths:
 
 
         Each kind is authorized as its list is: people on
-        `org:member-list`, as `listOrgMembers` is; agents on
-        `agent:read`, teams on `group:read`, policies on `policy:read`
-        and projects on `project:read`, each on the organization. A kind
+        `iam:org.member-list`, as `listOrgMembers` is; agents on
+        `iam:agent.read`, teams on `iam:group.read`, policies on `iam:policy.read`
+        and projects on `iam:project.read`, each on the organization. A kind
         the caller may not list is left out of the answer. Agents,
         teams, policies and projects then leave out each object whose
         own read the caller is denied, as their lists do (ADR-0115).
@@ -945,13 +1097,13 @@ paths:
       tags: [org]
       summary: List an organization's groups. Requires the `member` role.
       description: >-
-        Authorized on `group:read` on the organization. With `member=me`
+        Authorized on `iam:group.read` on the organization. With `member=me`
         it answers only the groups the signed-in caller belongs to, in
         the same order and paged the same way, so a caller learns its
         own teams in one request rather than one per group. The filter
         names the caller alone: who else belongs to a group is
         `listGroupMembers`', which is authorized per group.
-        Leaves out each group whose own `group:read` the caller is denied. The
+        Leaves out each group whose own `iam:group.read` the caller is denied. The
         page is filtered as read: `limit` and `offset` count stored
         entries, so a page can hold fewer than `limit` with more after
         it, and only an empty page is the end.
@@ -1160,8 +1312,8 @@ paths:
       tags: [org]
       summary: List an organization's projects. Requires the `member` role.
       description: >-
-        Authorized on `project:read` on the organization. Leaves out each
-        project whose own `project:read` the caller is denied. The page is
+        Authorized on `iam:project.read` on the organization. Leaves out each
+        project whose own `iam:project.read` the caller is denied. The page is
         filtered as read: `limit` and `offset` count stored entries, so
         a page can hold fewer than `limit` with more after it, and only
         an empty page is the end.
@@ -1335,8 +1487,8 @@ paths:
       tags: [agent]
       summary: List an organization's agents. Requires the `member` role.
       description: >-
-        Authorized on `agent:read` on the organization. Leaves out each
-        agent whose own `agent:read` the caller is denied. The page is
+        Authorized on `iam:agent.read` on the organization. Leaves out each
+        agent whose own `iam:agent.read` the caller is denied. The page is
         filtered as read: `limit` and `offset` count stored entries, so
         a page can hold fewer than `limit` with more after it, and only
         an empty page is the end.
@@ -1385,13 +1537,13 @@ paths:
     patch:
       operationId: renameAgent
       tags: [agent]
-      summary: Rename an agent. Requires `agent:rename`.
+      summary: Rename an agent. Requires `iam:agent.rename`.
       description: >-
         Sets what the organization calls the agent, or clears it with
         `null`, and nothing else (ADR-0119). Its GRN, assignment,
         lineage and tokens stand as they were, and no operator is told:
         a name is not configuration. It is authorized on the agent's own
-        GRN, so a policy denying `agent:rename` on that agent refuses
+        GRN, so a policy denying `iam:agent.rename` on that agent refuses
         it (ADR-0115).
       parameters:
         - $ref: '#/components/parameters/org'
@@ -1421,11 +1573,11 @@ paths:
     get:
       operationId: watchAgent
       tags: [agent]
-      summary: Watch an agent work. Requires the `agent:watch` action.
+      summary: Watch an agent work. Requires the `iam:agent.watch` action.
       description: >-
         What the agent is saying now, as server-sent events, for as long
         as the caller holds the response open (ADR-0022). Watching is
-        granted separately from reading: `agent:read` says an agent
+        granted separately from reading: `iam:agent.read` says an agent
         exists and reports the states two parties report about it, and
         this exposes the content of its work, so a caller holding only
         the read is refused here.
@@ -1464,7 +1616,7 @@ paths:
     get:
       operationId: listAgentEnrollments
       tags: [agent]
-      summary: List the organization's standalone approvals. Requires `agent:read`.
+      summary: List the organization's standalone approvals. Requires `iam:agent.read`.
       description: >-
         Lists every approval the organization holds, oldest first:
         pending, spent, withdrawn and expired, for standalone and direct
@@ -1479,7 +1631,7 @@ paths:
         certificate and no credential.
 
 
-        Authorization is `agent:read` on the organization, decided from
+        Authorization is `iam:agent.read` on the organization, decided from
         current membership, roles, groups and persisted policies, as the
         writes beside it are decided; an explicit Deny wins. Paged by
         `limit` and `offset` like every other list.
@@ -1505,7 +1657,7 @@ paths:
     post:
       operationId: approveAgentEnrollment
       tags: [agent]
-      summary: Approve a standalone host's enrollment. Requires current `agent:enroll`.
+      summary: Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
       description: >-
         Approves what a standalone host prepared before asking: the
         SHA-256 of a bootstrap secret it keeps and the request
@@ -1559,7 +1711,7 @@ paths:
     delete:
       operationId: withdrawAgentEnrollment
       tags: [agent]
-      summary: Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+      summary: Withdraw an unspent standalone approval. Requires current `iam:agent.enroll`.
       description: >-
         Withdraws an approval no host has spent. Spending it afterwards
         is refused as an unknown bootstrap would be, and a withdrawal
@@ -1594,7 +1746,7 @@ paths:
     get:
       operationId: listAgentSupervisors
       tags: [agent]
-      summary: List the organization's standalone supervisors. Requires `agent:read`.
+      summary: List the organization's standalone supervisors. Requires `iam:agent.read`.
       description: >-
         Lists every supervisor registration the organization holds,
         oldest first: `active` while current, `revoked` once ended by
@@ -1629,7 +1781,7 @@ paths:
     delete:
       operationId: revokeAgentSupervisor
       tags: [agent]
-      summary: Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+      summary: Revoke a standalone host's supervisor. Requires current `iam:agent.enroll`.
       description: >-
         Ends the supervisor's registration, the agent's current
         activation and every unspent approval for that agent, in one
@@ -1690,9 +1842,9 @@ paths:
         credential was reached, is the member's and not the subject's.
 
 
-        It is authorized on the subject's own read: `operator:read` on
-        the organization for an operator, `agent:read` on the agent for
-        an agent, and `agent:read` on the organization for a supervisor.
+        It is authorized on the subject's own read: `iam:operator.read` on
+        the organization for an operator, `iam:agent.read` on the agent for
+        an agent, and `iam:agent.read` on the organization for a supervisor.
         A subject of another organization, or of any other kind, is
         refused with 400.
       parameters:
@@ -1830,7 +1982,7 @@ paths:
         are not fields here and do not move: its keys stand as they
         were.
 
-        It is authorized on an action of its own, `operator:update`,
+        It is authorized on an action of its own, `iam:operator.update`,
         rather than on the one that registers or the one that deletes,
         because it grants nothing and withdraws nothing.
       parameters:
@@ -1931,9 +2083,9 @@ paths:
 
         It is the one route that issues a key; registering issues none.
         The first key of an operator that has never been issued one is
-        authorized by `operator:register`, as registering it was. Any
+        authorized by `iam:operator.register`, as registering it was. Any
         other — beside or in place of a live key, or after every key was
-        withdrawn — is `operator:reissue`, and a caller holding only the
+        withdrawn — is `iam:operator.reissue`, and a caller holding only the
         first finds an operator that was ever keyed refused with 403.
 
         `rotation` says how the key stands beside the ones the operator
@@ -1991,7 +2143,7 @@ paths:
     delete:
       operationId: revokeOperatorKey
       tags: [operator]
-      summary: Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+      summary: Withdraw an operator's key and every token exchanged under it. Requires `iam:operator.reissue`.
       description: >-
         Withdraws the key (ADR-0102). **It stops verifying assertions,
         and every token exchanged under it stops authenticating, at the
@@ -2018,7 +2170,7 @@ paths:
     put:
       operationId: writeOperatorDelegation
       tags: [operator]
-      summary: Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+      summary: Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
       description: >-
         Grants the hosted operator bounded authority over this
         organization's controllers (ADR-0078). A grant never changes:
@@ -2103,7 +2255,7 @@ paths:
     delete:
       operationId: endOperatorDelegation
       tags: [operator]
-      summary: Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+      summary: Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
       description: >-
         Ends the grant named in the body, and only that one. Every
         operation authority minted under it is refused from the next
@@ -2139,7 +2291,7 @@ paths:
     put:
       operationId: setOperatorManager
       tags: [operator]
-      summary: Link a control service to its cluster manager, once. Requires `operator:register`.
+      summary: Link a control service to its cluster manager, once. Requires `iam:operator.register`.
       description: >-
         Records this operator as the control service of the operator
         `manager` names, on a record that names no manager yet
@@ -2182,7 +2334,7 @@ paths:
     put:
       operationId: setOperatorControlEndpoint
       tags: [operator]
-      summary: Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+      summary: Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
       description: >-
         Sets the one base URL the console sends this operator's
         operation authorities to. It is an absolute `https` URL of at
@@ -2225,7 +2377,7 @@ paths:
     delete:
       operationId: clearOperatorControlEndpoint
       tags: [operator]
-      summary: Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+      summary: Clear a hosted operator's control endpoint. Requires current `iam:operator.delegate`.
       description: >-
         The console then reaches no control service for this operator.
         Clearing one already clear answers the same.
@@ -2266,22 +2418,22 @@ paths:
         is first.
 
 
-        `agent:create` targets the controller that will run the agent
-        and is authorized on the organization; `agent:configure` and
-        `agent:recover` target the agent, are authorized on it, and
-        bind where it runs now. `agent:recover` authorizes one exact
+        `iam:agent.create` targets the controller that will run the agent
+        and is authorized on the organization; `iam:agent.configure` and
+        `iam:agent.recover` target the agent, are authorized on it, and
+        bind where it runs now. `iam:agent.recover` authorizes one exact
         credential recovery, whose request body `bodySha256` digests
-        (ADR-0078). `agent:replace` targets the agent, is authorized on
+        (ADR-0078). `iam:agent.replace` targets the agent, is authorized on
         it, binds where it runs now and binds `destination`, the
         controller a replacement under `agent-enrollment.v1` moves it to
-        (ADR-0107). `agent-template:read`, `agent-template:publish`,
-        `execution-profile:read` and `operator:read` target this
-        organization and are authorized on it; `operator:read` reads
+        (ADR-0107). `iam:agent-template.read`, `iam:agent-template.publish`,
+        `iam:execution-profile.read` and `iam:operator.read` target this
+        organization and are authorized on it; `iam:operator.read` reads
         what the Operator reports for every operator of it (#1374).
-        `agent:execution-read` targets the agent, is
+        `iam:agent.execution-read` targets the agent, is
         authorized on it and binds where it runs now. The audience's
         current grant must cover the operation and, where it names one,
-        the controller; for `agent:replace`, both the controller the
+        the controller; for `iam:agent.replace`, both the controller the
         agent is on and `destination`.
 
 
@@ -2361,8 +2513,8 @@ paths:
       tags: [policy]
       summary: List an organization's policies. Requires the `admin` role.
       description: >-
-        Authorized on `policy:read` on the organization. Leaves out each
-        policy whose own `policy:read` the caller is denied.
+        Authorized on `iam:policy.read` on the organization. Leaves out each
+        policy whose own `iam:policy.read` the caller is denied.
       parameters:
         - $ref: '#/components/parameters/org'
       responses:
@@ -2471,7 +2623,7 @@ paths:
         attachments, so it contributes to no check from then on. An
         attached policy is deleted as readily as an unattached one:
         nothing is left that could apply to the whole organization.
-        Authorized on `policy:delete`.
+        Authorized on `iam:policy.delete`.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/policy'
@@ -2685,7 +2837,7 @@ paths:
     get:
       operationId: listInvitations
       tags: [org]
-      summary: List the invitations that can still be accepted. Requires `org:invite`.
+      summary: List the invitations that can still be accepted. Requires `iam:org.invite`.
       description: >-
         Answers each invitation neither spent nor expired, newest
         first, by its `id`. A token is a bearer secret and no answer
@@ -2745,7 +2897,7 @@ paths:
     delete:
       operationId: revokeInvitation
       tags: [org]
-      summary: Revoke an invitation no one has used. Requires `org:invite`.
+      summary: Revoke an invitation no one has used. Requires `iam:org.invite`.
       description: >-
         Deletes the invitation, so its token is answered 404 from then
         on, as a token that never existed is, by `getInvitation`,
@@ -2937,7 +3089,7 @@ components:
       description: The action asked about.
       schema:
         type: string
-        example: policy:update
+        example: iam:policy.update
     permissionResourceType:
       name: resourceType
       in: query
@@ -3054,6 +3206,120 @@ components:
         refresh_token_expires_in:
           type: integer
           description: Seconds the refresh token is accepted for.
+    IssuerConfiguration:
+      type: object
+      description: >-
+        The OIDC discovery document of garam as an issuer (ADR-0141).
+        Every URL is the `issuer` followed by the path the operation of
+        this file is served at.
+      required: [issuer, jwks_uri, token_endpoint, grant_types_supported, response_types_supported, subject_types_supported, id_token_signing_alg_values_supported, token_endpoint_auth_methods_supported]
+      properties:
+        issuer:
+          type: string
+          description: >-
+            The configured `GARAM_IDENTITY_ISSUER`, which every token's
+            `iss` equals byte for byte.
+          example: https://garam.example/api
+        jwks_uri:
+          type: string
+        token_endpoint:
+          type: string
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+            enum: ['urn:ietf:params:oauth:grant-type:token-exchange']
+        response_types_supported:
+          type: array
+          description: Empty, because the issuer has no authorization endpoint.
+          items:
+            type: string
+        subject_types_supported:
+          type: array
+          items:
+            type: string
+            enum: [public]
+        id_token_signing_alg_values_supported:
+          type: array
+          description: Only `RS256`.
+          items:
+            type: string
+        token_endpoint_auth_methods_supported:
+          type: array
+          description: '`none`: the exchange is authenticated by its subject token.'
+          items:
+            type: string
+            enum: [none]
+    IssuerKeySet:
+      type: object
+      description: RFC 7517's key set holding the issuer's one public key.
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssuerKey'
+    IssuerKey:
+      type: object
+      required: [kty, use, alg, kid, n, e]
+      properties:
+        kty:
+          type: string
+          enum: [RSA]
+        use:
+          type: string
+          enum: [sig]
+        alg:
+          type: string
+          description: Always `RS256`.
+        kid:
+          type: string
+          description: The key's RFC 7638 thumbprint, which a token's header names.
+        n:
+          type: string
+        e:
+          type: string
+    TokenExchangeRequest:
+      type: object
+      description: RFC 8693's token exchange request (ADR-0141).
+      required: [grant_type, subject_token, subject_token_type, audience]
+      properties:
+        grant_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:grant-type:token-exchange']
+        subject_token:
+          type: string
+          description: The access token of a live CLI session.
+        subject_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:access_token']
+        audience:
+          type: string
+          enum: [policy, codehub]
+          description: The one service the token is for.
+        requested_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:jwt']
+          description: Absent is the same.
+    TokenExchangeResponse:
+      type: object
+      description: RFC 8693's successful response (ADR-0141).
+      required: [access_token, issued_token_type, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: The compact RS256 JWT.
+        issued_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:access_token']
+        token_type:
+          type: string
+          description: Always `Bearer`.
+        expires_in:
+          type: integer
+          description: >-
+            Seconds the token lives: at most 300, and no more than the
+            session has left.
     OAuthError:
       type: object
       description: RFC 6749's error response, with RFC 8628's codes (ADR-0120).
@@ -3061,14 +3327,15 @@ components:
       properties:
         error:
           type: string
-          enum: [invalid_request, invalid_client, invalid_grant, unsupported_grant_type, authorization_pending, slow_down, access_denied, expired_token]
+          enum: [invalid_request, invalid_client, invalid_grant, invalid_target, unsupported_grant_type, authorization_pending, slow_down, access_denied, expired_token]
           description: >-
             `invalid_request` for a missing or malformed parameter;
             `invalid_client` for a `client_id` other than `garam-cli`;
             `invalid_grant` for a device code or refresh token garam
             holds nothing live for; `unsupported_grant_type` for any
-            other grant; and RFC 8628 §3.5's four while a device code is
-            polled.
+            other grant; RFC 8628 §3.5's four while a device code is
+            polled; and RFC 8693's `invalid_target` for an `audience`
+            the issuer holds no service by (ADR-0141).
         error_description:
           type: string
         interval:
@@ -3115,9 +3382,110 @@ components:
       properties:
         grn:
           type: string
-          example: grn:garam:default:user:117421510527410544321
+          example: grn:garam/iam/user/117421510527410544321
         nickname:
           type: string
+    Registry:
+      type: object
+      required: [services]
+      properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegistryService'
+    RegistryService:
+      type: object
+      required: [name, types, actions]
+      properties:
+        name:
+          type: string
+          description: The service's one name, the `service` segment of its GRNs.
+          example: cowork
+        types:
+          type: array
+          description: The entity types a GRN of this service names, sorted by `name`.
+          items:
+            $ref: '#/components/schemas/RegistryType'
+        actions:
+          type: array
+          description: The service's actions, sorted by `name`.
+          items:
+            $ref: '#/components/schemas/RegistryAction'
+    RegistryType:
+      type: object
+      required: [name, entityType, parents]
+      properties:
+        name:
+          type: string
+          description: The `type` segment of a GRN of this type.
+          example: channel
+        entityType:
+          type: string
+          description: The qualified entity type the name is written as.
+          example: Cowork::Channel
+        parents:
+          type: array
+          description: The qualified types an entity of this type may be a member of.
+          items:
+            type: string
+    RegistryAction:
+      type: object
+      required: [name, principals, resources]
+      properties:
+        name:
+          type: string
+          description: The action as it is written on the wire, `<service>:<type>.<verb>`.
+          example: cowork:channel.post
+        principals:
+          type: array
+          description: The qualified types that may take the action.
+          items:
+            type: string
+        resources:
+          type: array
+          description: The qualified types the action applies to.
+          items:
+            type: string
+    GrnDescription:
+      type: object
+      required: [grn, known]
+      properties:
+        grn:
+          type: string
+          description: The name as asked, locator included.
+        known:
+          type: boolean
+          description: >-
+            False where the name's service or type is declared by no
+            manifest. Every property below is absent then.
+        service:
+          type: string
+          example: cowork
+        type:
+          type: string
+          description: The name's last type segment.
+          example: channel
+        entityType:
+          type: string
+          description: The qualified entity type the name is written as.
+          example: Cowork::Channel
+        parent:
+          type: string
+          description: >-
+            The name with its last type and id pair removed. Absent for
+            a name of one pair.
+          example: grn:acme/cowork/project/frontend
+        locator:
+          type: string
+          description: The place inside the resource, as written after `#`.
+        actions:
+          type: array
+          description: >-
+            The names of the actions whose resource types name
+            `entityType`, sorted. `getRegistry` says what each applies
+            to.
+          items:
+            type: string
     PasswordLogin:
       type: object
       required: [username, password]
@@ -3194,7 +3562,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:garam:default:org:acme
+          example: grn:garam/iam/org/acme
         name:
           type: string
         createdAt:
@@ -3219,7 +3587,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:group:eng
+          example: grn:acme/iam/group/eng
         name:
           type: string
         orgGrn:
@@ -3249,7 +3617,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:project:frontend
+          example: grn:acme/iam/project/frontend
         name:
           type: string
         orgGrn:
@@ -3280,7 +3648,7 @@ components:
       properties:
         memberGrn:
           type: string
-          example: grn:acme:default:user:alice
+          example: grn:acme/iam/user/alice
     Role:
       type: string
       enum: [owner, admin, member]
@@ -3349,7 +3717,7 @@ components:
       properties:
         action:
           type: string
-          example: operator:register
+          example: iam:operator.register
         resource:
           $ref: '#/components/schemas/PermissionResource'
     PermissionResource:
@@ -3612,7 +3980,7 @@ components:
       properties:
         orgGrn:
           type: string
-          example: grn:root:default:org:globex
+          example: grn:root/iam/org/globex
         grantedHere:
           type: boolean
           description: The path organization's half stands.
@@ -3719,8 +4087,8 @@ components:
         Statement:
           - Sid: AllowOrgRead
             Effect: Allow
-            Action: [org:read]
-            Resource: ['grn:acme:*']
+            Action: [iam:org.read]
+            Resource: ['grn:acme/*']
     PolicyStatus:
       type: string
       description: >-
@@ -3733,7 +4101,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:policy:9f2ac1b40d8e7a35
+          example: grn:acme/iam/policy/9f2ac1b40d8e7a35
         orgGrn:
           type: string
         name:
@@ -3800,7 +4168,7 @@ components:
           type: string
         subjectGrn:
           type: string
-          example: grn:acme:default:group:eng
+          example: grn:acme/iam/group/eng
         createdAt:
           type: string
           format: date-time
@@ -3811,7 +4179,7 @@ components:
       properties:
         subjectGrn:
           type: string
-          example: grn:acme:default:group:eng
+          example: grn:acme/iam/group/eng
     AgentProvisioningState:
       type: string
       description: >-
@@ -4004,7 +4372,7 @@ components:
       properties:
         assigneeGrn:
           type: string
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
         epoch:
           type: integer
           minimum: 1
@@ -4031,7 +4399,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:agent:9f2ac1b40d8e7a35
+          example: grn:acme/iam/agent/9f2ac1b40d8e7a35
         name:
           type: string
           description: >-
@@ -4110,7 +4478,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
         name:
           type: string
           description: >-
@@ -4151,7 +4519,7 @@ components:
             `setOperatorManager` on a record naming none, and it names
             the identity rather than a live record: it stays after that
             manager's registration is deleted.
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
     OperatorKeyIssuance:
       type: object
       description: How an issued key stands beside the keys the operator holds (ADR-0102).
@@ -4187,7 +4555,7 @@ components:
         clientId:
           type: string
           description: The operator's canonical GRN, which its assertions name as `iss`, `sub` and `client_id`.
-          example: grn:acme:default:operator:controller
+          example: grn:acme/iam/operator/controller
         tokenUrl:
           type: string
           format: uri
@@ -4272,7 +4640,7 @@ components:
             (ADR-0124). It is how a control service joins a manager
             registered on its own, as every pair made before
             `controlService` was. Not given with `controlService`.
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
         controlService:
           type: object
           description: >-
@@ -4355,7 +4723,7 @@ components:
           description: >-
             The GRN of the cluster manager this operator is the control
             service of: another operator of this organization.
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
     ControlEndpointWrite:
       type: object
       required: [url]
@@ -4397,12 +4765,12 @@ components:
           format: date-time
     DelegatedOperation:
       type: string
-      enum: [agent:create, agent:configure, agent:activate, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, operator:read, agent:replace]
+      enum: [iam:agent.create, iam:agent.configure, iam:agent.activate, iam:agent.recover, iam:agent-template.read, iam:agent-template.publish, iam:execution-profile.read, iam:agent.execution-read, iam:operator.read, iam:agent.replace]
       description: >-
-        `agent:activate` bounds the hosted operator's own lifecycle
-        authority; no user mints it. `agent-template:read`,
-        `agent-template:publish`, `execution-profile:read` and
-        `operator:read` act on what the Operator holds for the
+        `iam:agent.activate` bounds the hosted operator's own lifecycle
+        authority; no user mints it. `iam:agent-template.read`,
+        `iam:agent-template.publish`, `iam:execution-profile.read` and
+        `iam:operator.read` act on what the Operator holds for the
         organization and name no controller, so a grant covers them
         whatever controllers it lists.
     RequestId:
@@ -4417,15 +4785,15 @@ components:
           description: GRN of the hosted operator that will act.
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, operator:read, agent:replace]
+          enum: [iam:agent.create, iam:agent.configure, iam:agent.recover, iam:agent-template.read, iam:agent-template.publish, iam:execution-profile.read, iam:agent.execution-read, iam:operator.read, iam:agent.replace]
         target:
           type: string
           description: >-
-            Controller GRN for `agent:create`; agent GRN for
-            `agent:configure`, `agent:recover`, `agent:execution-read`
-            and `agent:replace`; this organization's GRN for
-            `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read` and `operator:read`.
+            Controller GRN for `iam:agent.create`; agent GRN for
+            `iam:agent.configure`, `iam:agent.recover`, `iam:agent.execution-read`
+            and `iam:agent.replace`; this organization's GRN for
+            `iam:agent-template.read`, `iam:agent-template.publish`,
+            `iam:execution-profile.read` and `iam:operator.read`.
         requestId:
           $ref: '#/components/schemas/RequestId'
         bodySha256:
@@ -4439,9 +4807,9 @@ components:
           minLength: 1
           maxLength: 2048
           description: >-
-            Required for `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read`, `agent:execution-read` and
-            `operator:read`, and refused with 400 for every other
+            Required for `iam:agent-template.read`, `iam:agent-template.publish`,
+            `iam:execution-profile.read`, `iam:agent.execution-read` and
+            `iam:operator.read`, and refused with 400 for every other
             operation. The exact origin-form request target the route
             will receive: the escaped path and raw query, with no scheme
             or authority and no empty, `.` or `..` path segment, taken
@@ -4450,7 +4818,7 @@ components:
         destination:
           type: string
           description: >-
-            Required for `agent:replace` and refused with 400 for every
+            Required for `iam:agent.replace` and refused with 400 for every
             other operation: the GRN of the controller of this
             organization the replacement moves the agent to (ADR-0107).
     OperationAuthority:

@@ -228,7 +228,7 @@ func sendingStatements(sender grn.GRN) []Statement {
 		Sid:      "machine-own-org",
 		Effect:   wire.EffectAllow,
 		Action:   []string{message.ActionSend},
-		Resource: []string{"grn:" + sender.Organization + ":*"},
+		Resource: []string{grn.OrgPattern(sender.Organization)},
 	}}
 }
 

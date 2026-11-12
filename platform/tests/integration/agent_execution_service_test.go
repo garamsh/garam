@@ -353,10 +353,10 @@ func TestExecutionService_RecoveryIsBoundToItsExactBodyAndAnsweredOnce(t *testin
 	_, err = l.service.Recover(ctx, l.audience, in)
 	assert.ErrorIs(t, err, agent.ErrReferenceMismatch, "a handoff for another operation")
 
-	l.authorizer.err = errorx.New(errorx.KindPermissionDenied, "grant lacks agent:recover")
+	l.authorizer.err = errorx.New(errorx.KindPermissionDenied, "grant lacks iam:agent.recover")
 	in.Authority = "h1"
 	_, err = l.service.Recover(ctx, l.audience, in)
-	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "lifecycle authority without agent:recover")
+	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "lifecycle authority without iam:agent.recover")
 }
 
 // interleaving is the real execution store with a recovery and an

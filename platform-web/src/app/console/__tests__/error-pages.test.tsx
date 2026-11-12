@@ -12,7 +12,7 @@ import ConsoleNotFound from "@/app/console/not-found";
 describe("console error boundary", () => {
   it("says what happened in words and never the thrown message", () => {
     const error = Object.assign(
-      new Error("org not found: grn:root:default:org:acme"),
+      new Error("org not found: grn:root/iam/org/acme"),
       { digest: "1234567890" },
     );
     render(<ConsoleError error={error} reset={() => {}} />);

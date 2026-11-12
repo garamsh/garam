@@ -288,7 +288,7 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 		operator grn.GRN
 	}{
 		{"another org's operator", scopedGRN("globex", agent.ServiceTypeOperator, "one")},
-		{"a root-owned operator", grn.New(grn.RootOwner, grn.DefaultProject, agent.ServiceTypeOperator, "one")},
+		{"a root-owned operator", grn.New(grn.RootOwner, agent.ServiceTypeOperator, "one")},
 		{"an identity that is not an operator", grnOf("user", "ada")},
 	}
 	for _, tt := range rejected {

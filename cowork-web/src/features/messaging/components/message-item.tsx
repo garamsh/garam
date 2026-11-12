@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { ArtifactEmbed } from "@/features/artifacts/components/artifact-embed";
 import type { Message } from "@/lib/cowork";
+import { identifierOf } from "@/lib/grn";
 
 export type Names = Record<string, string>;
 
@@ -16,8 +17,7 @@ type Props = {
   threadHref?: string;
 };
 
-const nameOf = (names: Names, grn: string) =>
-  names[grn] ?? grn.split(":").at(-1) ?? grn;
+const nameOf = (names: Names, grn: string) => names[grn] ?? identifierOf(grn);
 
 /** One message: who wrote it, what it says, whom and which pages it names. */
 export function MessageItem({ org, message, names, pages, threadHref }: Props) {

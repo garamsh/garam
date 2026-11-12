@@ -14,13 +14,13 @@ import (
 )
 
 // ServiceType is an artifact's GRN service type.
-const ServiceType = "cowork-artifact"
+const ServiceType = "artifact"
 
 // The platform's actions on artifacts: on the organization, to list
 // and create them, and on an artifact, to read it and save versions.
 const (
 	ActionRead  = platform.ActionArtifactRead
-	ActionWrite = "cowork:artifact-write"
+	ActionWrite = "cowork:artifact.write"
 )
 
 // Kind is what an artifact's versions hold.
@@ -57,7 +57,7 @@ type Artifact struct {
 
 // GRN is the artifact's resource name under its organization.
 func (a Artifact) GRN() grn.GRN {
-	return grn.New(a.Org, grn.DefaultProject, ServiceType, a.ID)
+	return grn.New(a.Org, ServiceType, a.ID)
 }
 
 // Version is one saved version. Its bytes are under BlobKey.

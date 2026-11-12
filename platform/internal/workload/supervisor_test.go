@@ -72,7 +72,7 @@ func (g *stubGaram) asked() []workload.ActivationRequest {
 	return slices.Clone(g.requests)
 }
 
-var testAgent = mustGRN("grn:acme:default:agent:0a1b2c3d4e5f6071")
+var testAgent = mustGRN("grn:acme/iam/agent/0a1b2c3d4e5f6071")
 
 func mustGRN(s string) grn.GRN {
 	g, err := grn.Parse(s)

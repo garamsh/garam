@@ -354,7 +354,7 @@ func TestEngineSeam_DisclosesOverTheHopWhatItWouldInProcess(t *testing.T) {
 			seam := enginePolicySeam(t, &out, tc.stored)
 
 			_, err := seam.ActivatePolicy(context.Background(),
-				grn.New("acme", "default", "policy", "9f2ac1b40d8e7a35"))
+				grn.New("acme", "policy", "9f2ac1b40d8e7a35"))
 
 			require.Error(t, err)
 			assert.Equal(t, errorx.KindOf(tc.stored), errorx.KindOf(err), "the kind crosses the hop")

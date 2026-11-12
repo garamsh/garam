@@ -8,6 +8,7 @@ import { Button } from "@garam/design/ui/button";
 import { Input } from "@garam/design/ui/input";
 import { createPolicy, type CreatePolicyState } from "@/features/orgs/actions";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { projectsPattern } from "@/lib/grn";
 import {
   formatPolicyDocument,
   parsePolicyDocument,
@@ -35,8 +36,8 @@ export function CreatePolicyForm({ org }: { org: string }) {
       Statement: [
         {
           Effect: "Deny",
-          Action: ["project:update"],
-          Resource: [`grn:${org}:default:project:*`],
+          Action: ["iam:project.update"],
+          Resource: [projectsPattern(org)],
         },
       ],
     }),

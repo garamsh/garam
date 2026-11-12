@@ -60,12 +60,12 @@ func (p *proofs) Prove(_ context.Context, audience, _ grn.GRN, agent *grn.GRN) (
 }
 
 // proofRoute is the route for the controller of acme the tests prove.
-const proofRoute = "/operators/grn:acme:default:operator:controller/introspection"
+const proofRoute = "/operators/grn:acme%2Fiam%2Foperator%2Fcontroller/introspection"
 
 func proofListener(t *testing.T, c *recheck, v *shown, p *proofs) (string, *http.Client) {
 	t.Helper()
 	return serveTLS(t, machineapi.NewServer(nil, v, nil, nil, nil, nil, nil, nil, c, p, nil, nil, nil, nil),
-		grn.New("acme", "default", "operator", "hosted"))
+		grn.New("acme", "operator", "hosted"))
 }
 
 // forwardedToken is a controller's token in the form a hosted operator
@@ -88,9 +88,9 @@ func proofBody(t *testing.T, token string, agent string) string {
 // verified against the token forwarded, and the answer is the proof the
 // service gave, with agent null where none was named.
 func TestIntrospectController_ProvesWhatTheForwardedTokenNames(t *testing.T) {
-	controller := grn.New("acme", "default", "operator", "controller")
-	hosted := grn.New("acme", "default", "operator", "hosted")
-	org := grn.New("root", "default", "org", "acme")
+	controller := grn.New("acme", "operator", "controller")
+	hosted := grn.New("acme", "operator", "hosted")
+	org := grn.New("root", "org", "acme")
 	agent := agentGRN("acme", "0a1b2c3d4e5f6071")
 	c, v := &recheck{}, &shown{}
 	p := &proofs{proof: &operator.ControllerProof{Controller: controller, Org: org,
@@ -101,8 +101,8 @@ func TestIntrospectController_ProvesWhatTheForwardedTokenNames(t *testing.T) {
 		proofBody(t, forwardedToken, agent.String()))
 	require.Equal(t, http.StatusOK, status, body)
 	assert.Equal(t, operator.TokenAuthorityContractVersion, version)
-	assert.JSONEq(t, `{"operator":"grn:acme:default:operator:controller","org":"grn:root:default:org:acme",
-		"agent":{"grn":"grn:acme:default:agent:0a1b2c3d4e5f6071","epoch":"7"}}`, body)
+	assert.JSONEq(t, `{"operator":"grn:acme/iam/operator/controller","org":"grn:root/iam/org/acme",
+		"agent":{"grn":"grn:acme/iam/agent/0a1b2c3d4e5f6071","epoch":"7"}}`, body)
 	assert.Equal(t, hosted, p.audience)
 	require.NotNil(t, p.agent)
 	assert.Equal(t, agent, *p.agent)
@@ -116,14 +116,14 @@ func TestIntrospectController_ProvesWhatTheForwardedTokenNames(t *testing.T) {
 	status, _, body = versioned(t, client, http.MethodPost, url+proofRoute, operator.TokenAuthorityContractVersion,
 		proofBody(t, forwardedToken, ""))
 	require.Equal(t, http.StatusOK, status, body)
-	assert.JSONEq(t, `{"operator":"grn:acme:default:operator:controller","org":"grn:root:default:org:acme","agent":null}`, body)
+	assert.JSONEq(t, `{"operator":"grn:acme/iam/operator/controller","org":"grn:root/iam/org/acme","agent":null}`, body)
 	assert.Nil(t, p.agent)
 }
 
 // sessionProof is what the doubles answer a request that passes.
 func sessionProof() *operator.ControllerProof {
-	return &operator.ControllerProof{Controller: grn.New("acme", "default", "operator", "controller"),
-		Org: grn.New("root", "default", "org", "acme")}
+	return &operator.ControllerProof{Controller: grn.New("acme", "operator", "controller"),
+		Org: grn.New("root", "org", "acme")}
 }
 
 // TestIntrospectController_RefusesMalformedInputUnread holds that what
@@ -144,9 +144,9 @@ func TestIntrospectController_RefusesMalformedInputUnread(t *testing.T) {
 		{"no token", proofRoute, v2, `{}`, http.StatusBadRequest},
 		{"an agent that is not a GRN", proofRoute, v2, proofBody(t, forwardedToken, "bot"), http.StatusBadRequest},
 		{"a controller that is not a GRN", "/operators/controller/introspection", v2, accepted, http.StatusBadRequest},
-		{"another organization's controller", "/operators/grn:globex:default:operator:controller/introspection",
+		{"another organization's controller", "/operators/grn:globex%2Fiam%2Foperator%2Fcontroller/introspection",
 			v2, accepted, http.StatusNotFound},
-		{"an agent named as the controller", "/operators/grn:acme:default:agent:bot/introspection",
+		{"an agent named as the controller", "/operators/grn:acme%2Fiam%2Fagent%2Fbot/introspection",
 			v2, accepted, http.StatusNotFound},
 	}
 	for _, tt := range tests {

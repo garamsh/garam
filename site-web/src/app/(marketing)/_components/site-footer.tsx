@@ -36,7 +36,7 @@ export function SiteFooter() {
         <div className="mx-auto flex w-full max-w-shell flex-wrap items-center justify-between gap-2 px-6 py-6 text-xs text-muted-foreground">
           <span>garam</span>
           <span className="font-mono">
-            grn:&lt;organization&gt;:&lt;project&gt;:&lt;service_type&gt;:&lt;identifier&gt;
+            grn:&lt;org&gt;/&lt;service&gt;/&lt;type&gt;/&lt;id&gt;
           </span>
         </div>
       </div>

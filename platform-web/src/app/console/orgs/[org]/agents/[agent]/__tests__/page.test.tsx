@@ -65,10 +65,10 @@ describe("agent page", () => {
     );
   });
 
-  it("offers no rename where agent:rename is denied on the agent", async () => {
+  it("offers no rename where iam:agent.rename is denied on the agent", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "agent:rename" ? "deny" : "allow",
+        action === "iam:agent.rename" ? "deny" : "allow",
       ),
     );
     await renderAgent();
@@ -135,7 +135,7 @@ describe("agent page", () => {
 
   it("reads the execution once, and a switch back to Execution does not read it again", async () => {
     const endpoint = "https://control.example.test/garam";
-    const hosted = "grn:acme:default:operator:hosted";
+    const hosted = "grn:acme/iam/operator/hosted";
     let reads = 0;
     server.use(
       http.get(`${API_URL}/orgs/acme/operators`, () =>
@@ -154,9 +154,9 @@ describe("agent page", () => {
           grantId: "grant-1",
           operatorGrn: hosted,
           controllers: [fieldOne.grn],
-          operations: ["agent:execution-read"],
+          operations: ["iam:agent.execution-read"],
           expiresAt: "2099-01-01T00:00:00Z",
-          grantedBy: "grn:root:default:user:alice",
+          grantedBy: "grn:root/iam/user/alice",
           grantedAt: "2026-10-01T00:00:00Z",
         }),
       ),
@@ -239,7 +239,7 @@ describe("agent page", () => {
 
     it("states what holds an agent, read from its assignee, and where it came from", async () => {
       heldBy({
-        assigneeGrn: "grn:acme:default:operator:field-one",
+        assigneeGrn: "grn:acme/iam/operator/field-one",
         epoch: 7,
         since: "2026-10-01T00:00:00Z",
       });
@@ -282,7 +282,7 @@ describe("agent page", () => {
 
     it("says a standalone host enrolled an agent its supervisor holds", async () => {
       heldBy({
-        assigneeGrn: "grn:acme:default:supervisor:build-07",
+        assigneeGrn: "grn:acme/iam/supervisor/build-07",
         epoch: 2,
         since: "2026-10-01T00:00:00Z",
       });
@@ -307,7 +307,7 @@ describe("agent page", () => {
 
     it("approves a new standalone host from exactly the assignment the header read", async () => {
       heldBy({
-        assigneeGrn: "grn:acme:default:supervisor:build-07",
+        assigneeGrn: "grn:acme/iam/supervisor/build-07",
         epoch: 2,
         since: "2026-10-01T00:00:00Z",
       });
@@ -352,7 +352,7 @@ describe("agent page", () => {
           expect.objectContaining({
             replaces: {
               agentGrn: reportedAgent.grn,
-              assigneeGrn: "grn:acme:default:supervisor:build-07",
+              assigneeGrn: "grn:acme/iam/supervisor/build-07",
               epoch: 2,
             },
           }),
@@ -362,7 +362,7 @@ describe("agent page", () => {
 
     it("stays inactive for an agent an operator holds, since its control service replaces it", async () => {
       heldBy({
-        assigneeGrn: "grn:acme:default:operator:field-one",
+        assigneeGrn: "grn:acme/iam/operator/field-one",
         epoch: 3,
         since: "2026-10-01T00:00:00Z",
       });

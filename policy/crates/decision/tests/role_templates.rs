@@ -83,7 +83,7 @@ impl RoleTable {
                 .map(|action| actions[action].clone())
                 .collect();
             let wildcards = body.split('"').skip(1).step_by(2);
-            patterns.extend(wildcards.map(str::to_string));
+            patterns.extend(wildcards.map(String::from));
             if body.contains("machineActionsHeld(false)") {
                 patterns.extend(machine[&false].iter().cloned());
             }
@@ -124,7 +124,7 @@ fn role_go_is_read_rather_than_parsed_into_nothing() {
     let table = RoleTable::read();
 
     assert!(table.actions.len() > 50, "{} actions", table.actions.len());
-    assert_eq!(table.actions["ActionAgentWatch"], "agent:watch");
+    assert_eq!(table.actions["ActionAgentWatch"], "iam:agent.watch");
     assert_eq!(
         table.roles.keys().map(String::as_str).collect::<Vec<_>>(),
         vec!["Admin", "Member", "Owner"]
@@ -132,10 +132,10 @@ fn role_go_is_read_rather_than_parsed_into_nothing() {
     for (name, _) in ROLES {
         assert!(!table.patterns(name).is_empty(), "{name} parsed empty");
     }
-    assert!(grants(table.patterns("Owner"), "org:delete"));
-    assert!(!grants(table.patterns("Admin"), "org:delete"));
-    assert!(grants(table.patterns("Member"), "operator:read"));
-    assert!(!grants(table.patterns("Member"), "operator:register"));
+    assert!(grants(table.patterns("Owner"), "iam:org.delete"));
+    assert!(!grants(table.patterns("Admin"), "iam:org.delete"));
+    assert!(grants(table.patterns("Member"), "iam:operator.read"));
+    assert!(!grants(table.patterns("Member"), "iam:operator.register"));
 }
 
 #[test]
@@ -144,14 +144,21 @@ fn the_schema_names_every_action_role_go_defines_and_no_other() {
     let table = RoleTable::read();
 
     let mut expected: BTreeSet<String> = table.actions.values().cloned().collect();
-    expected.insert("message:send".to_string());
+    // No role.go constant: `iam:message.send` is the platform's own,
+    // `iam:permit.write` is ADR-0144 item 7's, held by owners alone, and
+    // `iam:agent.activate` is a delegated operation no role holds.
+    expected.insert("iam:message.send".to_string());
+    expected.insert("iam:permit.write".to_string());
+    expected.insert("iam:agent.activate".to_string());
 
     let declared: BTreeSet<String> = world
         .engine
-        .schema()
-        .actions()
-        .map(|action| AsRef::<str>::as_ref(action.id()).to_string())
-        .filter(|name| !name.ends_with('*') && !name.starts_with("role-"))
+        .manifests()
+        .services()
+        .iter()
+        .flat_map(|service| &service.actions)
+        .filter(|action| action.applies_to.is_some())
+        .map(|action| action.name.clone())
         .collect();
 
     assert_eq!(declared, expected);
@@ -186,20 +193,61 @@ fn no_role_reaches_agent_watch_and_a_grant_written_for_it_does() {
     let owner = link(Role::Owner, RoleScope::Organization, LEE, ACME);
 
     let policies = world.compose(std::slice::from_ref(&owner), &[]);
-    let refused = world.ask(&policies, LEE, "agent:watch", BOT);
+    let refused = world.ask(&policies, LEE, "iam:agent.watch", BOT);
     assert_eq!(refused.outcome, Outcome::Deny);
 
     let watch = policy(
         "lee-watches",
         r#"permit (
-            principal == User::"grn:acme:default:user:lee",
-            action == Action::"agent:watch",
+            principal == Iam::User::"grn:acme/iam/user/lee",
+            action == Iam::Action::"agent.watch",
             resource
         );"#,
     );
     let policies = world.compose(&[owner], &[watch]);
-    let control = world.ask(&policies, LEE, "agent:watch", BOT);
+    let control = world.ask(&policies, LEE, "iam:agent.watch", BOT);
     assert_eq!(control.outcome, Outcome::Allow);
+}
+
+#[test]
+fn writing_a_permit_is_the_owners_and_no_lesser_role_holds_it() {
+    let world = World::new();
+
+    for (name, role, outcome) in [
+        ("Owner", Role::Owner, Outcome::Allow),
+        ("Admin", Role::Admin, Outcome::Deny),
+        ("Member", Role::Member, Outcome::Deny),
+    ] {
+        let policies = world.compose(&[link(role, RoleScope::Organization, LEE, ACME)], &[]);
+
+        let permit = world.ask(&policies, LEE, "iam:permit.write", ACME);
+        assert_eq!(permit.outcome, outcome, "{name} on permit.write");
+
+        // Control: an admin holds the rest of `policy.*`, so the refusal
+        // above is the action's place outside the group.
+        let create = world.ask(&policies, LEE, "iam:policy.create", ACME);
+        let created = if name == "Member" {
+            Outcome::Deny
+        } else {
+            Outcome::Allow
+        };
+        assert_eq!(create.outcome, created, "{name} on policy.create");
+    }
+}
+
+#[test]
+fn a_type_group_names_its_type_and_no_prefix_of_it() {
+    let table = RoleTable::read();
+
+    // The administrator's `iam:policy.*` is not a prefix of
+    // `iam:permit.write`, and the control is the group's own action.
+    assert!(!grants(table.patterns("Admin"), "iam:permit.write"));
+    assert!(grants(table.patterns("Admin"), "iam:policy.create"));
+    // `iam:agent.*` is not a prefix of an `agent-template` action, and
+    // the control is an action of type `agent`.
+    let agent = ["iam:agent.*".to_string()];
+    assert!(!grants(&agent, "iam:agent-template.read"));
+    assert!(grants(&agent, "iam:agent.read"));
 }
 
 #[test]
@@ -209,9 +257,9 @@ fn every_organization_role_reaches_what_the_organization_contains() {
     for (name, role) in ROLES {
         let policies = world.compose(&[link(role, RoleScope::Organization, LEE, ACME)], &[]);
         for (action, what) in [
-            ("agent:read", BOT),
-            ("group:read", ENG),
-            ("project:read", WEB),
+            ("iam:agent.read", BOT),
+            ("iam:group.read", ENG),
+            ("iam:project.read", WEB),
         ] {
             let decision = world.ask(&policies, LEE, action, what);
             assert_eq!(decision.outcome, Outcome::Allow, "{name} on {action}");
@@ -226,10 +274,10 @@ fn every_scoped_role_reaches_its_team_and_no_member_agent() {
     for (name, role) in ROLES {
         let policies = world.compose(&[link(role, RoleScope::TeamOrProject, LEE, ENG)], &[]);
 
-        let control = world.ask(&policies, LEE, "group:read", ENG);
+        let control = world.ask(&policies, LEE, "iam:group.read", ENG);
         assert_eq!(control.outcome, Outcome::Allow, "{name} on its team");
 
-        let refused = world.ask(&policies, LEE, "agent:read", BOT);
+        let refused = world.ask(&policies, LEE, "iam:agent.read", BOT);
         assert_eq!(refused.outcome, Outcome::Deny, "{name} on a member agent");
     }
 }
@@ -241,10 +289,10 @@ fn every_scoped_role_reaches_its_project_and_no_other() {
     for (name, role) in ROLES {
         let policies = world.compose(&[link(role, RoleScope::TeamOrProject, LEE, WEB)], &[]);
 
-        let control = world.ask(&policies, LEE, "project:read", WEB);
+        let control = world.ask(&policies, LEE, "iam:project.read", WEB);
         assert_eq!(control.outcome, Outcome::Allow, "{name} on its project");
 
-        let refused = world.ask(&policies, LEE, "project:read", API);
+        let refused = world.ask(&policies, LEE, "iam:project.read", API);
         assert_eq!(refused.outcome, Outcome::Deny, "{name} on another");
     }
 }
@@ -257,8 +305,8 @@ fn a_team_holds_every_template_for_its_members_and_no_one_else() {
         let organization = link(role, RoleScope::Organization, ENG, ACME);
         let scoped = link(role, RoleScope::TeamOrProject, ENG, ENG);
         for (grant, action, what) in [
-            (organization, "org:read", ACME),
-            (scoped, "group:read", ENG),
+            (organization, "iam:org.read", ACME),
+            (scoped, "iam:group.read", ENG),
         ] {
             let policies = world.compose(&[grant], &[]);
 
@@ -279,9 +327,9 @@ fn a_direct_link_names_its_subject_alone() {
         &[],
     );
 
-    let named = world.ask(&policies, LEE, "org:read", ACME);
+    let named = world.ask(&policies, LEE, "iam:org.read", ACME);
     assert_eq!(named.outcome, Outcome::Allow);
 
-    let other = world.ask(&policies, KIM, "org:read", ACME);
+    let other = world.ask(&policies, KIM, "iam:org.read", ACME);
     assert_eq!(other.outcome, Outcome::Deny);
 }

@@ -77,12 +77,13 @@ func post(t *testing.T, client *http.Client, url, body string, headers map[strin
 	return resp.StatusCode
 }
 
-// TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent holds
-// that each machine route that writes a new agent asks the gate about
-// the agent's entity and answers 503 at the bound while the agent stays
-// stored (ADR-0165), whether the request created the agent or replayed
-// the creation; and that a route that moves an agent that exists asks
-// nothing, so an older mark of the agent is not its answer to give.
+// TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent
+// holds that each machine route that writes a new agent asks the gate
+// about the agent's entity and answers 503 at the bound while the
+// agent stays stored (ADR-0165), whether the request created the
+// agent or replayed the creation; and that a route that moves an agent
+// that exists asks nothing, so an older mark of the agent is not its
+// answer to give.
 //
 // The clear gate is the control: the same request answers its own
 // status, so the 503 is the wait and not the route. Without a gate the

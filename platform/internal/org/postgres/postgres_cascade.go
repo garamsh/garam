@@ -14,9 +14,9 @@ import (
 // for a request that asked (policyfeed.WithRaised). The cascade marks
 // each group, project, agent, operator and member it takes with the
 // row, which no handler can name before it runs (ADR-0165 item 3). A
-// caller that asked for no collection gets the same single DELETE, which
-// was one transaction before and is one now; the extra round trips are
-// begin and commit, and the record reads nothing.
+// caller that asked for no collection gets the same single DELETE,
+// which was one transaction before and is one now; the extra round
+// trips are begin and commit, and the record reads nothing.
 func (s *Store) deleteRecording(
 	ctx context.Context, op string, notFound error, del func(q *db.Queries) (int64, error),
 ) error {

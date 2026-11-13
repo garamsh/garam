@@ -116,10 +116,11 @@ What the outbox raises is read from the triggers of migration 000079
    the wait: it polls every second and backs off up to 30 seconds after
    a failed pass (`platform/internal/cli/policy_delivery.go`), so after
    a recovery a creation can still answer `503` for up to that long.
-   It adds no setting and changes no deployment. Two alternatives fail: answering without waiting leaves
-   an agent that is denied its next call, and delivering from the
-   machine process needs the policy address, the CA and the issuer on
-   it, which is a `deploy/` change this decision does not make.
+   It adds no setting and changes no deployment. Two alternatives fail:
+   answering without waiting leaves an agent that is denied its next
+   call, and delivering from the machine process needs the policy
+   address, the CA and the issuer on it, which is a `deploy/` change
+   this decision does not make.
 7. **With the feed off, routes answer as before; with it not
    configured, the api's do.** With the feed off the triggers raise
    nothing and every wait has no marks. An api with no policy address

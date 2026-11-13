@@ -331,9 +331,9 @@ func TestFedRoutes_WaitForNothingWithoutAFeed(t *testing.T) {
 	}
 }
 
-// TestAcceptInvitation_AndRegistration_NameTheUserMark holds that a join
-// and a registration wait for the user's entity as well as the link:
-// the user is a parent of the role link.
+// TestAcceptInvitation_AndRegistration_NameTheUserMark holds that a
+// join and a registration wait for the user's entity as well as the
+// link: the user is a parent of the role link.
 func TestAcceptInvitation_AndRegistration_NameTheUserMark(t *testing.T) {
 	f := newFixture(t)
 	inviteTo(t, f, "acme", "tok-join")
@@ -359,11 +359,11 @@ func TestAcceptInvitation_AndRegistration_NameTheUserMark(t *testing.T) {
 	}, gate.marked[1])
 }
 
-// TestOauthCallback_WaitsOnlyForTheSignInThatCreatedTheUser holds that a
-// first sign-in waits for the user's entity and, at the bound, redirects
-// as after a success with the session it started (ADR-0165 item 4), and
-// that a later one, which stored nothing, does not ask the gate: a feed
-// that is behind does not hold an existing user out.
+// TestOauthCallback_WaitsOnlyForTheSignInThatCreatedTheUser holds
+// that a first sign-in waits for the user's entity and, at the bound,
+// redirects as after a success with the session it started (ADR-0165
+// item 4), and that a later one, which stored nothing, does not ask
+// the gate: a feed that is behind does not hold an existing user out.
 //
 // The first sign-in, answered by a gate that is clear, is the control
 // for the redirect at the bound and for the later one.

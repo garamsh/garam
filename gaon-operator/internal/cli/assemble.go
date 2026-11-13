@@ -70,10 +70,13 @@ func assemble(cfg config.Config, log *slog.Logger) (*operator, error) {
 		return nil, err
 	}
 	cluster := api.NewClient(cfg.GaonURL, gaonHTTP, api.WithLabelSelector(agent.Selector()))
-	service := agent.NewService(feed, garam, cluster, agent.Options{
+	// A second client, for the model-key Secrets alone: the first one's
+	// selector does not reach them (ADR-0154).
+	modelKeys := api.NewClient(cfg.GaonURL, gaonHTTP, api.WithLabelSelector(agent.ModelKeySelector()))
+	service := agent.NewService(feed, garam, feed, cluster, agent.Options{
 		Image: cfg.AgentImage, GaramRoot: garamRoot, ControlRoot: controlRoot,
 		MachineURL: cfg.GuestMachineURL, ControlURL: cfg.GuestControlURL,
-		ModelKey: modelKey(cfg), Logger: log,
+		ModelKeys: modelKeys, Logger: log,
 	})
 	return &operator{service: service, settle: feed.Settle, probe: &health.Probe{}, log: log}, nil
 }
@@ -123,13 +126,4 @@ func transport(pool *x509.CertPool, minVersion uint16, certs []tls.Certificate) 
 		TLSHandshakeTimeout: 10 * time.Second,
 		IdleConnTimeout:     90 * time.Second,
 	}
-}
-
-// modelKey is the model credential's source the settings name, or nil
-// where they name none.
-func modelKey(cfg config.Config) *agent.ModelKey {
-	if cfg.ModelKeyEnv == "" {
-		return nil
-	}
-	return &agent.ModelKey{Env: cfg.ModelKeyEnv, Secret: cfg.ModelKeySecret, Key: cfg.ModelKeySecretKey}
 }

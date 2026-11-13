@@ -29,7 +29,7 @@ const (
 const workspaceCaps = "-all,+setuid,+setgid,+chown,+sys_admin,+kill"
 
 // The settings the operator renders into the guest's environment. They
-// are addresses, identifiers, one file path and the names of variables
+// are addresses, identifiers, two file paths and the names of variables
 // for the runtime: a credential for garam is a file below
 // CredentialsDir, and the supervisor's value for a runtime variable
 // reaches the runtime alone.
@@ -39,6 +39,7 @@ const (
 	EnvMachineURL    = "GUEST_MACHINE_URL"
 	EnvControlURL    = "GUEST_CONTROL_URL"
 	EnvRuntimeConfig = "GUEST_RUNTIME_CONFIG"
+	EnvRuntimeEgo    = "GUEST_RUNTIME_EGO"
 	EnvRuntimeEnv    = "GUEST_RUNTIME_ENV"
 )
 
@@ -86,6 +87,9 @@ func FromEnv(getenv func(string) string, stdout, stderr io.Writer, log *slog.Log
 	}
 	if config := getenv(EnvRuntimeConfig); config != "" {
 		runtime = append(runtime, "--config", config)
+	}
+	if ego := getenv(EnvRuntimeEgo); ego != "" {
+		runtime = append(runtime, "--ego-file", ego)
 	}
 	// The runtime and the adapter run as UID with no capability and no
 	// supplementary group; the workspace stays root with workspaceCaps.

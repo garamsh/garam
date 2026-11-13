@@ -8,13 +8,13 @@ require (
 	github.com/garamsh/garam/lib/grn v0.0.0-00010101000000-000000000000
 	github.com/garamsh/garam/lib/platform-sdk-go v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.12.1
+	go.yaml.in/yaml/v3 v3.0.5
 )
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/oapi-codegen/runtime v1.8.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
 )
 
 replace (

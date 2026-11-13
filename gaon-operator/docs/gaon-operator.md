@@ -8,8 +8,10 @@ How it sits among garam's operators is
 
 **Built: the reconciler (#1834), garam's and the control service's wire
 clients, the binary that composes them (#1839), the guest supervisor
-and composed guest image (#1846), and the MicroVM's command,
-environment and placement token (#1848).**
+and composed guest image (#1846), the MicroVM's command,
+environment and placement token (#1848), and the placement's
+registration and the agent's configuration and model key (#1853,
+[ADR-0154](../../docs/architecture/adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)).**
 `cmd/gaon-operator` exchanges its assertion with a key garam issued,
 reads the control service's feed as its registered manager and
 reconciles into gaon. The release's image and the deployment are not
@@ -26,8 +28,8 @@ built (§What is not built).
 
 `internal/agent` holds the reconciler. `Service.Reconcile` is one
 level-triggered pass: it reads the whole feed, lists the objects it
-labelled in gaon, and writes what differs. It keeps no state a restart
-loses.
+labelled in gaon, and writes what differs. What a restart loses is only
+which placement bodies it has presented, and it presents them again.
 
 - **Objects.** An agent yields one `Secret`, two `Volume`s (memory and
   workspace) and one `MicroVM`, named `agent-` plus 16 hex digits of a
@@ -39,18 +41,51 @@ loses.
   two trust roots live in the `Secret`. The MicroVM's files take them
   with `valueFrom.secretKeyRef`, mode 0400, owner 65532 (the runtime's
   and adapter's account; the MicroVM's `user` is `0:0`); no file
-  carries inline content, and no `env` entry does either where it is a
-  secret.
+  carries inline content that is secret, and no `env` entry does
+  either. The two inline files are the runtime's configuration and ego,
+  which hold none.
 - **Command and environment.** `command` is
   `["/usr/local/bin/gaon-guest"]` and `args` is empty: gaon's
   `command` replaces the image's entrypoint, and the supervisor builds
   each program's arguments itself. `env` holds `GUEST_AGENT_GRN` and
   `GUEST_ASSIGNMENT_EPOCH` from the feed, `GUEST_MACHINE_URL` and
-  `GUEST_CONTROL_URL` from the settings, and, where the model key is
-  set, `GUEST_RUNTIME_ENV` naming the variable and that variable as a
+  `GUEST_CONTROL_URL` from the settings, `GUEST_RUNTIME_CONFIG` and
+  `GUEST_RUNTIME_EGO` naming the two files below, and
+  `GUEST_RUNTIME_ENV` naming the model key's variables, each a
   `valueFrom.secretKeyRef`.
-  `GUEST_RUNTIME_CONFIG` is not rendered, because the feed's
-  `configuration` is not rendered by the operator.
+- **The runtime's configuration** (`internal/agent/runtime.go`). From
+  the feed's `configuration` the operator renders
+  `/run/garam/runtime-config.yaml` (`model` with its provider, endpoint,
+  name and `api-key-env`, `embedding`, `tools.pins`) and
+  `/run/garam/runtime-ego.md` as `files` entries with inline `content`,
+  mode 0400, owner 65532. Inline, not a `ConfigMap`: they hold no
+  secret, 65532 alone reads them so 10001 cannot read the pins, and no
+  object per agent is added. gaon bounds inline files at 64 and 1 MiB in
+  all. The key is an `env` entry, `MODEL_API_KEY` (and
+  `EMBEDDING_API_KEY` where an embedding names one), with
+  `valueFrom.secretKeyRef` of the Secret and key `apiKeyRef` names as
+  `<secret-name>/<key>`; the operator never reads the value. The
+  Secret must exist and carry `garam.sh/role=model-key` and
+  `garam.sh/organization=<digest>` for the agent's own organization;
+  an `apiKeyRef` naming any other (absent, unlabelled, another
+  organization's, one of the operator's own `agent-<16 hex>` Secrets),
+  or a configuration that cannot be rendered, writes nothing for the
+  agent and fails the pass with an error naming the reference.
+  `profile.storageClassName` and
+  `profile.resources` are parsed and not used: the Volume has the one
+  class `api.StorageClassLocal`, and `Options.Resources` sets the
+  MicroVM's. The instructions file and message issuers are not
+  rendered.
+- **Placement.** Once the MicroVM exists, `register` presents
+  `{epoch, podUid, pvcUid, tokenSha256, previous: null}` to the control
+  service: the MicroVM's and the memory Volume's `metadata.uid`, and the
+  SHA-256 of the placement token read from the agent's Secret.
+  `previous` is not built. 201 and 200 are both success; an identical
+  body is not presented again. A 409 `placement_superseded` or
+  `epoch_superseded` is never presented again; another 4xx is presented
+  again after five minutes; a 5xx or transport error fails the pass. A
+  stopped agent is not registered, and the state is in memory, so a
+  restart presents the same body and reads the repeat as a repeat.
 - **Volumes are made once.** They are created only where the agent has
   no MicroVM yet. Where the MicroVM exists and a Volume is missing, the
   operator creates nothing for that agent, returns an error naming the
@@ -127,7 +162,6 @@ Addresses and paths, in the environment; none holds a credential.
 | `OPERATOR_KEY_FILE`, `OPERATOR_CLIENT_ID` | the operator's key, and the manager's operator GRN, which is also the `Controller-Grn` |
 | `AGENT_IMAGE` | the composed guest image |
 | `GUEST_MACHINE_URL`, `GUEST_CONTROL_URL` | optional: the addresses the adapter in the guest reaches garam and the control service at; each defaults to `GARAM_MACHINE_URL` and `CONTROL_URL` |
-| `MODEL_KEY_ENV`, `MODEL_KEY_SECRET`, `MODEL_KEY_SECRET_KEY` | optional, all three or none: the variable the runtime reads its model key from, and the Secret and key holding it |
 | `HEALTH_ADDR` | optional, default `:8081` |
 
 ### Key files
@@ -166,7 +200,8 @@ each is written once.
 - **Settings.** The environment names `GUEST_AGENT_GRN` (a canonical
   agent GRN), `GUEST_ASSIGNMENT_EPOCH` (a canonical decimal),
   `GUEST_MACHINE_URL`, `GUEST_CONTROL_URL` and optionally
-  `GUEST_RUNTIME_CONFIG` and `GUEST_RUNTIME_ENV`. A program gets only
+  `GUEST_RUNTIME_CONFIG`, `GUEST_RUNTIME_EGO` and `GUEST_RUNTIME_ENV`.
+  A program gets only
   `PATH`, `SSL_CERT_FILE` and `SHERLOCK_TOOLS_DIR` from it, plus what
   its command needs.
 - **The image** (`guest/Dockerfile`) is the workspace image with the
@@ -186,6 +221,10 @@ each is written once.
   each `valueFrom` from the rendered Secret, or from a file standing for
   the deployment's model Secret, and stops on a source it cannot
   resolve, on a command of more than one word and on an argument. It
+  renders a mock-provider configuration and an ego, and shows the
+  runtime started with `--config` and `--ego-file`, the configuration
+  readable as 65532 and naming `MODEL_API_KEY` without the key, and the
+  runtime still running; it does not show the runtime using the ego. It
   checks the start order, the
   readiness port and the SIGTERM drain, each program's user and
   capabilities, that the model credential is in the runtime's
@@ -213,38 +252,47 @@ above.
 
 ### What the deployment must create
 
-- **The model Secret**, where `MODEL_KEY_*` is set: a gaon `Secret`
-  named by `MODEL_KEY_SECRET` holding the key `MODEL_KEY_SECRET_KEY`.
-  The operator never reads or logs it and creates none; gaon resolves
-  the `valueFrom` when the MicroVM starts. It is one Secret for every
-  agent the operator runs.
+- **Each organization's model-key Secret**: a gaon `Secret` named by
+  the agents' `apiKeyRef`, holding the key, labelled
+  `garam.sh/role=model-key` and `garam.sh/organization=<digest>`. The
+  digest is the first 32 hex digits of the SHA-256 of the organization's
+  GRN, `grn:root/iam/org/<id>`, the value the operator labels that
+  organization's own objects with. For the organization id `org1` the
+  string is `grn:root/iam/org/org1` and the digest is
+  `37a401b54d687a3e792937666c548e11`; a test pins that example to the
+  code. It is computed with this command:
+
+  ```sh
+  printf '%s' 'grn:root/iam/org/<id>' | sha256sum | cut -c1-32
+  ```
+
+  The operator creates none and never uses or logs a value; gaon resolves the `valueFrom` when the MicroVM
+  starts, so a Secret created later is not seen by a MicroVM already
+  started. A name is one Secret, labelled for one organization.
+- **A gaon role for the operator** that also reads Secrets labelled
+  `garam.sh/role=model-key` and no other Secret outside its own
+  objects. A list of those Secrets returns their data to the operator,
+  which drops it on arrival; the operator is trusted not to use it.
 - **The trust roots and the key files** the operator itself reads
   (§Settings).
 
 ### What is not established
 
-- **Registering a placement.** A placement must be registered, or the
-  adapter's activation is refused with 403 `placement_not_current`
-  (garam-agent-operator `docs/architecture/control.md` line 188). The
-  control service serves the route, `POST
-  /v1/operators/self/agents/{agent}/placements` (`control.md` lines
-  163-181; `internal/distribution/server.go` line 54), with the body
-  `{epoch, podUid, pvcUid, tokenSha256, previous}`, all at commit
-  `ac7c9f3c40b9611f6e2bdf1eba62c14e145b4aec`. This operator does not
-  call it: `podUid` and `pvcUid` are a Pod's and a claim's, and
-  `previous.writerStoppedSha256` digests a Pod's `status.writerStopped`
-  (`control.md` line 166). A MicroVM and a Volume are not those, and
-  which of their fields stand for them, and what evidence a MicroVM's
-  replacement writes, is a decision ADR-0153 leaves open. Until it is
-  made, an agent this operator renders cannot activate.
-- **A model key per agent.** The feed's `configuration.model.apiKeyRef`
-  is a per-agent `<secret-name>/<key>` (`control.md` line 113,
-  `agent.md` line 16 of that repository), which this operator parses
-  nowhere because it does not read `configuration`, and the variable
-  name sherlock reads the key from is written in the config file's
-  `model.api-key-env` (`agent.md` line 136), which this operator does
-  not render. The setting above therefore gives every agent one key. An
-  agent configured with another reference is run with this one.
+- **A registration against a real control service and gaon.** The
+  route, `POST /v1/operators/self/agents/{agent}/placements`, and its
+  answers are read from garam-agent-operator `control.md` at commit
+  `ac7c9f3c40b9611f6e2bdf1eba62c14e145b4aec`, and the tests run against
+  a stand-in. Whether the control service accepts a MicroVM's uid as
+  `podUid` and a Volume's as `pvcUid`, and whether gaon returns a
+  Secret's `data` on a list, which the digest is made from, was not
+  run.
+- **A first placement only.** `previous` is always null.
+  `writerStoppedSha256`, the SHA-256 of the canonical JSON of the stop
+  observed on an earlier MicroVM, is not built, so a replaced MicroVM is
+  not registered.
+- **A changed configuration.** A MicroVM's spec is immutable and a
+  `valueFrom` is not refreshed, so a changed `configuration` or
+  `apiKeyRef` does not reach a MicroVM that exists.
 
 ## What is not built
 
@@ -252,6 +300,7 @@ above.
   `NetworkPolicy`.
 - Renewing an agent's token by restarting its MicroVM.
 - Replacing a MicroVM of another revision.
+- The agent's instructions file and message issuers.
 
 ## What the tests prove
 
@@ -265,6 +314,16 @@ compare-and-swap on `resourceVersion`, the API's validation and
 label-selector lists. It does not prove: RBAC selector rules, garbage
 collection, the Node authorizer, a get refused for lack of labels,
 `bindingEpoch` as gaon writes it, or watches.
+
+The reconciler's tests prove a first placement registered once with the
+two uids and the token's digest, a repeat read as a repeat, a stopped
+agent not registered, a superseded body (both kinds) never presented
+again and a new body registered, another 4xx presented again after five
+minutes and a 5xx failing the pass. They prove the rendered MicroVM
+carries the configuration and ego files and each agent's own key
+reference, two agents rendering apart, no `MODEL_KEY_*` setting, and a
+bad configuration writing nothing. The control client's tests prove the
+body, the headers and the sorting of each refusal.
 
 The supervisor's tests start helper processes and prove the start
 order, the readiness port opening after all three start, the drain

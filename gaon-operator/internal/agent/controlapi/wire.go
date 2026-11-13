@@ -17,8 +17,10 @@ import (
 // The wire of contract C2's desired feed, in the form
 // garamsh/garam-agent-operator docs/architecture/control.md states.
 // Every field the operator reads is a pointer, so an absent one is told
-// from a zero one. configuration is not rendered by the operator, so it
-// only has to be an object.
+// from a zero one, except those of configuration: an absent one there
+// is one the agent is configured without. What a configuration may hold
+// is decided per agent where it is rendered, so that one agent's
+// malformed configuration does not stop the others.
 type (
 	wireAnswer struct {
 		Cursor *string      `json:"cursor"`
@@ -36,6 +38,23 @@ type (
 	wireRecovery struct {
 		RequestID *string `json:"requestId"`
 		Epoch     *string `json:"epoch"`
+	}
+	wireConfiguration struct {
+		Model wireModel         `json:"model"`
+		Ego   string            `json:"ego"`
+		Tools map[string]string `json:"tools"`
+	}
+	wireModel struct {
+		Provider  string         `json:"provider"`
+		BaseURL   string         `json:"baseUrl"`
+		Name      string         `json:"name"`
+		APIKeyRef string         `json:"apiKeyRef"`
+		Embedding *wireEmbedding `json:"embedding"`
+	}
+	wireEmbedding struct {
+		BaseURL   string `json:"baseUrl"`
+		Name      string `json:"name"`
+		APIKeyRef string `json:"apiKeyRef"`
 	}
 	wireProfile struct {
 		Name                 *string         `json:"name"`
@@ -112,10 +131,33 @@ func (w wireAgent) parse() (agent.Desired, error) {
 	if err != nil {
 		return agent.Desired{}, err
 	}
+	configuration, err := parseConfiguration(w.Configuration)
+	if err != nil {
+		return agent.Desired{}, err
+	}
 	return agent.Desired{
 		GRN: g, Epoch: epoch, Revision: strconv.FormatInt(revision, 10), Stopped: w.Stopped,
-		MemoryStorage: memory, WorkspaceStorage: workspace,
+		MemoryStorage: memory, WorkspaceStorage: workspace, Configuration: configuration,
 	}, nil
+}
+
+// parseConfiguration reads the types of configuration. The contract
+// writes `{}` for the model of an agent with none, which is no model.
+func parseConfiguration(raw json.RawMessage) (agent.Configuration, error) {
+	var wire wireConfiguration
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return agent.Configuration{}, errorx.Wrap(err, "configuration is not the contract's", errorx.KindInternal)
+	}
+	out := agent.Configuration{Ego: wire.Ego, Tools: wire.Tools}
+	m := wire.Model
+	if m.Provider == "" && m.BaseURL == "" && m.Name == "" && m.APIKeyRef == "" && m.Embedding == nil {
+		return out, nil
+	}
+	out.Model = &agent.Model{Provider: m.Provider, BaseURL: m.BaseURL, Name: m.Name, APIKeyRef: m.APIKeyRef}
+	if e := m.Embedding; e != nil {
+		out.Model.Embedding = &agent.Embedding{BaseURL: e.BaseURL, Name: e.Name, APIKeyRef: e.APIKeyRef}
+	}
+	return out, nil
 }
 
 // sizes returns the profile's two Volume sizes. A profile that names no

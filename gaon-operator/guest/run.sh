@@ -26,6 +26,7 @@ name="${GUEST_DEMO_NAME:-gaon-guest-demo-$$}"
 grn=grn:demo/iam/agent/0000000000000001
 model_env=MODEL_API_KEY
 model_key=demo-model-credential
+ego='You are the demo agent of run.sh.'
 scratch="$(mktemp -d)"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -44,8 +45,9 @@ mkdir "$scratch/render"
 (cd "$here" && go run ./cmd/gaon-render \
 	-image "$image" -agent "$grn" -epoch 1 \
 	-machine-url https://127.0.0.1:9 -control-url https://127.0.0.1:9 \
-	-model-env "$model_env" -model-secret model-credentials \
-	-model-secret-key api-key -model-key-file "$scratch/model-key" \
+	-provider mock -model-url http://127.0.0.1:9 -model-name demo \
+	-model-ref model-credentials/api-key -model-key-file "$scratch/model-key" \
+	-ego "$ego" \
 	-root-file "$scratch/root.pem" -out "$scratch/render")
 [ "$(wc -l <"$scratch/render/modes")" = 1 ] || { echo "the render gives the files more than one mode and owner"; exit 1; }
 IFS=: read -r file_mode file_uid file_gid <"$scratch/render/modes"
@@ -114,6 +116,22 @@ for program in runtime workspace adapter; do
 		[ "$program" != runtime ] || fail "the runtime does not hold the model credential"
 	fi
 done
+
+echo "== the runtime reads the rendered configuration and ego"
+# The files are inline content in the MicroVM, written by gaon as the
+# rendered owner and mode. The runtime is given their paths on its
+# command line, 65532 reads what they hold, and it is still running: a
+# file it could not parse would have ended it before the readiness port
+# answered.
+runtime_cmd="$(docker exec "$name" sh -c "tr '\\0' ' ' </proc/$(pid_of runtime)/cmdline")"
+echo "runtime command: $runtime_cmd"
+case "$runtime_cmd" in *"--config /run/garam/runtime-config.yaml"*) ;; *) fail "the runtime is not given the configuration file" ;; esac
+case "$runtime_cmd" in *"--ego-file /run/garam/runtime-ego.md"*) ;; *) fail "the runtime is not given the ego file" ;; esac
+docker exec --user 65532:65532 "$name" cat /run/garam/runtime-config.yaml
+[ "$(docker exec --user 65532:65532 "$name" cat /run/garam/runtime-ego.md)" = "$ego" ] || fail "the ego the runtime reads is not the rendered one"
+docker exec --user 65532:65532 "$name" grep -q "api-key-env: $model_env" /run/garam/runtime-config.yaml || fail "the configuration does not name $model_env"
+if docker exec "$name" grep -q "$model_key" /run/garam/runtime-config.yaml; then fail "the model key is in the configuration file"; fi
+docker exec "$name" test -d "/proc/$(pid_of runtime)" || fail "the runtime is not running"
 
 echo "== store and outbox are 65532's alone, mode 0700"
 docker exec "$name" stat -c '%n %U:%G %a' /var/lib/garam/memory /var/lib/garam/memory/outbox

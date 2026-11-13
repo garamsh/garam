@@ -32,8 +32,8 @@ func main() {
 func run(args []string) error {
 	var (
 		image, agentGRN, machineURL, controlURL string
-		modelEnv, modelSecret, modelKey         string
-		modelFile, rootFile, outDir             string
+		provider, baseURL, modelName, egoText   string
+		modelRef, modelFile, rootFile, outDir   string
 		epoch                                   int64
 	)
 	f := flag.NewFlagSet("gaon-render", flag.ContinueOnError)
@@ -42,9 +42,11 @@ func run(args []string) error {
 	f.Int64Var(&epoch, "epoch", 1, "the assignment epoch")
 	f.StringVar(&machineURL, "machine-url", "", "garam's machine listener, as the guest reaches it")
 	f.StringVar(&controlURL, "control-url", "", "the control service, as the guest reaches it")
-	f.StringVar(&modelEnv, "model-env", "", "the variable the runtime reads the model key from")
-	f.StringVar(&modelSecret, "model-secret", "", "the Secret the deployment holds the model key in")
-	f.StringVar(&modelKey, "model-secret-key", "", "the key in that Secret")
+	f.StringVar(&provider, "provider", "", "the model provider; none renders an agent with no model")
+	f.StringVar(&baseURL, "model-url", "", "the model's endpoint")
+	f.StringVar(&modelName, "model-name", "", "the model's name")
+	f.StringVar(&modelRef, "model-ref", "", "the model key's apiKeyRef, <secret-name>/<key>")
+	f.StringVar(&egoText, "ego", "", "the agent's ego")
 	f.StringVar(&modelFile, "model-key-file", "", "a file holding the model key, standing for that Secret")
 	f.StringVar(&rootFile, "root-file", "", "a certificate file used for both trust roots")
 	f.StringVar(&outDir, "out", "", "an empty directory to write into")
@@ -63,13 +65,19 @@ func run(args []string) error {
 		Image: image, GaramRoot: root, ControlRoot: root,
 		MachineURL: machineURL, ControlURL: controlURL,
 	}
-	if modelEnv != "" {
-		opts.ModelKey = &agent.ModelKey{Env: modelEnv, Secret: modelSecret, Key: modelKey}
+	conf := agent.Configuration{Ego: egoText}
+	if provider != "" {
+		conf.Model = &agent.Model{Provider: provider, BaseURL: baseURL, Name: modelName, APIKeyRef: modelRef}
 	}
+	modelSecret, modelKey, _ := strings.Cut(modelRef, "/")
 	creds := agent.Credentials{"agent-token": []byte("demo-token"), "control-token": []byte("demo-token")}
+	// The model Secret stands for the one the deployment labels as the
+	// agent's organization's model key.
+	models := []api.Secret{{Metadata: api.ObjectMeta{Name: modelSecret, Labels: agent.ModelKeyLabels(g)}}}
 	secret, microvm, err := agent.Render(opts, agent.Desired{
 		GRN: g, Epoch: epoch, Revision: "1", MemoryStorage: "1Gi", WorkspaceStorage: "1Gi",
-	}, creds)
+		Configuration: conf,
+	}, creds, models)
 	if err != nil {
 		return err
 	}
@@ -81,7 +89,7 @@ func run(args []string) error {
 			if v, ok := secret.Data[ref.Key]; ok {
 				return v, nil
 			}
-		case opts.ModelKey != nil && ref.Name == modelSecret && ref.Key == modelKey:
+		case conf.Model != nil && ref.Name == modelSecret && ref.Key == modelKey:
 			return os.ReadFile(modelFile)
 		}
 		return nil, errorx.New(errorx.KindInvalidArgument, "a valueFrom names a Secret key nothing here stands for")
@@ -122,12 +130,15 @@ func write(dir string, m *api.MicroVM, resolve func(*api.KeyReference) ([]byte, 
 	}
 	var modes []string
 	for _, file := range m.Spec.Files {
-		if file.ValueFrom == nil || file.Mode == nil || file.Owner == nil || filepath.Dir(file.Path) != "/run/garam" {
-			return errorx.New(errorx.KindInvalidArgument, "file "+file.Path+" is not a Secret file of /run/garam")
+		if file.Mode == nil || file.Owner == nil || filepath.Dir(file.Path) != "/run/garam" {
+			return errorx.New(errorx.KindInvalidArgument, "file "+file.Path+" is not a file of /run/garam with a mode and an owner")
 		}
-		v, err := resolve(file.ValueFrom.SecretKeyRef)
-		if err != nil {
-			return errorx.Wrap(err, "file "+file.Path)
+		v := []byte(file.Content)
+		if file.ValueFrom != nil {
+			var err error
+			if v, err = resolve(file.ValueFrom.SecretKeyRef); err != nil {
+				return errorx.Wrap(err, "file "+file.Path)
+			}
 		}
 		if err := os.WriteFile(filepath.Join(files, filepath.Base(file.Path)), v, 0o600); err != nil {
 			return errorx.Wrap(err, "write file")

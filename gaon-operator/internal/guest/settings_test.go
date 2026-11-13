@@ -1,6 +1,7 @@
 package guest_test
 
 import (
+	"strings"
 	"syscall"
 	"testing"
 
@@ -68,6 +69,26 @@ func TestFromEnv_GivesTheModelCredentialToTheRuntimeAlone(t *testing.T) {
 			assert.NotContains(t, entry, "MODEL_API_KEY", p.Name)
 		}
 	}
+}
+
+func TestFromEnv_NamesTheConfigurationAndEgoFilesToTheRuntimeOnly(t *testing.T) {
+	cfg, err := guest.FromEnv(environment(map[string]string{
+		"GUEST_RUNTIME_CONFIG": guest.RuntimeConfigFile, "GUEST_RUNTIME_EGO": guest.RuntimeEgoFile,
+	}), nil, nil, nil)
+	require.NoError(t, err)
+
+	args := cfg.Programs[0].Args
+	assert.Contains(t, strings.Join(args, " "), "--config "+guest.RuntimeConfigFile)
+	assert.Contains(t, strings.Join(args, " "), "--ego-file "+guest.RuntimeEgoFile)
+	for _, p := range cfg.Programs[1:] {
+		assert.NotContains(t, strings.Join(p.Args, " "), "--ego-file", p.Name)
+		assert.NotContains(t, strings.Join(p.Args, " "), "--config", p.Name)
+	}
+
+	bare, err := guest.FromEnv(environment(nil), nil, nil, nil)
+	require.NoError(t, err)
+	assert.NotContains(t, bare.Programs[0].Args, "--ego-file", "no ego, no flag")
+	assert.NotContains(t, bare.Programs[0].Args, "--config", "no configuration, no flag")
 }
 
 func TestFromEnv_DropsTheRuntimeAndTheAdapterToTheirAccount(t *testing.T) {

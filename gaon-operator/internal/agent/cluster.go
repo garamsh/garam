@@ -6,6 +6,12 @@ import (
 	"github.com/garamsh/gaon/lib/api"
 )
 
+// SecretLister lists Secrets. It is the part of gaon's API that finds
+// the model-key Secrets, which the Cluster's selector does not reach.
+type SecretLister interface {
+	ListSecrets(ctx context.Context) (*api.SecretList, error)
+}
+
 // Cluster is the part of gaon's resource API the operator calls, which
 // *api.Client satisfies. The client it is given is built with
 // api.WithLabelSelector(Selector()), so a list answers only what the

@@ -76,9 +76,17 @@ func assemble(cfg config.Config, log *slog.Logger) (*operator, error) {
 	service := agent.NewService(feed, garam, feed, cluster, agent.Options{
 		Image: cfg.AgentImage, GaramRoot: garamRoot, ControlRoot: controlRoot,
 		MachineURL: cfg.GuestMachineURL, ControlURL: cfg.GuestControlURL,
-		ModelKeys: modelKeys, Logger: log,
+		Resources: resources(cfg), ModelKeys: modelKeys, Logger: log,
 	})
 	return &operator{service: service, settle: feed.Settle, probe: &health.Probe{}, log: log}, nil
+}
+
+// resources is the MicroVM's requests and limits, both the configured
+// quantities: the Node Agent reads the limits and falls back to the
+// requests, and the scheduler reads the requests.
+func resources(cfg config.Config) api.ResourceRequirements {
+	list := api.ResourceList{CPU: api.Quantity(cfg.AgentCPU), Memory: api.Quantity(cfg.AgentMemory)}
+	return api.ResourceRequirements{Requests: list, Limits: list}
 }
 
 // readRoot reads a trust root, which is a certificate and not a secret,

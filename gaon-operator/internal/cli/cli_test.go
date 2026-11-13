@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/gaon/lib/api"
+
 	"github.com/garamsh/garam/gaon-operator/internal/agent"
 	"github.com/garamsh/garam/gaon-operator/internal/cli"
 	"github.com/garamsh/garam/gaon-operator/tests/gaonfake"
@@ -43,6 +45,18 @@ func TestRun_RefusesWithoutSettingsAndNamesThem(t *testing.T) {
 	assert.Contains(t, out.String(), "GAON_API_URL")
 	assert.Contains(t, out.String(), "GARAM_TOKEN_URL")
 	assert.Contains(t, out.String(), "CONTROL_GRN")
+}
+
+func TestRun_RefusesASettingGaonWouldRefuseAndNamesIt(t *testing.T) {
+	s := newSetup(t)
+	s.env["AGENT_IMAGE"] = "registry.example/agent:1"
+	var out strings.Builder
+
+	err := cli.Run(t.Context(), env(s.env), &out)
+
+	require.Error(t, err)
+	assert.Contains(t, out.String(), "AGENT_IMAGE")
+	assert.Equal(t, 0, s.gaon.Count("PUT", "microvms"))
 }
 
 // pki writes a self-signed certificate and its key, the key as 0600.
@@ -129,7 +143,8 @@ func newSetup(t *testing.T) setup {
 			"GARAM_MACHINE_URL": g.URL(), "GARAM_ROOT_FILE": cert, "GARAM_TOKEN_URL": g.TokenURL(),
 			"CONTROL_URL": ctl.URL, "CONTROL_ROOT_FILE": cert, "CONTROL_GRN": grn.New("org1", "operator", "ctl1").String(),
 			"OPERATOR_KEY_FILE": opKey, "OPERATOR_CLIENT_ID": operator,
-			"AGENT_IMAGE": "registry.example/agent:1", "HEALTH_ADDR": freeAddr(t),
+			"AGENT_IMAGE": "registry.example/agent@sha256:" + strings.Repeat("0", 64),
+			"AGENT_CPU":   "1", "AGENT_MEMORY": "1Gi", "HEALTH_ADDR": freeAddr(t),
 		},
 	}
 }
@@ -150,6 +165,17 @@ func TestRun_ExchangesReadsTheFeedRendersAndStopsGracefully(t *testing.T) {
 		_ = res.Body.Close()
 		return res.StatusCode == http.StatusOK
 	}, 10*time.Second, 20*time.Millisecond)
+
+	// The MicroVM names the configured resources, which gaon's Node
+	// Agent needs before it starts one.
+	for _, r := range s.gaon.Requests() {
+		if r.Method == "PUT" && r.Kind == "microvms" {
+			m, ok := s.gaon.MicroVM(t, r.Name)
+			require.True(t, ok)
+			assert.Equal(t, api.ResourceList{CPU: "1", Memory: "1Gi"}, m.Spec.Resources.Limits)
+			assert.Equal(t, api.ResourceList{CPU: "1", Memory: "1Gi"}, m.Spec.Resources.Requests)
+		}
+	}
 
 	// Two exchanges: garam's own and the control service's.
 	var audiences []string

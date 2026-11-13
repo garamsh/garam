@@ -162,7 +162,8 @@ Addresses and paths, in the environment; none holds a credential.
 | `GARAM_TOKEN_URL` | the token URL the key issuance answered, the assertion's `aud` |
 | `CONTROL_URL`, `CONTROL_ROOT_FILE`, `CONTROL_GRN` | the control service, its root, and its operator GRN |
 | `OPERATOR_KEY_FILE`, `OPERATOR_CLIENT_ID` | the operator's key, and the manager's operator GRN, which is also the `Controller-Grn` |
-| `AGENT_IMAGE` | the composed guest image |
+| `AGENT_IMAGE` | the composed guest image, as `<repository>@sha256:<64 hex digits>`, the only form gaon's Node Agent starts; the operator refuses to start on any other |
+| `AGENT_CPU`, `AGENT_MEMORY` | the MicroVM's requests and limits, each in gaon's quantity form (`1`, `500m`, `1Gi`); gaon's Node Agent refuses a MicroVM that names no cpu or no memory, so the operator refuses to start without either and publishes no figure |
 | `GUEST_MACHINE_URL`, `GUEST_CONTROL_URL` | optional: the addresses the adapter in the guest reaches garam and the control service at; each defaults to `GARAM_MACHINE_URL` and `CONTROL_URL` |
 | `HEALTH_ADDR` | optional, default `:8081` |
 
@@ -278,33 +279,40 @@ above.
   The operator creates none and never uses or logs a value; gaon resolves the `valueFrom` when the MicroVM
   starts, so a Secret created later is not seen by a MicroVM already
   started. A name is one Secret, labelled for one organization.
-- **A gaon role for the operator** that also reads Secrets labelled
-  `garam.sh/role=model-key` and no other Secret outside its own
-  objects. A list of those Secrets returns their data to the operator,
-  which drops it on arrival; the operator is trusted not to use it.
+- **A gaon role for the operator**, created and bound by an
+  administrator to the certificate with CN `garam-gaon-operator` and no
+  Organization. In the compute group it holds `list`, `create`,
+  `update` and `delete` of `microvms`, `volumes` and `secrets` limited
+  to `garam.sh/role=agent`, `watch` of `microvms` limited the same way,
+  and `list` of `secrets` limited to `garam.sh/role=model-key`. It
+  holds no `get`, because the operator reads by list, and no right in
+  the RBAC group. A list of the model-key Secrets returns their data to
+  the operator, which drops it on arrival; the operator is trusted not
+  to use it. `pair-run.sh` states this role and binds it.
 - **The trust roots and the key files** the operator itself reads
   (§Settings).
 
 ### What is not established
 
-- **A registration against a real gaon.** `make -C gaon-operator
-  pair-run` (`pair-run/pair-run.sh`) runs the operator against garam's
-  stack and the released control service, and the control service
-  answers the placement 201 with a uid the stand-in made. Its gaon API
-  is `tests/gaonstandin`, which serves `tests/gaonfake` on a port, so
-  the run does not show:
-  - gaon's RBAC: a label-limited role is never refused, and a get is
-    not refused by label;
-  - garbage collection by `ownerReferences`, the Node authorizer,
-    binding and `bindingEpoch`, a watch;
-  - that gaon returns a Secret's `data` on a list, which the digest is
-    made from, and that a uid gaon made is accepted as `podUid` and
-    `pvcUid`;
-  - a MicroVM starting: the stand-in has no scheduler or guest, and the
-    run states `Running` and `Ready` through an admin path that is not
-    gaon's;
-  - the 204 of the operator's report: the operator does not log it, and
-    the run reads garam's `provisioningState` instead.
+- **A real mvmd and a guest.** `make -C gaon-operator pair-run-gaon`
+  (`pair-run/pair-run.sh` with `PAIR_RUN_GAON=gaon`) runs the operator
+  against gaon's own services, built from commit
+  `2387cebd0b44b322b7da2ff485144a7456a97c6f` of gaon: the API server
+  with `--authorization-mode=RBAC`, the controllers, the scheduler, a
+  Node Agent with `gaon-storage-local`, and the operator's client
+  certificate bound to a role (§Settings, §What the deployment must
+  create). The Node Agent runs against a minimal mvmd of
+  `pair-run/gaonharness`, which keeps Machines and Disks in memory and
+  starts nothing. The run shows the MicroVM `Running` and `Ready` as
+  that Node Agent reports it, and shows no guest program: the three
+  programs of the composed guest image never ran.
+- **A get refused for lack of labels, and the operator's own watch.**
+  The role grants no `get`, and a get of a MicroVM or a Secret by name
+  is refused for that, which says nothing about a label. The operator
+  lists and writes and never watches; the role's `watch` is answered,
+  and no operator behaviour exercises it.
+- **Garbage collection by `ownerReferences`.** The operator sets none
+  (§Open questions).
 - **A first placement only.** `previous` is always null.
   `writerStoppedSha256`, the SHA-256 of the canonical JSON of the stop
   observed on an earlier MicroVM, is not built, so a replaced MicroVM is
@@ -312,6 +320,11 @@ above.
 - **A changed configuration.** A MicroVM's spec is immutable and a
   `valueFrom` is not refreshed, so a changed `configuration` or
   `apiKeyRef` does not reach a MicroVM that exists.
+
+`make pair-run` runs the same steps with `tests/gaonstandin` in place
+of gaon, which serves `tests/gaonfake` on a port. It shows none of
+gaon's behaviour above and states `Running` through an admin path that
+is not gaon's.
 
 ## What is not built
 

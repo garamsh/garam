@@ -4,7 +4,7 @@
 
 include ../tooling/make/go.mk
 
-.PHONY: ci format lint test build guest-image guest-run pair-run
+.PHONY: ci format lint test build guest-image guest-run pair-run pair-run-gaon
 
 ci: format lint test build
 
@@ -48,3 +48,16 @@ guest-run: guest-image
 # PAIR_RUN_PROJECT.
 pair-run:
 	sh pair-run/pair-run.sh
+
+# pair-run-gaon is the same run against gaon's own built services in
+# place of the stand-in, with authorization on: an embedded etcd,
+# gaon-apiserver (RBAC), gaon-controllers, gaon-scheduler and a Node
+# Agent over a minimal mvmd. GAON_REPO names a gaon checkout, which is
+# cloned and not changed, and GAON_COMMIT the commit built from it. It
+# needs the Go module cache to hold gaon's etcd and mvmd's runtime API
+# (pair-run/gaon-build.sh), and is not part of `ci`.
+GAON_COMMIT ?= 2387cebd0b44b322b7da2ff485144a7456a97c6f
+
+pair-run-gaon:
+	test -n "$(GAON_REPO)" || { echo "pair-run-gaon: GAON_REPO names the gaon checkout to clone" >&2; exit 1; }
+	PAIR_RUN_GAON=gaon GAON_REPO="$(GAON_REPO)" GAON_COMMIT="$(GAON_COMMIT)" sh pair-run/pair-run.sh

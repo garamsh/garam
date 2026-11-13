@@ -45,13 +45,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tooling/record-runner-image.sh
 
-      # ADR-0157: until launch a release is `v0.1.0-dev.N`, `v0.1.0-rc.N`
-      # or `v0.1.0`, and the image tag is that tag without the `v`
-      # (ADR-0039). The trigger admits every `v*`, and the repositories
-      # are IMMUTABLE, so any other tag is refused by
-      # tooling/release-version.sh rather than published under a name
-      # nothing can take back. The tag name reaches the shell through
-      # the environment.
+      # ADR-0157: until launch a release is `v0.1.0-dev.N`,
+      # `v0.1.0-rc.N` or `v0.1.0`, and the image tag is that tag
+      # without the `v` (ADR-0039). The trigger admits every `v*`,
+      # and the repositories are IMMUTABLE, so any other tag is
+      # refused by tooling/release-version.sh rather than published
+      # under a name nothing can take back. The tag name reaches the
+      # shell through the environment.
       - id: version
         env:
           REF_NAME: ${{ github.ref_name }}

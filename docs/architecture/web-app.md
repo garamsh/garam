@@ -376,8 +376,12 @@ authoritative for what a deployment sets.
 
 The address is server-side only and never reaches a browser. It is
 declared once, as a typed schema in `platform-web/src/env.ts`, parsed at
-import so a missing value fails at start rather than inside the first
-request that needs it. That file is also the authority
+import, which happens when the first request arrives and not when the
+process starts. The process stays up, and with no `GARAM_API_URL` every
+route answers 500, the probes included (ADR-0150;
+`platform/tests/image/web.sh` runs an image with none and expects a 5xx
+from `/api/healthz` and 500 from `/readyz`). That file is also the
+authority
 `make -C deploy/charts ci` reads the application's environment names
 from
 ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)),
@@ -612,13 +616,15 @@ The boundary is as much of the responsibility as the contents.
 - **Owns no schema.** `platform-web/src/types/api.ts` is generated from
   `platform/api/openapi.yaml`, so a change to what an operation carries
   starts in the specification and arrives here (ADR-0004, ADR-0019).
-- **Its probes read nothing.** Neither answer reads the API, the
-  environment or the filesystem, so a backend outage takes no replica
+- **Its probes read nothing outside the process.** Neither answer
+  reads the API or the filesystem, so a backend outage takes no replica
   out of rotation
-  ([ADR-0023](./adr/0023-web-probes.md)). Reporting an outage is the
-  reading surfaces' job and not the probes': `/login`, `/register` and
-  every console section that reads render a notice in place of what
-  they could not fetch.
+  ([ADR-0023](./adr/0023-web-probes.md)). A process with no
+  `GARAM_API_URL` is not ready: every request, the probes included,
+  answers 500 (§How it reaches garam; ADR-0150). Reporting an outage
+  is the reading surfaces' job and not the probes': `/login`,
+  `/register` and every console section that reads render a notice in
+  place of what they could not fetch.
 - **Reaches no listener but one.** The machine listener is a separate
   process on separate credentials
   ([ADR-0017](./adr/0017-machine-process.md)); nothing here holds key

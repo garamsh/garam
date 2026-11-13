@@ -242,7 +242,8 @@ A pass is one transaction (`platform/internal/policyfeed/postgres`):
 1. Lock the `policy_feed` row with `FOR UPDATE SKIP LOCKED`, so one
    replica delivers and the others skip. A feed that is off ends the
    pass.
-2. Read up to 500 marks with their generations, then each entity's
+2. Read up to 500 marks that are not set aside (see §Role links) with
+   their generations, then each entity's
    state through `policy_entity_state`. No row is an entity the owners
    no longer hold, which goes out as a delete.
 3. Take the next value of `policy_feed_sequence` (migration 000068) and
@@ -263,7 +264,35 @@ own fault, as one that breaks a limit of the schema. The pass sends
 that entity's delete under a second sequence, logs an error naming the
 entity and the reason, and deletes its mark. A bad entity then denies
 rather than decides on what it last said (ADR-0137). Nothing retries
-it: a later write to the entity marks it again.
+it: a later write to the entity marks it again. The log line is the
+only record of it, since its mark is gone; a refused link keeps its
+mark and is read as §Role links says.
+
+#### Reading the feed's standing
+
+`/metrics` on `serve api` carries the feed's standing, from a
+collector that counts the outbox at each scrape
+(`platform/internal/policyfeed/metrics.go`), so each replica reports
+the whole feed:
+
+- `garam_policy_feed_outbox_marks{state="pending"}` is the marks the
+  next pass reads. It grows while delivery fails or nothing delivers
+  it, and a value that stays above zero is a feed that is not
+  catching up.
+- `garam_policy_feed_outbox_marks{state="set_aside"}` is the links the
+  service refused for good. Any value above zero is a membership whose
+  link the service does not hold; the rows say which.
+- `garam_policy_feed_last_success_timestamp_seconds` is the Unix time of
+  the last pass of this replica's loop that ended without a failure. A
+  pass that found another replica holding the feed ends without one, so
+  it counts, and the metric is absent on a replica with no loop and
+  until the first pass. `time() - last_success` growing beside a
+  growing `pending` is a feed that is failing, which the log's one
+  "policy feed delivery failing" line also says.
+
+A scrape that cannot read the outbox fails rather than reading zero.
+With `GARAM_POLICY_ADDR` unset the two mark series are still served,
+which is how an outbox that nothing delivers is seen to grow.
 
 #### Role links
 
@@ -330,6 +359,54 @@ registered into or deleted). At the bound:
   invitation.
 - **Deleting an organization** has deleted it. The client does not
   repeat the delete, which would find it gone.
+
+**A link the service refuses for good is set aside.** A write the
+service answers with `PERMISSION_DENIED` or `INVALID_ARGUMENT` is not
+retried, because the request is a function of the membership alone and
+is judged the same each time. Those two codes are the whole list
+(`platform/internal/policyfeed/grpc/links.go`); each rests on
+`policy/crates/server/src/status.rs`:
+
+- `PERMISSION_DENIED` (lines 100 to 109 and 150 to 153): the caller
+  `platform` may not write this link, as where its identifier is held
+  by a policy of another kind (`NoWriter`).
+- `INVALID_ARGUMENT` (lines 116 to 121 and 166 to 180): the request or
+  the policy is one the service refuses by its own rules.
+
+Every other code, `UNAVAILABLE`, `INTERNAL`, `DEADLINE_EXCEEDED`,
+`FAILED_PRECONDITION`, `UNAUTHENTICATED` and `NOT_FOUND` among them, is
+a fault that may clear, so it fails the pass as before and the pass is
+retried. A permanent refusal first removes the member's links of all
+three roles, so a link the service would not write leaves the member
+with none and not with the role it held before (a removal the service
+refuses for the same reason leaves that link as it was). The mark is
+then kept and recorded in the columns `set_aside_code`,
+`set_aside_reason` and `set_aside_at` of `policy_outbox` (migration
+000076), the pass goes on with the entities and links of the other
+organizations, and the loop logs an error naming the member, the code
+and the reason once. No pass reads a set-aside mark again. A later
+write of the membership, and `garam policy-feed start`, mark it anew
+and clear the record, so a repaired link is delivered again;
+`stop` empties the outbox as for any mark. An operator reads the
+record from the table:
+
+```sql
+SELECT entity_id, set_aside_code, set_aside_reason, set_aside_at
+FROM policy_outbox WHERE set_aside_at IS NOT NULL;
+```
+
+A request waiting for a set-aside link does not wait out the bound: the
+gate reads the mark's record and answers at once with the same 503
+`change_not_applied` and the same `resource` as the bound's
+(`policyfeed.ErrLinkSetAside`, which is `ErrNotApplied`), so a client
+reads one answer. Which of the two it was is in the request's log, not
+the body. The change is stored and the member is decided by the role
+the service last had, until the membership is written again or an
+operator restarts the feed. What the codes could hide: a fault of the
+platform's own credentials or configuration that the service answers as
+`PERMISSION_DENIED` would set every link aside, which `set_aside` in
+§Reading the feed's standing shows and `garam policy-feed start`
+repairs once the fault is mended.
 
 `garam policy-feed start` marks every membership with the rest of the
 backfill, and so does migration 000075 for a feed already on, both

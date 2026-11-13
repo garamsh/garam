@@ -81,6 +81,29 @@ func TestCreateOrg_AnswersUnavailableWhileTheRoleLinkIsNotApplied(t *testing.T) 
 	assert.NoError(t, err, "the change is stored whatever the wait said")
 }
 
+// TestCreateOrg_AnswersAsNotAppliedForASetAsideLink holds that a link
+// the service refused for good is answered as a change not applied:
+// the same 503, reason and stored organization as the bound's, so a
+// client reads one answer and the log tells the cause.
+//
+// The clear gate is the control: the same request is 201.
+func TestCreateOrg_AnswersAsNotAppliedForASetAsideLink(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	gate := &recordingGate{}
+	f.server.WithFeed(gate)
+
+	rec := f.do(t, "POST", "/orgs", `{"name":"acme"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code, "the link is in force")
+
+	gate.err = policyfeed.ErrLinkSetAside
+	rec = f.do(t, "POST", "/orgs", `{"name":"globex"}`, owner)
+
+	notApplied(t, rec, gate.lastOrg(t))
+	_, err := f.orgs.GetOrg(context.Background(), gate.lastOrg(t))
+	assert.NoError(t, err, "the change is stored whatever the wait said")
+}
+
 // TestCreateOrg_WaitsForNothingWithoutAFeed holds that a server with
 // no gate answers as it did before the feed existed.
 func TestCreateOrg_WaitsForNothingWithoutAFeed(t *testing.T) {

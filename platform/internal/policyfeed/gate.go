@@ -29,12 +29,23 @@ var ErrNotApplied = errorx.NewWithReason(errorx.KindUnavailable,
 	errorx.Reason{Code: ReasonChangeNotApplied},
 	"the change is stored and the policy service has not yet applied it")
 
+// ErrLinkSetAside answers a change whose role link the service refused
+// for good, so the link is set aside and no wait ends it (ADR-0159). It
+// is ErrNotApplied with the cause said, and answers at once: the
+// request is told what the wait could not change, which is that the
+// change is stored and the service does not hold it. The member stays
+// decided by the role the service last had, until the membership is
+// written again or an operator restarts the feed.
+var ErrLinkSetAside = errorx.Wrap(ErrNotApplied,
+	"the policy service refused the role link and it is set aside")
+
 // Gate holds a request until the role links its change marked have
 // been applied.
 type Gate interface {
 	// Await wakes the delivery loop and returns once the outbox holds
 	// no mark of the role link of user in org, or of any member of org
-	// where user is empty. It returns ErrNotApplied at the bound.
+	// where user is empty. It returns ErrNotApplied at the bound, and
+	// ErrLinkSetAside, which is one, as soon as a mark is set aside.
 	Await(ctx context.Context, org, user string) error
 }
 
@@ -56,11 +67,13 @@ func (g *gate) Await(ctx context.Context, org, user string) error {
 	tick := time.NewTicker(pollEvery)
 	defer tick.Stop()
 	for {
-		pending, err := g.store.LinkPending(ctx, org, user)
+		state, err := g.store.LinkState(ctx, org, user)
 		switch {
 		case err != nil:
 			return err
-		case !pending:
+		case state == LinkSetAside:
+			return ErrLinkSetAside
+		case state == LinkApplied:
 			return nil
 		}
 		select {

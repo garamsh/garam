@@ -58,6 +58,20 @@ type fakePolicy struct {
 	failLinks error
 	// failOnly names the one link call that fails; empty fails all.
 	failOnly string
+	// refuseOrg is the error each link call answers for an organization,
+	// by its GRN, while the others answer as they would.
+	refuseOrg map[string]error
+}
+
+// linkRefuseOrg makes every link call for org fail with err while it is
+// set, and none for another organization. A nil err ends it.
+func (f *fakePolicy) linkRefuseOrg(org string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.refuseOrg == nil {
+		f.refuseOrg = map[string]error{}
+	}
+	f.refuseOrg[org] = err
 }
 
 func (f *fakePolicy) ApplyEntityChanges(
@@ -108,7 +122,10 @@ func (f *fakePolicy) linkFailOn(method string, err error) {
 
 // linkErr is what a call to method answers when the case has set it to
 // fail. The caller holds the lock.
-func (f *fakePolicy) linkErr(method string) error {
+func (f *fakePolicy) linkErr(method, org string) error {
+	if err := f.refuseOrg[org]; err != nil {
+		return err
+	}
 	if f.failOnly != "" && f.failOnly != method {
 		return nil
 	}
@@ -120,7 +137,7 @@ func (f *fakePolicy) CreatePolicy(
 ) (*policyv1.CreatePolicyResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if err := f.linkErr("CreatePolicy"); err != nil {
+	if err := f.linkErr("CreatePolicy", req.GetOrg()); err != nil {
 		return nil, err
 	}
 	if _, ok := f.policies[req.GetPolicy()]; ok {
@@ -138,7 +155,7 @@ func (f *fakePolicy) ActivatePolicy(
 ) (*policyv1.ActivatePolicyResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if err := f.linkErr("ActivatePolicy"); err != nil {
+	if err := f.linkErr("ActivatePolicy", req.GetOrg()); err != nil {
 		return nil, err
 	}
 	l, ok := f.policies[req.GetPolicy()]
@@ -154,7 +171,7 @@ func (f *fakePolicy) DeletePolicy(
 ) (*policyv1.DeletePolicyResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if err := f.linkErr("DeletePolicy"); err != nil {
+	if err := f.linkErr("DeletePolicy", req.GetOrg()); err != nil {
 		return nil, err
 	}
 	if _, ok := f.policies[req.GetPolicy()]; !ok {

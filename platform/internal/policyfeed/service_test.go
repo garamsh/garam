@@ -46,8 +46,12 @@ func (s *scriptedStore) Deliver(
 	return st.result, st.err
 }
 
-func (s *scriptedStore) LinkPending(context.Context, string, string) (bool, error) {
-	return false, nil
+func (s *scriptedStore) LinkState(context.Context, string, string) (policyfeed.LinkState, error) {
+	return policyfeed.LinkApplied, nil
+}
+
+func (s *scriptedStore) Standing(context.Context) (policyfeed.Standing, error) {
+	return policyfeed.Standing{}, nil
 }
 
 type syncBuffer struct {
@@ -109,6 +113,61 @@ func TestRun_LogsEachRefusal(t *testing.T) {
 	assert.Contains(t, logs, "level=ERROR")
 	assert.Contains(t, logs, "grn:acme/iam/group/t1")
 	assert.Contains(t, logs, "too many parents")
+}
+
+func TestRun_LogsEachSetAsideLink(t *testing.T) {
+	// The control is the refusal test above: an entity refusal logs its
+	// entity, and a set-aside link logs the member and the code.
+	_, logs := run(t, []step{{result: policyfeed.Result{
+		Marks: 2,
+		SetAside: []policyfeed.LinkRefusal{{
+			Link:   policyfeed.Link{Org: "grn:acme", User: "grn:acme/iam/user/u1", Role: "admin"},
+			Code:   "PermissionDenied",
+			Reason: "policy service CreatePolicy: no writer",
+		}},
+	}}}, policyfeed.Config{Poll: time.Millisecond, MaxBackoff: time.Millisecond})
+
+	assert.Contains(t, logs, "level=ERROR")
+	assert.Contains(t, logs, "set aside")
+	assert.Contains(t, logs, "grn:acme/iam/user/u1")
+	assert.Contains(t, logs, "code=PermissionDenied")
+	assert.Contains(t, logs, "no writer")
+}
+
+// probeStore fails its first pass and reads the service's last pass at
+// the start of each later one, then cancels the loop after the third.
+type probeStore struct {
+	scriptedStore
+	svc    policyfeed.Service
+	seen   []time.Time
+	cancel context.CancelFunc
+}
+
+func (p *probeStore) Deliver(context.Context, int, policyfeed.Sender) (policyfeed.Result, error) {
+	p.seen = append(p.seen, p.svc.LastPass())
+	switch len(p.seen) {
+	case 1:
+		return policyfeed.Result{}, errors.New("policy service unreachable")
+	case 3:
+		p.cancel()
+	}
+	return policyfeed.Result{}, nil
+}
+
+func TestRun_LastPassMovesOnlyOnASuccessfulPass(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &probeStore{cancel: cancel}
+	store.svc = policyfeed.NewService(store, nil, slog.New(slog.DiscardHandler),
+		policyfeed.Config{Poll: time.Millisecond, MaxBackoff: time.Millisecond})
+	before := time.Now()
+
+	require.NoError(t, store.svc.Run(ctx))
+
+	require.Len(t, store.seen, 3)
+	assert.True(t, store.seen[0].IsZero(), "no pass has succeeded before the first")
+	assert.True(t, store.seen[1].IsZero(), "a failed pass is no success")
+	assert.False(t, store.seen[2].Before(before), "the pass after it succeeded")
 }
 
 func TestRun_FullBatchDoesNotWait(t *testing.T) {

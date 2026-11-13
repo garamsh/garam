@@ -50,7 +50,8 @@ SELECT t, id FROM (
 	UNION ALL SELECT 'Iam::RoleLink', org_grn || ' ' || user_grn FROM org_members
 ) live
 ON CONFLICT (entity_type, entity_id)
-DO UPDATE SET generation = policy_outbox.generation + 1`
+DO UPDATE SET generation = policy_outbox.generation + 1,
+	set_aside_code = NULL, set_aside_reason = NULL, set_aside_at = NULL`
 
 // Start enables the feed and marks every live entity.
 func (s *Switch) Start(ctx context.Context) (int64, error) {

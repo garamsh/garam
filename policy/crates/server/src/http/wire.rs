@@ -309,6 +309,7 @@ struct Upsert {
     parents: Option<Vec<EntityRef>>,
     consents: Option<Vec<EntityRef>>,
     operations: Option<Vec<String>>,
+    agent: Option<EntityRef>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -378,6 +379,10 @@ impl Changes {
                         parents: entity_refs(upsert.parents, manifests)?,
                         consents: entity_refs(upsert.consents, manifests)?,
                         operations: upsert.operations.unwrap_or_default(),
+                        agent: upsert
+                            .agent
+                            .map(|reference| entity_ref(reference, manifests))
+                            .transpose()?,
                     })),
                     (None, Some(Delete {})) => Some(Operation::Delete(proto::EntityDelete {})),
                     (None, None) => None,

@@ -24,7 +24,7 @@ pub(crate) enum Parsed {
 }
 
 /// What an upsert states of an entity: where it sits, who belongs to
-/// it, and the one attribute each of two types carries.
+/// it, and the one attribute each of three types carries.
 #[derive(Debug, Clone, Default)]
 pub struct Upsert {
     /// The organization a resource names, which an `Org` names as
@@ -42,14 +42,18 @@ pub struct Upsert {
     /// carries any, and each is an action an `Operator` may be the
     /// principal of.
     pub operations: Vec<String>,
+    /// The agent a `Supervisor` holds (ADR-0164). Only a `Supervisor`
+    /// carries one.
+    pub agent: Option<EntityUid>,
 }
 
 impl EntityChange {
     /// The entity now reads as this. An entity carries containment and
-    /// membership and, on two types, one attribute each, so these are
-    /// all it can state: `org`, which every resource type requires,
+    /// membership and, on three types, one attribute each, so these
+    /// are all it can state: `org`, which every resource type requires,
     /// `members`, which an `Org` requires, its parents, an `Org`'s
-    /// `consents` and an `Operator`'s `operations`. Refused where the
+    /// `consents`, an `Operator`'s `operations` and a `Supervisor`'s
+    /// `agent`. Refused where the
     /// schema does not admit it, or where the attribute belongs to
     /// another type.
     pub fn upsert(
@@ -64,6 +68,7 @@ impl EntityChange {
             parents,
             consents,
             operations,
+            agent,
         } = upsert;
         let entity_type = uid.type_name().to_string();
         if entity_type == "Iam::Org" && !carries_itself(&uid, &org, &members) {
@@ -74,6 +79,9 @@ impl EntityChange {
         }
         if entity_type != "Iam::Operator" && !operations.is_empty() {
             return Err(Error::Attribute("operations"));
+        }
+        if entity_type != "Iam::Supervisor" && agent.is_some() {
+            return Err(Error::Attribute("agent"));
         }
         if let Some(operation) = operations
             .iter()
@@ -97,6 +105,9 @@ impl EntityChange {
         }
         if !operations.is_empty() {
             attrs.insert("operations".to_owned(), json!(operations));
+        }
+        if let Some(agent) = &agent {
+            attrs.insert("agent".to_owned(), json!({"__entity": uid_json(agent)}));
         }
         let document = json!({
             "uid": uid_json(&uid),

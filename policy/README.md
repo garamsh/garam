@@ -22,8 +22,9 @@ it through `garam policy-feed` (#1689, #1888).
   `policy`.
 - `system-policies/` — the system tier: tenant isolation and its one
   exception, an agent's sending, a hosted operator's ten delegated
-  operations (`operator-<type>-<verb>`), and the role templates. One
-  policy per file, and the file's
+  operations (`operator-<type>-<verb>`), a supervisor's activation of
+  the agent it holds (`supervisor-agent-activate`), and the role
+  templates. One policy per file, and the file's
   stem is the id a decision's reasons name. Their tests sit in
   `crates/decision/tests/`.
 - `migrations/` — the service's own database.
@@ -71,12 +72,12 @@ it through `garam policy-feed` (#1689, #1888).
 
 | `sub` | Writes | Asks |
 |-------|--------|------|
-| `platform` | the types whose `@caller` is `platform`: `Iam::Org`, `Iam::OrgMembers`, `Iam::Team`, `Iam::Project`, `Iam::User`, `Iam::Agent`, `Iam::Operator` | anything |
+| `platform` | the types whose `@caller` is `platform`: `Iam::Org`, `Iam::OrgMembers`, `Iam::Team`, `Iam::Project`, `Iam::User`, `Iam::Agent`, `Iam::Operator`, `Iam::Supervisor` | anything |
 | `grn:<org>/iam/service/cowork` | the types whose `@caller` is `cowork`: `Cowork::Channel`, `Cowork::Page`, `Cowork::Task`, `Cowork::Artifact`, into `<org>` alone | `cowork:` actions on resources of `<org>` |
 | `grn:<org>/iam/service/codehub` | the types whose `@caller` is `codehub`: `Codehub::Repo`, into `<org>` alone | `codehub:` actions on resources of `<org>` |
 
-- **No caller writes the rest.** `@caller("none")` holds `Iam::Policy`,
-  `Iam::Supervisor` and `Iam::Service`.
+- **No caller writes the rest.** `@caller("none")` holds `Iam::Policy`
+  and `Iam::Service`.
 - **A caller bound to an organization writes only into it.** Every
   entity of its `ApplyEntityChanges` is of a type it owns, has a GRN
   beginning `grn:<org>/`, names `<org>`'s own `Iam::Org` as its `org`,
@@ -115,9 +116,10 @@ it through `garam policy-feed` (#1689, #1888).
   (ADR-0161). The identifiers opening `link-scoped-` are the same for
   the scoped link of a team or a project on itself, named by
   `grant::scoped_link_policy` (ADR-0163).
-- **A `permit` never reaches an operator.** A decision for an
-  `Iam::Operator` composes the organization's guardrails and none of
-  its `permit`s, whatever a `permit` says.
+- **A `permit` never reaches an operator or a supervisor.** A decision
+  for an `Iam::Operator` or an `Iam::Supervisor` composes the
+  organization's guardrails and none of its `permit`s, whatever a
+  `permit` says (ADR-0164 for the supervisor).
 - **Removing a `permit` asks `iam:policy.delete`, not
   `iam:permit.write`.** Removal narrows, and an administrator can
   already forbid what a `permit` allows with a guardrail.
@@ -133,19 +135,31 @@ it through `garam policy-feed` (#1689, #1888).
   its index in the response, and the rest are written. A request holds
   at most 1000 changes, an id holds at most 512 bytes, a type 64 and a
   change 1000 parents.
-- **Two types carry one attribute each.** An `EntityUpsert` of an
+- **Three types carry one attribute each.** An `EntityUpsert` of an
   `Iam::Org` may name `consents`, the organizations it has granted its
   half of a message toward (ADR-0147), and one of an `Iam::Operator`
   may name `operations`, the actions its current delegation holds as
   wire-form names, `iam:agent.activate` (ADR-0146). An entity of another
   type carrying either, and an operation no manifest declares with
   `Iam::Operator` as a principal, refuse that entry, and each holds at
-  most 1000. `Iam::Org` and `Iam::Operator` are the platform's, so a
-  scoped caller writing either refuses its whole request, and neither
-  attribute can be written by a service that is not the platform. An
+  most 1000. An `Iam::Supervisor` may name `agent`, the `Iam::Agent`
+  it holds; no other type may, and an `agent` of another type refuses
+  the entry (ADR-0164). `Iam::Org`, `Iam::Operator` and
+  `Iam::Supervisor` are the platform's, so a scoped caller writing any
+  refuses its whole request, and no attribute can be written by a
+  service that is not the platform. An
   operator is written in its organization's `Iam::OrgMembers` and
   `Iam::Org`, as a user is, and the platform's feed does not yet write
   that parent or either attribute.
+- **A supervisor activates the agent it holds and nothing else.**
+  `Iam::Supervisor` is a principal of `iam:agent.activate` alone and
+  sits in its organization's `Iam::OrgMembers` and `Iam::Org`, as an
+  operator does. Its optional `agent` is the `Iam::Agent` it holds, and
+  `supervisor-agent-activate` permits it where the resource is that
+  agent: a supervisor fed no `agent` is denied, so is one asking for
+  another agent of its organization, and tenant isolation denies an
+  agent of another organization (ADR-0164). The platform feeds the
+  attribute and asks the question in a later round.
 - **Tenant isolation has one exception, a message both sides consent
   to.** A `message.send` from an agent to an agent lifts the
   isolation `forbid` when each of their organizations lists the other

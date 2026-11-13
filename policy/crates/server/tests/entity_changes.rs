@@ -326,6 +326,7 @@ fn with_attributes(
             parents,
             consents,
             operations: operations.into_iter().map(str::to_owned).collect(),
+            agent: None,
         })),
     }
 }
@@ -378,6 +379,55 @@ async fn consents_and_operations_are_written_on_their_own_types_and_refused_on_a
     assert_eq!(refused, [2, 3, 4]);
     assert_eq!(answer.written, 3, "{answer:?}");
     assert_eq!(reached.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
+async fn an_agent_is_written_on_a_supervisor_and_refused_on_any_other_type_or_of_any_other_type() {
+    let (mut client, reached) = served().await;
+    let org = || Some(named("Iam::Org", ACME));
+    let members = || named("Iam::OrgMembers", ACME);
+    let holding = |entity: EntityRef, parents: Vec<EntityRef>, agent: EntityRef| {
+        let mut change = with_attributes(entity, org(), parents, vec![], vec![]);
+        if let Some(Operation::Upsert(upsert)) = change.operation.as_mut() {
+            upsert.agent = Some(agent);
+        }
+        change
+    };
+    let supervisor = |agent: EntityRef| {
+        holding(
+            named("Iam::Supervisor", "grn:acme/iam/supervisor/host"),
+            vec![members(), named("Iam::Org", ACME)],
+            agent,
+        )
+    };
+    let bot = || named("Iam::Agent", "grn:acme/iam/agent/bot");
+
+    let answer = apply(
+        &mut client,
+        vec![
+            supervisor(bot()),
+            holding(
+                named("Iam::Agent", "grn:acme/iam/agent/peer"),
+                vec![members()],
+                bot(),
+            ),
+            holding(
+                named("Iam::Operator", "grn:acme/iam/operator/hosting"),
+                vec![members(), named("Iam::Org", ACME)],
+                bot(),
+            ),
+            supervisor(named("Iam::User", "grn:acme/iam/user/kim")),
+            supervisor(named("Iam::Org", ACME)),
+            supervisor(bot()),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let refused: Vec<u32> = answer.refusals.iter().map(|r| r.index).collect();
+    assert_eq!(refused, [1, 2, 3, 4], "{answer:?}");
+    assert_eq!(answer.written, 2, "{answer:?}");
+    assert_eq!(reached.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]

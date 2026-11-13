@@ -452,6 +452,7 @@ async fn an_undeclared_context_is_refused_on_both_transports(pool: PgPool) {
             }),
             context: Some(structure(context)),
             read: 0,
+            probe: false,
         });
         request
             .metadata_mut()

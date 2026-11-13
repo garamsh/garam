@@ -1306,8 +1306,9 @@ ADRs:
   isolation's one exception, where each organization's `consents`
   attribute on its `Org` holds the other, both organizations'
   guardrails are read for it and a withdrawal denies the next send;
-  built in the policy service (#1805), not yet in the platform, which
-  feeds no `consents` and still refuses before the engine; supersedes
+  built in the policy service (#1805), the platform feeding `consents`
+  since #1887 and its send still refusing before the engine;
+  supersedes
   0035 in part, on the send-path precondition, and 0024 in part, on
   the refusal before the engine
 - [0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
@@ -1320,7 +1321,9 @@ ADRs:
   an hour collapse into one record with a count and an organization
   holds at most 10,000 live denial records, with a per-day overflow
   record beyond; an organization's owners and administrators read them
-  on `iam:audit.read`; not built; supersedes nothing
+  on `iam:audit.read`; built in the policy service (#1785), not in the
+  platform's relay of the read or the console's view of it; supersedes
+  nothing
 - [0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
   — codehub is a service of the policy service: a `Codehub` manifest
   with the entity `Codehub::Repo`, named `grn:<org>/codehub/repo/<id>`

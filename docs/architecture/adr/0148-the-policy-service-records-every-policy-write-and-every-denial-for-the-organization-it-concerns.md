@@ -1,6 +1,7 @@
 # ADR 0148: The policy service records every policy write and every denial for the organization it concerns
 
-> Status: accepted; not built
+> Status: accepted; built in the policy service (#1785), not in the
+> platform's relay or the console's view
 > Date: 2026-11-12
 
 Drafted for #1800, under #1796, which holds the owner's decisions of

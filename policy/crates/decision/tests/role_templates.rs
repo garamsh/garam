@@ -167,10 +167,12 @@ fn the_schema_names_every_action_role_go_defines_and_no_other() {
 
     let mut expected: BTreeSet<String> = table.actions.values().cloned().collect();
     // No role.go constant: `iam:message.send` is the platform's own,
-    // `iam:permit.write` is ADR-0144 item 7's, held by owners alone, and
-    // `iam:agent.activate` is a delegated operation no role holds.
+    // `iam:permit.write` is ADR-0144 item 7's, held by owners alone,
+    // `iam:audit.read` is ADR-0148's, held by owners and administrators,
+    // and `iam:agent.activate` is a delegated operation no role holds.
     expected.insert("iam:message.send".to_string());
     expected.insert("iam:permit.write".to_string());
+    expected.insert("iam:audit.read".to_string());
     expected.insert("iam:agent.activate".to_string());
 
     let declared: BTreeSet<String> = world

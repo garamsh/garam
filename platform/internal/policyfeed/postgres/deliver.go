@@ -41,7 +41,7 @@ SELECT entity_type, entity_id, generation FROM policy_outbox
 WHERE set_aside_at IS NULL
 ORDER BY entity_type, entity_id LIMIT $1`
 
-const readState = `SELECT org, members, parent_types, parent_ids
+const readState = `SELECT org, members, parent_types, parent_ids, consent_ids
 	FROM policy_entity_state($1, $2)`
 
 const nextSequence = `SELECT nextval('policy_feed_sequence')`
@@ -252,8 +252,9 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 	var (
 		org, members *string
 		types, ids   []string
+		consents     []string
 	)
-	switch err := row.Scan(&org, &members, &types, &ids); {
+	switch err := row.Scan(&org, &members, &types, &ids, &consents); {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, nil
 	case err != nil:
@@ -268,6 +269,9 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 	}
 	for i := range types {
 		state.Parents[i] = policyfeed.Entity{Type: types[i], ID: ids[i]}
+	}
+	for _, id := range consents {
+		state.Consents = append(state.Consents, policyfeed.Entity{Type: "Iam::Org", ID: id})
 	}
 	return state, nil
 }
@@ -336,6 +340,21 @@ func (s *Store) LinkState(ctx context.Context, org, user string) (policyfeed.Lin
 		return policyfeed.LinkPending, nil
 	}
 	return policyfeed.LinkApplied, nil
+}
+
+const entityPending = `
+SELECT EXISTS (SELECT 1 FROM policy_outbox
+	WHERE entity_type = $1 AND entity_id = $2)`
+
+// EntityPending reports whether the outbox holds a mark of the entity.
+func (s *Store) EntityPending(ctx context.Context, entity policyfeed.Entity) (bool, error) {
+	var pending bool
+	err := s.pool.QueryRow(ctx, entityPending, entity.Type, entity.ID).Scan(&pending)
+	if err != nil {
+		return false,
+			errorx.Wrap(pgxerr.Classify(err, "read entity mark", nil, nil), "await entity")
+	}
+	return pending, nil
 }
 
 const readStanding = `

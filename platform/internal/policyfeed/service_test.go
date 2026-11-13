@@ -50,6 +50,10 @@ func (s *scriptedStore) LinkState(context.Context, string, string) (policyfeed.L
 	return policyfeed.LinkApplied, nil
 }
 
+func (s *scriptedStore) EntityPending(context.Context, policyfeed.Entity) (bool, error) {
+	return false, nil
+}
+
 func (s *scriptedStore) Standing(context.Context) (policyfeed.Standing, error) {
 	return policyfeed.Standing{}, nil
 }

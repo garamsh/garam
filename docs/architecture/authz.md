@@ -206,11 +206,17 @@ true of the platform.
   `Allow`.
 - **cowork asks the service alone,** and its path through
   `checkPermissions` goes.
-- Every denial and every write of a policy is recorded by the policy
-  service for the organization of the resource, and an organization's
-  owners and administrators read it on `iam:audit.read`
+- Built in the policy service (#1785), not yet relayed by the
+  platform: every denial and every write of a policy is recorded by
+  the policy service for the organization of the resource, and an
+  organization's owners and administrators read it on
+  `iam:audit.read`
   ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)).
-  Not built.
+  A write is recorded in its own transaction, so one that cannot be
+  recorded is not made. A denial is recorded after the engine decides
+  it, and one whose record cannot be written is answered anyway, the
+  failure logged and counted in process. Not built: the platform's
+  relay of `ListAuditRecords`, and a metric for the failures.
 
 [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md) makes a
 message between two agents of two consenting organizations tenant
@@ -218,9 +224,10 @@ isolation's one exception: `Org` gains `consents`, the platform feeds
 it, the isolation `forbid` gains one `unless` branch for `message.send`
 between agents where each organization's `consents` holds the other,
 and both organizations' guardrails are read for such a send. The
-policy service holds all of this (#1805); the platform does not yet
-feed `consents`, and the send path's refusal before the engine, as
-[messaging.md](./messaging.md), stands until it does. The sender's
+policy service holds all of this (#1805) and the platform feeds
+`consents` (§Consents under Delivery); the send path's refusal before
+the engine, as [messaging.md](./messaging.md), stands until its own
+round removes it. The sender's
 guardrails are read as `forbid`s alone and under ids prefixed by its
 organization, and the exception is read by no other action, since
 an `unless` branch names `message.send` and two agents.
@@ -433,6 +440,54 @@ the id `grn:<org>/iam/policy/link-<role>-<hex of the first 16 bytes of
 the SHA-256 of the member's GRN>` for each of the three roles (a
 `NOT_FOUND` is a link not held). Migration 000075's down leaves the
 links already written in the same way.
+
+#### Consents
+
+An organization's consents are an attribute of its `Iam::Org`, fed as
+ADR-0147 item 2 states (migration 000077). `policy_entity_state`
+returns `consent_ids`, the organizations toward which the
+organization holds a half of `message_consents` that stands, and the
+pass sends them as `EntityUpsert.consents`. The relation stays the
+fact: the attribute is read back from it at each delivery and holds no
+state of its own.
+
+No mark kind is added, because the attribute belongs to the entity
+the outbox already holds. A trigger on `message_consents` marks the
+`Iam::Org` of each organization whose half starts or stops standing:
+
+- A grant that creates the row, or sets a half that was down, marks
+  the granting organization. A grant that only re-stamps a half
+  already standing marks nothing, so repeating one costs the policy
+  service nothing.
+- A withdrawal marks the withdrawing organization, whether its update
+  clears the half beside the other's or its delete drops the row it
+  held alone (the two statements `Withdraw` runs).
+- Deleting an organization deletes the rows it is a side of through
+  the foreign key, and the deletion marks the other organization that
+  held a half toward it, beside the organization's own marks.
+
+A grant is thereby the upsert of the organization with the attribute
+and a withdrawal the upsert without the organization, both from the
+transaction that wrote them. `garam policy-feed start` takes
+`message_consents` among the tables it locks and marks every `Iam::Org`,
+and migration 000077 marks each organization holding a half for a feed
+that is already on, so a consent that existed before is delivered.
+
+The grant and the withdraw routes of the browser-facing listener read
+their own write as §Role links says, on the `Iam::Org` mark of the
+organization that wrote (ADR-0159 item 3): they wake the loop, wait
+until the outbox holds no mark of that entity, and answer 503
+`unavailable` with `change_not_applied` and the organization in
+`resource` at 5 seconds. The half is stored then, and a repeat changes
+nothing. A refused `Iam::Org` is deleted and logged as any entity is,
+so no wait ends in `change_refused`: that reason is a role link's
+alone. The wait is on the entity's mark and does not read which write
+raised it, so a later write that marks the same organization, such as
+another consent, keeps it waiting until the pass that delivers it.
+
+The send path still asks the platform's relation before the engine
+(`consentStands`, `platform/internal/machineapi/message.go`) and does
+not read the attribute; its own round removes the check.
 
 ### The signer
 

@@ -70,7 +70,7 @@ pub enum Error {
 pub struct Listeners {
     /// The contract, over TLS.
     pub contract: TcpListener,
-    /// `/healthz` and `/readyz`.
+    /// `/healthz`, `/readyz` and `/metrics`.
     pub probes: TcpListener,
 }
 
@@ -135,12 +135,21 @@ pub async fn serve(
     let contract = server
         .add_routes(Routes::from(routes))
         .serve_with_incoming_shutdown(incoming, shutdown);
-    tokio::select! {
+    let stopped = tokio::select! {
         served = contract => served.map_err(Error::Transport),
-        answered = probes::answer(listeners.probes, pool) => answered.map_err(Error::Probes),
-        () = sweeping(recorder) => Ok(()),
-    }
+        answered = probes::answer(listeners.probes, pool, recorder.clone()) => answered.map_err(Error::Probes),
+        () = sweeping(recorder.clone()) => Ok(()),
+    };
+    // What is still queued is given this long to be recorded; the rest
+    // is counted as lost and logged.
+    recorder.finish(QUEUE_DRAINS_WITHIN).await;
+    stopped
 }
+
+/// How long `serve` waits at shutdown for the denials still queued to
+/// be recorded, so a stop is not held by a database that does not
+/// answer.
+const QUEUE_DRAINS_WITHIN: Duration = Duration::from_secs(5);
 
 /// How often the denials past their retention are removed. The read
 /// answers none of them in between (ADR-0148 item 2).

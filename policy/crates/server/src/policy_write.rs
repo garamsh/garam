@@ -112,7 +112,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
             .evaluate(policies, &self.entities, &asked)
             .await?;
         if let (Outcome::Deny, Some(principal)) = (decision.outcome, asked_by) {
-            self.note_denial(principal, &asked, &decision).await;
+            self.note_denial(principal, &asked, &decision);
         }
         Ok(decision.outcome == Outcome::Allow)
     }
@@ -142,8 +142,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 principal,
                 (&writer.id, action_for(kind, step), org.as_str()),
                 &[],
-            )
-            .await;
+            );
             return Err(ServiceError::Reserved(policy.to_owned()));
         }
         for role in roles {
@@ -161,8 +160,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                     principal,
                     (&writer.id, action_for(kind, step), org.as_str()),
                     &[],
-                )
-                .await;
+                );
                 return Err(ServiceError::RoleNotHeld {
                     writer: writer.id.clone(),
                     role: *role,
@@ -201,8 +199,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                         context: serde_json::json!({}),
                     },
                     &decision,
-                )
-                .await;
+                );
                 Err(grant::Error::PermitDenied { writer, decision }.into())
             }
             Err(error) => Err(error.into()),
@@ -498,6 +495,11 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
             size if size <= 0 => MAX_AUDIT_PAGE,
             size => size.min(MAX_AUDIT_PAGE),
         };
+        // A denial answered before this read is in the page when the
+        // store keeps up; past the wait the page is what is stored.
+        if !recorder.settled(SETTLE_WITHIN).await {
+            tracing::warn!("an audit read did not wait out the queue of denials");
+        }
         let page = recorder.list(org.as_str(), after, size).await?;
         Ok(proto::ListAuditRecordsResponse {
             records: page.records.iter().map(audit_record_of).collect(),
@@ -607,6 +609,10 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
 
 /// The most records one page of the audit read holds.
 const MAX_AUDIT_PAGE: i64 = 100;
+
+/// How long the audit read waits for the denials queued before it to
+/// be recorded.
+const SETTLE_WITHIN: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Refuses a scoped caller whole: what is asked is the platform's.
 fn platform_only(principal: &Principal, what: &'static str) -> Result<(), ServiceError> {

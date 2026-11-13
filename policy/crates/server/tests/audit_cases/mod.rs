@@ -136,6 +136,84 @@ async fn a_denial_is_recorded_naming_its_policies_and_an_allow_or_a_probe_leaves
     assert_eq!(read.policy_ids, [policy_of("nobody")]);
 }
 
+/// How long a batch of denied entries may take while the record's
+/// store is blocked. Written inline, each entry waits the 2 s bound of
+/// its record, so the batch below takes twenty-four.
+const BATCH_ANSWERS_WITHIN: std::time::Duration = std::time::Duration::from_secs(2);
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_batch_of_denied_entries_is_answered_while_the_record_s_store_is_blocked(pool: PgPool) {
+    seed(&pool).await;
+    let mut service = platform(pool.clone()).await;
+    let strangers: Vec<String> = (0..12)
+        .map(|n| format!("grn:globex/iam/user/stranger-{n}"))
+        .collect();
+    let batch = pb::EvaluationsRequest {
+        subject: None,
+        action: Some(Action {
+            name: "iam:agent.read".into(),
+        }),
+        resource: Some(Resource {
+            r#type: BOT.0.into(),
+            id: BOT.1.into(),
+            properties: None,
+        }),
+        context: None,
+        read: 0,
+        evaluations: strangers
+            .iter()
+            .map(|id| pb::Evaluation {
+                subject: Some(Subject {
+                    r#type: "Iam::User".into(),
+                    id: id.clone(),
+                }),
+                action: None,
+                resource: None,
+                context: None,
+                probe: None,
+            })
+            .collect(),
+        probe: false,
+    };
+    // The lock every new denial of the organization takes, held.
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(ACME)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let request = service.request(batch);
+    let started = std::time::Instant::now();
+    let answered = service
+        .grpc
+        .evaluations(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let took = started.elapsed();
+
+    assert_eq!(answered.evaluations.len(), strangers.len());
+    assert!(answered.evaluations.iter().all(|e| !e.decision));
+    assert!(
+        took < BATCH_ANSWERS_WITHIN,
+        "answered after {took:?} with the store blocked"
+    );
+    // Control: the entries were denials a record was owed for, and
+    // the lock was what held them back.
+    blocker.rollback().await.unwrap();
+    let recorded = of_kind(
+        service.audit(Some(OWEN), ACME).await.unwrap(),
+        pb::AuditRecordKind::Denial,
+    );
+    let named = recorded
+        .iter()
+        .filter(|r| strangers.contains(&r.subject))
+        .count();
+    assert_eq!(named, strangers.len(), "each denial is recorded in the end");
+}
+
 #[sqlx::test(migrator = "MIGRATIONS")]
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn a_policy_write_leaves_a_record_naming_who_wrote_it(pool: PgPool) {

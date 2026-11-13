@@ -219,9 +219,12 @@ true of the platform.
   ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)).
   A write is recorded in its own transaction, so one that cannot be
   recorded is not made. A denial is recorded after the engine decides
-  it, and one whose record cannot be written is answered anyway, the
-  failure logged and counted in process. Not built: the platform's
-  relay of `ListAuditRecords`, and a metric for the failures.
+  it, and is queued for a worker that records it off the answering
+  path. One whose record cannot be written, or that meets a full queue
+  or a stop with it still queued, is answered anyway, the failure
+  logged and counted as lost, and read on `/metrics` of the service's
+  health listener. Not built: the platform's relay of
+  `ListAuditRecords`.
 - **cowork states its probes.** Each question cowork asks to filter a
   list or to decide whether a connection may write carries `probe` on
   its own entry of the batch, so a denied one is not recorded; every

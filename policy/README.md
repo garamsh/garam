@@ -37,7 +37,8 @@ it through `garam policy-feed` (#1689, #1888).
   (ADR-0148): a write is recorded in the transaction that makes it, a
   denial collapses with its hour's identical ones and an organization
   keeps at most 10,000 live ones, and a denial is removed 90 days after
-  it was last made, by an hourly sweep and by the read. `grant` records
+  it was last made, by an hourly sweep and by the read. A denial is
+  queued and recorded off the answering path. `grant` records
   its writes through it, and `ListAuditRecords` reads them for the
   platform on `iam:audit.read`.
 - `crates/entity/` — the containment and membership decisions read, and
@@ -185,7 +186,28 @@ it through `garam policy-feed` (#1689, #1888).
 - **`/healthz` and `/readyz` answer on `POLICY_HEALTH_ADDR`, in
   plaintext.** It is a port of its own, as `GARAM_MACHINE_HEALTH_ADDR`
   is, and carries no credential. `/healthz` reads nothing outside the
-  process, and `/readyz` answers while the database does.
+  process, and `/readyz` answers while the database does. `/metrics`
+  answers on it too, in the Prometheus text format, holding counts and
+  no name: `garam_policy_denials_lost_total`,
+  `garam_policy_denials_omitted_total`,
+  `garam_policy_denials_overflowed_total`,
+  `garam_policy_denial_queue_full_total` and the gauge
+  `garam_policy_denial_queue_depth`. A lost denial is one whose record
+  failed, passed its 2 s bound, met a full queue, or was still queued
+  at shutdown; `queue_full` is a part of it. An omitted denial has no
+  organization the service holds, or a field past its bound. An
+  overflowed one met an organization at its cap and is counted in its
+  `denial-overflow` record.
+- **A denial is recorded off the answering path.** The answer is
+  decided and sent, and the denial waits in a queue of 4,096 for one
+  worker that records them in order, each under the 2 s bound. A write's
+  record stays in its own transaction. A full queue answers the denial
+  and counts it as lost (and in `queue_full`): the answer never waits
+  on the store. At shutdown the service gives the queue 5 s to empty,
+  then abandons what is left and counts it as lost. `ListAuditRecords`
+  waits up to 2 s for the denials queued before it, so a read sees the
+  denials answered before it; on a timeout it lists what is stored.
+  Neither bound is a setting.
 - **Postgres TLS is `rustls` on `ring`,** the provider the gRPC listener
   already uses, so the binary links one TLS stack and needs no OpenSSL
   on a scratch image. `POLICY_DATABASE_URL`'s `sslmode` decides whether

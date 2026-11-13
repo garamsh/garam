@@ -64,7 +64,7 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-ci:chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package \
+ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package \
 	gaon-lint gaon-render gaon-order gaon-fields gaon-guards gaon-names gaon-secrets
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'

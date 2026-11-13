@@ -39,8 +39,8 @@ cowork cowork/engine deploy/local garam-cli
 # file: policy/ calls no service. Its suites run against the stack.
 policy platform deploy/local
 # The chart's checks read the environment names the platform, the
-# console, the site and the policy service declare.
-deploy/charts platform platform-web site-web policy
+# console, the site, cowork, cowork-web and the policy service declare.
+deploy/charts platform platform-web site-web policy cowork cowork-web
 # The stack has no gate of its own; the suites of the modules naming it
 # check it.
 deploy/local

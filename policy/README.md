@@ -3,8 +3,8 @@
 The policy service's Cargo workspace (ADR-0130, ADR-0137, ADR-0138,
 ADR-0140). It decides over its own stores and authenticates its callers,
 and an owner writes its entities over `ApplyEntityChanges`. The local
-stack runs its image under the `policy` profile, and nothing calls it
-yet (#1689).
+stack runs its image with no profile, and the api delivers entities to
+it through `garam policy-feed` (#1689, #1888).
 
 - `proto/garam/policy/v1/` — the gRPC contract in AuthZEN's shape.
 - `schema/<service>.cedarschema` — a service's manifest (ADR-0143):
@@ -111,7 +111,9 @@ yet (#1689).
   `link-admin-` or `link-member-` are that write's alone: a writer
   changes nothing under one, and the platform makes effective or
   removes only a policy every version of which is that member's link
-  (ADR-0161).
+  (ADR-0161). The identifiers opening `link-scoped-` are the same for
+  the scoped link of a team or a project on itself, named by
+  `grant::scoped_link_policy` (ADR-0163).
 - **A `permit` never reaches an operator.** A decision for an
   `Iam::Operator` composes the organization's guardrails and none of
   its `permit`s, whatever a `permit` says.

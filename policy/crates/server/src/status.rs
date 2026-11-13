@@ -65,10 +65,10 @@ pub(crate) enum ServiceError {
         /// The role the link names.
         role: decision::Role,
     },
-    /// An identifier reserved to the platform's role link of one
-    /// member, written by anyone else or holding another body
-    /// (ADR-0161).
-    #[error("{0} is reserved for the role link of one member, which the platform alone writes")]
+    /// An identifier reserved to a role link the platform derives,
+    /// written by anyone else or holding another body (ADR-0161,
+    /// ADR-0163).
+    #[error("{0} is reserved for a role link the platform derives, which it alone writes")]
     Reserved(String),
     /// The policy store refused or failed.
     #[error(transparent)]

@@ -1451,4 +1451,14 @@ ADRs:
   accepted only for a policy whose every version is that link; every
   refusal is `PERMISSION_DENIED`, which ADR-0160 sets aside, and a
   writer's is recorded as a denial; no migration; accepted, built
-  (#1882, second half); supersedes 0146 in part
+  (#1882, second half); supersedes 0146 in part; extended by 0163
+- [0163](./adr/0163-the-platform-alone-writes-under-the-identifier-of-the-scoped-link-it-derives-from-a-groups-or-a-projects-roles.md)
+  — the identifiers opening `link-scoped-` are reserved to the scoped
+  link the platform derives from a group's or a project's roles,
+  `link-scoped-<role>-<hex>` with `<hex>` the first 16 bytes of the
+  SHA-256 of the role, the principal's type and id and the resource's
+  type and id, each field length-prefixed with 8 bytes, so no two
+  principals or resources share one; only the caller `platform` with
+  no writer creates there, and only a team's or a project's link on
+  itself; every other rule of 0161 holds for it; no migration;
+  accepted, built (#1898); extends 0161

@@ -45,15 +45,13 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if err := s.awaitLinks(r.Context(), g.String(), u.GRN.String()); err != nil {
-		writeError(w, err)
-		return
-	}
-	// The organization's entities and the owner's, whose parent it now
-	// is, are marked by the same two writes.
+	// The organization's entities, the owner's role link and the
+	// owner's own entity, whose parent the organization now is, are
+	// marked by the same two writes, and one wait covers them.
 	if err := s.awaitMarks(r.Context(), g.String(),
 		policyfeed.Entity{Type: policyfeed.OrgType, ID: g.String()},
 		policyfeed.Entity{Type: policyfeed.OrgMembersType, ID: g.String()},
+		roleLinkMark(g.String(), u.GRN.String()),
 		policyfeed.Entity{Type: policyfeed.UserType, ID: u.GRN.String()}); err != nil {
 		writeError(w, err)
 		return
@@ -148,10 +146,6 @@ func (s *Server) DeleteOrg(w http.ResponseWriter, r *http.Request, orgSlug apige
 	}
 	ctx, raised := s.recording(r.Context())
 	if err := s.orgs.DeleteOrg(ctx, g); err != nil {
-		writeError(w, err)
-		return
-	}
-	if err := s.awaitLinks(r.Context(), g.String(), ""); err != nil {
 		writeError(w, err)
 		return
 	}

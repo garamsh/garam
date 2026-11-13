@@ -1515,6 +1515,8 @@ paths:
           $ref: '#/components/responses/EnrollmentContractError'
         '409':
           $ref: '#/components/responses/EnrollmentContractError'
+        '503':
+          $ref: '#/components/responses/EnrollmentContractError'
   /agent-enrollments:
     post:
       operationId: enrollStandaloneAgent
@@ -1613,6 +1615,8 @@ paths:
         '409':
           $ref: '#/components/responses/StandaloneContractError'
         '422':
+          $ref: '#/components/responses/StandaloneContractError'
+        '503':
           $ref: '#/components/responses/StandaloneContractError'
   /agent-enrollment-approvals:
     post:
@@ -1801,6 +1805,8 @@ paths:
         '404':
           $ref: '#/components/responses/AgentEnrollmentContractError'
         '409':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '503':
           $ref: '#/components/responses/AgentEnrollmentContractError'
 components:
   parameters:

@@ -2,6 +2,7 @@ package policyfeed
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -94,9 +95,13 @@ func (g *gate) AwaitMarks(ctx context.Context, marks []Entity) error {
 	if len(marks) == 0 {
 		return nil
 	}
+	// A mark seen absent stays settled for this wait, so a tick reads
+	// only the marks still pending: a request that names many reads
+	// fewer as the loop delivers them.
+	pending := slices.Clone(marks)
 	return g.wait(ctx, "await marks", func() (bool, error) {
-		applied := true
-		for _, m := range marks {
+		stillPending := pending[:0]
+		for _, m := range pending {
 			state, err := g.markState(ctx, m)
 			switch {
 			case err != nil:
@@ -104,10 +109,11 @@ func (g *gate) AwaitMarks(ctx context.Context, marks []Entity) error {
 			case state == LinkSetAside:
 				return false, ErrLinkSetAside
 			case state != LinkApplied:
-				applied = false
+				stillPending = append(stillPending, m)
 			}
 		}
-		return applied, nil
+		pending = stillPending
+		return len(pending) == 0, nil
 	})
 }
 

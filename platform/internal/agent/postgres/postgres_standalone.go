@@ -410,7 +410,7 @@ func resultOf(row db.AgentEnrollment) (*agent.EnrollmentResult, error) {
 	}
 	out := &agent.EnrollmentResult{
 		Placement: placement, Agent: agentGRN, Supervisor: supervisor, Epoch: int(row.Epoch.Int32),
-		Lineage: agent.Lineage(row.Lineage.Bytes),
+		Lineage: agent.Lineage(row.Lineage.Bytes), Replaced: row.ExpectedAssigneeGrn.Valid,
 	}
 	if row.ReplacedActivationID.Valid {
 		replaced := agent.ActivationID(row.ReplacedActivationID.Bytes)

@@ -15,18 +15,19 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
-// markTypes is the kinds of the marks a request named to the gate.
-func markTypes(marks []policyfeed.Entity) []string {
-	var kinds []string
-	for _, m := range marks {
-		kinds = append(kinds, m.Type)
-	}
-	return kinds
+// mark is a mark of kind typ for the entity id.
+func mark(typ, id string) policyfeed.Entity { return policyfeed.Entity{Type: typ, ID: id} }
+
+// bodyGRN reads the GRN of the entity a create answered with.
+func bodyGRN(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	return decodeBody[map[string]any](t, rec)["grn"].(string)
 }
 
 // feedRoute is one request that changes what the policy service decides
@@ -39,7 +40,9 @@ type feedRoute struct {
 	// seed stores what send changes, before the gate is made to fail.
 	seed   func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int)
 	status int
-	marks  []string
+	// marks is the whole marks, kind and id, the request must name,
+	// read from what send answered and what seed stored.
+	marks func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int, rec *httptest.ResponseRecorder) []policyfeed.Entity
 }
 
 func feedRoutes() []feedRoute {
@@ -59,33 +62,65 @@ func feedRoutes() []feedRoute {
 		require.NoError(t, err)
 		return g.Identifier
 	}
+	groupMark := func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) string {
+		return grn.New(slug, org.ServiceTypeGroup, groupIDFor(t, f, owner, slug, n)).String()
+	}
+	projectMark := func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) string {
+		return grn.New(slug, org.ServiceTypeProject, projectIDFor(t, f, owner, slug, n)).String()
+	}
+	// deleted holds the GRN of what a delete route's seed stored: what
+	// is gone cannot be listed to name its marks.
+	deleted := map[string]string{}
+	one := func(typ string, id func(slug string, n int) string) func(*testing.T, *fixture, *http.Cookie, string, int, *httptest.ResponseRecorder) []policyfeed.Entity {
+		return func(_ *testing.T, _ *fixture, _ *http.Cookie, slug string, n int, _ *httptest.ResponseRecorder) []policyfeed.Entity {
+			return []policyfeed.Entity{mark(typ, id(slug, n))}
+		}
+	}
 	return []feedRoute{
 		{name: "createOrg", status: http.StatusCreated,
-			marks: []string{policyfeed.OrgType, policyfeed.OrgMembersType, policyfeed.UserType},
+			marks: func(t *testing.T, _ *fixture, _ *http.Cookie, _ string, _ int, rec *httptest.ResponseRecorder) []policyfeed.Entity {
+				created := bodyGRN(t, rec)
+				owner := userGRNOf("owner-sub").String()
+				return []policyfeed.Entity{
+					mark(policyfeed.OrgType, created), mark(policyfeed.OrgMembersType, created),
+					mark(policyfeed.RoleLinkType, created+" "+owner), mark(policyfeed.UserType, owner),
+				}
+			},
 			send: func(t *testing.T, f *fixture, owner *http.Cookie, _ string, n int) *httptest.ResponseRecorder {
 				return f.do(t, "POST", "/orgs", fmt.Sprintf(`{"name":"made%d"}`, n), owner)
 			}},
-		{name: "createGroup", status: http.StatusCreated, marks: []string{policyfeed.TeamType},
+		{name: "createGroup", status: http.StatusCreated,
+			marks: func(t *testing.T, _ *fixture, _ *http.Cookie, _ string, _ int, rec *httptest.ResponseRecorder) []policyfeed.Entity {
+				created := bodyGRN(t, rec)
+				return []policyfeed.Entity{mark(policyfeed.TeamType, created), mark(policyfeed.ScopedRoleLinkType, created)}
+			},
 			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
 				return f.do(t, "POST", "/orgs/"+slug+"/groups", fmt.Sprintf(`{"name":"g%d"}`, n), owner)
 			}},
-		{name: "createProject", status: http.StatusCreated, marks: []string{policyfeed.ProjectType},
+		{name: "createProject", status: http.StatusCreated,
+			marks: func(t *testing.T, _ *fixture, _ *http.Cookie, _ string, _ int, rec *httptest.ResponseRecorder) []policyfeed.Entity {
+				created := bodyGRN(t, rec)
+				return []policyfeed.Entity{mark(policyfeed.ProjectType, created), mark(policyfeed.ScopedRoleLinkType, created)}
+			},
 			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
 				return f.do(t, "POST", "/orgs/"+slug+"/projects", fmt.Sprintf(`{"name":"p%d"}`, n), owner)
 			}},
-		{name: "addGroupMember user", status: http.StatusNoContent, marks: []string{policyfeed.UserType},
-			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) { groupFor(t, f, owner, slug, n) },
+		{name: "addGroupMember user", status: http.StatusNoContent,
+			marks: one(policyfeed.UserType, func(slug string, n int) string { return member(slug, user.ServiceType, n).String() }),
+			seed:  func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) { groupFor(t, f, owner, slug, n) },
 			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
 				return f.do(t, "POST", "/orgs/"+slug+"/groups/"+groupIDFor(t, f, owner, slug, n)+"/members",
 					fmt.Sprintf(`{"memberGrn":%q}`, member(slug, user.ServiceType, n)), owner)
 			}},
-		{name: "addGroupMember agent", status: http.StatusNoContent, marks: []string{policyfeed.AgentType},
-			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) { groupFor(t, f, owner, slug, n) },
+		{name: "addGroupMember agent", status: http.StatusNoContent,
+			marks: one(policyfeed.AgentType, func(slug string, n int) string { return member(slug, agent.ServiceType, n).String() }),
+			seed:  func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) { groupFor(t, f, owner, slug, n) },
 			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
 				return f.do(t, "POST", "/orgs/"+slug+"/groups/"+groupIDFor(t, f, owner, slug, n)+"/members",
 					fmt.Sprintf(`{"memberGrn":%q}`, member(slug, agent.ServiceType, n)), owner)
 			}},
-		{name: "removeGroupMember", status: http.StatusNoContent, marks: []string{policyfeed.UserType},
+		{name: "removeGroupMember", status: http.StatusNoContent,
+			marks: one(policyfeed.UserType, func(slug string, n int) string { return member(slug, user.ServiceType, n).String() }),
 			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
 				id := groupFor(t, f, owner, slug, n)
 				rec := f.do(t, "POST", "/orgs/"+slug+"/groups/"+id+"/members",
@@ -96,7 +131,8 @@ func feedRoutes() []feedRoute {
 				return f.do(t, "DELETE", memberPath(slug, "groups", groupIDFor(t, f, owner, slug, n),
 					member(slug, user.ServiceType, n)), "", owner)
 			}},
-		{name: "addProjectMember user", status: http.StatusNoContent, marks: []string{policyfeed.UserType},
+		{name: "addProjectMember user", status: http.StatusNoContent,
+			marks: one(policyfeed.UserType, func(slug string, n int) string { return member(slug, user.ServiceType, n).String() }),
 			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
 				projectFor(t, f, owner, slug, n)
 			},
@@ -104,7 +140,8 @@ func feedRoutes() []feedRoute {
 				return f.do(t, "POST", "/orgs/"+slug+"/projects/"+projectIDFor(t, f, owner, slug, n)+"/members",
 					fmt.Sprintf(`{"memberGrn":%q}`, member(slug, user.ServiceType, n)), owner)
 			}},
-		{name: "removeProjectMember", status: http.StatusNoContent, marks: []string{policyfeed.AgentType},
+		{name: "removeProjectMember", status: http.StatusNoContent,
+			marks: one(policyfeed.AgentType, func(slug string, n int) string { return member(slug, agent.ServiceType, n).String() }),
 			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
 				id := projectFor(t, f, owner, slug, n)
 				rec := f.do(t, "POST", "/orgs/"+slug+"/projects/"+id+"/members",
@@ -115,24 +152,74 @@ func feedRoutes() []feedRoute {
 				return f.do(t, "DELETE", memberPath(slug, "projects", projectIDFor(t, f, owner, slug, n),
 					member(slug, agent.ServiceType, n)), "", owner)
 			}},
-		{name: "registerOperator", status: http.StatusCreated, marks: []string{policyfeed.OperatorType},
+		{name: "registerOperator", status: http.StatusCreated,
+			marks: one(policyfeed.OperatorType, func(slug string, n int) string {
+				return grn.New(slug, operator.ServiceType, fmt.Sprintf("op%d", n)).String()
+			}),
 			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
 				return f.do(t, "POST", "/orgs/"+slug+"/operators", fmt.Sprintf(`{"identifier":"op%d"}`, n), owner)
 			}},
 		{name: "registerOperator pair", status: http.StatusCreated,
-			marks: []string{policyfeed.OperatorType, policyfeed.OperatorType},
+			marks: func(_ *testing.T, _ *fixture, _ *http.Cookie, slug string, n int, _ *httptest.ResponseRecorder) []policyfeed.Entity {
+				return []policyfeed.Entity{
+					mark(policyfeed.OperatorType, grn.New(slug, operator.ServiceType, fmt.Sprintf("pair%d", n)).String()),
+					mark(policyfeed.OperatorType, grn.New(slug, operator.ServiceType, fmt.Sprintf("pair%d-control", n)).String()),
+				}
+			},
 			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
 				return f.do(t, "POST", "/orgs/"+slug+"/operators", fmt.Sprintf(
 					`{"identifier":"pair%d","controlService":{"identifier":"pair%d-control","endpoint":"https://control.example/"}}`,
 					n, n), owner)
 			}},
-		{name: "deleteOperator", status: http.StatusNoContent, marks: []string{policyfeed.OperatorType},
+		{name: "deleteOperator", status: http.StatusNoContent,
+			marks: one(policyfeed.OperatorType, func(slug string, n int) string {
+				return grn.New(slug, operator.ServiceType, fmt.Sprintf("gone%d", n)).String()
+			}),
 			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
 				rec := f.do(t, "POST", "/orgs/"+slug+"/operators", fmt.Sprintf(`{"identifier":"gone%d"}`, n), owner)
 				require.Equal(t, http.StatusCreated, rec.Code)
 			},
 			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
 				return f.do(t, "DELETE", "/orgs/"+slug+"/operators/"+fmt.Sprintf("gone%d", n), "", owner)
+			}},
+		{name: "deleteGroup", status: http.StatusNoContent,
+			marks: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int, _ *httptest.ResponseRecorder) []policyfeed.Entity {
+				// The group is gone, so its mark is read from the id the
+				// seed stored before the send.
+				id := deleted[fmt.Sprintf("group%d", n)]
+				return []policyfeed.Entity{mark(policyfeed.TeamType, id), mark(policyfeed.ScopedRoleLinkType, id)}
+			},
+			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
+				groupFor(t, f, owner, slug, n)
+				deleted[fmt.Sprintf("group%d", n)] = groupMark(t, f, owner, slug, n)
+			},
+			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
+				return f.do(t, "DELETE", "/orgs/"+slug+"/groups/"+groupIDFor(t, f, owner, slug, n), "", owner)
+			}},
+		{name: "deleteProject", status: http.StatusNoContent,
+			marks: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int, _ *httptest.ResponseRecorder) []policyfeed.Entity {
+				id := deleted[fmt.Sprintf("project%d", n)]
+				return []policyfeed.Entity{mark(policyfeed.ProjectType, id), mark(policyfeed.ScopedRoleLinkType, id)}
+			},
+			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
+				projectFor(t, f, owner, slug, n)
+				deleted[fmt.Sprintf("project%d", n)] = projectMark(t, f, owner, slug, n)
+			},
+			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
+				return f.do(t, "DELETE", "/orgs/"+slug+"/projects/"+projectIDFor(t, f, owner, slug, n), "", owner)
+			}},
+		{name: "deleteOrg", status: http.StatusNoContent,
+			marks: func(_ *testing.T, _ *fixture, _ *http.Cookie, _ string, n int, _ *httptest.ResponseRecorder) []policyfeed.Entity {
+				id := deleted[fmt.Sprintf("org%d", n)]
+				return []policyfeed.Entity{mark(policyfeed.OrgType, id), mark(policyfeed.OrgMembersType, id)}
+			},
+			seed: func(t *testing.T, f *fixture, owner *http.Cookie, _ string, n int) {
+				deleted[fmt.Sprintf("org%d", n)] = grn.Org(createOrg(t, f, owner, fmt.Sprintf("doomed%d", n))).String()
+			},
+			send: func(t *testing.T, f *fixture, owner *http.Cookie, _ string, n int) *httptest.ResponseRecorder {
+				parsed, err := grn.Parse(deleted[fmt.Sprintf("org%d", n)])
+				require.NoError(t, err)
+				return f.do(t, "DELETE", "/orgs/"+parsed.Identifier, "", owner)
 			}},
 	}
 }
@@ -177,7 +264,9 @@ func allPermitted(t *testing.T, f *fixture) (*http.Cookie, string) {
 		permission{g, org.ActionProjectCreate}, permission{g, org.ActionProjectRead}, permission{g, org.ActionProjectUpdate},
 		permission{g, org.ActionProjectMemberAdd}, permission{g, org.ActionProjectMemberRemove},
 		permission{g, org.ActionOperatorRegister}, permission{g, org.ActionOperatorDelete},
-		permission{g, org.ActionOperatorUpdate}, permission{g, org.ActionOrgUpdate})
+		permission{g, org.ActionOperatorUpdate}, permission{g, org.ActionOrgUpdate},
+		permission{g, org.ActionGroupDelete}, permission{g, org.ActionProjectDelete},
+		permission{g, org.ActionOrgDelete})
 	// Asking once keeps the stubbed evaluator's expectation met for a
 	// route that asks it nothing.
 	require.Equal(t, http.StatusOK, f.do(t, "GET", "/orgs/"+slug+"/groups", "", owner).Code)
@@ -208,7 +297,8 @@ func TestFedRoutes_AnswerAfterTheMarksTheirWriteRaised(t *testing.T) {
 			rec := route.send(t, f, owner, slug, 1)
 			require.Equal(t, route.status, rec.Code, "the change is in force")
 			require.NotEmpty(t, gate.marked, "the answer waited")
-			assert.ElementsMatch(t, route.marks, markTypes(gate.marked[len(gate.marked)-1]))
+			assert.ElementsMatch(t, route.marks(t, f, owner, slug, 1, rec), gate.marked[len(gate.marked)-1],
+				"the whole marks, kind and id, its own write raised")
 
 			gate.err = policyfeed.ErrNotApplied
 			rec = route.send(t, f, owner, slug, 2)
@@ -255,22 +345,28 @@ func TestAcceptInvitation_AndRegistration_NameTheUserMark(t *testing.T) {
 	rec := f.do(t, "POST", "/invitations/tok-join/accept", "", joiner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Len(t, gate.marked, 1)
-	assert.Equal(t, []policyfeed.Entity{{Type: policyfeed.UserType, ID: userGRNOf("joiner-sub").String()}},
-		gate.marked[0])
+	assert.Equal(t, []policyfeed.Entity{
+		{Type: policyfeed.RoleLinkType, ID: grn.Org("acme").String() + " " + userGRNOf("joiner-sub").String()},
+		{Type: policyfeed.UserType, ID: userGRNOf("joiner-sub").String()},
+	}, gate.marked[0])
 
 	rec = f.do(t, "POST", "/auth/password/register", registerBody("tok-reg", "alice", registeredPassword))
 	require.Equal(t, http.StatusCreated, rec.Code)
 	require.Len(t, gate.marked, 2)
-	assert.Equal(t, []policyfeed.Entity{{Type: policyfeed.UserType, ID: "grn:root/iam/user/local-alice"}},
-		gate.marked[1])
+	assert.Equal(t, []policyfeed.Entity{
+		{Type: policyfeed.RoleLinkType, ID: grn.Org("globex").String() + " grn:root/iam/user/local-alice"},
+		{Type: policyfeed.UserType, ID: "grn:root/iam/user/local-alice"},
+	}, gate.marked[1])
 }
 
 // TestOauthCallback_WaitsOnlyForTheSignInThatCreatedTheUser holds that a
-// first sign-in waits for the user's entity and names the user, and that
-// a later one, which stored nothing, does not ask the gate: a feed that
-// is behind does not hold an existing user out.
+// first sign-in waits for the user's entity and, at the bound, redirects
+// as after a success with the session it started (ADR-0165 item 4), and
+// that a later one, which stored nothing, does not ask the gate: a feed
+// that is behind does not hold an existing user out.
 //
-// The first sign-in is the control for the second.
+// The first sign-in, answered by a gate that is clear, is the control
+// for the redirect at the bound and for the later one.
 func TestOauthCallback_WaitsOnlyForTheSignInThatCreatedTheUser(t *testing.T) {
 	f := callbackFixture(t)
 	gate := &recordingGate{}
@@ -295,11 +391,9 @@ func TestOauthCallback_WaitsOnlyForTheSignInThatCreatedTheUser(t *testing.T) {
 	other.server.WithFeed(gate)
 	require.NoError(t, other.states.Issue(testCtx(t), "state-3", time.Minute, ""))
 	rec = other.callback(t, "state-3")
-	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
-	body := decodeBody[apigen.Error](t, rec)
-	require.NotNil(t, body.Resource)
-	assert.Equal(t, "grn:root/iam/user/456", *body.Resource, "it names the user")
-	assert.NotNil(t, sessionCookieIn(rec), "the person is signed in at the bound, as a registration is")
+	require.Len(t, gate.marked, 1, "it waited")
+	require.Equal(t, http.StatusFound, rec.Code, "at the bound the person goes on as after a success")
+	assert.NotNil(t, sessionCookieIn(rec), "signed in")
 	_, err := other.users.Get(testCtx(t), grn.New("root", user.ServiceType, "456"))
 	assert.NoError(t, err, "the user is stored whatever the wait said")
 }

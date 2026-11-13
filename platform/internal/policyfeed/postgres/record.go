@@ -12,7 +12,12 @@ import (
 
 // raisedMarks reads the marks the open transaction wrote: a mark's row
 // is written by the transaction whose id it carries as xmin, and a
-// write that raised a mark already there writes the row again.
+// write that raised a mark already there writes the row again. The
+// transaction id is the top-level one: a write made under a savepoint
+// or an EXCEPTION block of a trigger carries a subtransaction id
+// instead, and this read would miss it with no error, so a delete or a
+// trigger that gains one must be read again against this predicate
+// (ADR-0165 §Signs the decision was wrong).
 const raisedMarks = `
 SELECT entity_type, entity_id FROM policy_outbox
 WHERE xmin = pg_current_xact_id()::xid`

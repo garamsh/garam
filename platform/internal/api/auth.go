@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -146,11 +148,22 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 	}
 	// Only the sign-in that created the user waits: it stored the one
 	// mark no member's change will raise again, and a user whose entity
-	// was written earlier is not held by a feed that is behind. No
-	// organization is stored, so the answer names the user.
+	// was written earlier is not held by a feed that is behind. The
+	// session, the spent state and the cookies are stored by now and a
+	// browser would show a 503 on this redirect, so at the bound the
+	// person goes on as after a success, and the first request that
+	// needs the user in the service waits on the mark again (ADR-0165
+	// item 4).
 	if created {
-		if err := s.awaitMarks(r.Context(), u.GRN.String(),
-			policyfeed.Entity{Type: policyfeed.UserType, ID: u.GRN.String()}); err != nil {
+		err := s.awaitMarks(r.Context(), u.GRN.String(),
+			policyfeed.Entity{Type: policyfeed.UserType, ID: u.GRN.String()})
+		switch {
+		case err == nil:
+		case errors.Is(err, policyfeed.ErrNotApplied), errors.Is(err, policyfeed.ErrLinkSetAside):
+			slog.WarnContext(r.Context(), "sign-in redirected with the user's mark pending",
+				slog.String("user_id", u.GRN.String()),
+				slog.String("error", err.Error()))
+		default:
 			writeError(w, err)
 			return
 		}

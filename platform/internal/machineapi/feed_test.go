@@ -155,7 +155,21 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 				"Authorization": "Garam-Bootstrap secret"},
 			build: func(created bool) *machineapi.Server {
 				moved := enrollment
-				moved.ReplacesActivation = &replaced
+				moved.Replaced, moved.ReplacesActivation = true, &replaced
+				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+					&enrolling{result: moved, created: created}, nil, nil)
+			}},
+		// An agent never activated has no activation to name, so the
+		// answer's ReplacesActivation is nil as a new agent's is: the
+		// store's Replaced is what tells them apart.
+		{name: "enrollStandaloneAgent replacement of an agent never activated", waits: false,
+			status: http.StatusCreated,
+			path:   "/agent-enrollments", body: `{"requestId":"r-1"}`,
+			headers: map[string]string{"Garam-Contract-Version": agent.CredentialStandaloneContractVersion,
+				"Authorization": "Garam-Bootstrap secret"},
+			build: func(created bool) *machineapi.Server {
+				moved := enrollment
+				moved.Replaced = true
 				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 					&enrolling{result: moved, created: created}, nil, nil)
 			}},

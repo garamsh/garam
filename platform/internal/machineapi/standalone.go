@@ -62,10 +62,11 @@ func (s *Server) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	// A replacement moves an agent that exists and raises no mark, so
-	// only the enrollment that creates one waits for it. The wait is
-	// before the audit line because a 503 sends no credential, and the
-	// line records one issued.
-	if result.ReplacesActivation == nil {
+	// only the enrollment that creates one waits for it. The store
+	// says which this was: ReplacesActivation is nil for an agent never
+	// activated as well. The wait is before the audit line because a
+	// 503 sends no credential, and the line records one issued.
+	if !result.Replaced {
 		if err := s.awaitAgent(r.Context(), result.Agent); err != nil {
 			writeError(w, withinBudget(r, err))
 			return

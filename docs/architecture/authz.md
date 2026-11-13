@@ -539,14 +539,25 @@ ending an operator's delegation, granting and withdrawing a
 consent, registration, accepting an invitation, the first sign-in
 that created the user, and on the machine listener creating a managed
 agent, admitting an enrollment of a new agent and enrolling a new
-standalone agent. A repeat sign-in, a replacement of an agent that
-exists, a rename, and every other write raise no mark and answer at
-once, whatever older mark is set aside. A first sign-in that times
-out has set the session. The machine process holds a gate with no
-loop (`NewObservingGate`) over the same outbox: it answers when the
-api's loop has delivered, at once with the feed off, and `503` at the
-bound with the feed on and no loop. With the feed off or not
-configured no route waits.
+standalone agent. A request that raised several marks names them in one
+list, role links and scoped links included, and waits under one bound.
+A repeat sign-in, a replacement of an agent that exists (the store
+says which an enrollment was by `EnrollmentResult.Replaced`), a rename,
+and every other write raise no mark and answer at once, whatever older
+mark is set aside. A first sign-in that created the user waits up to the
+bound and then redirects as on success, logging the mark still
+pending: its session is set and a redirect cannot carry a 503, and the
+first request that needs the user in the service waits on the mark
+again. Registration and accepting an invitation keep the 503. The
+machine process holds a gate with no loop (`NewObservingGate`) over the
+same outbox, installed whether or not the feed is on: it answers when
+the api's loop has delivered, at once with the feed off, and with the
+feed on and no deliverer every create answers `503` at the bound for
+good. The api's loop polls every second and backs off up to 30
+seconds, so after a recovery a creation can still answer `503` for up
+to that long. With the feed off no route waits, and an api with no
+policy address has no gate; the machine listener's gate is always
+there.
 
 `garam policy-feed start` marks every membership, group and project
 with the rest of the backfill, and so do migrations 000075 and 000079

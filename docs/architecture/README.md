@@ -1486,7 +1486,8 @@ ADRs:
   marks, read by their kind's state function under one bound and
   answering at once for none, with ADR-0159's bound and ADR-0160's
   two answers and no new reason; a delete that cascades records the
-  marks of its own transaction; a first sign-in waits and a repeat one
-  does not, nor does a replacement of an agent; the machine listener
+  marks of its own transaction; a first sign-in waits and redirects at
+  the bound, and a repeat one does not wait, nor does a replacement of
+  an agent; the machine listener
   waits through a gate that observes the outbox with no loop, with no
   new setting; accepted, built (#1909); extends 0159 and 0162

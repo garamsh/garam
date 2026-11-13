@@ -4732,6 +4732,11 @@ type AdmitAgentEnrollmentResponse409Headers struct {
 	GaramContractVersion *string
 }
 
+// AdmitAgentEnrollmentResponse503Headers the declared response headers of an HTTP 503 response for AdmitAgentEnrollment
+type AdmitAgentEnrollmentResponse503Headers struct {
+	GaramContractVersion *string
+}
+
 type AdmitAgentEnrollmentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4749,6 +4754,8 @@ type AdmitAgentEnrollmentResponse struct {
 	JSON404 *AgentEnrollmentContractError
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *AgentEnrollmentContractError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *AgentEnrollmentContractError
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *AdmitAgentEnrollmentResponse200Headers
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -4763,6 +4770,8 @@ type AdmitAgentEnrollmentResponse struct {
 	Headers404 *AdmitAgentEnrollmentResponse404Headers
 	// Headers409 the parsed response headers for an HTTP 409 response
 	Headers409 *AdmitAgentEnrollmentResponse409Headers
+	// Headers503 the parsed response headers for an HTTP 503 response
+	Headers503 *AdmitAgentEnrollmentResponse503Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -4798,6 +4807,11 @@ func (r AdmitAgentEnrollmentResponse) GetJSON404() *AgentEnrollmentContractError
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r AdmitAgentEnrollmentResponse) GetJSON409() *AgentEnrollmentContractError {
 	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r AdmitAgentEnrollmentResponse) GetJSON503() *AgentEnrollmentContractError {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -4864,6 +4878,11 @@ type EnrollStandaloneAgentResponse422Headers struct {
 	GaramContractVersion *string
 }
 
+// EnrollStandaloneAgentResponse503Headers the declared response headers of an HTTP 503 response for EnrollStandaloneAgent
+type EnrollStandaloneAgentResponse503Headers struct {
+	GaramContractVersion *string
+}
+
 type EnrollStandaloneAgentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4881,6 +4900,8 @@ type EnrollStandaloneAgentResponse struct {
 	JSON409 *StandaloneContractError
 	// JSON422 the response for an HTTP 422 `application/json` response
 	JSON422 *StandaloneContractError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *StandaloneContractError
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *EnrollStandaloneAgentResponse200Headers
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -4895,6 +4916,8 @@ type EnrollStandaloneAgentResponse struct {
 	Headers409 *EnrollStandaloneAgentResponse409Headers
 	// Headers422 the parsed response headers for an HTTP 422 response
 	Headers422 *EnrollStandaloneAgentResponse422Headers
+	// Headers503 the parsed response headers for an HTTP 503 response
+	Headers503 *EnrollStandaloneAgentResponse503Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -4930,6 +4953,11 @@ func (r EnrollStandaloneAgentResponse) GetJSON409() *StandaloneContractError {
 // GetJSON422 returns the response for an HTTP 422 `application/json` response
 func (r EnrollStandaloneAgentResponse) GetJSON422() *StandaloneContractError {
 	return r.JSON422
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r EnrollStandaloneAgentResponse) GetJSON503() *StandaloneContractError {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -6695,6 +6723,11 @@ type CreateManagedAgentResponse409Headers struct {
 	GaramContractVersion *string
 }
 
+// CreateManagedAgentResponse503Headers the declared response headers of an HTTP 503 response for CreateManagedAgent
+type CreateManagedAgentResponse503Headers struct {
+	GaramContractVersion *string
+}
+
 type CreateManagedAgentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6712,6 +6745,8 @@ type CreateManagedAgentResponse struct {
 	JSON404 *EnrollmentContractError
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *EnrollmentContractError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *EnrollmentContractError
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *CreateManagedAgentResponse200Headers
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -6726,6 +6761,8 @@ type CreateManagedAgentResponse struct {
 	Headers404 *CreateManagedAgentResponse404Headers
 	// Headers409 the parsed response headers for an HTTP 409 response
 	Headers409 *CreateManagedAgentResponse409Headers
+	// Headers503 the parsed response headers for an HTTP 503 response
+	Headers503 *CreateManagedAgentResponse503Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -6761,6 +6798,11 @@ func (r CreateManagedAgentResponse) GetJSON404() *EnrollmentContractError {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r CreateManagedAgentResponse) GetJSON409() *EnrollmentContractError {
 	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateManagedAgentResponse) GetJSON503() *EnrollmentContractError {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -8002,6 +8044,13 @@ func ParseAdmitAgentEnrollmentResponse(rsp *http.Response) (*AdmitAgentEnrollmen
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest AgentEnrollmentContractError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	switch {
@@ -8075,6 +8124,16 @@ func ParseAdmitAgentEnrollmentResponse(rsp *http.Response) (*AdmitAgentEnrollmen
 			headers.GaramContractVersion = &value
 		}
 		response.Headers409 = &headers
+	case rsp.StatusCode == 503:
+		var headers AdmitAgentEnrollmentResponse503Headers
+		if values := rsp.Header.Values("Garam-Contract-Version"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.GaramContractVersion = &value
+		}
+		response.Headers503 = &headers
 	}
 
 	return response, nil
@@ -8142,6 +8201,13 @@ func ParseEnrollStandaloneAgentResponse(rsp *http.Response) (*EnrollStandaloneAg
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest StandaloneContractError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -8216,6 +8282,16 @@ func ParseEnrollStandaloneAgentResponse(rsp *http.Response) (*EnrollStandaloneAg
 			headers.GaramContractVersion = &value
 		}
 		response.Headers422 = &headers
+	case rsp.StatusCode == 503:
+		var headers EnrollStandaloneAgentResponse503Headers
+		if values := rsp.Header.Values("Garam-Contract-Version"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.GaramContractVersion = &value
+		}
+		response.Headers503 = &headers
 	}
 
 	return response, nil
@@ -9917,6 +9993,13 @@ func ParseCreateManagedAgentResponse(rsp *http.Response) (*CreateManagedAgentRes
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest EnrollmentContractError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	switch {
@@ -9990,6 +10073,16 @@ func ParseCreateManagedAgentResponse(rsp *http.Response) (*CreateManagedAgentRes
 			headers.GaramContractVersion = &value
 		}
 		response.Headers409 = &headers
+	case rsp.StatusCode == 503:
+		var headers CreateManagedAgentResponse503Headers
+		if values := rsp.Header.Values("Garam-Contract-Version"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.GaramContractVersion = &value
+		}
+		response.Headers503 = &headers
 	}
 
 	return response, nil

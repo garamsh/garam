@@ -47,12 +47,9 @@ func (s *Server) CreateProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		writeError(w, err)
 		return
 	}
-	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), p.GRN.String()); err != nil {
-		writeError(w, err)
-		return
-	}
 	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(),
-		policyfeed.Entity{Type: policyfeed.ProjectType, ID: p.GRN.String()}); err != nil {
+		policyfeed.Entity{Type: policyfeed.ProjectType, ID: p.GRN.String()},
+		scopedLinkMark(p.GRN.String())); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -175,10 +172,6 @@ func (s *Server) DeleteProject(w http.ResponseWriter, r *http.Request, orgSlug a
 	}
 	ctx, raised := s.recording(r.Context())
 	if err := s.orgs.DeleteProject(ctx, projectGRN(orgSlug, projectSlug)); err != nil {
-		writeError(w, err)
-		return
-	}
-	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), projectGRN(orgSlug, projectSlug).String()); err != nil {
 		writeError(w, err)
 		return
 	}

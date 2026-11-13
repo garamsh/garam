@@ -46,6 +46,8 @@ What the outbox raises is read from the triggers of migration 000079
   update that did not write `roles` at once.
 - The machine listener is a separate process. It has no delivery loop,
   no policy address and no issuer, and its compose service holds none.
+  It holds a gate over the outbox whether or not the feed is on
+  (`platform/internal/cli/machine.go`).
 
 ## Decision
 
@@ -65,38 +67,66 @@ What the outbox raises is read from the triggers of migration 000079
 2. **A request that raised several marks waits on all of them, under
    one bound.** The wait is one deadline over the list, not one
    per mark, so a request is answered within the bound however many
-   it raised.
+   it raised. The role link and scoped link marks are named in that
+   same list, by `roleLinkMark` and `scopedLinkMark`, and not by a wait
+   of their own before it: CreateOrg, DeleteOrg, CreateGroup,
+   DeleteGroup, CreateProject, DeleteProject, RegisterPassword and
+   AcceptInvitation each wait once. DeleteOrg's links are among the
+   marks its cascade recorded. A write of a group's or a project's
+   roles raises no other mark and keeps its one scoped wait. A
+   registration that fails after its user is stored
+   (`abandonAccount`) deletes the user and raises marks with no wait:
+   it answers an error that stores nothing the person acts on.
 3. **A cascading delete records what it raised.** `DeleteOrg`,
    `DeleteGroup` and `DeleteProject` collect the marks of their own
    transaction when the request's context carries a collection
    (`policyfeed.WithRaised`), by reading the outbox rows whose `xmin` is
    the transaction's id before commit. A caller with no collection
    reads nothing.
-4. **Signing in waits only when it created the user.** The OIDC callback
-   waits on the new user's mark; a repeat sign-in raised none and
-   answers at once, so a user's own pending mark from a stuck feed
-   does not lock the person out. A first sign-in that times out has
-   set the session cookie, and the answer says so. Registration and
-   accepting an invitation wait on the user's mark, after the wait on
-   the member's link that ADR-0159 gave them.
-5. **A replacement does not wait.** The machine routes that replace an
-   agent that exists (`admitAgentEnrollment` with `replaces`,
-   `enrollStandaloneAgent` replacing an activation) raise no mark and
-   answer at once; a creation, including a replayed one, waits.
+4. **Signing in waits only when it created the user, and at the bound
+   redirects.** The OIDC callback waits on the new user's mark up to
+   the bound; a repeat sign-in raised none and answers at once, so a
+   user's own pending mark from a stuck feed does not lock the person
+   out. The session, the spent state and the cookies are stored before
+   the wait, and the answer is a redirect a browser follows, which
+   cannot carry a 503 it would show. So at the bound the callback
+   redirects as on success and logs that the user's mark was still
+   pending, and the first request that needs the user in the policy
+   service waits on the mark again. Registration and accepting an
+   invitation keep the 503, naming the organization, and wait on the
+   member's link and the user's mark in one list.
+5. **A replacement does not wait, and the store says which it was.**
+   The machine routes that replace an agent that exists
+   (`admitAgentEnrollment` with `replaces`, `enrollStandaloneAgent`
+   with a replacement approval) raise no mark and answer at once; a
+   creation, including a replayed one, waits. The standalone route
+   decides by `EnrollmentResult.Replaced`, which the store sets from
+   the approval it spent (an approval that names an expected assignee
+   replaces an agent), and not by `ReplacesActivation`, which is also
+   empty where the agent replaced was never activated.
 6. **The machine listener waits by observing.** The machine process
    holds a gate over the outbox with no loop to wake
-   (`NewObservingGate`), and waits as the API does. With the api's loop
-   running it answers when the pass has delivered; with the feed off
-   there are no marks and it answers at once; with the feed on and no
-   loop it answers `503` at the bound, with no reason, as every other
-   503 of that surface does. It adds no setting and changes no
-   deployment. Two alternatives fail: answering without waiting leaves
+   (`NewObservingGate`), always installed whether or not the feed is on,
+   and waits as the API does. With the api's loop running it answers
+   when the pass has delivered; with the feed off there are no marks
+   and it answers at once; with the feed on in the database and no
+   deliverer anywhere, every create answers `503` after the bound for
+   good, with no reason, as every other 503 of that surface does
+   (`machine.yaml` lists it on the three routes). The api's loop paces
+   the wait: it polls every second and backs off up to 30 seconds after
+   a failed pass (`platform/internal/cli/policy_delivery.go`), so after
+   a recovery a creation can still answer `503` for up to that long.
+   It adds no setting and changes no deployment. Two alternatives fail: answering without waiting leaves
    an agent that is denied its next call, and delivering from the
    machine process needs the policy address, the CA and the issuer on
    it, which is a `deploy/` change this decision does not make.
-7. **With the feed off or not configured, routes answer as before.**
-   The triggers raise nothing, `awaitMarks` has no gate, and the
-   handlers do not read the outbox.
+7. **With the feed off, routes answer as before; with it not
+   configured, the api's do.** With the feed off the triggers raise
+   nothing and every wait has no marks. An api with no policy address
+   has no gate, so `awaitMarks` returns at once and its handlers do
+   not read the outbox. The machine listener is not in that case: its
+   gate is always installed (item 6), so a feed on and nothing
+   delivering holds its creations to the bound.
 
 ## Consequences
 
@@ -110,7 +140,17 @@ What the outbox raises is read from the triggers of migration 000079
 - A request marking many entities (a deleted organization) waits under
   one bound, and a pass reads at most 500 marks, so one that raised
   more answers `change_not_applied` at the bound, as it names a stored
-  change.
+  change. A wait reads each mark still pending once per 50ms tick and
+  stops reading one it has seen absent; a batched read over the list
+  was not added, since it needs a store method for each of the three
+  kinds of read.
+- The wait is on a mark's presence, not its generation. A second
+  request that raises a mark the first is waiting on holds the first
+  to the bound while the loop has not delivered, and releases both once
+  it has; a request is never answered early by that.
+- A first sign-in at the bound answers a redirect, so a person can land
+  in the console before the policy service holds their user, and their
+  first request that raises a mark of it waits again.
 - The machine listener's creating routes now fail with `503` while the
   api's loop is down and the feed is on, where they answered 201.
 
@@ -125,6 +165,11 @@ What the outbox raises is read from the triggers of migration 000079
   the bound.
 - A person who cannot sign in while the feed is stuck: a repeat
   sign-in is waiting.
+- A cascading delete answering with fewer marks recorded than the
+  outbox holds for it, and no error: the recorder reads the rows whose
+  `xmin` is the top-level transaction id, and a later `EXCEPTION` block
+  in `policy_outbox_track`, or a savepoint in the delete, gives a mark
+  a subtransaction id that the read misses.
 - The machine listener's creating routes timing out in a deployment
   whose api runs a loop: the observing gate and the loop are reading
   different outboxes.

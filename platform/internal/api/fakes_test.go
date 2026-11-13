@@ -19,6 +19,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 	"github.com/garamsh/garam/platform/internal/watch"
 )
@@ -348,13 +349,36 @@ func (s *fakeOrgStore) UpdateOrg(_ context.Context, g grn.GRN, p org.Patch) (*or
 	return updated, nil
 }
 
-func (s *fakeOrgStore) DeleteOrg(_ context.Context, g grn.GRN) error {
+// raise fills the collection a request's context carries with the marks
+// a delete of the real store raises in its transaction, as the store
+// does (ADR-0165 item 3): a request that does not wait for them is
+// answered before the policy service has applied what it removed.
+func raise(ctx context.Context, kind string, owner grn.GRN) {
+	r := policyfeed.RaisedIn(ctx)
+	if r == nil {
+		return
+	}
+	switch kind {
+	case "org":
+		r.Add(policyfeed.Entity{Type: policyfeed.OrgType, ID: owner.String()},
+			policyfeed.Entity{Type: policyfeed.OrgMembersType, ID: owner.String()})
+	case "group":
+		r.Add(policyfeed.Entity{Type: policyfeed.TeamType, ID: owner.String()},
+			policyfeed.Entity{Type: policyfeed.ScopedRoleLinkType, ID: owner.String()})
+	case "project":
+		r.Add(policyfeed.Entity{Type: policyfeed.ProjectType, ID: owner.String()},
+			policyfeed.Entity{Type: policyfeed.ScopedRoleLinkType, ID: owner.String()})
+	}
+}
+
+func (s *fakeOrgStore) DeleteOrg(ctx context.Context, g grn.GRN) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.orgs[g.String()]; !ok {
 		return org.ErrOrgNotFound
 	}
 	delete(s.orgs, g.String())
+	raise(ctx, "org", g)
 	return nil
 }
 
@@ -422,7 +446,7 @@ func (s *fakeOrgStore) UpdateGroup(_ context.Context, g grn.GRN, p org.GroupPatc
 	return updated, nil
 }
 
-func (s *fakeOrgStore) DeleteGroup(_ context.Context, g grn.GRN) error {
+func (s *fakeOrgStore) DeleteGroup(ctx context.Context, g grn.GRN) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.groups[g.String()]; !ok {
@@ -430,6 +454,7 @@ func (s *fakeOrgStore) DeleteGroup(_ context.Context, g grn.GRN) error {
 	}
 	delete(s.groups, g.String())
 	delete(s.groupMembers, g.String())
+	raise(ctx, "group", g)
 	return nil
 }
 
@@ -547,7 +572,7 @@ func (s *fakeOrgStore) UpdateProject(_ context.Context, g grn.GRN, patch org.Pro
 	return updated, nil
 }
 
-func (s *fakeOrgStore) DeleteProject(_ context.Context, g grn.GRN) error {
+func (s *fakeOrgStore) DeleteProject(ctx context.Context, g grn.GRN) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.projects[g.String()]; !ok {
@@ -555,6 +580,7 @@ func (s *fakeOrgStore) DeleteProject(_ context.Context, g grn.GRN) error {
 	}
 	delete(s.projects, g.String())
 	delete(s.projectMembers, g.String())
+	raise(ctx, "project", g)
 	return nil
 }
 

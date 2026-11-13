@@ -47,12 +47,9 @@ func (s *Server) CreateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), gr.GRN.String()); err != nil {
-		writeError(w, err)
-		return
-	}
 	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(),
-		policyfeed.Entity{Type: policyfeed.TeamType, ID: gr.GRN.String()}); err != nil {
+		policyfeed.Entity{Type: policyfeed.TeamType, ID: gr.GRN.String()},
+		scopedLinkMark(gr.GRN.String())); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -179,10 +176,6 @@ func (s *Server) DeleteGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 	}
 	ctx, raised := s.recording(r.Context())
 	if err := s.orgs.DeleteGroup(ctx, groupGRN(orgSlug, groupSlug)); err != nil {
-		writeError(w, err)
-		return
-	}
-	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), groupGRN(orgSlug, groupSlug).String()); err != nil {
 		writeError(w, err)
 		return
 	}

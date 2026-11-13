@@ -93,3 +93,38 @@ func TestObservingGate_ReadsTheOutboxWithoutALoop(t *testing.T) {
 	require.NoError(t, err, "it reads the outbox until the mark is gone")
 	assert.EqualValues(t, 2, store.reads.Load())
 }
+
+// entityStore holds each entity of pending for as many reads as it
+// maps it to, and counts each entity's reads.
+type entityStore struct {
+	scriptedStore
+	pending map[string]int
+	reads   map[string]int
+}
+
+func (s *entityStore) EntityPending(_ context.Context, e policyfeed.Entity) (bool, error) {
+	s.reads[e.ID]++
+	if s.pending[e.ID] > 0 {
+		s.pending[e.ID]--
+		return true, nil
+	}
+	return false, nil
+}
+
+// TestGate_AwaitMarksReadsOnlyTheMarksStillPending holds that a mark
+// seen absent is not read again by the same wait: the one still held is
+// read each tick and the settled one once.
+//
+// The held mark's three reads are the control: the gate did keep
+// reading until it was delivered.
+func TestGate_AwaitMarksReadsOnlyTheMarksStillPending(t *testing.T) {
+	store := &entityStore{pending: map[string]int{"held": 2}, reads: map[string]int{}}
+
+	err := policyfeed.NewGate(store, &wakeCounter{}, time.Second).
+		AwaitMarks(context.Background(), []policyfeed.Entity{
+			{Type: policyfeed.AgentType, ID: "settled"}, {Type: policyfeed.AgentType, ID: "held"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, store.reads["held"], "read until delivered")
+	assert.Equal(t, 1, store.reads["settled"], "read once")
+}

@@ -181,12 +181,10 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 		writeError(w, err)
 		return
 	}
-	if err := s.awaitLinks(r.Context(), m.Organization.String(), u.GRN.String()); err != nil {
-		writeError(w, err)
-		return
-	}
-	// The membership marks the user's entity, whose parent it now is.
+	// The membership marks its role link and the user's entity, whose
+	// parent it now is.
 	if err := s.awaitMarks(r.Context(), m.Organization.String(),
+		roleLinkMark(m.Organization.String(), u.GRN.String()),
 		policyfeed.Entity{Type: policyfeed.UserType, ID: u.GRN.String()}); err != nil {
 		writeError(w, err)
 		return

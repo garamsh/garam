@@ -71,10 +71,13 @@ func run(args []string) error {
 	}
 	modelSecret, modelKey, _ := strings.Cut(modelRef, "/")
 	creds := agent.Credentials{"agent-token": []byte("demo-token"), "control-token": []byte("demo-token")}
+	// The model Secret stands for the one the deployment labels as the
+	// agent's organization's model key.
+	models := []api.Secret{{Metadata: api.ObjectMeta{Name: modelSecret, Labels: agent.ModelKeyLabels(g)}}}
 	secret, microvm, err := agent.Render(opts, agent.Desired{
 		GRN: g, Epoch: epoch, Revision: "1", MemoryStorage: "1Gi", WorkspaceStorage: "1Gi",
 		Configuration: conf,
-	}, creds)
+	}, creds, models)
 	if err != nil {
 		return err
 	}

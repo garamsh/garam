@@ -59,7 +59,10 @@ func (s *service) secretFor(d Desired, c Credentials, placement []byte) (*api.Se
 // what a reconcile of a new agent writes and nothing more, so a run of
 // the guest image can start from the rendered object rather than from
 // a copy of it.
-func Render(o Options, d Desired, c Credentials) (*api.Secret, *api.MicroVM, error) {
+//
+// models are the Secrets a model key reference may name; a reference to
+// another is refused as it is in a reconcile.
+func Render(o Options, d Desired, c Credentials, models []api.Secret) (*api.Secret, *api.MicroVM, error) {
 	s := &service{opts: o}
 	token, err := mintPlacementToken()
 	if err != nil {
@@ -69,7 +72,7 @@ func Render(o Options, d Desired, c Credentials) (*api.Secret, *api.MicroVM, err
 	if err != nil {
 		return nil, nil, err
 	}
-	m, err := s.microVMFor(d, secret)
+	m, err := s.microVMFor(d, secret, modelKeysFor(d.GRN, models))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -94,8 +97,8 @@ func volumeFor(name string, d Desired, size api.Quantity) *api.Volume {
 // from the Secret and none is an inline value: a Node may read every
 // MicroVM, so the spec is not where a secret lives. What is inline is
 // the runtime's configuration and ego, which hold none (ADR 0154).
-func (s *service) microVMFor(d Desired, secret *api.Secret) (*api.MicroVM, error) {
-	settings, err := runtimeFor(d.Configuration)
+func (s *service) microVMFor(d Desired, secret *api.Secret, models modelKeys) (*api.MicroVM, error) {
+	settings, err := runtimeFor(d.Configuration, models)
 	if err != nil {
 		return nil, errorx.Wrap(err, "render the configuration")
 	}

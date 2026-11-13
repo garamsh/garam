@@ -70,10 +70,13 @@ func assemble(cfg config.Config, log *slog.Logger) (*operator, error) {
 		return nil, err
 	}
 	cluster := api.NewClient(cfg.GaonURL, gaonHTTP, api.WithLabelSelector(agent.Selector()))
+	// A second client, for the model-key Secrets alone: the first one's
+	// selector does not reach them (ADR-0154).
+	modelKeys := api.NewClient(cfg.GaonURL, gaonHTTP, api.WithLabelSelector(agent.ModelKeySelector()))
 	service := agent.NewService(feed, garam, feed, cluster, agent.Options{
 		Image: cfg.AgentImage, GaramRoot: garamRoot, ControlRoot: controlRoot,
 		MachineURL: cfg.GuestMachineURL, ControlURL: cfg.GuestControlURL,
-		Logger: log,
+		ModelKeys: modelKeys, Logger: log,
 	})
 	return &operator{service: service, settle: feed.Settle, probe: &health.Probe{}, log: log}, nil
 }

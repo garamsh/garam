@@ -101,6 +101,32 @@ the runtime alone. A name matching `agent-` and 16 hex digits is
 refused, as it is one of the operator's own Secrets. A configuration the
 operator cannot render writes nothing for the agent and fails the pass.
 
+**A reference is honoured only for a model-key Secret of the agent's
+organization.** gaon has no namespaces and a Node hands a MicroVM any
+Secret its spec names, so an organization could otherwise name another's
+Secret, garam's database URL or its key-encryption key, and the value
+would land in its agent's environment. The Secret must exist when the
+MicroVM is rendered and carry both `garam.sh/role=model-key` and
+`garam.sh/organization=<digest>`, where the digest is the label the
+operator puts on that agent's own objects: the first 32 hex digits of
+the SHA-256 of the organization's GRN string (`grn:org:<org>`), since a
+label value holds 63 characters. Any other reference, absent,
+unlabelled, another organization's or the operator's own, starts nothing
+for that agent and fails its pass with an error naming the reference and
+no value. The operator finds the Secrets by label with a second gaon
+client whose selector is the role alone, because a client's selector is
+fixed and the organization differs by agent; it filters by organization
+in code, once per pass and only where an agent about to be created names
+a model. Where `Options.ModelKeys` is nil no reference is honoured.
+
+The list returns each Secret's `data` to the operator. It drops the data
+on arrival and neither uses nor logs it; the listing is a read of the
+key's value that the operator's gaon role is therefore trusted not to
+misuse. The role needs read on Secrets labelled
+`garam.sh/role=model-key` and on no other Secret beyond its own objects.
+The deployment creates each organization's model-key Secret with both
+labels; the operator creates none.
+
 **`MODEL_KEY_ENV`, `MODEL_KEY_SECRET` and `MODEL_KEY_SECRET_KEY` are
 removed.**
 
@@ -119,7 +145,13 @@ are made in `agent/render.go` and `agent/service.go`.
   MicroVM's start, so a Secret created later is not seen by a MicroVM
   that already started.
 - An agent whose `apiKeyRef` names another Secret is run with that one,
-  and the setting that gave every agent one key is gone.
+  and the setting that gave every agent one key is gone. A reference to
+  a Secret the deployment has not labelled for the organization starts
+  nothing for that agent, and the pass fails until it is labelled.
+- The operator's gaon role reads model-key Secrets, and so reads their
+  values. A Secret created or labelled after a MicroVM started is not
+  seen by it, and that the named key exists inside the Secret is not
+  checked.
 - A change of an agent's configuration does not reach its MicroVM: the
   spec is immutable and the `valueFrom` is not refreshed. It takes a
   MicroVM of another revision, which is not built.
@@ -132,12 +164,16 @@ are made in `agent/render.go` and `agent/service.go`.
   the fake does and a real gaon was not run for.
 - A Secret that exists without a placement token fails its agent's pass
   for good, with the loop's backoff. The operator never mints over a
-  Secret.
+  Secret, so a person deletes that Secret and the next pass mints it
+  again; nothing else recovers it.
 - The token restart, the release image and the `NetworkPolicy` stay
   unbuilt, and so does a cluster run.
 
 ## Signs the decision was wrong
 
+- A listing of model-key Secrets is refused to the operator's gaon
+  identity, or gaon offers a list that leaves out `data`, which would
+  make the second client's reach smaller than this ADR states.
 - gaon does not return a Secret's `data` to the operator, so the digest
   cannot be made from what the operator reads.
 - The control service refuses a MicroVM's uid as a `podUid` or the

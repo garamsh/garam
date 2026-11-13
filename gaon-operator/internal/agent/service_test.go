@@ -142,7 +142,29 @@ func (p *stubPlacements) seen() []placementCall {
 	return append([]placementCall(nil), p.calls...)
 }
 
+// stubKeys lists the model-key Secrets the deployment created. Each
+// carries data, as gaon returns it, so a test can see it go nowhere.
+type stubKeys struct {
+	items []api.Secret
+	value string
+}
+
+func (k *stubKeys) ListSecrets(context.Context) (*api.SecretList, error) {
+	items := make([]api.Secret, len(k.items))
+	copy(items, k.items)
+	return &api.SecretList{Items: items}, nil
+}
+
+// add creates a Secret of the name and labels, holding a generated key.
+func (k *stubKeys) add(name string, labels map[string]string) {
+	k.items = append(k.items, api.Secret{
+		Metadata: api.ObjectMeta{Name: name, Labels: labels},
+		Data:     map[string][]byte{"api-key": []byte(k.value)},
+	})
+}
+
 type harness struct {
+	keys       *stubKeys
 	feed       *stubFeed
 	garam      *stubGaram
 	placements *stubPlacements
@@ -156,6 +178,7 @@ func newHarness(t *testing.T) *harness {
 	t.Helper()
 	gaon, client := gaonfake.New(t, agent.Selector())
 	h := &harness{
+		keys: &stubKeys{value: "key-" + randomHex(8)},
 		feed: &stubFeed{}, garam: &stubGaram{}, placements: &stubPlacements{}, gaon: gaon, cluster: client,
 		opts: agent.Options{
 			Image:       "registry.example/garam/agent:1",
@@ -166,12 +189,26 @@ func newHarness(t *testing.T) *harness {
 			Logger:      slog.New(slog.DiscardHandler),
 		},
 	}
+	h.opts.ModelKeys = h.keys
 	h.restart()
 	return h
 }
 
 func (h *harness) restart() {
 	h.svc = agent.NewService(h.feed, h.garam, h.placements, h.cluster, h.opts)
+}
+
+// modelKey creates the model-key Secret of d's organization.
+func (h *harness) modelKey(d agent.Desired, names ...string) {
+	for _, n := range names {
+		h.keys.add(n, agent.ModelKeyLabels(d.GRN))
+	}
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func desired(id string) agent.Desired {
@@ -561,6 +598,7 @@ func fileAt(t *testing.T, m api.MicroVM, path string) api.MicroVMFile {
 func TestReconcile_TheConfigurationIsFilesAndTheKeysAreEnvSourcedFromSecrets(t *testing.T) {
 	h := newHarness(t)
 	d := configured("a1", "model-credentials/api-key", "embedding-credentials/emb-key")
+	h.modelKey(d, "model-credentials", "embedding-credentials")
 	h.feed.set(d)
 
 	require.NoError(t, h.svc.Reconcile(t.Context()))
@@ -614,6 +652,7 @@ func TestReconcile_TwoAgentsWithTwoReferencesRenderApart(t *testing.T) {
 	h := newHarness(t)
 	a := configured("a1", "creds-one/key-one", "")
 	b := configured("a2", "creds-two/key-two", "")
+	h.modelKey(a, "creds-one", "creds-two")
 	h.feed.set(a, b)
 
 	require.NoError(t, h.svc.Reconcile(t.Context()))
@@ -891,13 +930,109 @@ func TestReconcile_ACredentialNamedLikeThePlacementTokenIsRefused(t *testing.T) 
 func TestRender_IsTheMicroVMAReconcileWrites(t *testing.T) {
 	h := newHarness(t)
 	d := configured("a1", "model-credentials/api-key", "")
+	h.modelKey(d, "model-credentials")
 	h.feed.set(d)
 	require.NoError(t, h.svc.Reconcile(t.Context()))
 	written, _ := h.gaon.MicroVM(t, objectName(t, d))
 
-	_, rendered, err := agent.Render(h.opts, d, h.garam.minted[0])
+	_, rendered, err := agent.Render(h.opts, d, h.garam.minted[0], h.keys.items)
 
 	require.NoError(t, err)
 	assert.Equal(t, written.Spec, rendered.Spec,
 		"a run that starts from Render starts from what the operator writes")
+}
+
+// A model key reference is honoured for a Secret that carries the model
+// key role and the agent's organization, and for no other: gaon has no
+// namespaces, so any other would put a stranger's value in this agent's
+// environment.
+func TestReconcile_AKeyReferenceNamesOnlyALabelledSecretOfTheAgentsOrganization(t *testing.T) {
+	other := grn.New("org2", "agent", "x")
+	for name, setup := range map[string]func(h *harness){
+		"missing": func(h *harness) {},
+		"unlabelled": func(h *harness) {
+			h.keys.add("model-credentials", nil)
+		},
+		"labelled with the role alone": func(h *harness) {
+			h.keys.add("model-credentials", map[string]string{"garam.sh/role": "model-key"})
+		},
+		"labelled for another organization": func(h *harness) {
+			h.modelKey(agent.Desired{GRN: other}, "model-credentials")
+		},
+		"labelled for the organization with another role": func(h *harness) {
+			l := agent.ModelKeyLabels(desired("a1").GRN)
+			l["garam.sh/role"] = "agent"
+			h.keys.add("model-credentials", l)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			setup(h)
+			d := configured("a1", "model-credentials/api-key", "")
+			h.feed.set(d, desired("a2"))
+
+			err := h.svc.Reconcile(t.Context())
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "model-credentials/api-key", "the error names the reference")
+			assert.NotContains(t, err.Error(), h.keys.value)
+			_, ok := h.gaon.MicroVM(t, objectName(t, d))
+			assert.False(t, ok, "nothing starts for the agent")
+			_, ok = h.gaon.Secret(t, objectName(t, d))
+			assert.False(t, ok, "no Secret is minted for it")
+			_, ok = h.gaon.MicroVM(t, objectName(t, desired("a2")))
+			assert.True(t, ok, "the other agent is still written")
+		})
+	}
+}
+
+func TestReconcile_WithoutAModelKeyListerNoReferenceIsHonoured(t *testing.T) {
+	h := newHarness(t)
+	d := configured("a1", "model-credentials/api-key", "")
+	h.modelKey(d, "model-credentials")
+	h.opts.ModelKeys = nil
+	h.restart()
+	h.feed.set(d)
+
+	require.Error(t, h.svc.Reconcile(t.Context()))
+
+	_, ok := h.gaon.MicroVM(t, objectName(t, d))
+	assert.False(t, ok)
+}
+
+func TestReconcile_TwoOrganizationsWithOneKeyNameEachGetTheirOwn(t *testing.T) {
+	h := newHarness(t)
+	a := configured("a1", "shared-name/api-key", "")
+	b := configured("a2", "shared-name/api-key", "")
+	b.GRN = grn.New("org2", "agent", "a2")
+	h.modelKey(a, "shared-name")
+	h.feed.set(a, b)
+
+	require.Error(t, h.svc.Reconcile(t.Context()), "org2 has no Secret of that name yet")
+	_, ok := h.gaon.MicroVM(t, objectName(t, a))
+	assert.True(t, ok, "org1's agent renders from org1's Secret")
+	_, ok = h.gaon.MicroVM(t, objectName(t, b))
+	assert.False(t, ok, "org2's agent does not take org1's Secret of the same name")
+
+	h.modelKey(b, "shared-name")
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	for _, d := range []agent.Desired{a, b} {
+		m, _ := h.gaon.MicroVM(t, objectName(t, d))
+		ref := envOf(t, m)["MODEL_API_KEY"].ValueFrom.SecretKeyRef
+		assert.Equal(t, "shared-name", ref.Name)
+	}
+}
+
+func TestReconcile_NoKeyValueReachesASpec(t *testing.T) {
+	h := newHarness(t)
+	d := configured("a1", "model-credentials/api-key", "")
+	h.modelKey(d, "model-credentials")
+	h.feed.set(d)
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	m, _ := h.gaon.MicroVM(t, objectName(t, d))
+	spec, err := json.Marshal(m)
+	require.NoError(t, err)
+	assert.NotContains(t, string(spec), h.keys.value, "the listed data is never rendered")
 }

@@ -64,10 +64,14 @@ which placement bodies it has presented, and it presents them again.
   all. The key is an `env` entry, `MODEL_API_KEY` (and
   `EMBEDDING_API_KEY` where an embedding names one), with
   `valueFrom.secretKeyRef` of the Secret and key `apiKeyRef` names as
-  `<secret-name>/<key>`; the operator never reads the value. An
-  `apiKeyRef` naming one of the operator's own `agent-<16 hex>` Secrets,
+  `<secret-name>/<key>`; the operator never reads the value. The
+  Secret must exist and carry `garam.sh/role=model-key` and
+  `garam.sh/organization=<digest>` for the agent's own organization;
+  an `apiKeyRef` naming any other (absent, unlabelled, another
+  organization's, one of the operator's own `agent-<16 hex>` Secrets),
   or a configuration that cannot be rendered, writes nothing for the
-  agent and fails the pass. `profile.storageClassName` and
+  agent and fails the pass with an error naming the reference.
+  `profile.storageClassName` and
   `profile.resources` are parsed and not used: the Volume has the one
   class `api.StorageClassLocal`, and `Options.Resources` sets the
   MicroVM's. The instructions file and message issuers are not
@@ -248,10 +252,19 @@ above.
 
 ### What the deployment must create
 
-- **Each agent's model Secret**: a gaon `Secret` named by the agent's
-  `apiKeyRef`, holding its key. The operator never reads or logs it and
-  creates none; gaon resolves the `valueFrom` when the MicroVM starts,
-  so a Secret created later is not seen by a MicroVM already started.
+- **Each organization's model-key Secret**: a gaon `Secret` named by
+  the agents' `apiKeyRef`, holding the key, labelled
+  `garam.sh/role=model-key` and `garam.sh/organization=<digest>`. The
+  digest is the first 32 hex digits of the SHA-256 of the organization's
+  GRN string, `grn:org:<org>`, the value the operator labels that
+  organization's own objects with. The operator creates none and never
+  uses or logs a value; gaon resolves the `valueFrom` when the MicroVM
+  starts, so a Secret created later is not seen by a MicroVM already
+  started. A name is one Secret, labelled for one organization.
+- **A gaon role for the operator** that also reads Secrets labelled
+  `garam.sh/role=model-key` and no other Secret outside its own
+  objects. A list of those Secrets returns their data to the operator,
+  which drops it on arrival; the operator is trusted not to use it.
 - **The trust roots and the key files** the operator itself reads
   (§Settings).
 

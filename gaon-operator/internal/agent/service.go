@@ -35,6 +35,10 @@ type Options struct {
 	// Now is the clock, time.Now where nil. It only paces how often a
 	// refused placement is presented again.
 	Now func() time.Time
+	// ModelKeys lists the Secrets labelled as model keys, through a
+	// client built with api.WithLabelSelector(ModelKeySelector()). Where
+	// it is nil no model key reference is honoured.
+	ModelKeys SecretLister
 }
 
 // refusedWait is how long a placement the control service refused is
@@ -94,6 +98,11 @@ type snapshot struct {
 	microvms map[string]*api.MicroVM
 	secrets  map[string]*api.Secret
 	volumes  map[string]*api.Volume
+	// keys are the model-key Secrets, read at most once a pass and only
+	// where an agent about to be created names a model. Their data is
+	// dropped on arrival.
+	keys     []api.Secret
+	keysRead bool
 }
 
 // read lists the three kinds and keeps what carries the operator's
@@ -192,6 +201,7 @@ func (s *service) halt(ctx context.Context, m *api.MicroVM) error {
 func (s *service) reconcileAgent(ctx context.Context, d Desired, snap *snapshot) error {
 	n := namesOf(d.GRN)
 	m := snap.microvms[n.microvm]
+	var keys modelKeys
 	if m == nil && d.Stopped {
 		return nil
 	}
@@ -211,7 +221,11 @@ func (s *service) reconcileAgent(ctx context.Context, d Desired, snap *snapshot)
 	if m == nil {
 		// A configuration that cannot be rendered stops the agent
 		// before a token is minted or a Volume made for it.
-		if _, err := runtimeFor(d.Configuration); err != nil {
+		var err error
+		if keys, err = s.modelKeys(ctx, d, snap); err != nil {
+			return err
+		}
+		if _, err := runtimeFor(d.Configuration, keys); err != nil {
 			return errorx.Wrap(err, "render the configuration")
 		}
 	}
@@ -230,7 +244,7 @@ func (s *service) reconcileAgent(ctx context.Context, d Desired, snap *snapshot)
 			}
 			snap.volumes[name] = v
 		}
-		want, err := s.microVMFor(d, secret)
+		want, err := s.microVMFor(d, secret, keys)
 		if err != nil {
 			return err
 		}

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"regexp"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/garamsh/garam/gaon-operator/internal/guest"
 	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Configuration is what the feed's `configuration` holds for the
@@ -92,10 +94,53 @@ type runtimeSettings struct {
 	env   []api.EnvVar
 }
 
+// modelKeys are the names of the Secrets a reference of one agent may
+// name: those labelled as model keys of the agent's own organization.
+type modelKeys map[string]bool
+
+// modelKeysFor keeps of secrets the ones that carry both labels
+// ModelKeyLabels gives for g. The listing's selector already asks for
+// the role; the check here keeps a Secret of another organization out
+// whatever the client was built with.
+func modelKeysFor(g grn.GRN, secrets []api.Secret) modelKeys {
+	want := ModelKeyLabels(g)
+	out := modelKeys{}
+	for i := range secrets {
+		l := secrets[i].Metadata.Labels
+		if l[labelRole] == want[labelRole] && l[labelOrganization] == want[labelOrganization] {
+			out[secrets[i].Metadata.Name] = true
+		}
+	}
+	return out
+}
+
+// modelKeys returns the Secrets d's configuration may name. gaon has no
+// namespaces, so a reference to a Secret of no organization, or of
+// another, would put its value in this agent's environment. The list
+// returns the Secrets' data, which is dropped at once, never used and
+// never logged.
+func (s *service) modelKeys(ctx context.Context, d Desired, snap *snapshot) (modelKeys, error) {
+	if d.Configuration.Model == nil || s.opts.ModelKeys == nil {
+		return nil, nil
+	}
+	if !snap.keysRead {
+		list, err := s.opts.ModelKeys.ListSecrets(ctx)
+		if err != nil {
+			return nil, errorx.Wrap(err, "list model-key secrets")
+		}
+		for i := range list.Items {
+			list.Items[i].Data = nil
+		}
+		snap.keys, snap.keysRead = list.Items, true
+	}
+	return modelKeysFor(d.GRN, snap.keys), nil
+}
+
 // runtimeFor renders c. A key is an `env` entry sourced from the
-// Secret c names and the operator never reads it; a file's content is
-// inline and holds no secret, because nothing of c is one.
-func runtimeFor(c Configuration) (runtimeSettings, error) {
+// Secret c names, which must be one of keys, and the operator never
+// reads it; a file's content is inline and holds no secret, because
+// nothing of c is one.
+func runtimeFor(c Configuration, keys modelKeys) (runtimeSettings, error) {
 	var out runtimeSettings
 	var cfg runtimeConfig
 	var keyVars []string
@@ -103,6 +148,10 @@ func runtimeFor(c Configuration) (runtimeSettings, error) {
 		secret, key, err := parseSecretRef(ref)
 		if err != nil {
 			return err
+		}
+		if !keys[secret] {
+			return errorx.New(errorx.KindFailedPrecondition,
+				"the Secret of reference "+ref+" does not exist or is not labelled as a model key of this agent's organization")
 		}
 		keyVars = append(keyVars, variable)
 		out.env = append(out.env, api.EnvVar{Name: variable, ValueFrom: &api.ValueSource{

@@ -101,15 +101,16 @@ already expose, built in parallel rather than gating P3.
   [deployment-contract.md](../architecture/deployment-contract.md).
   Publishing is built and exercised: `.github/workflows/release.yml`
   publishes the images on a release tag push under the tag rule
-  ADR-0039 fixed, which until launch is ADR-0157's, and `v0.1.0` ran
-  it on 2026-09-01. Both repositories
-  it then wrote held `0.1.0` when ADR-0039's erratum of 2026-09-02 read
-  them, and the release that tag created records each image's digest
-  beside it. Each image now has one repository, `garam/<image>`, and
-  `release.yml` publishes five (ADR-0134); no tag has yet run that
-  version of it. A development build goes into the same repository under
-  a commit-derived or prerelease tag: `make image-build` builds one
-  locally and a person pushes it (ADR-0071, ADR-0134).
+  ADR-0039 fixed, which until launch is ADR-0157's, and
+  `v0.1.0-dev.1` (then `v0.1.0`) ran it on 2026-09-01. Both
+  repositories it then wrote held `0.1.0-dev.1` (then `0.1.0`) when
+  ADR-0039's erratum of 2026-09-02 read them, and the release that tag
+  created records each image's digest beside it. Each image now has
+  one repository, `garam/<image>`, and `release.yml` publishes five
+  (ADR-0134); no tag has yet run that version of it. A development
+  build goes into the same repository under a commit-derived or
+  prerelease tag: `make image-build` builds one locally and a person
+  pushes it (ADR-0071, ADR-0134).
 
 ## Collaboration platform (decided, not started)
 

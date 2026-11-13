@@ -49,6 +49,7 @@ fn question() -> EvaluateRequest {
         }),
         context: None,
         read: 0,
+        probe: false,
     }
 }
 

@@ -10,6 +10,7 @@ name = "policy"
 path = "src/main.rs"
 
 [dependencies]
+audit = { path = "../audit" }
 axum.workspace = true
 base64.workspace = true
 cedar-policy.workspace = true

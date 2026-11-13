@@ -343,6 +343,7 @@ fn question(action: &str, resource_type: &str, resource: &str) -> EvaluateReques
         }),
         context: None,
         read: 0,
+        probe: false,
     }
 }
 
@@ -402,6 +403,7 @@ async fn one_question_out_of_scope_in_a_batch_refuses_the_batch() {
             id: id.into(),
             properties: None,
         }),
+        probe: None,
         context: None,
     };
     let batch = |evaluations| EvaluationsRequest {
@@ -414,6 +416,7 @@ async fn one_question_out_of_scope_in_a_batch_refuses_the_batch() {
         context: None,
         evaluations,
         read: 0,
+        probe: false,
     };
 
     let own = entry("cowork:channel.post", "Cowork::Channel", CHANNEL);

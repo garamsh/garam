@@ -5,6 +5,7 @@
 
 #![cfg(test)]
 
+mod audit_cases;
 mod caller_tokens;
 mod listening;
 
@@ -389,6 +390,7 @@ impl Platform {
             }),
             context: None,
             read: 0,
+            probe: false,
         });
         self.grpc
             .evaluate(request)

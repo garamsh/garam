@@ -60,6 +60,13 @@ const (
 	ActionPolicyDetach = "iam:policy.detach"
 	ActionPolicyDelete = "iam:policy.delete"
 
+	// ActionAuditRead is reading what the policy service recorded of an
+	// organization: its policy writes and its denials (ADR-0148). The
+	// policy service decides it; nothing here enforces it. Owners and
+	// admins hold it one at a time: it shares no prefix with
+	// `iam:policy.*`.
+	ActionAuditRead = "iam:audit.read"
+
 	// Cross-organization consent management (ADR-0035). The org owns
 	// the constants for the reason it owns the policy ones: the
 	// relation is org-managed data the api server enforces over,
@@ -212,6 +219,7 @@ var actions = []string{
 	ActionProjectCreate, ActionProjectRead, ActionProjectUpdate, ActionProjectDelete,
 	ActionProjectMemberList, ActionProjectMemberAdd, ActionProjectMemberRemove,
 	ActionPolicyCreate, ActionPolicyRead, ActionPolicyUpdate, ActionPolicyAttach, ActionPolicyDetach, ActionPolicyDelete,
+	ActionAuditRead,
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
@@ -339,11 +347,13 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
+			ActionAuditRead,
 		}, machineActionsHeld(false), coworkActions, codehubActionsHeld(false))
 	case RoleAdmin:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
 			"iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
+			ActionAuditRead,
 		}, machineActionsHeld(false), coworkActions, codehubActionsHeld(false))
 	case RoleMember:
 		return slices.Concat([]string{

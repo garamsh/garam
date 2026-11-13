@@ -1320,7 +1320,9 @@ ADRs:
   an hour collapse into one record with a count and an organization
   holds at most 10,000 live denial records, with a per-day overflow
   record beyond; an organization's owners and administrators read them
-  on `iam:audit.read`; not built; supersedes nothing
+  on `iam:audit.read`; built in the policy service (#1785), not in the
+  platform's relay of the read or the console's view of it; supersedes
+  nothing
 - [0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
   — codehub is a service of the policy service: a `Codehub` manifest
   with the entity `Codehub::Repo`, named `grn:<org>/codehub/repo/<id>`

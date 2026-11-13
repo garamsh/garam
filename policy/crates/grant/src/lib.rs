@@ -7,8 +7,10 @@ mod body;
 mod error;
 mod permit_right;
 mod postgres;
+mod step;
 
 pub use body::{Body, BodyKind, Content};
 pub use error::Error;
 pub use permit_right::PermitRight;
 pub use postgres::{NewPolicy, PolicyStore, Status, Summary, Version};
+pub use step::{Step, action_for};

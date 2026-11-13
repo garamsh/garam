@@ -99,6 +99,12 @@ namespace Iam {
   action "permit.write" in ["role-owner"]
     appliesTo { principal: [User, Agent], resource: [Org, Policy] };
 
+  // Reading an organization's record of policy writes and denials
+  // (ADR-0148), asked of the organization and held by the owners and
+  // administrators, whose own role links it is.
+  action "audit.read" in ["role-owner", "role-admin"]
+    appliesTo { principal: [User, Agent], resource: [Org] };
+
   action "consent.read", "consent.grant", "consent.withdraw"
     in ["consent.*"]
     appliesTo { principal: [User, Agent], resource: [Org] };

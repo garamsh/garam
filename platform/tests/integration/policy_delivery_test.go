@@ -61,6 +61,21 @@ type fakePolicy struct {
 	// refuseOrg is the error each link call answers for an organization,
 	// by its GRN, while the others answer as they would.
 	refuseOrg map[string]error
+	// refuseOwner is the error CreatePolicy answers for a scoped link whose
+	// principal is the owner, by its GRN, while the others answer as they
+	// would.
+	refuseOwner map[string]error
+}
+
+// linkRefuseOwner makes CreatePolicy of the scoped link of owner fail with
+// err while it is set, and none of another owner's. A nil err ends it.
+func (f *fakePolicy) linkRefuseOwner(owner string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.refuseOwner == nil {
+		f.refuseOwner = map[string]error{}
+	}
+	f.refuseOwner[owner] = err
 }
 
 // linkRefuseOrg makes every link call for org fail with err while it is
@@ -138,6 +153,9 @@ func (f *fakePolicy) CreatePolicy(
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.linkErr("CreatePolicy", req.GetOrg()); err != nil {
+		return nil, err
+	}
+	if err := f.refuseOwner[req.GetBody().GetRoleLink().GetPrincipal().GetId()]; err != nil {
 		return nil, err
 	}
 	if _, ok := f.policies[req.GetPolicy()]; ok {

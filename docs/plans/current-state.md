@@ -13,8 +13,6 @@ none is scheduled.
 - **Resource-based policies** — a statement names no `Principal`, so a
   policy reaches subjects through an identity attachment only
   (ADR-0008).
-- **Per-org direct roles** — a role stored on the user applies in every
-  org it belongs to. Scoping needs subject × role × scope persistence.
 - **`Condition` in policy documents** — reserved: a statement carries
   one through the parse boundary and reads it back as it was written,
   and nothing evaluates it (ADR-0002). It is the `Statement` type in

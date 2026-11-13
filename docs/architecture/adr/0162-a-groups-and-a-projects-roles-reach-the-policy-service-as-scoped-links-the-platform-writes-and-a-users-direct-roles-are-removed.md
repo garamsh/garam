@@ -86,13 +86,14 @@ alone (ADR-0159, ADR-0160).
    for good removes the owner's links of all three roles and is set
    aside, and a waiting request is answered at once with
    `change_refused`, as ADR-0160 has it for a member.
-5. **A request waits for the owner's mark.** Creating, updating and
-   deleting a group or a project wait on its `Iam::ScopedRoleLink`
-   mark as the membership routes wait on theirs: `Gate.AwaitScoped`,
-   the bound of ADR-0159 item 3 and the same two reasons. An update
-   that touches no role waits on a mark that is not there and is
-   answered at once. That every request changing a fed entity waits
-   is a wider rule that is not decided here.
+5. **A request waits for the owner's mark.** Creating and deleting a
+   group or a project wait on its `Iam::ScopedRoleLink` mark as the
+   membership routes wait on theirs: `Gate.AwaitScoped`, the bound of
+   ADR-0159 item 3 and the same two reasons. An update waits only when
+   its body wrote the roles; one that did not is answered at once,
+   whatever mark of its owner is set aside, as a request that asked
+   nothing of the service. That every request changing a fed entity
+   waits is a wider rule that is not decided here.
 6. **A user's direct roles are removed.** Migration 000079 drops
    `users.roles`, and the code that read it goes: the field of the
    user, the statement built from it, the `direct-role` source of an

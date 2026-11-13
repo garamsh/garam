@@ -312,7 +312,11 @@ func TestScopedRoles_AnswerUnavailableWhileTheScopedLinkIsNotApplied(t *testing.
 			require.Equal(t, http.StatusOK, rec.Code, "the link is in force")
 			rec = f.do(t, "PATCH", path, `{"name":"y"}`, owner)
 			require.Equal(t, http.StatusOK, rec.Code, "the link is in force")
-			require.Equal(t, []string{created.String(), created.String(), created.String()}, gate.scoped)
+			require.Equal(t, []string{created.String(), created.String()}, gate.scoped,
+				"the rename asked the gate nothing")
+			gate.err = policyfeed.ErrLinkSetAside
+			rec = f.do(t, "PATCH", path, `{"name":"w"}`, owner)
+			assert.Equal(t, http.StatusOK, rec.Code, "a rename is not answered by a set-aside mark")
 
 			gate.err = policyfeed.ErrNotApplied
 			rec = f.do(t, "PATCH", path, `{"roles":["owner"]}`, owner)

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -220,22 +221,22 @@ func TestPolicyScopedLinks_ALinkRefusedForGoodIsSetAsideAndTheOthersAreDelivered
 			p, fake, d := seedDelivered(t)
 			execSQL(t, p, `UPDATE groups SET roles = ARRAY['admin'] WHERE grn = '`+outboxTeam+`'`)
 			execSQL(t, p, `UPDATE projects SET roles = ARRAY['member']`)
-			fake.linkFailOn("CreatePolicy", status.Error(code, "reserved identifier"))
+			fake.linkRefuseOwner(outboxTeam, status.Error(code, "reserved identifier"))
 
 			result, err := d.pass(t)
 
 			require.NoError(t, err, "a link refused for good does not fail the pass")
-			require.Len(t, result.ScopedSetAside, 2)
-			for _, r := range result.ScopedSetAside {
-				assert.Equal(t, code.String(), r.Code)
-				assert.Contains(t, r.Reason, "reserved identifier")
-			}
+			require.Len(t, result.ScopedSetAside, 1, "the project's link is not refused")
+			assert.Equal(t, code.String(), result.ScopedSetAside[0].Code)
+			assert.Contains(t, result.ScopedSetAside[0].Reason, "reserved identifier")
 			marks := setAsideMarks(t, p)
 			require.Contains(t, marks, "Iam::ScopedRoleLink "+outboxTeam)
-			require.Contains(t, marks, "Iam::ScopedRoleLink "+outboxProject)
+			assert.NotContains(t, marks, "Iam::ScopedRoleLink "+outboxProject)
 			assert.Equal(t, code.String(), marks["Iam::ScopedRoleLink "+outboxTeam].code)
 			assert.WithinDuration(t, time.Now(), marks["Iam::ScopedRoleLink "+outboxTeam].at, time.Minute)
-			assert.ElementsMatch(t, []string{memberLink}, fake.links(), "the member's own link is untouched")
+			assert.ElementsMatch(t, []string{memberLink, scopedLink("MEMBER", outboxProject)}, fake.links(),
+				"the other owner's link is delivered beside the refused one")
+			assert.NotContains(t, outboxMarks(t, p), "Iam::ScopedRoleLink "+outboxProject)
 
 			// Not retried: the next pass reads nothing.
 			result, err = d.pass(t)
@@ -243,14 +244,68 @@ func TestPolicyScopedLinks_ALinkRefusedForGoodIsSetAsideAndTheOthersAreDelivered
 			assert.Zero(t, result.Marks)
 
 			// A write of the roles clears it, and the link is written.
-			fake.linkFail(nil)
+			fake.linkRefuseOwner(outboxTeam, nil)
 			execSQL(t, p, `UPDATE groups SET roles = ARRAY['owner'] WHERE grn = '`+outboxTeam+`'`)
 			_, err = d.pass(t)
 			require.NoError(t, err)
-			assert.ElementsMatch(t, []string{memberLink, scopedLink("OWNER", outboxTeam)}, fake.links())
+			assert.ElementsMatch(t, []string{memberLink, scopedLink("OWNER", outboxTeam),
+				scopedLink("MEMBER", outboxProject)}, fake.links())
 			assert.NotContains(t, setAsideMarks(t, p), "Iam::ScopedRoleLink "+outboxTeam)
 		})
 	}
+}
+
+// setAsideTeam gives the seeded group a link that is written and then
+// refused for good, which sets the group's mark aside.
+func setAsideTeam(t *testing.T) (*pgxpool.Pool, *fakePolicy, deliverer) {
+	t.Helper()
+	p, fake, d := seedDelivered(t)
+	execSQL(t, p, `UPDATE groups SET roles = ARRAY['admin'] WHERE grn = '`+outboxTeam+`'`)
+	_, err := d.pass(t)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{memberLink, scopedLink("ADMIN", outboxTeam)}, fake.links(),
+		"the case needs the link written")
+
+	fake.linkRefuseOwner(outboxTeam, status.Error(codes.PermissionDenied, "reserved identifier"))
+	execSQL(t, p, `UPDATE groups SET roles = ARRAY['member'] WHERE grn = '`+outboxTeam+`'`)
+	result, err := d.pass(t)
+	require.NoError(t, err)
+	require.Len(t, result.ScopedSetAside, 1)
+	return p, fake, d
+}
+
+// TestPolicyScopedLinks_ALinkRefusedAfterItWasWrittenRemovesAllThree starts
+// from a link that is in force: the refusal of the next one removes what
+// the owner held, so no role outlives the refusal (ADR-0162 item 4).
+func TestPolicyScopedLinks_ALinkRefusedAfterItWasWrittenRemovesAllThree(t *testing.T) {
+	p, fake, _ := setAsideTeam(t)
+
+	assert.Equal(t, []string{memberLink}, fake.links(), "the written link is removed")
+	assert.Len(t, policyNames(fake), 1, "and no policy of the owner is left, active or not")
+	assert.Contains(t, setAsideMarks(t, p), "Iam::ScopedRoleLink "+outboxTeam)
+}
+
+// TestPolicyScopedGate_AwaitScopedOnASetAsideMarkAnswersAtOnce reads the
+// set-aside branch of the store over Postgres: the wait on a refused
+// owner is answered with its own error well inside the bound, and the
+// wait on an owner whose link is pending runs to the bound.
+func TestPolicyScopedGate_AwaitScopedOnASetAsideMarkAnswersAtOnce(t *testing.T) {
+	p, fake, d := setAsideTeam(t)
+	const bound = 2 * time.Second
+	gate := runLoop(t, p, d, bound)
+	time.Sleep(200 * time.Millisecond)
+	fake.linkFail(status.Error(codes.Unavailable, "policy service down"))
+	execSQL(t, p, `UPDATE projects SET roles = ARRAY['member']`)
+
+	start := time.Now()
+	err := gate.AwaitScoped(context.Background(), outboxTeam)
+	elapsed := time.Since(start)
+
+	assert.ErrorIs(t, err, policyfeed.ErrLinkSetAside)
+	assert.Less(t, elapsed, bound/2, "a refused link is not waited for")
+
+	err = gate.AwaitScoped(context.Background(), outboxProject)
+	assert.ErrorIs(t, err, policyfeed.ErrNotApplied, "the control: a pending link waits for the bound")
 }
 
 func TestPolicyScopedGate_AwaitScopedAnswersOnlyOnceTheLinkIsInForce(t *testing.T) {
@@ -258,8 +313,12 @@ func TestPolicyScopedGate_AwaitScopedAnswersOnlyOnceTheLinkIsInForce(t *testing.
 	gate := runLoop(t, p, d, 5*time.Second)
 	time.Sleep(200 * time.Millisecond)
 
+	// The service is down while the role is stored, so the loop cannot
+	// have delivered it whatever it does: the control does not race it.
+	fake.linkFail(status.Error(codes.Unavailable, "policy service down"))
 	execSQL(t, p, `UPDATE groups SET roles = ARRAY['admin'] WHERE grn = '`+outboxTeam+`'`)
 	require.NotContains(t, fake.links(), scopedLink("ADMIN", outboxTeam), "the control: not in force before the wait")
+	fake.linkFail(nil)
 
 	require.NoError(t, gate.AwaitScoped(context.Background(), outboxTeam))
 

@@ -144,9 +144,14 @@ func (s *Server) UpdateProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		writeError(w, err)
 		return
 	}
-	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), p.GRN.String()); err != nil {
-		writeError(w, err)
-		return
+	// Only a body that wrote the roles waits on the scoped link: a
+	// rename asks nothing of the policy service, and an older mark of
+	// the project that was set aside is not its answer to give.
+	if body.Roles != nil {
+		if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), p.GRN.String()); err != nil {
+			writeError(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, projectToAPI(p))
 }

@@ -497,7 +497,9 @@ owner's roles, each once, those the platform knows, or no row for an
 owner the tables no longer hold). A trigger marks it when a group or a
 project is inserted or deleted and when an update changes `roles`; a
 write of the name marks nothing, and the entity's own mark is not
-raised for a change of roles alone. A pass writes, after the member
+raised for a change of roles alone. A write that reorders the roles or
+repeats one marks, though the state is the same; it is rewritten as
+the same policies. A pass writes, after the member
 links and by name under no sequence, the policy ADR-0163 names for each
 role held, as `CreatePolicy` (`ALREADY_EXISTS` is a link written
 already) and `ActivatePolicy` with no writer and team-or-project scope,
@@ -508,11 +510,15 @@ past state is read. A link refused for good is set aside as a member's
 is, its owner's links of all three roles are removed, and the waiting
 request is answered `change_refused`.
 
-Creating, updating and deleting a group or a project wait for its
-mark as the membership routes do (`Gate.AwaitScoped`, the same bound
-and the same two reasons); an update that touches no role waits on no
-mark and is answered at once. The other requests that change a fed
-entity do not wait yet.
+Creating and deleting a group or a project wait for its mark as the
+membership routes do (`Gate.AwaitScoped`, the same bound and the same
+two reasons). An update waits only when its body wrote the roles; one
+that did not is answered at once, whatever mark of its owner is set
+aside, since it asked nothing of the policy service. A write of the
+roles is answered by what the service then says. The other requests
+that change a fed entity do not wait yet, among them deleting an
+organization, which waits for its members' links and not for the
+scoped marks its groups' and projects' deletions raise.
 
 `garam policy-feed start` marks every membership, group and project
 with the rest of the backfill, and so do migrations 000075 and 000079

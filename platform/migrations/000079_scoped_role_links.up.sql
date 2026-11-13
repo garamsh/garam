@@ -14,8 +14,9 @@
 -- groups and projects are locked before policy_outbox, the order a
 -- writer of either takes (its row, then the mark its trigger writes)
 -- and `garam policy-feed start` takes (postgres.go lockSources), so a
--- live writer and this migration wait on each other and never
--- deadlock.
+-- writer of groups or projects and this migration wait on each other
+-- and do not deadlock. A transaction that holds users or policy_outbox
+-- and then writes a group is not covered by that order.
 LOCK TABLE groups, projects IN SHARE MODE;
 
 ALTER TABLE users DROP COLUMN roles;

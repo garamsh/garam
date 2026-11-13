@@ -479,8 +479,8 @@ func TestPolicyFeedStart_WaitsOutAWriterOfARegistrationThatReadTheFeedAsOff(t *t
 // TestMigration000080_MarksEverySupervisorThatStandsOfAFeedThatIsOn
 // applies 000080 over registrations that exist: a feed that is on marks
 // each registration, the one that ended included, one that is off
-// marks none, and the way down removes the triggers, the marks of the kind
-// and the kind itself.
+// marks none, and the way down removes the triggers, the marks of the
+// kind and the kind itself.
 func TestMigration000080_MarksEverySupervisorThatStandsOfAFeedThatIsOn(t *testing.T) {
 	for _, on := range []bool{true, false} {
 		name, schema := "a feed that is off", "migrate_000080_off"

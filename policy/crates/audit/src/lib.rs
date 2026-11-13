@@ -7,13 +7,15 @@
 
 mod denial;
 mod error;
+mod queue;
 mod read;
 mod write;
 
 pub use denial::{
-    Denial, FAULT, MAX_FIELD_BYTES, MAX_LIVE_DENIALS, RECORD_BOUND, Recorded, Recorder,
-    organization_of,
+    Denial, FAULT, MAX_FIELD_BYTES, MAX_LIVE_DENIALS, Noted, QUEUE_CAPACITY, RECORD_BOUND,
+    Recorded, Recorder, organization_of,
 };
 pub use error::Error;
+pub use queue::Counts;
 pub use read::{Kind, Page, RETENTION_DAYS, Record};
 pub use write::{Origin, Outcome, Write, Written, record_write};

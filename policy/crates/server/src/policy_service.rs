@@ -38,10 +38,11 @@ impl<P, E> Service<P, E> {
         self
     }
 
-    /// Records a denial the engine decided, unless the question was a
-    /// probe. The record never changes the answer: a failure to write
-    /// it is logged and counted by the recorder.
-    pub(crate) async fn note_denial(
+    /// Queues the record of a denial the engine decided, unless the
+    /// question was a probe. The answer never waits for the record: a
+    /// full queue or a failure to write it is logged and counted by
+    /// the recorder.
+    pub(crate) fn note_denial(
         &self,
         principal: &Principal,
         asked: &Evaluation<'_>,
@@ -61,14 +62,14 @@ impl<P, E> Service<P, E> {
             principal,
             (asked.subject.id, asked.action, asked.resource.id),
             &policies,
-        )
-        .await;
+        );
     }
 
-    /// Records a denial of `action` on `resource` to `subject`, naming
-    /// the `policies` that decided it. A write refused for want of a
-    /// role is one: no policy decided it, so it names none.
-    pub(crate) async fn record_denial(
+    /// Queues the record of a denial of `action` on `resource` to
+    /// `subject`, naming the `policies` that decided it. A write
+    /// refused for want of a role is one: no policy decided it, so it
+    /// names none.
+    pub(crate) fn record_denial(
         &self,
         principal: &Principal,
         (subject, action, resource): (&str, &str, &str),
@@ -77,15 +78,13 @@ impl<P, E> Service<P, E> {
         let Some(recorder) = &self.recorder else {
             return;
         };
-        recorder
-            .deny(&audit::Denial {
-                service: &principal.sub(),
-                subject,
-                action,
-                resource,
-                policies,
-            })
-            .await;
+        recorder.note(&audit::Denial {
+            service: &principal.sub(),
+            subject,
+            action,
+            resource,
+            policies,
+        });
     }
 
     /// The manifests the engine decides under, which the HTTP binding
@@ -141,7 +140,7 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
             .evaluate(&self.policies, &self.entities, &evaluation)
             .await?;
         if decision.outcome == Outcome::Deny && !question.probe {
-            self.note_denial(principal, &evaluation, &decision).await;
+            self.note_denial(principal, &evaluation, &decision);
         }
         Ok(response(&decision))
     }

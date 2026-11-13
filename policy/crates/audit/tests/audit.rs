@@ -5,8 +5,8 @@
 use std::time::{Duration, Instant};
 
 use audit::{
-    Denial, FAULT, Kind, MAX_FIELD_BYTES, MAX_LIVE_DENIALS, Origin, Outcome, Recorded, Recorder,
-    Write, Written, record_write,
+    Denial, FAULT, Kind, MAX_FIELD_BYTES, MAX_LIVE_DENIALS, Noted, Origin, Outcome, Recorded,
+    Recorder, Write, Written, record_write,
 };
 use sqlx::PgPool;
 use sqlx::migrate::Migrator;
@@ -421,4 +421,100 @@ async fn a_write_is_recorded_while_its_organization_is_held_and_not_after_its_to
     assert!(records(&recorder, ACME).await.is_empty());
     assert_eq!(write(&pool).await, Written::Omitted);
     assert!(records(&recorder, ACME).await.is_empty());
+}
+
+/// Holds the lock a new denial of `ACME` takes, until the returned
+/// transaction ends.
+async fn block(pool: &PgPool) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(ACME)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    blocker
+}
+
+fn strangers(n: usize) -> Vec<String> {
+    (0..n)
+        .map(|i| format!("grn:globex/iam/user/stranger-{i}"))
+        .collect()
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_denial_noted_to_a_full_queue_is_answered_and_counted_as_lost(pool: PgPool) {
+    hold(&pool, ACME).await;
+    let recorder = Recorder::new(pool.clone()).queueing(2);
+    let blocker = block(&pool).await;
+    let none = ids(&[]);
+    let who = strangers(10);
+
+    // No await between the notes: the worker holds at most one, so at
+    // least seven find the queue full, whatever it has taken.
+    let noted: Vec<Noted> = who
+        .iter()
+        .map(|subject| recorder.note(&denial(subject, &none)))
+        .collect();
+
+    let lost = noted.iter().filter(|n| **n == Noted::Lost).count();
+    assert!(lost >= 7, "{noted:?}");
+    assert!(
+        lost < noted.len(),
+        "control: the queue took some: {noted:?}"
+    );
+    let counts = recorder.counts();
+    assert_eq!(counts.lost, lost as u64);
+    assert_eq!(counts.queue_full, lost as u64);
+    blocker.rollback().await.unwrap();
+    assert!(recorder.settled(Duration::from_secs(10)).await);
+    assert_eq!(
+        records(&recorder, ACME).await.len(),
+        noted.len() - lost,
+        "what the queue took is recorded"
+    );
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn the_denials_still_queued_at_shutdown_are_abandoned_and_counted_as_lost(pool: PgPool) {
+    hold(&pool, ACME).await;
+    let recorder = Recorder::new(pool.clone()).bounded(Duration::from_secs(30));
+    let blocker = block(&pool).await;
+    let none = ids(&[]);
+    for subject in strangers(3) {
+        assert_eq!(recorder.note(&denial(&subject, &none)), Noted::Queued);
+    }
+    assert_eq!(recorder.counts().queued, 3);
+
+    let started = Instant::now();
+    let abandoned = recorder.finish(Duration::from_millis(300)).await;
+
+    assert_eq!(abandoned, 3);
+    assert!(started.elapsed() < Duration::from_secs(5));
+    let counts = recorder.counts();
+    assert_eq!((counts.lost, counts.queued), (3, 0));
+    assert_eq!(
+        recorder.note(&denial(LEE, &none)),
+        Noted::Lost,
+        "a stopped queue takes nothing"
+    );
+    blocker.rollback().await.unwrap();
+    assert!(records(&recorder, ACME).await.is_empty());
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_queue_the_store_keeps_up_with_is_emptied_at_shutdown_and_loses_nothing(pool: PgPool) {
+    hold(&pool, ACME).await;
+    let recorder = Recorder::new(pool.clone());
+    let none = ids(&[]);
+    for subject in strangers(3) {
+        assert_eq!(recorder.note(&denial(&subject, &none)), Noted::Queued);
+    }
+
+    assert_eq!(recorder.finish(Duration::from_secs(10)).await, 0);
+
+    assert_eq!(recorder.lost(), 0);
+    assert_eq!(records(&recorder, ACME).await.len(), 3);
 }

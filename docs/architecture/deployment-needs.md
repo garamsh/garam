@@ -546,8 +546,9 @@ Two are named by a setting: garam's `serve api`
 (`GARAM_POLICY_ADDR`) and cowork (`COWORK_POLICY_ADDR`); codehub is
 named by none and is §codehub as a caller.
 `POLICY_HEALTH_ADDR`: HTTP, plaintext,
-`/healthz` and `/readyz`, a credential riding neither
-(`probes.rs:13-34`).
+`/healthz`, `/readyz` and `/metrics` (the denials lost, omitted and
+queued, in the Prometheus text format), a credential riding none of
+them (`probes.rs`).
 
 **Probes.** `/healthz` answers 200 and reads nothing; `/readyz` answers
 200 while `SELECT 1` succeeds within 2s and 503 otherwise

@@ -2,7 +2,9 @@
 
 > Status: accepted; superseded in part by
 > [ADR-0150](./0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
-> (§Decision 5, on the site baking the address)
+> (§Decision 5, on the site baking the address) and by
+> [ADR-0156](./0156-a-release-publishes-eight-images-and-a-pull-request-builds-the-guest-only-to-its-build-stage.md)
+> (§Decision 6, for the guest alone)
 > Date: 2026-10-31
 
 Drafted for #1716, which reserves this number. The direction is the

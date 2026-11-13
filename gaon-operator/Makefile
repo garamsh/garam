@@ -27,9 +27,14 @@ build:
 # SIGTERM drain (guest/run.sh).
 GUEST_IMAGE ?= gaon-guest:local
 
+# The image is the one the release builds, from the same parse of
+# release.yml (ADR-0156), so a change to how the release builds the
+# guest is what guest-run runs.
+GUEST_REPOSITORY = garam/gaon-guest
+
 guest-image:
-	docker build -f guest/Dockerfile -t $(GUEST_IMAGE) \
-		--build-arg REVISION=$(shell git rev-parse HEAD) ..
+	cd .. && tooling/image-build.sh --only $(GUEST_REPOSITORY)
+	docker tag $(GUEST_REPOSITORY):ci $(GUEST_IMAGE)
 
 guest-run: guest-image
 	sh guest/run.sh $(GUEST_IMAGE)

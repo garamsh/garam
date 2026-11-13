@@ -10,10 +10,13 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 )
 
-// The guest's user, as the standalone runner's (agents.md §The host's
-// runner), and where the guest finds what the operator gives it.
+// The MicroVM runs as root, since the supervisor drops each program
+// itself (ADR-0153); credential files belong to the account of the
+// runtime and the adapter. Also where the guest finds what the operator
+// gives it.
 const (
-	guestUID         = guest.UID
+	guestUser        = "0:0"
+	credentialUID    = guest.UID
 	credentialsDir   = guest.CredentialsDir
 	memoryMountPath  = guest.MemoryDir
 	workspaceMount   = guest.WorkspaceDir
@@ -69,7 +72,7 @@ func (s *service) microVMFor(d Desired, secret *api.Secret) *api.MicroVM {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	mode, owner := int32(fileMode), api.FileOwner{UID: guestUID, GID: guestUID}
+	mode, owner := int32(fileMode), api.FileOwner{UID: credentialUID, GID: credentialUID}
 	files := make([]api.MicroVMFile, 0, len(keys))
 	for _, k := range keys {
 		files = append(files, api.MicroVMFile{
@@ -84,7 +87,7 @@ func (s *service) microVMFor(d Desired, secret *api.Secret) *api.MicroVM {
 		Metadata: metaFor(n.microvm, d),
 		Spec: api.MicroVMSpec{
 			Image:       s.opts.Image,
-			User:        fmt.Sprint(guestUID),
+			User:        guestUser,
 			Resources:   s.opts.Resources,
 			RunStrategy: strategyFor(d),
 			Files:       files,

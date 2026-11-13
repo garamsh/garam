@@ -1,7 +1,8 @@
-# The composed guest image of a gaon MicroVM (ADR-0151 §3): one root
-# that holds the agent runtime, the workspace and garam's adapter, and
-# the supervisor that is its entrypoint. Build context is the
-# repository root; `make -C gaon-operator guest-image` builds it.
+# The composed guest image of a gaon MicroVM (ADR-0151 §3, its user by
+# ADR-0153): one root that holds the agent runtime, the workspace and
+# garam's adapter, and the supervisor that is its entrypoint. Build
+# context is the repository root; `make -C gaon-operator guest-image`
+# builds it.
 #
 # Each program's image is pinned by digest and the three digests are
 # recorded as labels. The registry holds each as one manifest, not an
@@ -67,17 +68,19 @@ COPY --from=build /out/gaon-guest /usr/local/bin/gaon-guest
 RUN --mount=type=bind,from=agent,source=/sherlock,target=/mnt/agent-sherlock \
     cmp /sherlock /mnt/agent-sherlock
 
-# The one account the three programs run as, and the mount points the
-# operator's MicroVM names.
-RUN useradd --uid 65532 --user-group --no-create-home --home-dir /nonexistent \
+# The account the runtime and the adapter run as (ADR-0153), and the
+# mount points the operator's MicroVM names. The directories stay
+# root's: the supervisor gives the store and the outbox to 65532 at
+# start, and the workspace manages /workspace as root. The image sets no
+# USER: the supervisor is root and drops each program itself.
+RUN groupadd --gid 65532 guest \
+  && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /nonexistent \
       --shell /usr/sbin/nologin guest \
-  && mkdir -p /var/lib/garam/memory /workspace /run/garam \
-  && chown 65532:65532 /var/lib/garam/memory /workspace /run/garam
+  && mkdir -p /var/lib/garam/memory /workspace /run/garam
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     SHERLOCK_TOOLS_DIR=/opt/sherlock/tools
 
-USER 65532:65532
 EXPOSE 8088
 ENTRYPOINT ["/usr/local/bin/gaon-guest"]
 CMD []

@@ -20,12 +20,13 @@ type running struct {
 	done    chan struct{}
 }
 
-// Run starts the programs in order, opens the readiness listener once
-// all of them run, and holds until ctx ends or a program exits. Either
-// ends the generation: the listener closes, and each program still
-// running is sent SIGTERM and awaited, in start order, with no deadline
-// and no kill. It returns nil when ctx ended it and an error naming
-// the program when one exited or failed to start.
+// Run makes the directories private, starts the programs in order,
+// opens the readiness listener once all of them run, and holds until
+// ctx ends or a program exits. Either ends the generation: the listener
+// closes, and each program still running is sent SIGTERM and awaited,
+// in start order, with no deadline and no kill. It returns nil when ctx
+// ended it and an error naming the program when one exited or failed to
+// start.
 func Run(ctx context.Context, cfg Config) error {
 	if len(cfg.Programs) == 0 {
 		return errorx.New(errorx.KindInvalidArgument, "no program to supervise")
@@ -33,6 +34,11 @@ func Run(ctx context.Context, cfg Config) error {
 	log := cfg.Log
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
+	}
+	for _, d := range cfg.Prepare {
+		if err := prepare(d); err != nil {
+			return err
+		}
 	}
 	exits := make(chan *running, len(cfg.Programs))
 	var started []*running
@@ -71,6 +77,9 @@ func Run(ctx context.Context, cfg Config) error {
 func start(p Program, cfg Config, exits chan<- *running) (*running, error) {
 	cmd := exec.Command(p.Path, p.Args...)
 	cmd.Env = p.Env
+	if p.Cred != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: p.Cred}
+	}
 	cmd.Stdout, cmd.Stderr = cfg.Stdout, cfg.Stderr
 	if err := cmd.Start(); err != nil {
 		return nil, errorx.Wrap(err, "start "+p.Name, errorx.KindInternal)
@@ -100,6 +109,29 @@ func drain(programs []*running, log *slog.Logger) {
 		<-r.done
 		log.Info("exited", slog.String("program", r.program.Name), slog.Any("status", r.cmd.ProcessState))
 	}
+}
+
+// prepare creates d if absent and gives it to UID at its mode. A path
+// that is a symbolic link is refused: the volume it sits on is not the
+// supervisor's to trust.
+func prepare(d Dir) error {
+	if err := os.Mkdir(d.Path, d.Mode); err != nil && !errors.Is(err, os.ErrExist) {
+		return errorx.Wrap(err, "prepare "+d.Path, errorx.KindInternal)
+	}
+	fi, err := os.Lstat(d.Path)
+	if err != nil {
+		return errorx.Wrap(err, "prepare "+d.Path, errorx.KindInternal)
+	}
+	if !fi.IsDir() {
+		return errorx.New(errorx.KindInvalidArgument, d.Path+" is not a directory")
+	}
+	if err := os.Lchown(d.Path, UID, UID); err != nil {
+		return errorx.Wrap(err, "own "+d.Path, errorx.KindInternal)
+	}
+	if err := os.Chmod(d.Path, d.Mode); err != nil {
+		return errorx.Wrap(err, "chmod "+d.Path, errorx.KindInternal)
+	}
+	return nil
 }
 
 // answer accepts and closes connections: a TCP probe asks only whether

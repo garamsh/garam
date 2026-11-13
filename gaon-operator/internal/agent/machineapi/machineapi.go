@@ -20,8 +20,9 @@ import (
 const (
 	// KeyAgentToken is the token garam accepts, for the agent's adapter.
 	KeyAgentToken = guest.AgentTokenFile
-	// KeyPlacementToken is the token only the control service accepts.
-	KeyPlacementToken = guest.PlacementTokenFile
+	// KeyControlToken is the agent token minted with the control service
+	// as audience, which the adapter presents to the lifecycle authority.
+	KeyControlToken = guest.ControlTokenFile
 )
 
 // tokenContract is the contract version mintAgentToken is called under.
@@ -38,7 +39,7 @@ var _ agent.Garam = (*Client)(nil)
 
 // New returns the Client of the machine listener at url, calling as the
 // holder of tokens. control is the control service's GRN, the audience
-// of the placement token.
+// of the control token.
 func New(url string, httpClient *http.Client, tokens Tokens, control string) (*Client, error) {
 	c := &Client{tokens: tokens, control: control}
 	api, err := machine.NewClientWithResponses(url,
@@ -68,11 +69,11 @@ func (c *Client) MintTokens(ctx context.Context, g grn.GRN, epoch int64) (agent.
 	if err != nil {
 		return nil, err
 	}
-	placement, err := c.mint(ctx, g, epoch, &c.control)
+	control, err := c.mint(ctx, g, epoch, &c.control)
 	if err != nil {
 		return nil, err
 	}
-	return agent.Credentials{KeyAgentToken: []byte(own), KeyPlacementToken: []byte(placement)}, nil
+	return agent.Credentials{KeyAgentToken: []byte(own), KeyControlToken: []byte(control)}, nil
 }
 
 func (c *Client) mint(ctx context.Context, g grn.GRN, epoch int64, audience *string) (string, error) {

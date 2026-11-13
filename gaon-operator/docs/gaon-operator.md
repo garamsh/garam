@@ -36,7 +36,8 @@ loses.
   because a label value cannot hold a GRN.
 - **No credential in a spec.** The tokens and the two trust roots live
   in the `Secret`. The MicroVM's files take them with
-  `valueFrom.secretKeyRef`, mode 0400, owner 65532; no file carries
+  `valueFrom.secretKeyRef`, mode 0400, owner 65532 (the runtime's
+  and adapter's account; the MicroVM's `user` is `0:0`); no file carries
   inline content.
 - **Volumes are made once.** They are created only where the agent has
   no MicroVM yet. Where the MicroVM exists and a Volume is missing, the
@@ -71,11 +72,11 @@ gaon's side is `lib/api` at `github.com/garamsh/gaon` commit
   garam's own, and one that asks for `audience` the control service's
   GRN, which only the control service accepts.
 - **Garam** (`internal/agent/machineapi`). `MintTokens` mints two
-  tokens under contract `machine-token.v1`: the agent's own and a
-  placement token with the control service as audience. A token minted
-  at an epoch other than the feed's, and a 409 `failed_precondition`
-  from `reportProvisioningState`, are `agent.ErrStaleEpoch`. A 401
-  drops the held token and asks once more.
+  tokens under contract `machine-token.v1`: the agent's own and the
+  control token, minted with the control service as audience. A token
+  minted at an epoch other than the feed's, and a 409
+  `failed_precondition` from `reportProvisioningState`, are
+  `agent.ErrStaleEpoch`. A 401 drops the held token and asks once more.
 - **Feed** (`internal/agent/controlapi`). `GET
   /v1/operators/self/desired?after=&waitSeconds=` under the control
   token and `Controller-Grn`; the status report is `POST
@@ -124,56 +125,71 @@ plainly.
 ### The guest supervisor and image
 
 `cmd/gaon-guest` is the entrypoint of the composed guest image
-(ADR-0151 §3). `internal/guest` holds it, and the constants the
-operator's MicroVM spec and the supervisor both name (user 65532, the
-credential, memory and workspace paths, port 8088), so each is written
-once.
+(ADR-0151 §3, its user by ADR-0153). `internal/guest` holds it, and the
+constants the operator's MicroVM spec and the supervisor both name (the
+accounts, the credential, memory and workspace paths, port 8088), so
+each is written once.
 
+- **Accounts.** The MicroVM's `user` is `0:0`, so the supervisor is
+  root. It starts the runtime and the adapter as 65532:65532 with no
+  supplementary group and so no capability, and the workspace as root
+  through `setpriv --bounding-set` keeping the standalone runner's five
+  (`SETUID`, `SETGID`, `CHOWN`, `SYS_ADMIN`, `KILL`) with
+  `SHERLOCK_EXEC_UID=10001`. Before it starts anything it makes the
+  memory directory and the outbox 0700 and 65532's, refusing a path that
+  is a symbolic link. The credential files are 65532's at 0400, which
+  the operator's `files` entries state as owner. The model credential is
+  named by `GUEST_RUNTIME_ENV` and reaches the runtime alone.
 - **Order.** `Run` starts the runtime, the workspace and the adapter in
   that order, opens the readiness port 8088 only once all three are
   started, and on SIGTERM or the first program's exit sends SIGTERM to
   each still-running program in start order, waiting for each before
-  the next. This is what garam's standalone runner does. ADR-0151's
-  wording, "drained in the reverse order ... with the adapter last",
-  contradicts itself, since the reverse of the start order ends with
-  the runtime; the supervisor follows the runner, so the adapter is
-  last.
+  the next, as garam's standalone runner does.
 - **Settings.** The environment names `GUEST_AGENT_GRN` (a canonical
   agent GRN), `GUEST_ASSIGNMENT_EPOCH` (a canonical decimal),
   `GUEST_MACHINE_URL`, `GUEST_CONTROL_URL` and optionally
-  `GUEST_RUNTIME_CONFIG`. A program gets only `PATH`, `SSL_CERT_FILE`
-  and `SHERLOCK_TOOLS_DIR` from it, plus what its command needs.
+  `GUEST_RUNTIME_CONFIG` and `GUEST_RUNTIME_ENV`. A program gets only
+  `PATH`, `SSL_CERT_FILE` and `SHERLOCK_TOOLS_DIR` from it, plus what
+  its command needs.
 - **The image** (`guest/Dockerfile`) is the workspace image with the
   runtime's tools and CA bundle, garam's binary and `gaon-guest` copied
-  in. The three source images are pinned by digest as `ARG`s and
-  recorded as `sh.garam.guest.*-image` labels. The build stops if the
-  runtime image's `/sherlock` and the workspace image's differ. The
-  pins are 0.10.0 of the two sherlock images and 0.7.0 of garam's
-  server; `platform/Makefile` pins sherlock 0.9.0, so these digests are
-  pinned nowhere else in the repository.
+  in, and no `USER`. The three source images are pinned by digest as
+  `ARG`s and recorded as `sh.garam.guest.*-image` labels. The build
+  stops if the runtime image's `/sherlock` and the workspace image's
+  differ. The pins are Sherlock 0.10.0 for the two sherlock images and
+  garam 0.7.0 for the server; `platform/Makefile` pins Sherlock 0.9.0
+  for the runner's tests, so these digests are pinned nowhere else in
+  the repository.
 - **Running it.** `make -C gaon-operator guest-run` builds the image
-  and starts it as one container, one command, user 65532, with the
-  credentials as 0400 files; it checks the start order, the readiness
-  port and the SIGTERM drain. It needs Docker, a registry login and
-  openssl and is not part of `ci`.
+  and starts it as one container with user `0:0` and `SYS_ADMIN` added,
+  the credentials as 65532's 0400 files. It checks the start order, the
+  readiness port and the SIGTERM drain, each program's user and
+  capabilities, that the model credential is in the runtime's
+  environment alone, and that a command run as 10001 is refused the
+  store, the outbox, each credential file and the runtime's and the
+  adapter's environment while 65532 reads the same. It needs Docker, a
+  registry login and openssl and is not part of `ci`.
 
-The cost of one user and one filesystem: the workspace's Exec children
-run as 65532, the account that owns the runtime's memory store, outbox
-and credentials, which agents.md's isolation for the standalone runner
-does not allow. Under Docker's default seccomp the workspace logs that
-its network-namespace probe fails and every shell Exec will fail; what
-gaon's guest kernel admits is not known.
+The guest still does not isolate the workspace process from the store:
+it is root in the same guest and holds `CHOWN` and `SETUID`, so it could
+take the store or become 65532. The runtime and the adapter share one
+account, so the runtime can read the adapter's tokens. What gaon's guest
+kernel admits for the workspace executor (the user and network
+namespace clone, refused under Docker's default seccomp) is not known.
 
 Open in the guest: the supervisor does not reap orphaned Exec children
-that reparent to it; the model credential and runtime configuration
-have no delivery path beyond `GUEST_RUNTIME_CONFIG`; `render.go` still
-renders no command, arguments or environment, so no MicroVM carries the
-`GUEST_*` settings yet; and the token files are mapped as
-`placement-token` to the adapter's placement token, `agent-token` to
-its agent token and `control-token` to its control token, but no
-operator renders `control-token`, and machineapi describes
-`placement-token` as audience the control service, which adapter.md
-gives to the control token. The adapter reports the missing file.
+that reparent to it; `render.go` still renders no command, arguments or
+environment, so no MicroVM carries the `GUEST_*` settings, and the model
+credential has no delivery path (the next issue); and the adapter
+requires a placement token file that no operator can supply yet (see
+the token note below).
+
+Tokens: `agent-token` is the adapter's agent token and `control-token`
+is the agent token minted with the control service as audience, which
+the adapter presents to the lifecycle authority (adapter.md §Token
+mode). The placement token is separate, sent in `Garam-Placement`; the
+Kubernetes operator mints it as 32 random bytes and the standalone
+supervisor draws its own, and nothing here mints or delivers one.
 
 ## What is not built
 
@@ -198,9 +214,11 @@ collection, the Node authorizer, a get refused for lack of labels,
 The supervisor's tests start helper processes and prove the start
 order, the readiness port opening after all three start, the drain
 order with a wait for each, the drain after one program exits early,
-and the settings each program receives. They do not prove the adapter's
-calls to garam, which need an admitted agent, an Exec under the guest
-kernel, or gaon's MicroVM start.
+the settings and account each program receives, and a store path that
+is a symbolic link refused. `guest-run` shows in the built image each
+program's user and capabilities and a command run as 10001 refused.
+They do not prove the adapter's calls to garam, which need an admitted
+agent, an Exec under the guest kernel, or gaon's MicroVM start.
 
 ## Rationale
 

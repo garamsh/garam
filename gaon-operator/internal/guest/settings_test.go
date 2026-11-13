@@ -1,6 +1,7 @@
 package guest_test
 
 import (
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,7 +40,7 @@ func TestFromEnv_NamesTheThreeProgramsInStartOrder(t *testing.T) {
 	assert.Equal(t, ":8088", cfg.ReadyAddr)
 	assert.Contains(t, cfg.Programs[0].Args, agentGRN)
 	assert.Contains(t, cfg.Programs[0].Args, "7")
-	assert.Contains(t, cfg.Programs[1].Env, "SHERLOCK_EXEC_UID=65532")
+	assert.Contains(t, cfg.Programs[1].Env, "SHERLOCK_EXEC_UID=10001")
 	assert.Contains(t, cfg.Programs[2].Env, "GARAM_ADAPTER_AGENT="+agentGRN)
 	assert.Contains(t, cfg.Programs[2].Env, "GARAM_ADAPTER_TOKEN_FILE=/run/garam/agent-token")
 }
@@ -55,6 +56,42 @@ func TestFromEnv_GivesAProgramOnlyWhatItNames(t *testing.T) {
 			assert.NotContains(t, entry, "GUEST_", p.Name)
 		}
 	}
+}
+
+func TestFromEnv_GivesTheModelCredentialToTheRuntimeAlone(t *testing.T) {
+	cfg, err := guest.FromEnv(environment(map[string]string{"GUEST_RUNTIME_ENV": "MODEL_API_KEY, UNSET_NAME"}), nil, nil, nil)
+	require.NoError(t, err)
+
+	assert.Contains(t, cfg.Programs[0].Env, "MODEL_API_KEY=must-not-reach-a-program")
+	for _, p := range cfg.Programs[1:] {
+		for _, entry := range p.Env {
+			assert.NotContains(t, entry, "MODEL_API_KEY", p.Name)
+		}
+	}
+}
+
+func TestFromEnv_DropsTheRuntimeAndTheAdapterToTheirAccount(t *testing.T) {
+	cfg, err := guest.FromEnv(environment(nil), nil, nil, nil)
+	require.NoError(t, err)
+
+	want := &syscall.Credential{Uid: guest.UID, Gid: guest.UID, Groups: []uint32{}}
+	assert.Equal(t, want, cfg.Programs[0].Cred)
+	assert.Nil(t, cfg.Programs[1].Cred, "the workspace stays root")
+	assert.Equal(t, want, cfg.Programs[2].Cred)
+
+	workspace := cfg.Programs[1]
+	assert.Equal(t, "/usr/bin/setpriv", workspace.Path)
+	assert.Equal(t, []string{"--bounding-set", "-all,+setuid,+setgid,+chown,+sys_admin,+kill", "/sherlock", "workspace"}, workspace.Args)
+}
+
+func TestFromEnv_MakesTheStoreAndTheOutboxPrivate(t *testing.T) {
+	cfg, err := guest.FromEnv(environment(nil), nil, nil, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, []guest.Dir{
+		{Path: "/var/lib/garam/memory", Mode: 0o700},
+		{Path: "/var/lib/garam/memory/outbox", Mode: 0o700},
+	}, cfg.Prepare)
 }
 
 func TestFromEnv_RefusesWhatItCannotRunAGenerationFrom(t *testing.T) {

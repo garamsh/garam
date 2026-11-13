@@ -1336,7 +1336,8 @@ ADRs:
   — the gaon operator is a service here that runs each managed agent as
   one MicroVM: a `gaon-operator/` folder with its own module and image,
   no custom gaon kind, one composed guest image, one no-ingress network
-  policy, a pair registered in garam; accepted, and unbuilt
+  policy, a pair registered in garam; accepted, and unbuilt; superseded
+  in part by ADR-0153 (item 3, the guest's user)
 - [0152](./adr/0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)
   — garam may hold the Transit token by logging in to OpenBao's JWT auth
   method with a workload identity file beside the token file:
@@ -1348,3 +1349,13 @@ ADRs:
   403; gaon serves the token request only and has decided, not built,
   the file's writer, discovery and key set; accepted, built in
   `platform/internal/message/transit`; supersedes nothing
+- [0153](./adr/0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)
+  — the gaon guest's MicroVM runs as `0:0` and its supervisor drops the
+  runtime and the adapter to 65532 with no capability and keeps the
+  workspace root with the runner's five capabilities and executor 10001;
+  store and outbox 0700 and 65532's, the model credential to the runtime
+  alone; the token minted with the control service as audience is the
+  control token; records that the workspace stays root in the guest,
+  the open question of the guest kernel and the placement token's
+  source, and the drain in start order; supersedes 0151's item 3 in
+  part (the guest's user), accepted, built in `gaon-operator/`

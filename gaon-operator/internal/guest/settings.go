@@ -5,6 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -15,19 +17,29 @@ import (
 const (
 	sherlockPath  = "/sherlock"
 	garamPath     = "/usr/local/bin/garam"
+	setprivPath   = "/usr/bin/setpriv"
 	gatewayAddr   = "127.0.0.1:8080"
 	workspaceAddr = "127.0.0.1:8081"
 )
 
+// workspaceCaps are the capabilities the workspace keeps, the
+// standalone runner's five: it sets its executor's user and group, owns
+// the workspace, enters the runtime's network namespace and kills what
+// an Exec started.
+const workspaceCaps = "-all,+setuid,+setgid,+chown,+sys_admin,+kill"
+
 // The settings the operator renders into the guest's environment. They
-// are addresses, identifiers and one file path: a credential is a file
-// below CredentialsDir, never a value here.
+// are addresses, identifiers, one file path and the names of variables
+// for the runtime: a credential for garam is a file below
+// CredentialsDir, and the supervisor's value for a runtime variable
+// reaches the runtime alone.
 const (
 	envAgent         = "GUEST_AGENT_GRN"
 	envEpoch         = "GUEST_ASSIGNMENT_EPOCH"
 	envMachineURL    = "GUEST_MACHINE_URL"
 	envControlURL    = "GUEST_CONTROL_URL"
 	envRuntimeConfig = "GUEST_RUNTIME_CONFIG"
+	envRuntimeEnv    = "GUEST_RUNTIME_ENV"
 )
 
 // inherited are the variables a program takes from the supervisor's
@@ -53,10 +65,15 @@ func FromEnv(getenv func(string) string, stdout, stderr io.Writer, log *slog.Log
 		return Config{}, errorx.New(errorx.KindInvalidArgument, envControlURL+" is required")
 	}
 
-	var base []string
+	var base, runtimeOnly []string
 	for _, k := range inherited {
 		if v := getenv(k); v != "" {
 			base = append(base, k+"="+v)
+		}
+	}
+	for _, name := range runtimeNames(getenv(envRuntimeEnv)) {
+		if v := getenv(name); v != "" {
+			runtimeOnly = append(runtimeOnly, name+"="+v)
 		}
 	}
 	with := func(extra ...string) []string { return append(append([]string{}, base...), extra...) }
@@ -70,19 +87,25 @@ func FromEnv(getenv func(string) string, stdout, stderr io.Writer, log *slog.Log
 	if config := getenv(envRuntimeConfig); config != "" {
 		runtime = append(runtime, "--config", config)
 	}
+	// The runtime and the adapter run as UID with no capability and no
+	// supplementary group; the workspace stays root with workspaceCaps.
+	account := func() *syscall.Credential {
+		return &syscall.Credential{Uid: UID, Gid: UID, Groups: []uint32{}}
+	}
 	return Config{
+		Prepare: []Dir{{Path: MemoryDir, Mode: 0o700}, {Path: OutboxDir, Mode: 0o700}},
 		Programs: []Program{
-			{Name: "runtime", Path: sherlockPath, Args: runtime, Env: with()},
-			{Name: "workspace", Path: sherlockPath, Args: []string{"workspace"}, Env: with(
-				"SHERLOCK_WORKSPACE="+WorkspaceDir, fmt.Sprintf("SHERLOCK_EXEC_UID=%d", UID))},
-			{Name: "adapter", Path: garamPath, Args: []string{"adapter"}, Env: with(
+			{Name: "runtime", Path: sherlockPath, Args: runtime, Cred: account(), Env: with(runtimeOnly...)},
+			{Name: "workspace", Path: setprivPath, Args: []string{"--bounding-set", workspaceCaps, sherlockPath, "workspace"}, Env: with(
+				"SHERLOCK_WORKSPACE="+WorkspaceDir, fmt.Sprintf("SHERLOCK_EXEC_UID=%d", ExecUID))},
+			{Name: "adapter", Path: garamPath, Args: []string{"adapter"}, Cred: account(), Env: with(
 				"GARAM_ADAPTER_AGENT="+agent,
 				"GARAM_ADAPTER_MACHINE_URL="+machineURL,
 				"GARAM_ADAPTER_SERVER_ROOT_FILE="+file(GaramRootFile),
 				"GARAM_ADAPTER_CONTROL_URL="+controlURL,
 				"GARAM_ADAPTER_CONTROL_ROOT_FILE="+file(ControlRootFile),
 				"GARAM_ADAPTER_PLACEMENT_TOKEN_FILE="+file(PlacementTokenFile),
-				"GARAM_ADAPTER_OUTBOX_DIR="+MemoryDir+"/outbox",
+				"GARAM_ADAPTER_OUTBOX_DIR="+OutboxDir,
 				"GARAM_ADAPTER_TOKEN_FILE="+file(AgentTokenFile),
 				"GARAM_ADAPTER_CONTROL_TOKEN_FILE="+file(ControlTokenFile))},
 		},
@@ -100,4 +123,15 @@ func parseAgent(s string) (string, error) {
 		return "", errorx.New(errorx.KindInvalidArgument, envAgent+" is not a canonical agent GRN")
 	}
 	return s, nil
+}
+
+// runtimeNames splits the comma-separated variable names list.
+func runtimeNames(list string) []string {
+	var names []string
+	for _, n := range strings.Split(list, ",") {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	return names
 }

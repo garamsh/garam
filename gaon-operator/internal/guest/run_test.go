@@ -252,3 +252,16 @@ func TestRun_NeverOpensReadinessWhenAProgramDoesNotStart(t *testing.T) {
 		"terminating workspace", "exited workspace",
 	}, g.drained(), "what had started is drained in order")
 }
+
+func TestRun_StartsNothingWhenADirectoryIsASymbolicLink(t *testing.T) {
+	g := newGeneration(t, nil)
+	link := filepath.Join(t.TempDir(), "memory")
+	require.NoError(t, os.Symlink(t.TempDir(), link))
+	g.cfg.Prepare = []guest.Dir{{Path: link, Mode: 0o700}}
+
+	err := guest.Run(context.Background(), g.cfg)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "is not a directory")
+	assert.Empty(t, g.started(), "no program starts on a store the supervisor cannot trust")
+}

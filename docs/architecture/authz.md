@@ -360,8 +360,8 @@ registered into or deleted). At the bound:
 - **Deleting an organization** has deleted it. The client does not
   repeat the delete, which would find it gone.
 
-**A link the service refuses for good is set aside.** A write the
-service answers with `PERMISSION_DENIED` or `INVALID_ARGUMENT` is not
+**A link the service refuses for good is set aside** (ADR-0160). A
+write the service answers with `PERMISSION_DENIED` or `INVALID_ARGUMENT` is not
 retried, because the request is a function of the membership alone and
 is judged the same each time. Those two codes are the whole list
 (`platform/internal/policyfeed/grpc/links.go`); each rests on
@@ -396,17 +396,21 @@ FROM policy_outbox WHERE set_aside_at IS NOT NULL;
 ```
 
 A request waiting for a set-aside link does not wait out the bound: the
-gate reads the mark's record and answers at once with the same 503
-`change_not_applied` and the same `resource` as the bound's
-(`policyfeed.ErrLinkSetAside`, which is `ErrNotApplied`), so a client
-reads one answer. Which of the two it was is in the request's log, not
-the body. The change is stored and the member is decided by the role
-the service last had, until the membership is written again or an
-operator restarts the feed. What the codes could hide: a fault of the
-platform's own credentials or configuration that the service answers as
-`PERMISSION_DENIED` would set every link aside, which `set_aside` in
-§Reading the feed's standing shows and `garam policy-feed start`
-repairs once the fault is mended.
+gate reads the mark's record and answers at once, 503 with the reason
+`change_refused` (`policyfeed.ErrLinkSetAside`) and the same `resource`
+as the bound's. It is a reason of its own because `change_not_applied`
+says the loop goes on delivering the change and here it does not: the
+client has nothing to wait for and does not repeat the request, and an
+operator reads the set-aside link. The change is stored, and the
+service holds no role for the member, who is denied there until the
+membership is written again or an operator restarts the feed. This
+fails closed, and it has a cost: a fault of the platform's own
+credentials or configuration that the service answers as
+`PERMISSION_DENIED`, or one that makes every link write malformed,
+sets every link aside and so removes every member's role in the
+policy service. `set_aside` in §Reading the feed's standing shows it,
+and `garam policy-feed start` repairs it once the fault is mended
+([ADR-0160](./adr/0160-a-role-link-the-policy-service-refuses-for-good-is-set-aside-and-the-members-links-are-removed.md)).
 
 `garam policy-feed start` marks every membership with the rest of the
 backfill, and so does migration 000075 for a feed already on, both

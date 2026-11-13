@@ -89,12 +89,12 @@ func TestGate_AwaitAnswersASetAsideLinkAtOnce(t *testing.T) {
 		Await(context.Background(), "grn:o", "grn:u")
 
 	require.ErrorIs(t, err, policyfeed.ErrLinkSetAside)
-	require.ErrorIs(t, err, policyfeed.ErrNotApplied,
-		"the answer is the not-applied one, so the API names the stored resource")
+	assert.NotErrorIs(t, err, policyfeed.ErrNotApplied,
+		"it is not the answer that delivery goes on")
 	assert.Equal(t, errorx.KindUnavailable, errorx.KindOf(err))
 	reason, ok := errorx.ReasonOf(err)
 	require.True(t, ok)
-	assert.Equal(t, policyfeed.ReasonChangeNotApplied, reason.Code)
+	assert.Equal(t, policyfeed.ReasonChangeRefused, reason.Code)
 	assert.Less(t, time.Since(start), time.Second, "no wait for the bound")
 	assert.EqualValues(t, 1, store.reads.Load())
 }

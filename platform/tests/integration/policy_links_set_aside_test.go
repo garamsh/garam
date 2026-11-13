@@ -228,11 +228,11 @@ func TestPolicyGate_AwaitAnswersASetAsideLinkAtOnceBesideTheOrdinaryAnswer(t *te
 	start := time.Now()
 	err = gate.Await(context.Background(), outboxOrg, outboxUser)
 	require.ErrorIs(t, err, policyfeed.ErrLinkSetAside)
-	require.ErrorIs(t, err, policyfeed.ErrNotApplied)
+	assert.NotErrorIs(t, err, policyfeed.ErrNotApplied)
 	assert.Equal(t, errorx.KindUnavailable, errorx.KindOf(err))
 	reason, ok := errorx.ReasonOf(err)
 	require.True(t, ok)
-	assert.Equal(t, policyfeed.ReasonChangeNotApplied, reason.Code)
+	assert.Equal(t, policyfeed.ReasonChangeRefused, reason.Code)
 	assert.Less(t, time.Since(start), bound/2, "it did not wait out the bound")
 	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM org_members WHERE role = 'member'`),
 		"the change is stored")

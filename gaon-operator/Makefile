@@ -56,6 +56,8 @@ pair-run:
 # cloned and not changed, and GAON_COMMIT the commit built from it. It
 # needs the Go module cache to hold gaon's etcd and mvmd's runtime API
 # (pair-run/gaon-build.sh), and is not part of `ci`.
+# The PM moves GAON_COMMIT with the lib/api pin in go.mod, to the same
+# commit of gaon, in the same pull request.
 GAON_COMMIT ?= 2387cebd0b44b322b7da2ff485144a7456a97c6f
 
 pair-run-gaon:

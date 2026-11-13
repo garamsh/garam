@@ -7,10 +7,12 @@
 # Each program's image is pinned by digest and the three digests are
 # recorded as labels. The registry holds each as one manifest, not an
 # index, so that manifest's digest is the image's. A move is a change
-# to these lines and to nothing else.
+# to these lines and to nothing else. The PM moves all three pins; the
+# adapter's moves by a pull request after each garam release
+# (ADR-0156 §Decision 3).
 ARG AGENT_IMAGE=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/sherlock/agent:0.10.0@sha256:fe7e426bc2ad7c6d5c31c96daf699fb1b801a6c9c14c3d917e7297a0cbd264cf
 ARG WORKSPACE_IMAGE=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/sherlock/workspace:0.10.0@sha256:acb6679005542bfd01705ae6a12926dee9a3f7ed839a673b14ec78f29a1fd489
-ARG ADAPTER_IMAGE=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/server:0.7.0@sha256:d0798604733e7a1b7becedfe841add01a7f6f8423e2a1b222e1d6eb20bff1997
+ARG ADAPTER_IMAGE=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/server:0.8.0@sha256:898c44f06b6514525fb2c015135aa123bf086388a0b5d7ec37244b0daa7f21c7
 
 # The builder is the one deploy/local/Dockerfile builds garam with.
 FROM mirror.gcr.io/library/golang:1.27.4-alpine3.24@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build

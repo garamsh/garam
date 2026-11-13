@@ -26,7 +26,7 @@ func (s *service) List(ctx context.Context, caller platform.Caller, org string) 
 		batch := pages[start:min(start+maxChecksPerAsk, len(pages))]
 		checks := make([]platform.Check, len(batch))
 		for i, p := range batch {
-			checks[i] = platform.OnPage(platform.ActionPageRead, p.ID)
+			checks[i] = platform.OnPage(platform.ActionPageRead, p.ID).AsProbe()
 		}
 		allowed, err := s.platform.Allowed(ctx, caller, org, checks)
 		if err != nil {

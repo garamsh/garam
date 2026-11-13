@@ -19,7 +19,10 @@ import (
 
 // policy allows every check but those deny names, as `action` or
 // `action@id`, or either after a person's name and a space.
-type policy struct{ deny map[string]bool }
+type policy struct {
+	deny    map[string]bool
+	checked []platform.Check
+}
 
 func (p *policy) Identify(context.Context, platform.Credential) (platform.Caller, error) {
 	return platform.Caller{}, nil
@@ -33,6 +36,7 @@ func (p *policy) Allowed(_ context.Context, c platform.Caller, org string, check
 	if org != "acme" {
 		return nil, errorx.New(errorx.KindPermissionDenied, "not a member")
 	}
+	p.checked = append(p.checked, checks...)
 	out := make([]bool, len(checks))
 	for i, ch := range checks {
 		k := ch.Action
@@ -226,4 +230,28 @@ func TestComments_AreWrittenByWritersAndReadByReaders(t *testing.T) {
 	deny["bob cowork:task.write@"+tk.ID] = true
 	_, err = s.Comment(ctx, bob, "acme", tk.ID, "again")
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
+}
+
+// TestList_StatesItsPerTaskQuestionsAsProbes lists the tasks and reads
+// one. Each task the list asks about is a probe; the gate on the list
+// and the read of one task are not.
+func TestList_StatesItsPerTaskQuestionsAsProbes(t *testing.T) {
+	p := &policy{}
+	r := readers{}
+	s := task.NewService(memory.New(), p, r, r)
+	tk, err := s.Create(ctx, ada, "acme", task.CreateInput{Title: "one"})
+	require.NoError(t, err)
+	p.checked = nil
+
+	_, err = s.List(ctx, ada, "acme", task.Filter{})
+	require.NoError(t, err)
+	require.Len(t, p.checked, 2, "the gate, then the one task")
+	assert.False(t, p.checked[0].Probe, "the gate is the caller's request")
+	assert.True(t, p.checked[1].Probe, "the filter is a probe")
+
+	p.checked = nil
+	_, err = s.Get(ctx, ada, "acme", tk.ID)
+	require.NoError(t, err)
+	require.Len(t, p.checked, 1)
+	assert.False(t, p.checked[0].Probe, "a read of one task is an attempt")
 }

@@ -36,12 +36,18 @@ db-prune:
 	@../../tooling/db-prune.sh
 
 # backend-up starts what the browser suites drive — postgres, the
-# one-shot migration, authz and api — and returns once api answers; the
-# profile-gated `web` service stays down. It builds first, migrations
-# included, because compose starts an existing image stale and reports
-# it healthy (#297).
+# one-shot migration, authz, the policy service with its feed, and
+# api — and returns once api answers; the profile-gated `web` service
+# stays down. It builds first, migrations included, because compose
+# starts an existing image stale and reports it healthy (#297). The feed
+# is a one-shot, and `up --wait` fails on a container that exits, so it
+# is started apart and its exit status read.
 backend-up:
-	$(COMPOSE_LOCAL) up -d --build --wait api
+	$(COMPOSE_LOCAL) up -d --build --wait api policy
+	$(COMPOSE_LOCAL) up -d --build policy-feed
+	@$(COMPOSE_LOCAL) wait policy-feed >/dev/null 2>&1; \
+		test "$$($(COMPOSE_LOCAL) ps -a --status exited --format '{{.ExitCode}}' policy-feed)" = 0 \
+			|| { echo "backend-up: policy-feed did not exit 0" >&2; exit 1; }
 
 # ---------------------------------------------------------------------
 # deploy/local/minikube — the whole stack on a local Kubernetes cluster.

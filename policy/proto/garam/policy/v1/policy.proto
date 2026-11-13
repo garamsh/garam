@@ -3,6 +3,7 @@ syntax = "proto3";
 package garam.policy.v1;
 
 import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
 
 // PolicyService is the policy service's wire contract (ADR-0130). Its
 // messages take the shape of OpenID AuthZEN Authorization API 1.0, over
@@ -53,6 +54,12 @@ service PolicyService {
 
   // ListPolicies reads the organization's policies, unpaged.
   rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse);
+
+  // ListAuditRecords reads the organization's records of every policy
+  // write and every denial (ADR-0148), newest first. The platform
+  // alone calls it, for a reader that holds `iam:audit.read` on the
+  // organization, which the service evaluates itself.
+  rpc ListAuditRecords(ListAuditRecordsRequest) returns (ListAuditRecordsResponse);
 }
 
 // Subject is who asks. It carries no properties, unlike AuthZEN's: a
@@ -100,6 +107,11 @@ message EvaluateRequest {
   // a context holding a field is refused.
   google.protobuf.Struct context = 4;
   Read read = 5;
+  // probe states that the question is a probe: the caller is deciding
+  // what to show, as when it filters a list or enables a control. A
+  // denied probe is not recorded (ADR-0148). The default is an
+  // attempt, a request someone made, and a denied attempt is.
+  bool probe = 6;
 }
 
 // Reason names one ground of a decision.
@@ -130,6 +142,8 @@ message Evaluation {
   Action action = 2;
   Resource resource = 3;
   google.protobuf.Struct context = 4;
+  // probe, where set, replaces the request's.
+  optional bool probe = 5;
 }
 
 // EvaluationsRequest holds the defaults its evaluations share.
@@ -140,6 +154,8 @@ message EvaluationsRequest {
   google.protobuf.Struct context = 4;
   Read read = 5;
   repeated Evaluation evaluations = 6;
+  // probe is the default of every entry, as EvaluateRequest's is.
+  bool probe = 7;
 }
 
 message EvaluationsResponse {
@@ -362,4 +378,74 @@ message ListPoliciesRequest {
 
 message ListPoliciesResponse {
   repeated PolicySummary policies = 1;
+}
+
+// AuditRecordKind is what an audit record is.
+enum AuditRecordKind {
+  AUDIT_RECORD_KIND_UNSPECIFIED = 0;
+  // AUDIT_RECORD_KIND_WRITE is a write of a policy.
+  AUDIT_RECORD_KIND_WRITE = 1;
+  // AUDIT_RECORD_KIND_DENIAL is a denial, or the identical denials of
+  // one hour, counted.
+  AUDIT_RECORD_KIND_DENIAL = 2;
+  // AUDIT_RECORD_KIND_DENIAL_OVERFLOW counts the denials of one UTC day
+  // that the organization's cap stored no record for, and holds
+  // nothing else.
+  AUDIT_RECORD_KIND_DENIAL_OVERFLOW = 3;
+}
+
+// AuditRecord is one record of an organization, all of it readable by
+// the organization's owners and administrators. It holds no policy
+// text, no context, no token and no fault text.
+message AuditRecord {
+  int64 id = 1;
+  AuditRecordKind kind = 2;
+  // first_at is when a write was made or a denial first occurred.
+  google.protobuf.Timestamp first_at = 3;
+  // last_at is when a denial last occurred, and a write's first_at.
+  google.protobuf.Timestamp last_at = 4;
+  // count is how many identical denials the record holds; 1 for a
+  // write.
+  int64 count = 5;
+  // service is the `sub` of the service that made the request. It is
+  // empty on an overflow record.
+  string service = 6;
+  // subject is the GRN of who asked or wrote, and empty for a write
+  // the service made with no writer and on an overflow record.
+  string subject = 7;
+  // action is in its qualified wire form, such as `iam:permit.write`.
+  string action = 8;
+  // resource is the GRN asked about; for a write, the policy's.
+  string resource = 9;
+  // outcome is `deny`, or `created`, `version-added`, `activated`,
+  // `rolled-back` or `removed`.
+  string outcome = 10;
+  // policy_ids are the policies of a denial's reasons, with `fault`
+  // for a reason that is an evaluation fault; for a write, the
+  // policy.
+  repeated string policy_ids = 11;
+  // version_from is the default a write moved from, or 0.
+  int32 version_from = 12;
+  // version_to is the version a write wrote or moved to, or 0.
+  int32 version_to = 13;
+  // day is the first second of the UTC day an overflow record holds.
+  google.protobuf.Timestamp day = 14;
+}
+
+// ListAuditRecordsRequest names the reader, who must hold
+// `iam:audit.read` on the organization.
+message ListAuditRecordsRequest {
+  Subject writer = 1;
+  string org = 2;
+  // page_size is at most the service's bound, and 0 asks the bound.
+  int32 page_size = 3;
+  // page_token is the previous response's next_page_token.
+  string page_token = 4;
+}
+
+message ListAuditRecordsResponse {
+  // records are newest first.
+  repeated AuditRecord records = 1;
+  // next_page_token reads the next page, and is empty at the end.
+  string next_page_token = 2;
 }

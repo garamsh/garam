@@ -174,6 +174,7 @@ fn question(who: Named, name: &str, what: Named) -> EvaluateRequest {
         resource: resource(what),
         context: None,
         read: 0,
+        probe: false,
     }
 }
 
@@ -257,6 +258,7 @@ async fn evaluations_with_no_entries_answer_the_question_the_defaults_state(pool
         resource: resource(BOT),
         context: None,
         read: 0,
+        probe: false,
         evaluations: vec![],
     };
 
@@ -295,6 +297,7 @@ async fn a_bad_entry_is_denied_where_it_stands_and_the_rest_are_answered(pool: P
         action: None,
         resource: None,
         context: None,
+        probe: None,
     };
 
     let answers = client
@@ -304,6 +307,7 @@ async fn a_bad_entry_is_denied_where_it_stands_and_the_rest_are_answered(pool: P
             resource: resource(BOT),
             context: None,
             read: 0,
+            probe: false,
             evaluations: vec![
                 entry(LEE),
                 entry(("Nope", "x")),
@@ -333,12 +337,14 @@ async fn a_batch_past_the_bound_is_refused(pool: PgPool) {
         resource: resource(BOT),
         context: None,
         read: 0,
+        probe: false,
         evaluations: vec![
             Evaluation {
                 subject: None,
                 action: None,
                 resource: None,
                 context: None,
+                probe: None,
             };
             entries
         ],
@@ -400,6 +406,7 @@ async fn mia_may_read(client: &mut PolicyServiceClient<Channel>) -> bool {
             resource: resource(BOT),
             context: None,
             read: 0,
+            probe: false,
         }))
         .await
         .unwrap()
@@ -598,6 +605,7 @@ async fn evaluations_answer_in_order_and_take_the_requests_defaults(pool: PgPool
         action: None,
         resource: None,
         context: None,
+        probe: None,
     };
 
     let answers = client
@@ -607,6 +615,7 @@ async fn evaluations_answer_in_order_and_take_the_requests_defaults(pool: PgPool
             resource: resource(BOT),
             context: None,
             read: 0,
+            probe: false,
             evaluations: vec![entry(MIA), entry(LEE), entry(MIA)],
         }))
         .await

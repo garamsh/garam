@@ -569,10 +569,39 @@ membership routes do (`Gate.AwaitScoped`, the same bound and the same
 two reasons). An update waits only when its body wrote the roles; one
 that did not is answered at once, whatever mark of its owner is set
 aside, since it asked nothing of the policy service. A write of the
-roles is answered by what the service then says. The other requests
-that change a fed entity do not wait yet, among them deleting an
-organization, which waits for its members' links and not for the
-scoped marks its groups' and projects' deletions raise.
+roles is answered by what the service then says.
+
+Every other request that changes a fed entity waits as well, on the
+marks its own write raised (ADR-0165): `Gate.AwaitMarks` reads each
+by its kind's state function under one bound and answers at once for
+none. These wait: creating an organization, deleting an organization
+(on every mark its cascade raised, collected from its own transaction
+by `policyfeedpg.Record` as the group's and the project's deletions
+are), creating and deleting a group or a project, adding and removing
+a member of either, registering and deleting an operator, writing and
+ending an operator's delegation, granting and withdrawing a
+consent, registration, accepting an invitation, the first sign-in
+that created the user, and on the machine listener creating a managed
+agent, admitting an enrollment of a new agent and enrolling a new
+standalone agent. A request that raised several marks names them in one
+list, role links and scoped links included, and waits under one bound.
+A repeat sign-in, a replacement of an agent that exists (the store
+says which an enrollment was by `EnrollmentResult.Replaced`), a rename,
+and every other write raise no mark and answer at once, whatever older
+mark is set aside. A first sign-in that created the user waits up to the
+bound and then redirects as on success, logging the mark still
+pending: its session is set and a redirect cannot carry a 503, and the
+first request that needs the user in the service waits on the mark
+again. Registration and accepting an invitation keep the 503. The
+machine process holds a gate with no loop (`NewObservingGate`) over the
+same outbox, installed whether or not the feed is on: it answers when
+the api's loop has delivered, at once with the feed off, and with the
+feed on and no deliverer every create answers `503` at the bound for
+good. The api's loop polls every second and backs off up to 30
+seconds, so after a recovery a creation can still answer `503` for up
+to that long. With the feed off no route waits, and an api with no
+policy address has no gate; the machine listener's gate is always
+there.
 
 `garam policy-feed start` marks every membership, group and project
 with the rest of the backfill, and so do migrations 000075 and 000079

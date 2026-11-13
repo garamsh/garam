@@ -141,6 +141,10 @@ type EnrollmentResult struct {
 	// replacement moved it, which the new supervisor's first
 	// activation names; nil for a new agent and one never activated.
 	ReplacesActivation *ActivationID
+	// Replaced is true when the approval was a replacement's, whether
+	// or not the agent was ever activated: the enrollment moved an
+	// agent that exists and created none.
+	Replaced bool
 }
 
 // EnrollmentInput is a host spending its approval, as received. Body

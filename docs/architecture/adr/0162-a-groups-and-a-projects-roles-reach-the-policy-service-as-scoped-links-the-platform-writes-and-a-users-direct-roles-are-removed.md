@@ -6,7 +6,10 @@
 > in part (inventory row 2, "A user's direct roles", which is removed
 > and not written as a link) and extends
 > [ADR-0159](./0159-role-links-follow-the-entities-in-one-pass-the-platforms-tables-win-a-failed-write-and-a-request-finishes-its-work-before-it-waits.md)
-> item 4, whose "second kind of mark" is the first of a family
+> item 4, whose "second kind of mark" is the first of a family, and
+> extended by
+> [ADR-0165](./0165-every-request-that-changes-a-fed-entity-answers-after-its-delivery-by-the-marks-its-own-write-raised.md)
+> (the wait on a mark reaches every route that raises one)
 > Date: 2026-11-14
 
 Drafted for #1896, which reserves this number. It records the

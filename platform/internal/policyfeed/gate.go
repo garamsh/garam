@@ -2,6 +2,8 @@ package policyfeed
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/garamsh/garam/lib/errorx"
@@ -63,6 +65,12 @@ type Gate interface {
 	// AwaitEntity wakes the loop and returns once the outbox holds no
 	// mark of the entity, or ErrNotApplied at the bound.
 	AwaitEntity(ctx context.Context, entity Entity) error
+	// AwaitMarks wakes the loop and returns once the outbox holds no
+	// mark of any of marks, each named by the kind and identifier it
+	// was written under, or at once where there are none. It returns
+	// ErrNotApplied at the bound, and ErrLinkSetAside as soon as a
+	// link among them is set aside (ADR-0165 item 2).
+	AwaitMarks(ctx context.Context, marks []Entity) error
 }
 
 type gate struct {
@@ -74,6 +82,56 @@ type gate struct {
 // NewGate constructs a gate over the outbox store, waking svc's loop.
 func NewGate(store Store, svc Service, bound time.Duration) Gate {
 	return &gate{store: store, wake: svc.Wake, bound: bound}
+}
+
+// NewObservingGate constructs a gate over the outbox store for a
+// process that runs no delivery loop: it wakes nothing and reads the
+// outbox until another process's loop has delivered (ADR-0165 item 6).
+func NewObservingGate(store Store, bound time.Duration) Gate {
+	return &gate{store: store, wake: func() {}, bound: bound}
+}
+
+func (g *gate) AwaitMarks(ctx context.Context, marks []Entity) error {
+	if len(marks) == 0 {
+		return nil
+	}
+	// A mark seen absent stays settled for this wait, so a tick reads
+	// only the marks still pending: a request that names many reads
+	// fewer as the loop delivers them.
+	pending := slices.Clone(marks)
+	return g.wait(ctx, "await marks", func() (bool, error) {
+		stillPending := pending[:0]
+		for _, m := range pending {
+			state, err := g.markState(ctx, m)
+			switch {
+			case err != nil:
+				return false, err
+			case state == LinkSetAside:
+				return false, ErrLinkSetAside
+			case state != LinkApplied:
+				stillPending = append(stillPending, m)
+			}
+		}
+		pending = stillPending
+		return len(pending) == 0, nil
+	})
+}
+
+// markState reads where the outbox's mark of m stands, by the read its
+// kind has.
+func (g *gate) markState(ctx context.Context, m Entity) (LinkState, error) {
+	switch m.Type {
+	case RoleLinkType:
+		org, user, _ := strings.Cut(m.ID, " ")
+		return g.store.LinkState(ctx, org, user)
+	case ScopedRoleLinkType:
+		return g.store.ScopedLinkState(ctx, m.ID)
+	}
+	pending, err := g.store.EntityPending(ctx, m)
+	if pending {
+		return LinkPending, err
+	}
+	return LinkApplied, err
 }
 
 func (g *gate) AwaitEntity(ctx context.Context, entity Entity) error {

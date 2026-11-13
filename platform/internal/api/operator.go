@@ -7,6 +7,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 )
 
 // RegisterOperator records that the org has an operator under the
@@ -51,6 +52,7 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 		}
 	}
 	var registered *operator.Operator
+	marks := []policyfeed.Entity{{Type: policyfeed.OperatorType, ID: o.GRN.String()}}
 	if body.ControlService != nil {
 		// The pair is recorded in one write, or neither is (ADR-0124).
 		control, err := controlServiceOf(o, body.ControlService.Identifier,
@@ -64,12 +66,17 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 			writeError(w, err)
 			return
 		}
+		marks = append(marks, policyfeed.Entity{Type: policyfeed.OperatorType, ID: control.GRN.String()})
 	} else {
 		registered, err = s.operators.Register(r.Context(), o)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
+	}
+	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(), marks...); err != nil {
+		writeError(w, err)
+		return
 	}
 	writeJSON(w, http.StatusCreated, operatorToAPI(registered))
 }
@@ -114,6 +121,11 @@ func (s *Server) DeleteOperator(w http.ResponseWriter, r *http.Request, orgSlug 
 		return
 	}
 	if err := s.operators.Delete(r.Context(), g); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(),
+		policyfeed.Entity{Type: policyfeed.OperatorType, ID: g.String()}); err != nil {
 		writeError(w, err)
 		return
 	}

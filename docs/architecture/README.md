@@ -1481,3 +1481,13 @@ ADRs:
   `supervisor-agent-activate` permits it where the resource is that
   agent; no `permit` of an organization reaches it; accepted, built in
   the policy service (#1905); corrects row 6 of 0146's inventory
+- [0165](./adr/0165-every-request-that-changes-a-fed-entity-answers-after-its-delivery-by-the-marks-its-own-write-raised.md)
+  — every request whose write raises an outbox mark waits on those
+  marks, read by their kind's state function under one bound and
+  answering at once for none, with ADR-0159's bound and ADR-0160's
+  two answers and no new reason; a delete that cascades records the
+  marks of its own transaction; a first sign-in waits and redirects at
+  the bound, and a repeat one does not wait, nor does a replacement of
+  an agent; the machine listener
+  waits through a gate that observes the outbox with no loop, with no
+  new setting; accepted, built (#1909); extends 0159 and 0162

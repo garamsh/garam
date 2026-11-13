@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,9 +20,15 @@ import (
 // answering what the test sets and recording what it was asked.
 type recordingGate struct {
 	err      error
-	asked    []string
 	entities []policyfeed.Entity
 	scoped   []string
+	// marked holds the marks each AwaitMarks call named.
+	marked [][]policyfeed.Entity
+}
+
+func (g *recordingGate) AwaitMarks(_ context.Context, marks []policyfeed.Entity) error {
+	g.marked = append(g.marked, marks)
+	return g.err
 }
 
 func (g *recordingGate) AwaitScoped(_ context.Context, owner string) error {
@@ -36,18 +41,24 @@ func (g *recordingGate) AwaitEntity(_ context.Context, e policyfeed.Entity) erro
 	return g.err
 }
 
-func (g *recordingGate) Await(_ context.Context, org, user string) error {
-	g.asked = append(g.asked, org+" "+user)
+func (g *recordingGate) Await(context.Context, string, string) error {
 	return g.err
 }
 
-// lastOrg is the organization the gate was last asked about.
+// lastOrg is the organization whose entity the gate was last asked
+// about, which a create names.
 func (g *recordingGate) lastOrg(t *testing.T) grn.GRN {
 	t.Helper()
-	require.NotEmpty(t, g.asked)
-	g1, err := grn.Parse(strings.Fields(g.asked[len(g.asked)-1])[0])
-	require.NoError(t, err)
-	return g1
+	require.NotEmpty(t, g.marked)
+	for _, m := range g.marked[len(g.marked)-1] {
+		if m.Type == policyfeed.OrgType {
+			g1, err := grn.Parse(m.ID)
+			require.NoError(t, err)
+			return g1
+		}
+	}
+	require.FailNow(t, "the last wait named no organization")
+	return grn.GRN{}
 }
 
 // notApplied reads the answer at the bound: 503, the reason that tells
@@ -89,12 +100,12 @@ func TestCreateOrg_AnswersUnavailableWhileTheRoleLinkIsNotApplied(t *testing.T) 
 
 	rec := f.do(t, "POST", "/orgs", `{"name":"acme"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code, "the link is in force")
-	require.Len(t, gate.asked, 1, "the answer waited once")
+	require.Len(t, gate.marked, 1, "the answer waited once")
 
 	gate.err = policyfeed.ErrNotApplied
 	rec = f.do(t, "POST", "/orgs", `{"name":"globex"}`, owner)
 
-	require.Len(t, gate.asked, 2)
+	require.Len(t, gate.marked, 2)
 	notApplied(t, rec, gate.lastOrg(t))
 	_, err := f.orgs.GetOrg(context.Background(), gate.lastOrg(t))
 	assert.NoError(t, err, "the change is stored whatever the wait said")
@@ -157,13 +168,13 @@ func TestDeleteOrg_AnswersUnavailableWhileTheRemovalIsNotApplied(t *testing.T) {
 
 	rec := f.do(t, "DELETE", "/orgs/"+first, "", owner)
 	require.Equal(t, http.StatusNoContent, rec.Code, "the removal is in force")
-	require.Equal(t, []string{grn.Org(first).String() + " "}, gate.asked)
+	require.Len(t, gate.marked, 1, "the answer waited once")
 
 	gate.err = policyfeed.ErrNotApplied
 	rec = f.do(t, "DELETE", "/orgs/"+second, "", owner)
 
 	notApplied(t, rec, grn.Org(second))
-	assert.Equal(t, grn.Org(second).String()+" ", gate.asked[1])
+	assert.Len(t, gate.marked, 2)
 	_, err := f.orgs.GetOrg(context.Background(), grn.Org(second))
 	assert.Error(t, err, "the deletion is stored whatever the wait said")
 }
@@ -185,7 +196,10 @@ func TestAcceptInvitation_AnswersUnavailableWhileTheRoleLinkIsNotApplied(t *test
 
 	rec := f.do(t, "POST", "/invitations/tok-clear/accept", "", joiner)
 	require.Equal(t, http.StatusOK, rec.Code, "the link is in force")
-	require.Equal(t, []string{grn.Org("acme").String() + " " + joinerGRN.String()}, gate.asked)
+	require.Equal(t, [][]policyfeed.Entity{{
+		{Type: policyfeed.RoleLinkType, ID: grn.Org("acme").String() + " " + joinerGRN.String()},
+		{Type: policyfeed.UserType, ID: joinerGRN.String()},
+	}}, gate.marked, "the answer waited once, for the link and the user")
 
 	gate.err = policyfeed.ErrNotApplied
 	rec = f.do(t, "POST", "/invitations/tok-held/accept", "", joiner)
@@ -216,7 +230,7 @@ func TestRegisterPassword_AnswersUnavailableWithTheSessionItStarted(t *testing.T
 
 	rec := f.do(t, "POST", "/auth/password/register", registerBody("tok-clear", "alice", registeredPassword))
 	require.Equal(t, http.StatusCreated, rec.Code, "the link is in force")
-	require.Len(t, gate.asked, 1)
+	require.Len(t, gate.marked, 1, "the answer waited once")
 
 	gate.err = policyfeed.ErrNotApplied
 	rec = f.do(t, "POST", "/auth/password/register", registerBody("tok-held", "bob", registeredPassword))
@@ -302,18 +316,23 @@ func TestScopedRoles_AnswerUnavailableWhileTheScopedLinkIsNotApplied(t *testing.
 	for _, kind := range []string{"groups", "projects"} {
 		t.Run(kind, func(t *testing.T) {
 			gate.scoped = nil
+			gate.marked = nil
 			gate.err = nil
 			rec := f.do(t, "POST", base+"/"+kind, `{"name":"x","roles":["admin"]}`, owner)
 			require.Equal(t, http.StatusCreated, rec.Code, "the link is in force")
 			created, err := grn.Parse(decodeBody[apigen.Group](t, rec).Grn)
 			require.NoError(t, err)
+			require.Len(t, gate.marked, 1, "a create waits once")
+			assert.Contains(t, gate.marked[0], policyfeed.Entity{Type: policyfeed.ScopedRoleLinkType, ID: created.String()},
+				"and names the scoped link in that wait")
+			assert.Empty(t, gate.scoped, "and asks the scoped gate nothing")
 			path := base + "/" + kind + "/" + created.Identifier
 			rec = f.do(t, "PATCH", path, `{"roles":["member"]}`, owner)
 			require.Equal(t, http.StatusOK, rec.Code, "the link is in force")
 			rec = f.do(t, "PATCH", path, `{"name":"y"}`, owner)
 			require.Equal(t, http.StatusOK, rec.Code, "the link is in force")
-			require.Equal(t, []string{created.String(), created.String()}, gate.scoped,
-				"the rename asked the gate nothing")
+			require.Equal(t, []string{created.String()}, gate.scoped,
+				"the roles asked the gate once and the rename nothing")
 			gate.err = policyfeed.ErrLinkSetAside
 			rec = f.do(t, "PATCH", path, `{"name":"w"}`, owner)
 			assert.Equal(t, http.StatusOK, rec.Code, "a rename is not answered by a set-aside mark")

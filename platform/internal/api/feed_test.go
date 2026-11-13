@@ -20,8 +20,14 @@ import (
 // recordingGate is the wait a request makes for the policy service,
 // answering what the test sets and recording what it was asked.
 type recordingGate struct {
-	err   error
-	asked []string
+	err      error
+	asked    []string
+	entities []policyfeed.Entity
+}
+
+func (g *recordingGate) AwaitEntity(_ context.Context, e policyfeed.Entity) error {
+	g.entities = append(g.entities, e)
+	return g.err
 }
 
 func (g *recordingGate) Await(_ context.Context, org, user string) error {
@@ -218,4 +224,47 @@ func TestRegisterPassword_AnswersUnavailableWithTheSessionItStarted(t *testing.T
 	_, err := f.orgs.GetMember(context.Background(), grn.Org("globex"),
 		grn.New("root", user.ServiceType, "local-bob"))
 	assert.NoError(t, err, "the membership is stored whatever the wait said")
+}
+
+// TestConsents_AnswerUnavailableWhileTheOrgEntityIsNotApplied holds
+// the wait of a grant and of a withdrawal (ADR-0159 item 3): at the
+// bound the half is stored whatever the wait said, and the answer is
+// 503 with the reason that tells a stored change from a service down,
+// naming the organization that made it.
+//
+// The clear gate is the control: the same routes answer 200 and 204,
+// asking the gate about the organization's entity each time.
+func TestConsents_AnswerUnavailableWhileTheOrgEntityIsNotApplied(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	f.permit(permission{ownerGRN, org.ActionConsentGrant},
+		permission{ownerGRN, org.ActionConsentWithdraw})
+	acme := orgGRNForTest(slug)
+	globex := orgGRNForTest("globex")
+	require.NoError(t, f.orgs.CreateOrg(testCtx(t), org.NewOrganization(globex, "globex")))
+	gate := &recordingGate{}
+	f.server.WithFeed(gate)
+	path := "/orgs/" + slug + "/consents/globex"
+	entity := policyfeed.Entity{Type: "Iam::Org", ID: acme.String()}
+
+	rec := f.do(t, "PUT", path, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code, "the grant is in force")
+	rec = f.do(t, "DELETE", path, "", owner)
+	require.Equal(t, http.StatusNoContent, rec.Code, "the withdrawal is in force")
+	require.Equal(t, []policyfeed.Entity{entity, entity}, gate.entities)
+
+	gate.err = policyfeed.ErrNotApplied
+	rec = f.do(t, "PUT", path, "", owner)
+	storedAnswer(t, rec, acme, policyfeed.ReasonChangeNotApplied)
+	listed, err := f.consents.List(testCtx(t), acme)
+	require.NoError(t, err)
+	require.Len(t, listed, 1, "the half is stored whatever the wait said")
+
+	rec = f.do(t, "DELETE", path, "", owner)
+	storedAnswer(t, rec, acme, policyfeed.ReasonChangeNotApplied)
+	listed, err = f.consents.List(testCtx(t), acme)
+	require.NoError(t, err)
+	assert.Empty(t, listed, "the withdrawal is stored whatever the wait said")
 }

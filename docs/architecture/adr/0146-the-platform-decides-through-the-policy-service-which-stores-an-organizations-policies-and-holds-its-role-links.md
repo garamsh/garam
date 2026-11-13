@@ -13,7 +13,10 @@
 > and §Reading one's own write's answer at the bound, which gains a
 > reason and the stored resource), and by
 > [ADR-0161](./0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)
-> (a writer writes under no identifier a member's link is named by)
+> (a writer writes under no identifier a member's link is named by).
+> Row 6 of the inventory is corrected by
+> [ADR-0164](./0164-the-policy-service-decides-a-supervisors-activation-of-the-agent-it-holds.md):
+> a supervisor's activation of the agent it holds is a system policy
 > Date: 2026-11-12
 
 Drafted for #1799, under #1796, which holds the owner's decisions of

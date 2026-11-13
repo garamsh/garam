@@ -103,8 +103,9 @@ only in the policy service: nothing sends one yet.
   is bounded as a guardrail's is. A decision composes the
   organization's `permit` policies beside its guardrails, and
   `access-report` lists one by its id, and a `permit` never reaches an
-  operator: a decision for an `Iam::Operator` composes the
-  organization's guardrails and none of its `permit`s. An RPC writes
+  operator or a supervisor: a decision for an `Iam::Operator` or an
+  `Iam::Supervisor` composes the organization's guardrails and none of
+  its `permit`s. An RPC writes
   one (item 3 of ADR-0146). Not built: a check of an entity literal in
   a `permit`'s principal scope or condition.
 
@@ -205,7 +206,16 @@ true of the platform.
   operator's place among its organization's members (#1891, §Operator
   operations under Delivery), and still decides an operator's authority
   itself until its own round: the policy service holds the operations
-  and no request asks it about them yet. Only an
+  and no request asks it about them yet. A standalone host's
+  supervisor is the second such identity
+  ([ADR-0164](./adr/0164-the-policy-service-decides-a-supervisors-activation-of-the-agent-it-holds.md)):
+  `Iam::Supervisor` is an entity the platform feeds, carrying the
+  optional `agent` it holds, a principal of `iam:agent.activate` alone,
+  and a system policy permits it that action where the resource is that
+  agent. The policy service holds this half (#1905), correcting row 6
+  of ADR-0146's inventory; the platform does not yet feed a supervisor
+  and still decides its activation itself in
+  `lifecycleAuthorization.supervising`. Only an
   owner writes a `permit`, so an administrator keeps assigning the
   roles it holds and writing guardrails and no longer writes an
   `Allow`.

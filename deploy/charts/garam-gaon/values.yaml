@@ -102,8 +102,9 @@ policy:
     key: *ref
 
 # garam's own OIDC issuer, off until named
-# (deployment-contract.md §The identity issuer is off until it is named).
-# `issuer` is https://<lowercase host>/api with no trailing slash, never
+# (deployment-contract.md §The identity issuer is off until it is
+# named). `issuer` is https://<lowercase host>/api with no trailing
+# slash, never
 # machine.issuer, and the same as policy.tokenIssuer: serve refuses to
 # start otherwise. Set, `api` and `machine` both serve it, and `machine`
 # is given the signing key api.policy.signingKey names. `serviceKeys` is

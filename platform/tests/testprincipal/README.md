@@ -43,8 +43,8 @@ process using the database has stopped:
 ```
 
 `go run github.com/garamsh/garam/platform/tests/testprincipal@<revision>`
-is not a supported invocation: `-migrations` names a checkout's directory, and
-nothing verifies that a module cache copy serves.
+is not a supported invocation: `-migrations` names a checkout's
+directory, and nothing verifies that a module cache copy serves.
 
 ## Contract 1
 

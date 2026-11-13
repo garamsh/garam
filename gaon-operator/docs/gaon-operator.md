@@ -278,14 +278,24 @@ above.
 
 ### What is not established
 
-- **A registration against a real control service and gaon.** The
-  route, `POST /v1/operators/self/agents/{agent}/placements`, and its
-  answers are read from garam-agent-operator `control.md` at commit
-  `ac7c9f3c40b9611f6e2bdf1eba62c14e145b4aec`, and the tests run against
-  a stand-in. Whether the control service accepts a MicroVM's uid as
-  `podUid` and a Volume's as `pvcUid`, and whether gaon returns a
-  Secret's `data` on a list, which the digest is made from, was not
-  run.
+- **A registration against a real gaon.** `make -C gaon-operator
+  pair-run` (`pair-run/pair-run.sh`) runs the operator against garam's
+  stack and the released control service, and the control service
+  answers the placement 201 with a uid the stand-in made. Its gaon API
+  is `tests/gaonstandin`, which serves `tests/gaonfake` on a port, so
+  the run does not show:
+  - gaon's RBAC: a label-limited role is never refused, and a get is
+    not refused by label;
+  - garbage collection by `ownerReferences`, the Node authorizer,
+    binding and `bindingEpoch`, a watch;
+  - that gaon returns a Secret's `data` on a list, which the digest is
+    made from, and that a uid gaon made is accepted as `podUid` and
+    `pvcUid`;
+  - a MicroVM starting: the stand-in has no scheduler or guest, and the
+    run states `Running` and `Ready` through an admin path that is not
+    gaon's;
+  - the 204 of the operator's report: the operator does not log it, and
+    the run reads garam's `provisioningState` instead.
 - **A first placement only.** `previous` is always null.
   `writerStoppedSha256`, the SHA-256 of the canonical JSON of the stop
   observed on an earlier MicroVM, is not built, so a replaced MicroVM is

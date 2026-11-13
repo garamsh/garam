@@ -93,6 +93,9 @@ func change(e policyfeed.Entry, sequence int64) *policyv1.EntityChange {
 	for i, p := range e.State.Parents {
 		upsert.Parents[i] = ref(p)
 	}
+	for _, o := range e.State.Consents {
+		upsert.Consents = append(upsert.Consents, ref(o))
+	}
 	c.Operation = &policyv1.EntityChange_Upsert{Upsert: upsert}
 	return c
 }

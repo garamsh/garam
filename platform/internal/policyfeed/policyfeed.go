@@ -34,6 +34,9 @@ type State struct {
 	// Members is the OrgMembers an Org names as its own.
 	Members *Entity
 	Parents []Entity
+	// Consents are the organizations toward which an Org holds a
+	// consent half that stands (ADR-0147 item 2).
+	Consents []Entity
 }
 
 // RoleLinkType is the mark kind of a member's role link (ADR-0146

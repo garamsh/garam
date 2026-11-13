@@ -31,7 +31,24 @@ func (s *Server) awaitLinks(ctx context.Context, orgGRN, userGRN string) error {
 	if s.feed == nil {
 		return nil
 	}
-	err := s.feed.Await(ctx, orgGRN, userGRN)
+	return namesStored(s.feed.Await(ctx, orgGRN, userGRN), orgGRN)
+}
+
+// awaitOrg holds the answer of a request that has committed a change
+// to what the organization's entity carries, its consents, until the
+// policy service has applied it (ADR-0159 item 3), and answers as
+// awaitLinks does.
+func (s *Server) awaitOrg(ctx context.Context, orgGRN string) error {
+	if s.feed == nil {
+		return nil
+	}
+	err := s.feed.AwaitEntity(ctx, policyfeed.Entity{Type: "Iam::Org", ID: orgGRN})
+	return namesStored(err, orgGRN)
+}
+
+// namesStored wraps an error that says the change is stored but not
+// applied with the organization it concerns.
+func namesStored(err error, orgGRN string) error {
 	if errors.Is(err, policyfeed.ErrNotApplied) ||
 		errors.Is(err, policyfeed.ErrLinkSetAside) {
 		return &storedError{error: err, resource: orgGRN}

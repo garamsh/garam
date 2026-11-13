@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/gaon/lib/api"
+
 	"github.com/garamsh/garam/gaon-operator/internal/agent"
 	"github.com/garamsh/garam/gaon-operator/internal/cli"
 	"github.com/garamsh/garam/gaon-operator/tests/gaonfake"
@@ -136,6 +138,7 @@ func newSetup(t *testing.T) setup {
 
 func TestRun_ExchangesReadsTheFeedRendersAndStopsGracefully(t *testing.T) {
 	s := newSetup(t)
+	s.env["AGENT_CPU"], s.env["AGENT_MEMORY"] = "1", "1Gi"
 	runCtx, stop := context.WithCancel(t.Context())
 	var out strings.Builder
 	done := make(chan error, 1)
@@ -150,6 +153,17 @@ func TestRun_ExchangesReadsTheFeedRendersAndStopsGracefully(t *testing.T) {
 		_ = res.Body.Close()
 		return res.StatusCode == http.StatusOK
 	}, 10*time.Second, 20*time.Millisecond)
+
+	// The MicroVM names the configured resources, which gaon's Node
+	// Agent needs before it starts one.
+	for _, r := range s.gaon.Requests() {
+		if r.Method == "PUT" && r.Kind == "microvms" {
+			m, ok := s.gaon.MicroVM(t, r.Name)
+			require.True(t, ok)
+			assert.Equal(t, api.ResourceList{CPU: "1", Memory: "1Gi"}, m.Spec.Resources.Limits)
+			assert.Equal(t, api.ResourceList{CPU: "1", Memory: "1Gi"}, m.Spec.Resources.Requests)
+		}
+	}
 
 	// Two exchanges: garam's own and the control service's.
 	var audiences []string

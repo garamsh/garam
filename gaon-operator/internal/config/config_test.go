@@ -74,6 +74,22 @@ func TestLoad_NamesEveryMissingSettingAndNoValue(t *testing.T) {
 	assert.NotContains(t, err.Error(), "gaon.example")
 }
 
+func TestLoad_TheMicroVMsResourcesAreOptional(t *testing.T) {
+	c, err := config.Load(get(full))
+	require.NoError(t, err)
+	assert.Empty(t, c.AgentCPU)
+	assert.Empty(t, c.AgentMemory)
+
+	with := map[string]string{"AGENT_CPU": "1", "AGENT_MEMORY": "1Gi"}
+	for k, v := range full {
+		with[k] = v
+	}
+	c, err = config.Load(get(with))
+	require.NoError(t, err)
+	assert.Equal(t, "1", c.AgentCPU)
+	assert.Equal(t, "1Gi", c.AgentMemory)
+}
+
 func TestLoad_TheGuestAddressesDefaultToTheOperatorsOwn(t *testing.T) {
 	c, err := config.Load(get(full))
 	require.NoError(t, err)

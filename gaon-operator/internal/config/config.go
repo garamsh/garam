@@ -43,6 +43,12 @@ type Config struct {
 	// defaults to the operator's own address for the same service.
 	GuestMachineURL string
 	GuestControlURL string
+	// AgentCPU and AgentMemory are the MicroVM's requests and limits,
+	// as gaon's quantities ("1", "1Gi"). gaon's Node Agent refuses a
+	// MicroVM that names neither, so a deployment sets them; they are
+	// empty where unset.
+	AgentCPU    string
+	AgentMemory string
 	// HealthAddr is where the probes listen. It defaults to
 	// DefaultHealthAddr.
 	HealthAddr string
@@ -92,6 +98,8 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	c.GuestMachineURL = optional(getenv, "GUEST_MACHINE_URL", c.GaramMachineURL)
 	c.GuestControlURL = optional(getenv, "GUEST_CONTROL_URL", c.ControlURL)
+	c.AgentCPU = optional(getenv, "AGENT_CPU", "")
+	c.AgentMemory = optional(getenv, "AGENT_MEMORY", "")
 	c.HealthAddr = strings.TrimSpace(getenv("HEALTH_ADDR"))
 	if c.HealthAddr == "" {
 		c.HealthAddr = DefaultHealthAddr

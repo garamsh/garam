@@ -29,7 +29,7 @@ type Options struct {
 	MachineURL string
 	ControlURL string
 	// Resources are the MicroVM's requests and limits. They may be
-	// empty, which leaves the choice to gaon's scheduler.
+	// empty, which gaon's Node Agent refuses to start.
 	Resources api.ResourceRequirements
 	Logger    *slog.Logger
 	// Now is the clock, time.Now where nil. It only paces how often a

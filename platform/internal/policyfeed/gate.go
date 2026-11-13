@@ -55,6 +55,11 @@ type Gate interface {
 	// where user is empty. It returns ErrNotApplied at the bound, and
 	// ErrLinkSetAside as soon as a mark is set aside.
 	Await(ctx context.Context, org, user string) error
+	// AwaitScoped wakes the loop and returns once the outbox holds no
+	// mark of the scoped links of the group or the project owner. It
+	// returns ErrNotApplied at the bound, and ErrLinkSetAside as soon
+	// as the mark is set aside.
+	AwaitScoped(ctx context.Context, owner string) error
 	// AwaitEntity wakes the loop and returns once the outbox holds no
 	// mark of the entity, or ErrNotApplied at the bound.
 	AwaitEntity(ctx context.Context, entity Entity) error
@@ -75,6 +80,19 @@ func (g *gate) AwaitEntity(ctx context.Context, entity Entity) error {
 	return g.wait(ctx, "await entity", func() (bool, error) {
 		pending, err := g.store.EntityPending(ctx, entity)
 		return !pending, err
+	})
+}
+
+func (g *gate) AwaitScoped(ctx context.Context, owner string) error {
+	return g.wait(ctx, "await scoped role link", func() (bool, error) {
+		state, err := g.store.ScopedLinkState(ctx, owner)
+		switch {
+		case err != nil:
+			return false, err
+		case state == LinkSetAside:
+			return false, ErrLinkSetAside
+		}
+		return state == LinkApplied, nil
 	})
 }
 

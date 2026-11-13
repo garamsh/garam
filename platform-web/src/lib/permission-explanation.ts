@@ -47,7 +47,6 @@ const ExplanationParser = parserFor<PermissionExplanation>()(
         effect: z.enum(["Allow", "Deny"]),
         source: z.enum([
           "org-role",
-          "direct-role",
           "group-role",
           "project-role",
           "policy",

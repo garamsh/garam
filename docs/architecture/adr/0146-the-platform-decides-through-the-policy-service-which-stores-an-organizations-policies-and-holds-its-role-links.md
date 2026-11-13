@@ -13,7 +13,11 @@
 > and §Reading one's own write's answer at the bound, which gains a
 > reason and the stored resource), and by
 > [ADR-0161](./0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)
-> (a writer writes under no identifier a member's link is named by)
+> (a writer writes under no identifier a member's link is named by),
+> and by
+> [ADR-0162](./0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)
+> (inventory row 2, a user's direct roles, which is removed and not
+> written as a link)
 > Date: 2026-11-12
 
 Drafted for #1799, under #1796, which holds the owner's decisions of

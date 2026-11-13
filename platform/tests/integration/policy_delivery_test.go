@@ -358,7 +358,7 @@ func TestPolicyDelivery_SendsWhatTheOwnersTablesSayAndDeletesTheMarks(t *testing
 	calls := fake.received()
 	require.Len(t, calls, 1)
 	changes := changesByEntity(calls[0])
-	require.Len(t, changes, len(outboxEntities)-1, "the role link is not an entity change")
+	require.Len(t, changes, len(outboxEntities)-4, "the role links are not entity changes")
 	assert.Equal(t, []string{"MEMBER " + outboxUser + " " + outboxOrg}, fake.links(),
 		"the seeded membership reached the service as a link")
 	seqs := map[int64]bool{}

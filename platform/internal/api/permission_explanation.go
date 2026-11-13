@@ -150,8 +150,6 @@ func roleStatement(st Statement, effect apigen.ExplainedStatementEffect) apigen.
 	switch st.Origin.Kind {
 	case OriginOrgRole:
 		out.Source = apigen.SourceOrgRole
-	case OriginDirectRole:
-		out.Source = apigen.SourceDirectRole
 	case OriginGroupRole:
 		out.Source, out.Group = apigen.SourceGroupRole, &via
 	case OriginProjectRole:

@@ -46,6 +46,10 @@ func (s *Server) CreateProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), p.GRN.String()); err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusCreated, projectToAPI(p))
 }
 
@@ -140,6 +144,10 @@ func (s *Server) UpdateProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), p.GRN.String()); err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, projectToAPI(p))
 }
 
@@ -155,6 +163,10 @@ func (s *Server) DeleteProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		return
 	}
 	if err := s.orgs.DeleteProject(r.Context(), projectGRN(orgSlug, projectSlug)); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), projectGRN(orgSlug, projectSlug).String()); err != nil {
 		writeError(w, err)
 		return
 	}

@@ -26,8 +26,6 @@ type OriginKind int
 const (
 	// OriginOrgRole is the subject's org membership role.
 	OriginOrgRole OriginKind = iota
-	// OriginDirectRole is the roles stored on the subject itself.
-	OriginDirectRole
 	// OriginGroupRole is the roles of a group the subject belongs to.
 	OriginGroupRole
 	// OriginProjectRole is the roles of a project the subject belongs
@@ -37,7 +35,7 @@ const (
 
 // Origin is how a role-derived statement reaches its subject: the kind
 // of role, the role names it grants, and the group or project holding
-// them — the zero GRN for an org or direct role.
+// them — the zero GRN for an org role.
 type Origin struct {
 	Kind  OriginKind
 	Roles []string

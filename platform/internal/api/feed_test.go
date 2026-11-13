@@ -23,6 +23,12 @@ type recordingGate struct {
 	err      error
 	asked    []string
 	entities []policyfeed.Entity
+	scoped   []string
+}
+
+func (g *recordingGate) AwaitScoped(_ context.Context, owner string) error {
+	g.scoped = append(g.scoped, owner)
+	return g.err
 }
 
 func (g *recordingGate) AwaitEntity(_ context.Context, e policyfeed.Entity) error {
@@ -267,4 +273,58 @@ func TestConsents_AnswerUnavailableWhileTheOrgEntityIsNotApplied(t *testing.T) {
 	listed, err = f.consents.List(testCtx(t), acme)
 	require.NoError(t, err)
 	assert.Empty(t, listed, "the withdrawal is stored whatever the wait said")
+}
+
+// TestScopedRoles_AnswerUnavailableWhileTheScopedLinkIsNotApplied holds
+// the wait of every request that writes the roles of a group or a
+// project or ends one (ADR-0162): each asks the gate about the owner's
+// GRN, and at the bound the change is stored whatever the wait said,
+// the answer is 503 naming the organization, and a link refused for
+// good is answered with its own reason.
+//
+// The clear gate is the control: the same routes answer as they do
+// without a feed, asking the gate once each.
+func TestScopedRoles_AnswerUnavailableWhileTheScopedLinkIsNotApplied(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	f.permit(
+		permission{ownerGRN, org.ActionGroupCreate}, permission{ownerGRN, org.ActionGroupUpdate},
+		permission{ownerGRN, org.ActionGroupDelete}, permission{ownerGRN, org.ActionProjectCreate},
+		permission{ownerGRN, org.ActionProjectUpdate}, permission{ownerGRN, org.ActionProjectDelete},
+		permission{ownerGRN, org.ActionGroupRead}, permission{ownerGRN, org.ActionProjectRead})
+	gate := &recordingGate{}
+	f.server.WithFeed(gate)
+	acme := orgGRNForTest(slug)
+	base := "/orgs/" + slug
+
+	for _, kind := range []string{"groups", "projects"} {
+		t.Run(kind, func(t *testing.T) {
+			gate.scoped = nil
+			gate.err = nil
+			rec := f.do(t, "POST", base+"/"+kind, `{"name":"x","roles":["admin"]}`, owner)
+			require.Equal(t, http.StatusCreated, rec.Code, "the link is in force")
+			created, err := grn.Parse(decodeBody[apigen.Group](t, rec).Grn)
+			require.NoError(t, err)
+			path := base + "/" + kind + "/" + created.Identifier
+			rec = f.do(t, "PATCH", path, `{"roles":["member"]}`, owner)
+			require.Equal(t, http.StatusOK, rec.Code, "the link is in force")
+			rec = f.do(t, "PATCH", path, `{"name":"y"}`, owner)
+			require.Equal(t, http.StatusOK, rec.Code, "the link is in force")
+			require.Equal(t, []string{created.String(), created.String(), created.String()}, gate.scoped)
+
+			gate.err = policyfeed.ErrNotApplied
+			rec = f.do(t, "PATCH", path, `{"roles":["owner"]}`, owner)
+			notApplied(t, rec, acme)
+			rec = f.do(t, "POST", base+"/"+kind, `{"name":"z"}`, owner)
+			notApplied(t, rec, acme)
+			gate.err = policyfeed.ErrLinkSetAside
+			rec = f.do(t, "DELETE", path, "", owner)
+			storedAnswer(t, rec, acme, policyfeed.ReasonChangeRefused)
+			gate.err = nil
+			rec = f.do(t, "GET", path, "", owner)
+			assert.Equal(t, http.StatusNotFound, rec.Code, "the deletion is stored whatever the wait said")
+		})
+	}
 }

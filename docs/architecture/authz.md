@@ -180,8 +180,9 @@ true of the platform.
   membership, as the caller `platform` and with no writer, and the
   outbox carries it, so a rebuild rewrites it. Built for an
   organization membership (#1878), by the rules of §Role links under
-  Delivery; a role link of a group or a project, and a direct role,
-  are not built.
+  Delivery. A group's and a project's roles are written the same way
+  as scoped links (#1896, ADR-0162), and a user holds no role of its
+  own: `users.roles` is removed.
 - **A writer reads its own write.** A request that changes an entity, a
   membership or a policy waits, up to a bound of 5 seconds, until
   the outbox marks it wrote are applied, and is answered as
@@ -189,9 +190,11 @@ true of the platform.
   an organization membership: creating an organization, accepting an
   invitation, registering by one, and deleting an organization, and
   for the two requests that write and end an operator's delegation
-  (§Operator operations under Delivery). A request that changes any
-  other entity does not wait, except those §Consents names, and the
-  policy write is not the platform's yet.
+  (§Operator operations under Delivery), and for creating, updating
+  and deleting a group or a project, which wait on its scoped link's
+  mark (§Role links). A request that changes any other entity does not
+  wait, except those §Consents names, and the policy write is not the
+  platform's yet.
 - **Every present capability has a place.** The ADR's inventory gives
   each origin of a statement and each surface that reads a decision
   its form. A hosted operator's delegation, handed to the evaluator
@@ -480,10 +483,40 @@ person writes through the console, with a user, an agent or another
 team as principal, stays a named writer's under an identifier that
 does not open `link-scoped-`.
 
-`garam policy-feed start` marks every membership with the rest of the
-backfill, and so does migration 000075 for a feed already on, both
-raising a mark's generation if it is there, so running them again
-rewrites the same policies and no second one.
+**A group's and a project's roles are scoped links the platform
+writes** ([ADR-0162](./adr/0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md),
+migration 000079). The outbox's third kind of mark,
+`Iam::ScopedRoleLink`, has as its id the GRN of the group or the
+project, which is the link's principal and its resource; the kinds are
+the entity types, `Iam::RoleLink` and this one, each link kind read
+through its own state function (`policy_scoped_link_state` returns the
+owner's roles, each once, those the platform knows, or no row for an
+owner the tables no longer hold). A trigger marks it when a group or a
+project is inserted or deleted and when an update changes `roles`; a
+write of the name marks nothing, and the entity's own mark is not
+raised for a change of roles alone. A pass writes, after the member
+links and by name under no sequence, the policy ADR-0163 names for each
+role held, as `CreatePolicy` (`ALREADY_EXISTS` is a link written
+already) and `ActivatePolicy` with no writer and team-or-project scope,
+then deletes the policy of each of the three roles not held
+(`NOT_FOUND` is a link removed already). A role removed, a role
+changed and a deleted group or project are that one operation, and no
+past state is read. A link refused for good is set aside as a member's
+is, its owner's links of all three roles are removed, and the waiting
+request is answered `change_refused`.
+
+Creating, updating and deleting a group or a project wait for its
+mark as the membership routes do (`Gate.AwaitScoped`, the same bound
+and the same two reasons); an update that touches no role waits on no
+mark and is answered at once. The other requests that change a fed
+entity do not wait yet.
+
+`garam policy-feed start` marks every membership, group and project
+with the rest of the backfill, and so do migrations 000075 and 000079
+for a feed already on, both raising a mark's generation if it is
+there, so running them again rewrites the same policies and no second
+one. Migration 000079's down leaves the scoped links already written,
+as 000075's leaves a member's.
 
 **What stays when the feed is turned off and on.** `stop` empties the
 outbox and the triggers mark nothing while the feed is off, and
@@ -717,7 +750,6 @@ the statements that apply to that resource:
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
 | org membership role | `Role.Actions()` | the org GRN and `grn:<org>/*` |
-| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>/*` |
 | target group's roles, when the subject is a member | `org.ActionsFor(group.Roles())` | the group GRN |
 | target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
 
@@ -727,12 +759,11 @@ group and project create and patch endpoints, and are narrowed by
 resource: a group `admin`
 administers that group and nothing else, while an org `admin`
 administers everything the org owns. Unknown role names grant nothing.
-Org membership stays the precondition for every check — neither a
-group grant nor a direct role admits a non-member of the org.
-
-Roles stored on the user itself are direct grants and carry the org
-role's scope, so a direct role applies in every org the subject
-belongs to. Policies are not collected here at all — the engine owns
+Org membership stays the precondition for every check — a group grant
+does not admit a non-member of the org. A user holds no role of its
+own: the column that stored one, `users.roles`, is removed
+([ADR-0162](./adr/0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)).
+Policies are not collected here at all — the engine owns
 them and resolves them from the subject and the groups the request
 carries (§Policy attachment).
 
@@ -965,7 +996,7 @@ decides it this way:
 | subject | the agent's GRN |
 | `subject_groups` | the groups whose members list that GRN |
 | `subject_org` | the organization the agent's GRN names |
-| collected statements | none: an agent holds no membership, direct, group or project role |
+| collected statements | none: an agent holds no membership, group or project role |
 
 - **Its authority is the policies that reach it**: attached to it,
   attached to a group holding it, and the org's unattached active

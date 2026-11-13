@@ -1359,3 +1359,11 @@ ADRs:
   the open question of the guest kernel and the placement token's
   source, and the drain in start order; supersedes 0151's item 3 in
   part (the guest's user), accepted, built in `gaon-operator/`
+- [0154](./adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)
+  — the gaon operator registers each agent's first placement with the
+  control service (the MicroVM's and the memory Volume's uids, the
+  placement token's digest, a superseded body never presented again)
+  and renders the feed's configuration as two inline files and the
+  model key as an `env` `valueFrom` of the Secret `apiKeyRef` names;
+  `MODEL_KEY_*` is removed, `previous` is not built; closes ADR-0153's
+  open dependency, accepted, built in `gaon-operator/`

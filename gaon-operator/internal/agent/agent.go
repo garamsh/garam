@@ -32,6 +32,9 @@ type Desired struct {
 	// MemoryStorage and WorkspaceStorage size the agent's two Volumes.
 	MemoryStorage    api.Quantity
 	WorkspaceStorage api.Quantity
+	// Configuration is what the runtime is configured with. It is read
+	// as the wire gave it and checked where it is rendered, per agent.
+	Configuration Configuration
 }
 
 // State is a provisioning state the operator reports. `pending` is

@@ -46,6 +46,15 @@ const (
 	ControlTokenFile   = "control-token"
 )
 
+// The files the operator writes into the MicroVM for the runtime's own
+// configuration, beside the credentials: owned by UID and readable by
+// it alone, which is what keeps a tool the workspace runs (ExecUID)
+// from reading the pins the file holds.
+const (
+	RuntimeConfigFile = CredentialsDir + "runtime-config.yaml"
+	RuntimeEgoFile    = CredentialsDir + "runtime-ego.md"
+)
+
 // Program is one process of a generation. Its environment is exactly
 // Env: nothing is inherited from the supervisor. Cred, when set, is the
 // account it runs as, with no supplementary group; nil keeps the

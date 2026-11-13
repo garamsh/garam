@@ -3,9 +3,12 @@ package agent
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"strconv"
+	"time"
 
 	"github.com/garamsh/gaon/lib/api"
 
@@ -25,14 +28,20 @@ type Options struct {
 	// at. They may differ from the operator's own.
 	MachineURL string
 	ControlURL string
-	// ModelKey names the Secret key of the model's credential. It is
-	// optional: nil renders an agent with none.
-	ModelKey *ModelKey
 	// Resources are the MicroVM's requests and limits. They may be
 	// empty, which leaves the choice to gaon's scheduler.
 	Resources api.ResourceRequirements
 	Logger    *slog.Logger
+	// Now is the clock, time.Now where nil. It only paces how often a
+	// refused placement is presented again.
+	Now func() time.Time
 }
+
+// refusedWait is how long a placement the control service refused is
+// left before it is presented again. A refusal other than a superseded
+// placement may stop holding once what it names has changed, and
+// presenting it at every pass would only repeat it.
+const refusedWait = 5 * time.Minute
 
 // Service reconciles the agents the feed names into gaon.
 type Service interface {
@@ -48,27 +57,35 @@ type reportKey struct {
 }
 
 type service struct {
-	feed    Feed
-	garam   Garam
-	cluster Cluster
-	opts    Options
-	log     *slog.Logger
-	// reported and rendered only keep the operator from repeating a
-	// report it made: a restart loses them and repeats one, which is
-	// harmless where a restart that lost a token is not.
-	reported map[string]reportKey
-	rendered map[string]string
+	feed       Feed
+	garam      Garam
+	placements Placements
+	cluster    Cluster
+	opts       Options
+	log        *slog.Logger
+	// reported, rendered and registered only keep the operator from
+	// repeating a report or a registration it made: a restart loses
+	// them and repeats one, which is harmless where a restart that
+	// lost a token is not. The control service answers a placement it
+	// holds as a repeat.
+	reported   map[string]reportKey
+	rendered   map[string]string
+	registered map[string]*registration
 }
 
-// NewService returns the Service over feed, garam and cluster.
-func NewService(feed Feed, garam Garam, cluster Cluster, o Options) Service {
+// NewService returns the Service over feed, garam, placements and
+// cluster.
+func NewService(feed Feed, garam Garam, placements Placements, cluster Cluster, o Options) Service {
 	log := o.Logger
 	if log == nil {
 		log = slog.Default()
 	}
+	if o.Now == nil {
+		o.Now = time.Now
+	}
 	return &service{
-		feed: feed, garam: garam, cluster: cluster, opts: o, log: log,
-		reported: map[string]reportKey{}, rendered: map[string]string{},
+		feed: feed, garam: garam, placements: placements, cluster: cluster, opts: o, log: log,
+		reported: map[string]reportKey{}, rendered: map[string]string{}, registered: map[string]*registration{},
 	}
 }
 
@@ -131,11 +148,19 @@ func (s *service) Reconcile(ctx context.Context) error {
 		return err
 	}
 	var errs []error
-	fed := map[string]bool{}
+	fed, named := map[string]bool{}, map[string]bool{}
 	for _, d := range desired {
 		fed[namesOf(d.GRN).microvm] = true
+		named[d.GRN.String()] = true
 		if err := s.reconcileAgent(ctx, d, snap); err != nil {
 			errs = append(errs, errorx.Wrap(err, "agent "+d.GRN.String()))
+		}
+	}
+	// What is kept of an agent that left the feed is dropped, so that
+	// the map holds one entry for each agent the feed names.
+	for key := range s.registered {
+		if !named[key] {
+			delete(s.registered, key)
 		}
 	}
 	for name, m := range snap.microvms {
@@ -183,6 +208,13 @@ func (s *service) reconcileAgent(ctx context.Context, d Desired, snap *snapshot)
 			}
 		}
 	}
+	if m == nil {
+		// A configuration that cannot be rendered stops the agent
+		// before a token is minted or a Volume made for it.
+		if _, err := runtimeFor(d.Configuration); err != nil {
+			return errorx.Wrap(err, "render the configuration")
+		}
+	}
 	secret, err := s.ensureSecret(ctx, d, snap)
 	if err != nil {
 		return err
@@ -192,13 +224,17 @@ func (s *service) reconcileAgent(ctx context.Context, d Desired, snap *snapshot)
 			if snap.volumes[name] != nil {
 				continue
 			}
-			if _, err := s.cluster.PutVolume(ctx, volumeFor(name, d, volumes[name])); err != nil {
+			v, err := s.cluster.PutVolume(ctx, volumeFor(name, d, volumes[name]))
+			if err != nil {
 				return errorx.Wrap(err, "put volume "+name)
 			}
+			snap.volumes[name] = v
 		}
-	}
-	if m == nil {
-		if m, err = s.cluster.PutMicroVM(ctx, s.microVMFor(d, secret)); err != nil {
+		want, err := s.microVMFor(d, secret)
+		if err != nil {
+			return err
+		}
+		if m, err = s.cluster.PutMicroVM(ctx, want); err != nil {
 			return errorx.Wrap(err, "put microvm")
 		}
 	} else if want := strategyFor(d); m.Spec.RunStrategy != want {
@@ -207,7 +243,74 @@ func (s *service) reconcileAgent(ctx context.Context, d Desired, snap *snapshot)
 			return errorx.Wrap(err, "put microvm")
 		}
 	}
-	return s.report(ctx, d, m)
+	// A failed registration does not hold back the report, nor the
+	// report the registration: they go to two services.
+	return errors.Join(s.register(ctx, d, m, snap.volumes[n.memory], secret), s.report(ctx, d, m))
+}
+
+// registration is what the operator remembers of the placement it
+// presents for one agent. It starts afresh whenever the body changes.
+type registration struct {
+	body Placement
+	// accepted is set once the control service stored the body or held
+	// it already; superseded once it refused it for good.
+	accepted, superseded bool
+	// next is when a refused body may be presented again.
+	next time.Time
+}
+
+// register presents the placement of d: the MicroVM m on the memory
+// Volume, with the digest of the token in the agent's Secret. A stopped
+// agent has no placement to present. A body is presented until the
+// control service answers it, never again once it refused it for good,
+// and slowly after any other refusal.
+func (s *service) register(ctx context.Context, d Desired, m *api.MicroVM, memory *api.Volume, secret *api.Secret) error {
+	if d.Stopped {
+		return nil
+	}
+	token, ok := secret.Data[KeyPlacementToken]
+	if !ok || len(token) == 0 || memory == nil {
+		return errorx.New(errorx.KindFailedPrecondition, "the agent has no placement token or memory volume to register a placement from")
+	}
+	sum := sha256.Sum256(token)
+	body := Placement{
+		Epoch: strconv.FormatInt(d.Epoch, 10), PodUID: string(m.Metadata.UID), PVCUID: string(memory.Metadata.UID),
+		TokenSHA256: hex.EncodeToString(sum[:]),
+	}
+	if body.PodUID == "" || body.PVCUID == "" {
+		return errorx.New(errorx.KindFailedPrecondition, "gaon gave the agent's microvm or memory volume no uid")
+	}
+	key := d.GRN.String()
+	state := s.registered[key]
+	if state == nil || state.body != body {
+		state = &registration{body: body}
+		s.registered[key] = state
+	}
+	if state.accepted || state.superseded || s.opts.Now().Before(state.next) {
+		return nil
+	}
+	log := s.log.With(slog.String("agent", key), slog.String("microvm_uid", body.PodUID))
+	created, err := s.placements.RegisterPlacement(ctx, d.GRN, body)
+	switch {
+	case errors.Is(err, ErrPlacementSuperseded):
+		state.superseded = true
+		log.Error("the control service refused the placement for good; it is not presented again", slog.String("error", err.Error()))
+		return nil
+	case errors.Is(err, ErrPlacementRefused):
+		state.next = s.opts.Now().Add(refusedWait)
+		log.Error("the control service refused the placement; it is presented again later",
+			slog.String("error", err.Error()), slog.Duration("retry_in", refusedWait))
+		return nil
+	case err != nil:
+		return errorx.Wrap(err, "register placement")
+	}
+	state.accepted = true
+	if created {
+		log.Info("registered the agent's placement")
+	} else {
+		log.Info("the agent's placement was already registered")
+	}
+	return nil
 }
 
 // ensureSecret returns the agent's Secret. One that exists is left

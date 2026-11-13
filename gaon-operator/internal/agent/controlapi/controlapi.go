@@ -130,6 +130,61 @@ func (c *Client) ReportRendered(ctx context.Context, g grn.GRN, revision string)
 	return nil
 }
 
+// wirePlacement is the body of a placement registration, as
+// garamsh/garam-agent-operator docs/architecture/control.md pins it.
+// `previous` is always null: this operator registers an agent's first
+// placement only (ADR 0154).
+type wirePlacement struct {
+	Epoch       string  `json:"epoch"`
+	PodUID      string  `json:"podUid"`
+	PVCUID      string  `json:"pvcUid"`
+	TokenSHA256 string  `json:"tokenSha256"`
+	Previous    *string `json:"previous"`
+}
+
+// The 409 kinds that refuse a placement for good (contract C2).
+const (
+	kindPlacementSuperseded = "placement_superseded"
+	kindEpochSuperseded     = "epoch_superseded"
+)
+
+// RegisterPlacement presents p as the placement of g. It answers true
+// for a placement the control service stored (201) and false for one it
+// already held (200). A 409 placement_superseded or epoch_superseded is
+// agent.ErrPlacementSuperseded, any other 4xx is
+// agent.ErrPlacementRefused; anything else is returned as it is and is
+// worth presenting again.
+func (c *Client) RegisterPlacement(ctx context.Context, g grn.GRN, p agent.Placement) (bool, error) {
+	body, err := json.Marshal(wirePlacement{
+		Epoch: p.Epoch, PodUID: p.PodUID, PVCUID: p.PVCUID, TokenSHA256: p.TokenSHA256,
+	})
+	if err != nil {
+		return false, errorx.Wrap(err, "render the placement", errorx.KindInternal)
+	}
+	path := "/v1/operators/self/agents/" + url.PathEscape(g.String()) + "/placements"
+	status, data, err := c.send(ctx, http.MethodPost, path, nil, body, maxRefusal, 0)
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case status == http.StatusCreated:
+		return true, nil
+	case status == http.StatusOK:
+		return false, nil
+	case status < http.StatusBadRequest || status >= http.StatusInternalServerError:
+		return false, refusal("register the placement", status, data)
+	}
+	var wire struct {
+		Kind string `json:"kind"`
+	}
+	_ = json.Unmarshal(data, &wire)
+	cause := refusal("register the placement", status, data)
+	if status == http.StatusConflict && (wire.Kind == kindPlacementSuperseded || wire.Kind == kindEpochSuperseded) {
+		return false, errorx.Wrap(agent.ErrPlacementSuperseded, cause.Error())
+	}
+	return false, errorx.Wrap(agent.ErrPlacementRefused, cause.Error())
+}
+
 // send makes one request, and a second under a fresh token where the
 // control service answers 401. It returns the status and the whole
 // body, or an error where the body could not be read whole.

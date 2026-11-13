@@ -103,7 +103,10 @@ value of it. A second operator is decided and in part built, which
 runs an agent as one MicroVM on a gaon cluster
 ([ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md));
 its guest runs the three programs under accounts of its own
-([ADR-0153](./adr/0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)).
+([ADR-0153](./adr/0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)),
+and it registers the agent's first placement and renders its
+configuration and model key
+([ADR-0154](./adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)).
 The paragraph below describes the Kubernetes operator only. The images
 an agent's Pod is built from and the size of the volume it keeps state
 on are named by flags that Garam Agent Operator's `cmd/main.go` declares

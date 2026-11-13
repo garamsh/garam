@@ -34,17 +34,6 @@ const (
 	KeyPlacementToken = guest.PlacementTokenFile
 )
 
-// ModelKey is where the model's credential comes from: the key of a
-// Secret the deployment creates, and the variable the runtime reads it
-// from. The operator never reads the value.
-type ModelKey struct {
-	// Env is the variable the runtime reads the key from.
-	Env string
-	// Secret and Key name the Secret and the key in it.
-	Secret string
-	Key    string
-}
-
 // secretFor returns the Secret of d: the credentials, the two trust
 // roots the guest reads and the placement token.
 func (s *service) secretFor(d Desired, c Credentials, placement []byte) (*api.Secret, error) {
@@ -80,7 +69,11 @@ func Render(o Options, d Desired, c Credentials) (*api.Secret, *api.MicroVM, err
 	if err != nil {
 		return nil, nil, err
 	}
-	return secret, s.microVMFor(d, secret), nil
+	m, err := s.microVMFor(d, secret)
+	if err != nil {
+		return nil, nil, err
+	}
+	return secret, m, nil
 }
 
 // volumeFor returns one of d's two Volumes. A Volume outlives its
@@ -99,8 +92,13 @@ func volumeFor(name string, d Desired, size api.Quantity) *api.Volume {
 
 // microVMFor returns d's MicroVM. Every credential is a file sourced
 // from the Secret and none is an inline value: a Node may read every
-// MicroVM, so the spec is not where a secret lives.
-func (s *service) microVMFor(d Desired, secret *api.Secret) *api.MicroVM {
+// MicroVM, so the spec is not where a secret lives. What is inline is
+// the runtime's configuration and ego, which hold none (ADR 0154).
+func (s *service) microVMFor(d Desired, secret *api.Secret) (*api.MicroVM, error) {
+	settings, err := runtimeFor(d.Configuration)
+	if err != nil {
+		return nil, errorx.Wrap(err, "render the configuration")
+	}
 	n := namesOf(d.GRN)
 	keys := make([]string, 0, len(secret.Data))
 	for k := range secret.Data {
@@ -123,11 +121,11 @@ func (s *service) microVMFor(d Desired, secret *api.Secret) *api.MicroVM {
 		Spec: api.MicroVMSpec{
 			Image:       s.opts.Image,
 			Command:     []string{guest.BinaryPath},
-			Env:         s.envFor(d),
+			Env:         append(s.envFor(d), settings.env...),
 			User:        guestUser,
 			Resources:   s.opts.Resources,
 			RunStrategy: strategyFor(d),
-			Files:       files,
+			Files:       append(files, settings.files...),
 			Volumes: []api.MicroVMVolume{
 				{Name: n.memory, MountPath: memoryMountPath},
 				{Name: n.workspace, MountPath: workspaceMount},
@@ -135,27 +133,19 @@ func (s *service) microVMFor(d Desired, secret *api.Secret) *api.MicroVM {
 			Ports:          []api.MicroVMPort{{Name: supervisorPort, Port: supervisorNumber, Protocol: api.ProtocolTCP}},
 			ReadinessProbe: &api.Probe{TCPSocket: &api.TCPSocketAction{Port: api.PortRef{Name: supervisorPort}}},
 		},
-	}
+	}, nil
 }
 
-// envFor returns the guest's environment: the settings the supervisor
-// reads, each a value that is an address or an identifier, and the
-// model key, which is sourced from a Secret and never given inline.
+// envFor returns the guest's environment the supervisor reads, each a
+// value that is an address or an identifier. The runtime's own, the
+// file paths and the keys sourced from Secrets, come from runtimeFor.
 func (s *service) envFor(d Desired) []api.EnvVar {
-	env := []api.EnvVar{
+	return []api.EnvVar{
 		{Name: guest.EnvAgent, Value: d.GRN.String()},
 		{Name: guest.EnvEpoch, Value: strconv.FormatInt(d.Epoch, 10)},
 		{Name: guest.EnvMachineURL, Value: s.opts.MachineURL},
 		{Name: guest.EnvControlURL, Value: s.opts.ControlURL},
 	}
-	if k := s.opts.ModelKey; k != nil {
-		env = append(env,
-			api.EnvVar{Name: guest.EnvRuntimeEnv, Value: k.Env},
-			api.EnvVar{Name: k.Env, ValueFrom: &api.ValueSource{
-				SecretKeyRef: &api.KeyReference{Name: k.Secret, Key: k.Key},
-			}})
-	}
-	return env
 }
 
 // strategyFor is the run strategy the feed asks for: Always restarts an

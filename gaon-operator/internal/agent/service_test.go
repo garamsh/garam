@@ -21,6 +21,7 @@ import (
 	"github.com/garamsh/garam/gaon-operator/internal/agent"
 	"github.com/garamsh/garam/gaon-operator/internal/guest"
 	"github.com/garamsh/garam/gaon-operator/tests/gaonfake"
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 )
 
@@ -93,20 +94,69 @@ func (failingList) ListMicroVMs(context.Context) (*api.MicroVMList, error) {
 	return nil, errors.New("gaon unreachable")
 }
 
+// stubPlacements is a stand-in for the control service's placement
+// route. It answers created for the first body it sees from an agent
+// and not created for an identical one, as the contract does, unless a
+// test scripts an error for the agent.
+type stubPlacements struct {
+	mu     sync.Mutex
+	calls  []placementCall
+	errs   map[string]error
+	stored map[string]agent.Placement
+}
+
+type placementCall struct {
+	agent     string
+	placement agent.Placement
+}
+
+func (p *stubPlacements) RegisterPlacement(_ context.Context, g grn.GRN, body agent.Placement) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.calls = append(p.calls, placementCall{g.String(), body})
+	if err := p.errs[g.String()]; err != nil {
+		return false, err
+	}
+	if p.stored == nil {
+		p.stored = map[string]agent.Placement{}
+	}
+	if prior, ok := p.stored[g.String()]; ok && prior == body {
+		return false, nil
+	}
+	p.stored[g.String()] = body
+	return true, nil
+}
+
+func (p *stubPlacements) fail(g grn.GRN, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.errs == nil {
+		p.errs = map[string]error{}
+	}
+	p.errs[g.String()] = err
+}
+
+func (p *stubPlacements) seen() []placementCall {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]placementCall(nil), p.calls...)
+}
+
 type harness struct {
-	feed    *stubFeed
-	garam   *stubGaram
-	gaon    *gaonfake.Server
-	cluster agent.Cluster
-	opts    agent.Options
-	svc     agent.Service
+	feed       *stubFeed
+	garam      *stubGaram
+	placements *stubPlacements
+	gaon       *gaonfake.Server
+	cluster    agent.Cluster
+	opts       agent.Options
+	svc        agent.Service
 }
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	gaon, client := gaonfake.New(t, agent.Selector())
 	h := &harness{
-		feed: &stubFeed{}, garam: &stubGaram{}, gaon: gaon, cluster: client,
+		feed: &stubFeed{}, garam: &stubGaram{}, placements: &stubPlacements{}, gaon: gaon, cluster: client,
 		opts: agent.Options{
 			Image:       "registry.example/garam/agent:1",
 			GaramRoot:   []byte("garam root"),
@@ -116,11 +166,13 @@ func newHarness(t *testing.T) *harness {
 			Logger:      slog.New(slog.DiscardHandler),
 		},
 	}
-	h.svc = agent.NewService(h.feed, h.garam, h.cluster, h.opts)
+	h.restart()
 	return h
 }
 
-func (h *harness) restart() { h.svc = agent.NewService(h.feed, h.garam, h.cluster, h.opts) }
+func (h *harness) restart() {
+	h.svc = agent.NewService(h.feed, h.garam, h.placements, h.cluster, h.opts)
+}
 
 func desired(id string) agent.Desired {
 	return agent.Desired{
@@ -246,7 +298,7 @@ func TestReconcile_ReportsEachChangeOnce(t *testing.T) {
 func TestReconcile_ReportsNothingWhereNothingWasRead(t *testing.T) {
 	h := newHarness(t)
 	h.feed.set(desired("a1"))
-	svc := agent.NewService(h.feed, h.garam, failingList{h.cluster}, h.opts)
+	svc := agent.NewService(h.feed, h.garam, h.placements, failingList{h.cluster}, h.opts)
 
 	err := svc.Reconcile(t.Context())
 
@@ -395,7 +447,7 @@ func (g *collidingGaram) MintTokens(context.Context, grn.GRN, int64) (agent.Cred
 func TestReconcile_ACredentialNamedLikeATrustRootIsRefused(t *testing.T) {
 	h := newHarness(t)
 	h.feed.set(desired("a1"))
-	svc := agent.NewService(h.feed, &collidingGaram{}, h.cluster, h.opts)
+	svc := agent.NewService(h.feed, &collidingGaram{}, h.placements, h.cluster, h.opts)
 
 	err := svc.Reconcile(t.Context())
 
@@ -415,7 +467,7 @@ func TestReconcile_DoesNotTouchWhatItDoesNotOwn(t *testing.T) {
 	_, err := everything.PutMicroVM(t.Context(), other)
 	require.NoError(t, err)
 	h := newHarness(t)
-	svc := agent.NewService(h.feed, h.garam, everything, h.opts)
+	svc := agent.NewService(h.feed, h.garam, h.placements, everything, h.opts)
 	h.feed.set(desired("a1"))
 
 	require.NoError(t, svc.Reconcile(t.Context()))
@@ -480,27 +532,289 @@ func TestReconcile_TheMicroVMCarriesTheGuestsCommandAndSettings(t *testing.T) {
 	}
 }
 
-func TestReconcile_TheModelKeyIsAnEnvSourcedFromASecret(t *testing.T) {
+// configured returns an agent with a model, an embedding, tool pins and
+// an ego, its keys named by the references given.
+func configured(id, modelRef, embeddingRef string) agent.Desired {
+	d := desired(id)
+	d.Configuration = agent.Configuration{
+		Model: &agent.Model{
+			Provider: "openai", BaseURL: "https://llm.example/v1", Name: "m-" + id, APIKeyRef: modelRef,
+			Embedding: &agent.Embedding{BaseURL: "https://emb.example/v1", Name: "e-" + id, APIKeyRef: embeddingRef},
+		},
+		Ego:   "You are " + id + ".\n",
+		Tools: map[string]string{"web": "sha256:abc"},
+	}
+	return d
+}
+
+func fileAt(t *testing.T, m api.MicroVM, path string) api.MicroVMFile {
+	t.Helper()
+	for _, f := range m.Spec.Files {
+		if f.Path == path {
+			return f
+		}
+	}
+	require.Failf(t, "no such file", "%s", path)
+	return api.MicroVMFile{}
+}
+
+func TestReconcile_TheConfigurationIsFilesAndTheKeysAreEnvSourcedFromSecrets(t *testing.T) {
 	h := newHarness(t)
-	h.opts.ModelKey = &agent.ModelKey{Env: "MODEL_API_KEY", Secret: "model-credentials", Key: "api-key"}
-	h.restart()
-	d := desired("a1")
+	d := configured("a1", "model-credentials/api-key", "embedding-credentials/emb-key")
 	h.feed.set(d)
 
 	require.NoError(t, h.svc.Reconcile(t.Context()))
 
 	m, _ := h.gaon.MicroVM(t, objectName(t, d))
 	env := envOf(t, m)
-	key := env["MODEL_API_KEY"]
-	assert.Empty(t, key.Value, "the key is never an inline value")
-	require.NotNil(t, key.ValueFrom)
-	require.NotNil(t, key.ValueFrom.SecretKeyRef)
-	assert.Equal(t, "model-credentials", key.ValueFrom.SecretKeyRef.Name)
-	assert.Equal(t, "api-key", key.ValueFrom.SecretKeyRef.Key)
-	assert.Equal(t, "MODEL_API_KEY", env["GUEST_RUNTIME_ENV"].Value,
-		"the supervisor hands the variable to the runtime alone")
+	for name, want := range map[string][2]string{
+		"MODEL_API_KEY":     {"model-credentials", "api-key"},
+		"EMBEDDING_API_KEY": {"embedding-credentials", "emb-key"},
+	} {
+		e := env[name]
+		assert.Empty(t, e.Value, "the key is never an inline value")
+		require.NotNil(t, e.ValueFrom, name)
+		require.NotNil(t, e.ValueFrom.SecretKeyRef, name)
+		assert.Equal(t, want[0], e.ValueFrom.SecretKeyRef.Name)
+		assert.Equal(t, want[1], e.ValueFrom.SecretKeyRef.Key)
+	}
+	assert.Equal(t, "MODEL_API_KEY,EMBEDDING_API_KEY", env["GUEST_RUNTIME_ENV"].Value,
+		"the supervisor hands the variables to the runtime alone")
+	assert.Equal(t, guest.RuntimeConfigFile, env["GUEST_RUNTIME_CONFIG"].Value)
+	assert.Equal(t, guest.RuntimeEgoFile, env["GUEST_RUNTIME_EGO"].Value)
 	_, secret := h.gaon.Secret(t, "model-credentials")
 	assert.False(t, secret, "the operator creates no model Secret")
+
+	conf := fileAt(t, m, guest.RuntimeConfigFile)
+	assert.Nil(t, conf.ValueFrom)
+	assert.Equal(t, `tools:
+    pins:
+        web: sha256:abc
+model:
+    provider: openai
+    base-url: https://llm.example/v1
+    model: m-a1
+    api-key-env: MODEL_API_KEY
+embedding:
+    base-url: https://emb.example/v1
+    model: e-a1
+    api-key-env: EMBEDDING_API_KEY
+`, conf.Content)
+	ego := fileAt(t, m, guest.RuntimeEgoFile)
+	assert.Equal(t, "You are a1.\n", ego.Content)
+	for _, f := range []api.MicroVMFile{conf, ego} {
+		require.NotNil(t, f.Mode, f.Path)
+		assert.Equal(t, int32(0o400), *f.Mode, f.Path)
+		require.NotNil(t, f.Owner, f.Path)
+		assert.Equal(t, int64(65532), f.Owner.UID, f.Path)
+	}
+}
+
+func TestReconcile_TwoAgentsWithTwoReferencesRenderApart(t *testing.T) {
+	h := newHarness(t)
+	a := configured("a1", "creds-one/key-one", "")
+	b := configured("a2", "creds-two/key-two", "")
+	h.feed.set(a, b)
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	for _, tc := range []struct {
+		d       agent.Desired
+		secret  string
+		key     string
+		foreign string
+	}{{a, "creds-one", "key-one", "creds-two"}, {b, "creds-two", "key-two", "creds-one"}} {
+		m, _ := h.gaon.MicroVM(t, objectName(t, tc.d))
+		ref := envOf(t, m)["MODEL_API_KEY"].ValueFrom.SecretKeyRef
+		assert.Equal(t, tc.secret, ref.Name)
+		assert.Equal(t, tc.key, ref.Key)
+		spec, err := json.Marshal(m)
+		require.NoError(t, err)
+		assert.NotContains(t, string(spec), tc.foreign, "an agent's spec names its own key alone")
+		assert.NotContains(t, envOf(t, m), "EMBEDDING_API_KEY", "an endpoint with no reference takes no key")
+	}
+}
+
+func TestReconcile_NoSettingNamesAModelKey(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	h.feed.set(d)
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	m, _ := h.gaon.MicroVM(t, objectName(t, d))
+	for name := range envOf(t, m) {
+		assert.False(t, strings.HasPrefix(name, "MODEL_KEY"), name)
+	}
+	assert.NotContains(t, envOf(t, m), "MODEL_API_KEY", "an agent with no model carries no key")
+	assert.NotContains(t, envOf(t, m), "GUEST_RUNTIME_CONFIG")
+}
+
+func TestReconcile_ABadConfigurationWritesNothingAndFailsThePass(t *testing.T) {
+	for name, d := range map[string]agent.Desired{
+		"a reference with no key":           configured("a1", "model-credentials", ""),
+		"a reference to the agent's Secret": configured("a1", "agent-0123456789abcdef/api-key", ""),
+		"a model with no name": func() agent.Desired {
+			d := configured("a1", "c/k", "")
+			d.Configuration.Model.Name = ""
+			return d
+		}(),
+		"a model other than mock with no embedding": func() agent.Desired {
+			d := configured("a1", "c/k", "")
+			d.Configuration.Model.Embedding = nil
+			return d
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			h.feed.set(d, desired("a2"))
+
+			require.Error(t, h.svc.Reconcile(t.Context()))
+
+			_, ok := h.gaon.MicroVM(t, objectName(t, desired("a2")))
+			assert.True(t, ok, "the other agent is still written")
+			_, ok = h.gaon.MicroVM(t, objectName(t, d))
+			assert.False(t, ok)
+			_, ok = h.gaon.Secret(t, objectName(t, d))
+			assert.False(t, ok, "no Secret is minted for an agent that cannot render")
+		})
+	}
+}
+
+func TestReconcile_APlacementIsRegisteredOnceWithTheUidsAndTheTokenDigest(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	h.feed.set(d)
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	name := objectName(t, d)
+	m, _ := h.gaon.MicroVM(t, name)
+	memory, _ := h.gaon.Volume(t, name+"-memory")
+	secret, _ := h.gaon.Secret(t, name)
+	sum := sha256.Sum256(secret.Data["placement-token"])
+	require.NotEmpty(t, m.Metadata.UID)
+	require.NotEmpty(t, memory.Metadata.UID)
+	require.NotEqual(t, m.Metadata.UID, memory.Metadata.UID)
+	assert.Equal(t, []placementCall{{d.GRN.String(), agent.Placement{
+		Epoch: "3", PodUID: string(m.Metadata.UID), PVCUID: string(memory.Metadata.UID), TokenSHA256: hex.EncodeToString(sum[:]),
+	}}}, h.placements.seen())
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	assert.Len(t, h.placements.seen(), 1, "a registered body is not presented again by the same process")
+}
+
+func TestReconcile_ARestartPresentsTheSameBodyAndTheRepeatIsNotAnError(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	h.feed.set(d)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	h.restart()
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	calls := h.placements.seen()
+	require.Len(t, calls, 2)
+	assert.Equal(t, calls[0], calls[1], "the body is rebuilt from gaon's objects, byte for byte")
+}
+
+func TestReconcile_AStoppedAgentIsNotRegistered(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	d.Stopped = true
+	h.feed.set(d)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	assert.Empty(t, h.placements.seen(), "a stopped agent is not created, so it has no placement")
+
+	// The control: the same agent running registers, and stopped
+	// afterwards, in a process that remembers nothing, it does not.
+	d.Stopped = false
+	h.feed.set(d)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	require.Len(t, h.placements.seen(), 1)
+	d.Stopped = true
+	h.feed.set(d)
+	h.restart()
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	assert.Len(t, h.placements.seen(), 1, "a stopped microvm that exists is not registered either")
+}
+
+func TestReconcile_ASupersededPlacementIsNeverPresentedAgain(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"placement_superseded", errorx.Wrap(agent.ErrPlacementSuperseded, "placement_superseded")},
+		{"epoch_superseded", errorx.Wrap(agent.ErrPlacementSuperseded, "epoch_superseded")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			now := time.Unix(1000, 0)
+			h.opts.Now = func() time.Time { return now }
+			h.restart()
+			d := desired("a1")
+			h.feed.set(d)
+			h.placements.fail(d.GRN, tc.err)
+
+			require.NoError(t, h.svc.Reconcile(t.Context()), "a refusal is not a failed pass")
+			now = now.Add(24 * time.Hour)
+			require.NoError(t, h.svc.Reconcile(t.Context()))
+
+			assert.Len(t, h.placements.seen(), 1, "the body is not presented again, however long after")
+			assert.Len(t, h.garam.reported(), 1, "the agent is still reported, once")
+		})
+	}
+}
+
+func TestReconcile_ASupersededBodyIsReplacedByANewOne(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	h.feed.set(d)
+	h.placements.fail(d.GRN, errorx.Wrap(agent.ErrPlacementSuperseded, "superseded"))
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	next := d
+	next.Epoch = 4
+	h.feed.set(next)
+	h.placements.fail(d.GRN, nil)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	calls := h.placements.seen()
+	require.Len(t, calls, 2)
+	assert.Equal(t, "4", calls[1].placement.Epoch, "a different body is a new attempt")
+}
+
+func TestReconcile_ARefusedPlacementIsPresentedAgainAfterFiveMinutes(t *testing.T) {
+	h := newHarness(t)
+	now := time.Unix(1000, 0)
+	h.opts.Now = func() time.Time { return now }
+	h.restart()
+	d := desired("a1")
+	h.feed.set(d)
+	h.placements.fail(d.GRN, errorx.Wrap(agent.ErrPlacementRefused, "previous_mismatch"))
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	now = now.Add(5*time.Minute - time.Second)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	assert.Len(t, h.placements.seen(), 1, "not before five minutes")
+
+	now = now.Add(time.Second)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	assert.Len(t, h.placements.seen(), 2, "at five minutes")
+}
+
+func TestReconcile_AnUnreachableControlServiceFailsThePassAndIsRetried(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	h.feed.set(d)
+	h.placements.fail(d.GRN, errors.New("control unreachable"))
+
+	require.Error(t, h.svc.Reconcile(t.Context()))
+	assert.Len(t, h.garam.reported(), 1, "the report is still made")
+
+	h.placements.fail(d.GRN, nil)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	assert.Len(t, h.placements.seen(), 2)
 }
 
 func TestReconcile_ThePlacementTokenIsMintedOnceIntoTheSecret(t *testing.T) {
@@ -550,7 +864,7 @@ func TestReconcile_AnExistingSecretIsNotGivenAPlacementToken(t *testing.T) {
 	require.NoError(t, err)
 
 	h.restart()
-	require.NoError(t, h.svc.Reconcile(t.Context()))
+	require.Error(t, h.svc.Reconcile(t.Context()), "no placement can be registered without the token")
 
 	after, _ := h.gaon.Secret(t, objectName(t, d))
 	assert.NotContains(t, after.Data, "placement-token",
@@ -568,7 +882,7 @@ func (g *collidingPlacementGaram) MintTokens(context.Context, grn.GRN, int64) (a
 func TestReconcile_ACredentialNamedLikeThePlacementTokenIsRefused(t *testing.T) {
 	h := newHarness(t)
 	h.feed.set(desired("a1"))
-	svc := agent.NewService(h.feed, &collidingPlacementGaram{}, h.cluster, h.opts)
+	svc := agent.NewService(h.feed, &collidingPlacementGaram{}, h.placements, h.cluster, h.opts)
 
 	require.Error(t, svc.Reconcile(t.Context()))
 	assert.Zero(t, h.gaon.Count("PUT", "secrets")+h.gaon.Count("PUT", "microvms"))
@@ -576,9 +890,7 @@ func TestReconcile_ACredentialNamedLikeThePlacementTokenIsRefused(t *testing.T) 
 
 func TestRender_IsTheMicroVMAReconcileWrites(t *testing.T) {
 	h := newHarness(t)
-	h.opts.ModelKey = &agent.ModelKey{Env: "MODEL_API_KEY", Secret: "model-credentials", Key: "api-key"}
-	h.restart()
-	d := desired("a1")
+	d := configured("a1", "model-credentials/api-key", "")
 	h.feed.set(d)
 	require.NoError(t, h.svc.Reconcile(t.Context()))
 	written, _ := h.gaon.MicroVM(t, objectName(t, d))

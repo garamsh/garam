@@ -220,6 +220,19 @@ func (s *Server) put(kind string) http.HandlerFunc {
 			writeError(w, err)
 			return
 		}
+		// The server sets a UID on create and keeps it after, as gaon
+		// does; a UID the client sent is not trusted.
+		meta.UID = api.NewUID()
+		if old != nil {
+			var stored struct {
+				Metadata api.ObjectMeta `json:"metadata"`
+			}
+			if err := json.Unmarshal(old, &stored); err != nil {
+				writeError(w, err)
+				return
+			}
+			meta.UID = stored.Metadata.UID
+		}
 		s.store(kind, name, obj, meta)
 		writeJSON(w, http.StatusOK, obj)
 	}

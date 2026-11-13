@@ -126,10 +126,13 @@ the model credential to the runtime alone
 ([ADR-0153](./adr/0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)).
 The guest still holds a root workspace beside the store, and what gaon's
 guest kernel admits for the executor is unanswered.
+It registers each agent's first placement with the control service and
+renders the feed's configuration as two inline files and the model key
+as an `env` entry from the Secret the agent's `apiKeyRef` names
+([ADR-0154](./adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)).
 Unbuilt: the release's image, the `NetworkPolicy`, the token restart,
-the MicroVM's command, arguments and environment and the model
-credential's delivery, and a placement token, whose source for a managed
-agent is not supplied here.
+a placement's `previous` and so a replaced MicroVM's registration, and
+the agent's instructions and message issuers.
 
 ## An Operator's two identities
 

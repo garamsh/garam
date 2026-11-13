@@ -106,7 +106,7 @@ func (c *control) reply(status int, body string) {
 func agentJSON(id string, extra string) string {
 	return fmt.Sprintf(`{"agent":%q,"revision":"2","epoch":"3",`+
 		`"profile":{"name":"std","version":1,"resources":{},"storageSize":"1Gi","workspaceStorageSize":"10Gi"},`+
-		`"configuration":{"model":{},"ego":{},"tools":{}}%s}`,
+		`"configuration":{"model":{},"ego":"","tools":{}}%s}`,
 		grn.New("org1", "agent", id).String(), extra)
 }
 
@@ -283,7 +283,7 @@ var unreadable = []struct {
 	{name: "agent of another type", status: 200, body: feedJSON("2", strings.Replace(agentJSON("a1", ""), grn.New("org1", "agent", "a1").String(), grn.New("org1", "operator", "a1").String(), 1))},
 	{name: "agent named twice", status: 200, body: feedJSON("2", agentJSON("a1", ""), agentJSON("a1", ""))},
 	{name: "bad storage quantity", status: 200, body: feedJSON("2", strings.Replace(agentJSON("a1", ""), `"storageSize":"1Gi"`, `"storageSize":"lots"`, 1))},
-	{name: "configuration not an object", status: 200, body: feedJSON("2", strings.Replace(agentJSON("a1", ""), `"configuration":{"model":{},"ego":{},"tools":{}}`, `"configuration":[]`, 1))},
+	{name: "configuration not an object", status: 200, body: feedJSON("2", strings.Replace(agentJSON("a1", ""), `"configuration":{"model":{},"ego":"","tools":{}}`, `"configuration":[]`, 1))},
 	{name: "recovery without its fields", status: 200, body: feedJSON("2", agentJSON("a1", `,"recovery":{}`))},
 	{name: "202 with a whole body", status: 202, body: feedJSON("2")},
 	{name: "204", status: 204, body: ``},
@@ -315,7 +315,7 @@ func TestAnUnreadableAnswerFailsThePassAndHaltsNothing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := newControl(t)
 			gaon, cluster := gaonfake.New(t, agent.Selector())
-			svc := agent.NewService(c.client, stubGaram{}, cluster, agent.Options{
+			svc := agent.NewService(c.client, stubGaram{}, c.client, cluster, agent.Options{
 				Image: "registry.example/agent:1", GaramRoot: []byte("g"), ControlRoot: []byte("c"),
 				Logger: slog.New(slog.DiscardHandler),
 			})
@@ -348,7 +348,7 @@ func TestAnUnreadableAnswerFailsThePassAndHaltsNothing(t *testing.T) {
 func TestAWellFormedEmptySetHaltsEveryAgent(t *testing.T) {
 	c := newControl(t)
 	gaon, cluster := gaonfake.New(t, agent.Selector())
-	svc := agent.NewService(c.client, stubGaram{}, cluster, agent.Options{
+	svc := agent.NewService(c.client, stubGaram{}, c.client, cluster, agent.Options{
 		Image: "registry.example/agent:1", GaramRoot: []byte("g"), ControlRoot: []byte("c"),
 		Logger: slog.New(slog.DiscardHandler),
 	})

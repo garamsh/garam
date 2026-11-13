@@ -267,8 +267,10 @@ it: a later write to the entity marks it again.
 
 #### Role links
 
-An organization membership is marked as `Iam::RoleLink`, whose id is the
-organization's GRN, a space and the member's GRN (migration 000075). A
+[ADR-0159](./adr/0159-role-links-follow-the-entities-in-one-pass-the-platforms-tables-win-a-failed-write-and-a-request-finishes-its-work-before-it-waits.md)
+records the four decisions below. An organization membership is marked
+as `Iam::RoleLink` (ADR-0159 item 4), whose id is the organization's
+GRN, a space and the member's GRN (migration 000075). A
 trigger marks it on every insert, delete and change of the role of an
 `org_members` row, so a route written later is covered without a line of
 its own, and the user's own mark on insert and delete stays. The
@@ -277,7 +279,8 @@ cascade of a deleted user or organization marks it as well.
 no row is a link to remove.
 
 A pass sends its entities as above, then its links in the same
-transaction, then deletes every mark. The policy service's link calls
+transaction, then deletes every mark (ADR-0159 item 1, which replaces
+ADR-0146's "under the same sequence"). The policy service's link calls
 carry no sequence, so a link is ordered by its name instead: one policy
 per member and role, `grn:<org>/iam/policy/link-<role>-<hex of the
 first 16 bytes of the SHA-256 of the member's GRN>`, since a policy's
@@ -298,9 +301,10 @@ and reads the outbox every 50 milliseconds until no `Iam::RoleLink`
 mark of that member is left (of any member of the organization, for
 its deletion), then answers. At 5 seconds it answers 503 `unavailable`
 with the reason `change_not_applied`, which the API discloses on a 503
-for this code alone: the change is stored and is not yet applied. The
-mark stays and the loop applies it when the service answers. Until
-then the **platform's tables win**: the service holds the links it last
+for this code alone: the change is stored and is not yet applied
+(ADR-0159 item 3). The mark stays and the loop applies it when the
+service answers. Until then the **platform's tables win** (ADR-0159
+item 2): the service holds the links it last
 had, so a member added is not yet allowed and a member removed is not
 yet denied, and a role changed is the old one's or both. The wait is on
 the table, so another replica's loop ends it. With `GARAM_POLICY_ADDR`
@@ -308,9 +312,9 @@ unset there is no gate and no request waits, and nothing is fed, as for
 the entities.
 
 Three of the four requests cannot be repeated, so each finishes its own
-work before it waits, and the 503 names the organization in `resource`
-(the GRN of the one created, joined, registered into or deleted). At the
-bound:
+work before it waits (ADR-0159 item 3), and the 503 names the
+organization in `resource` (the GRN of the one created, joined,
+registered into or deleted). At the bound:
 
 - **Creating an organization** has created it and made the caller its
   owner. The client reads the organization from `resource` and does

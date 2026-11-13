@@ -301,7 +301,7 @@ func name(g grn.GRN) string {
 type stubGaram struct{}
 
 func (stubGaram) MintTokens(context.Context, grn.GRN, int64) (agent.Credentials, error) {
-	return agent.Credentials{"agent-token": []byte("a"), "placement-token": []byte("p")}, nil
+	return agent.Credentials{"agent-token": []byte("a"), "control-token": []byte("c")}, nil
 }
 
 func (stubGaram) ReportState(context.Context, grn.GRN, int64, agent.State) error { return nil }

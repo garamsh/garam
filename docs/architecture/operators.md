@@ -117,9 +117,19 @@ machine client (the `private_key_jwt` exchange as an operator,
 with its cursor and long poll and the status report; and the binary that
 composes them, with a reconcile loop, a bounded backoff and a health
 listener
-([gaon-operator.md](../../gaon-operator/docs/gaon-operator.md)).
-Unbuilt: the guest supervisor and composed image, the release's image,
-the `NetworkPolicy` and the token restart.
+([gaon-operator.md](../../gaon-operator/docs/gaon-operator.md)); and the
+guest, a supervisor and composed image whose MicroVM runs as `0:0` and
+which starts the runtime and the adapter as 65532 with no capability and
+the workspace as root with the runner's five capabilities and executor
+10001, drains in start order, and keeps the store and outbox 0700 and
+the model credential to the runtime alone
+([ADR-0153](./adr/0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)).
+The guest still holds a root workspace beside the store, and what gaon's
+guest kernel admits for the executor is unanswered.
+Unbuilt: the release's image, the `NetworkPolicy`, the token restart,
+the MicroVM's command, arguments and environment and the model
+credential's delivery, and a placement token, whose source for a managed
+agent is not supplied here.
 
 ## An Operator's two identities
 

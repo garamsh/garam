@@ -49,8 +49,8 @@ func TestMintTokensMintsBothTokensAsTheOperator(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Contains(t, creds, machineapi.KeyAgentToken)
-	require.Contains(t, creds, machineapi.KeyPlacementToken)
-	assert.NotEqual(t, creds[machineapi.KeyAgentToken], creds[machineapi.KeyPlacementToken])
+	require.Contains(t, creds, machineapi.KeyControlToken)
+	assert.NotEqual(t, creds[machineapi.KeyAgentToken], creds[machineapi.KeyControlToken])
 
 	mints := fake.Mints()
 	require.Len(t, mints, 2)

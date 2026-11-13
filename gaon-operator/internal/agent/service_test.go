@@ -66,7 +66,7 @@ func (g *stubGaram) MintTokens(_ context.Context, a grn.GRN, _ int64) (agent.Cre
 	if g.mintErr != nil {
 		return nil, g.mintErr
 	}
-	c := agent.Credentials{"agent-token": []byte("garam_at_" + rand.Text()), "placement-token": []byte("garam_pt_" + rand.Text())}
+	c := agent.Credentials{"agent-token": []byte("garam_at_" + rand.Text()), "control-token": []byte("garam_ct_" + rand.Text())}
 	g.minted = append(g.minted, c)
 	return c, nil
 }
@@ -164,7 +164,7 @@ func TestReconcile_AgentYieldsSecretVolumesAndMicroVM(t *testing.T) {
 	assert.Equal(t, "3", m.Metadata.Annotations["garam.sh/epoch"])
 	assert.Equal(t, "2", m.Metadata.Annotations["garam.sh/revision"])
 	assert.Equal(t, api.RunAlways, m.Spec.RunStrategy)
-	assert.Equal(t, "65532", m.Spec.User)
+	assert.Equal(t, "0:0", m.Spec.User, "the supervisor is root and drops each program")
 
 	require.NotEmpty(t, m.Spec.Files)
 	for _, f := range m.Spec.Files {

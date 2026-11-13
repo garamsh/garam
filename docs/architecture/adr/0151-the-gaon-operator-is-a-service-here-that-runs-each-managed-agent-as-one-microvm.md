@@ -1,6 +1,7 @@
 # ADR 0151: The gaon operator is a service here that runs each managed agent as one MicroVM
 
-> Status: accepted; not built
+> Status: accepted; not built; superseded in part by ADR-0153 (item 3,
+> the guest's user)
 > Date: 2026-11-13
 
 Drafted for #1825, which reserves this number. The direction is the

@@ -14,29 +14,37 @@ import (
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 )
 
-// pendingStore reports a mark for the first `pending` reads, then none.
+// pendingStore reports a mark for the first `pending` reads, then none,
+// or a set-aside one on each read where setAside is set.
 type pendingStore struct {
 	scriptedStore
-	pending atomic.Int64
-	reads   atomic.Int64
-	err     error
-	org     string
-	user    string
+	pending  atomic.Int64
+	setAside bool
+	reads    atomic.Int64
+	err      error
+	org      string
+	user     string
 }
 
-func (p *pendingStore) LinkPending(_ context.Context, org, user string) (bool, error) {
+func (p *pendingStore) LinkState(_ context.Context, org, user string) (policyfeed.LinkState, error) {
 	p.reads.Add(1)
 	p.org, p.user = org, user
-	if p.err != nil {
-		return false, p.err
+	switch {
+	case p.err != nil:
+		return policyfeed.LinkApplied, p.err
+	case p.setAside:
+		return policyfeed.LinkSetAside, nil
+	case p.pending.Add(-1) >= 0:
+		return policyfeed.LinkPending, nil
 	}
-	return p.pending.Add(-1) >= 0, nil
+	return policyfeed.LinkApplied, nil
 }
 
 type wakeCounter struct{ wakes atomic.Int64 }
 
 func (w *wakeCounter) Run(context.Context) error { return nil }
 func (w *wakeCounter) Wake()                     { w.wakes.Add(1) }
+func (w *wakeCounter) LastPass() time.Time       { return time.Time{} }
 
 func TestGate_AwaitReturnsOnceTheMarkIsGone(t *testing.T) {
 	store := &pendingStore{}
@@ -68,6 +76,27 @@ func TestGate_AwaitRefusesAtTheBoundWhileTheMarkStays(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, policyfeed.ReasonChangeNotApplied, reason.Code)
 	assert.GreaterOrEqual(t, time.Since(start), 120*time.Millisecond)
+}
+
+func TestGate_AwaitAnswersASetAsideLinkAtOnce(t *testing.T) {
+	// The control is the bound test above: a mark that is only pending
+	// holds the request to the bound, and a set-aside one, which no pass
+	// will clear, does not.
+	store := &pendingStore{setAside: true}
+
+	start := time.Now()
+	err := policyfeed.NewGate(store, &wakeCounter{}, time.Hour).
+		Await(context.Background(), "grn:o", "grn:u")
+
+	require.ErrorIs(t, err, policyfeed.ErrLinkSetAside)
+	assert.NotErrorIs(t, err, policyfeed.ErrNotApplied,
+		"it is not the answer that delivery goes on")
+	assert.Equal(t, errorx.KindUnavailable, errorx.KindOf(err))
+	reason, ok := errorx.ReasonOf(err)
+	require.True(t, ok)
+	assert.Equal(t, policyfeed.ReasonChangeRefused, reason.Code)
+	assert.Less(t, time.Since(start), time.Second, "no wait for the bound")
+	assert.EqualValues(t, 1, store.reads.Load())
 }
 
 func TestGate_AwaitReturnsAStoreError(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/garamsh/garam/lib/errorx"
 	policyv1 "github.com/garamsh/garam/lib/policy-sdk-go/gen/garam/policy/v1"
@@ -65,14 +66,19 @@ const (
 // never comes, and logs an error when the feed is on and so nothing
 // delivers it (ADR-0140 §9).
 func startPolicyDelivery(
-	ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger,
+	ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, registerer prometheus.Registerer,
 ) (policyfeed.Gate, func(), error) {
 	cfg, err := readPolicyDeliveryConfig()
 	if err != nil {
 		return nil, nil, err
 	}
+	store := policyfeedpg.NewStore(pool)
 	if cfg == nil {
 		warnIfFeedUndelivered(ctx, policyfeedpg.New(pool), logger)
+		// Nothing delivers, so the outbox is all the standing there is.
+		if err := policyfeed.NewCollector(registerer, store, nil); err != nil {
+			return nil, nil, err
+		}
 		return nil, func() {}, nil
 	}
 	key, err := signer.LoadKey(cfg.keyFile)
@@ -83,13 +89,16 @@ func startPolicyDelivery(
 	if err != nil {
 		return nil, nil, err
 	}
-	store := policyfeedpg.NewStore(pool)
 	service := policyfeed.NewService(
 		store,
 		policyfeedgrpc.NewSender(policyv1.NewPolicyServiceClient(conn)),
 		logger,
 		policyfeed.Config{Poll: policyPoll, MaxBackoff: policyMaxBackoff},
 	)
+	if err := policyfeed.NewCollector(registerer, store, service.LastPass); err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
 	runCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {

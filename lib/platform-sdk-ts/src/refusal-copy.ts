@@ -225,6 +225,8 @@ function opening(text: string): string {
 const BY_REASON: Record<string, (path: string | undefined) => string> = {
   change_not_applied: () =>
     "Your change is saved but not yet in effect. Wait a moment and check again; don't repeat the request.",
+  change_refused: () =>
+    "Your change is saved but the policy service refused it, so it will not take effect on its own. Don't repeat the request; ask whoever runs garam to look at it.",
   invitation_accepted: () =>
     "This invitation has already been used. Ask an admin of the organization for a new one.",
   invitation_expired: () =>

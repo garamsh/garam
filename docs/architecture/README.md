@@ -1429,3 +1429,13 @@ ADRs:
   state function; accepted, built (#1878); supersedes 0146 in part,
   on item 4's "same sequence" and the answer at the bound, and 0140 in
   part, on §5's set of dirty entities
+- [0160](./adr/0160-a-role-link-the-policy-service-refuses-for-good-is-set-aside-and-the-members-links-are-removed.md)
+  — a role link the policy service refuses with `PERMISSION_DENIED` or
+  `INVALID_ARGUMENT` is set aside on its outbox mark and the pass goes
+  on; the member's links are then removed, so the service holds no
+  role for the member (fail closed, and a platform-side fault making
+  every link write malformed removes every member's role); a waiting
+  request is answered at once, 503 with the reason `change_refused`
+  and the stored resource; accepted, built (#1882, first half);
+  extends 0140 item 11 to a role link and supersedes 0159 in part, on
+  item 2 for a link refused for good

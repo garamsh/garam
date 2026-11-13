@@ -9,7 +9,9 @@
 > stored resource) and
 > [ADR-0140](./0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)
 > (§5, "the outbox is a set" of dirty entities, which also holds a
-> role link)
+> role link) and superseded in part by
+> [ADR-0160](./0160-a-role-link-the-policy-service-refuses-for-good-is-set-aside-and-the-members-links-are-removed.md)
+> (item 2, for a link the service refuses for good)
 > Date: 2026-11-13
 
 Drafted for #1878, which reserves this number. It records four

@@ -14,5 +14,10 @@ type Sender interface {
 	// roles are removed, so a member holds one link or none. A link
 	// already written, or already gone, is not a fault, so a pass that
 	// sent a link and was then rolled back sends it again unharmed.
-	SendLinks(ctx context.Context, links []Link) error
+	//
+	// A link the service refuses with a code that cannot clear by retry
+	// is returned in the refusals, after the member's links the platform
+	// may remove are removed, and the links after it are still sent. Any
+	// other failure is the error and fails the call.
+	SendLinks(ctx context.Context, links []Link) ([]LinkRefusal, error)
 }

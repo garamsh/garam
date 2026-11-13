@@ -4,6 +4,7 @@
 package config
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/garamsh/garam/lib/errorx"
@@ -38,6 +39,18 @@ type Config struct {
 	OperatorClientID string
 	// AgentImage is the composed guest image of this release.
 	AgentImage string
+	// GuestMachineURL and GuestControlURL are the addresses the adapter
+	// in the guest reaches garam and the control service at. Each
+	// defaults to the operator's own address for the same service.
+	GuestMachineURL string
+	GuestControlURL string
+	// ModelKeyEnv, ModelKeySecret and ModelKeySecretKey name where the
+	// model's credential comes from: the variable the runtime reads
+	// and the Secret key the deployment created for it. All three or
+	// none; none renders an agent with no model credential.
+	ModelKeyEnv       string
+	ModelKeySecret    string
+	ModelKeySecretKey string
 	// HealthAddr is where the probes listen. It defaults to
 	// DefaultHealthAddr.
 	HealthAddr string
@@ -85,9 +98,61 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, errorx.New(errorx.KindInvalidArgument,
 			"missing settings: "+strings.Join(missing, ", "))
 	}
+	c.GuestMachineURL = optional(getenv, "GUEST_MACHINE_URL", c.GaramMachineURL)
+	c.GuestControlURL = optional(getenv, "GUEST_CONTROL_URL", c.ControlURL)
+	if err := c.loadModelKey(getenv); err != nil {
+		return Config{}, err
+	}
 	c.HealthAddr = strings.TrimSpace(getenv("HEALTH_ADDR"))
 	if c.HealthAddr == "" {
 		c.HealthAddr = DefaultHealthAddr
 	}
 	return c, nil
+}
+
+// optional returns the setting name, or fallback where it is unset.
+func optional(getenv func(string) string, name, fallback string) string {
+	if v := strings.TrimSpace(getenv(name)); v != "" {
+		return v
+	}
+	return fallback
+}
+
+var (
+	// variableName is a name the runtime can read from its environment.
+	variableName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	// secretKey is a Secret key gaon accepts.
+	secretKey = regexp.MustCompile(`^[-._a-zA-Z0-9]+$`)
+)
+
+// guestPrefix marks the supervisor's own settings, which a model key
+// must not take the name of.
+const guestPrefix = "GUEST_"
+
+// loadModelKey reads the three model key settings and refuses a set
+// that is partial or names something the guest cannot carry. The error
+// names variables, never values.
+func (c *Config) loadModelKey(getenv func(string) string) error {
+	c.ModelKeyEnv = strings.TrimSpace(getenv("MODEL_KEY_ENV"))
+	c.ModelKeySecret = strings.TrimSpace(getenv("MODEL_KEY_SECRET"))
+	c.ModelKeySecretKey = strings.TrimSpace(getenv("MODEL_KEY_SECRET_KEY"))
+	set := 0
+	for _, v := range []string{c.ModelKeyEnv, c.ModelKeySecret, c.ModelKeySecretKey} {
+		if v != "" {
+			set++
+		}
+	}
+	switch {
+	case set == 0:
+		return nil
+	case set != 3:
+		return errorx.New(errorx.KindInvalidArgument,
+			"MODEL_KEY_ENV, MODEL_KEY_SECRET and MODEL_KEY_SECRET_KEY are set together or not at all")
+	case !variableName.MatchString(c.ModelKeyEnv) || strings.HasPrefix(c.ModelKeyEnv, guestPrefix):
+		return errorx.New(errorx.KindInvalidArgument,
+			"MODEL_KEY_ENV is not a variable name the runtime may read")
+	case !secretKey.MatchString(c.ModelKeySecretKey) || c.ModelKeySecretKey == "." || c.ModelKeySecretKey == "..":
+		return errorx.New(errorx.KindInvalidArgument, "MODEL_KEY_SECRET_KEY is not a Secret key")
+	}
+	return nil
 }

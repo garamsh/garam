@@ -28,11 +28,16 @@ const (
 	WorkspaceDir = "/workspace"
 	// ReadyPort is the supervisor's readiness listener.
 	ReadyPort = 8088
+	// BinaryPath is where the image holds the supervisor, which the
+	// MicroVM's command names because a command replaces the image's
+	// entrypoint.
+	BinaryPath = "/usr/local/bin/gaon-guest"
 )
 
 // The files below CredentialsDir, named as the operator's Secret keys.
 // ControlTokenFile is the token minted with the control service as
-// audience; PlacementTokenFile is rendered by no operator yet.
+// audience; PlacementTokenFile is the token the operator mints into the
+// agent's Secret.
 const (
 	GaramRootFile      = "garam-root.pem"
 	ControlRootFile    = "control-root.pem"

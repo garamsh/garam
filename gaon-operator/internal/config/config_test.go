@@ -73,3 +73,60 @@ func TestLoad_NamesEveryMissingSettingAndNoValue(t *testing.T) {
 	assert.Contains(t, err.Error(), "AGENT_IMAGE")
 	assert.NotContains(t, err.Error(), "gaon.example")
 }
+
+func TestLoad_TheGuestAddressesDefaultToTheOperatorsOwn(t *testing.T) {
+	c, err := config.Load(get(full))
+	require.NoError(t, err)
+	assert.Equal(t, "https://garam.example", c.GuestMachineURL)
+	assert.Equal(t, "https://control.example", c.GuestControlURL)
+
+	with := map[string]string{
+		"GUEST_MACHINE_URL": "https://garam.guest", "GUEST_CONTROL_URL": "https://control.guest",
+	}
+	for k, v := range full {
+		with[k] = v
+	}
+	c, err = config.Load(get(with))
+	require.NoError(t, err)
+	assert.Equal(t, "https://garam.guest", c.GuestMachineURL)
+	assert.Equal(t, "https://control.guest", c.GuestControlURL)
+}
+
+func withModelKey(env, secret, key string) map[string]string {
+	m := map[string]string{
+		"MODEL_KEY_ENV": env, "MODEL_KEY_SECRET": secret, "MODEL_KEY_SECRET_KEY": key,
+	}
+	for k, v := range full {
+		m[k] = v
+	}
+	return m
+}
+
+func TestLoad_TheModelKeyIsOptionalAndAllOrNothing(t *testing.T) {
+	c, err := config.Load(get(full))
+	require.NoError(t, err)
+	assert.Empty(t, c.ModelKeyEnv)
+
+	c, err = config.Load(get(withModelKey("MODEL_API_KEY", "model-credentials", "api-key")))
+	require.NoError(t, err)
+	assert.Equal(t, "MODEL_API_KEY", c.ModelKeyEnv)
+	assert.Equal(t, "model-credentials", c.ModelKeySecret)
+	assert.Equal(t, "api-key", c.ModelKeySecretKey)
+
+	_, err = config.Load(get(withModelKey("MODEL_API_KEY", "", "api-key")))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "MODEL_KEY_SECRET")
+}
+
+func TestLoad_AModelKeyTheGuestCannotCarryIsRefused(t *testing.T) {
+	for _, bad := range [][3]string{
+		{"GUEST_AGENT_GRN", "s", "k"},
+		{"1BAD", "s", "k"},
+		{"has space", "s", "k"},
+		{"MODEL_API_KEY", "s", "a/b"},
+		{"MODEL_API_KEY", "s", ".."},
+	} {
+		_, err := config.Load(get(withModelKey(bad[0], bad[1], bad[2])))
+		require.Error(t, err, bad)
+	}
+}

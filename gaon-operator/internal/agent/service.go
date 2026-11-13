@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 
@@ -18,6 +20,14 @@ type Options struct {
 	// garam's server root and the control service's.
 	GaramRoot   []byte
 	ControlRoot []byte
+	// MachineURL and ControlURL are the addresses the adapter in the
+	// guest reaches garam's machine listener and the control service
+	// at. They may differ from the operator's own.
+	MachineURL string
+	ControlURL string
+	// ModelKey names the Secret key of the model's credential. It is
+	// optional: nil renders an agent with none.
+	ModelKey *ModelKey
 	// Resources are the MicroVM's requests and limits. They may be
 	// empty, which leaves the choice to gaon's scheduler.
 	Resources api.ResourceRequirements
@@ -213,7 +223,11 @@ func (s *service) ensureSecret(ctx context.Context, d Desired, snap *snapshot) (
 	if err != nil {
 		return nil, errorx.Wrap(err, "mint tokens")
 	}
-	secret, err := s.secretFor(d, creds)
+	token, err := mintPlacementToken()
+	if err != nil {
+		return nil, err
+	}
+	secret, err := s.secretFor(d, creds, token)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +236,20 @@ func (s *service) ensureSecret(ctx context.Context, d Desired, snap *snapshot) (
 	}
 	snap.secrets[name] = secret
 	return secret, nil
+}
+
+// placementTokenBytes is the size of a placement token before it is
+// hex-encoded.
+const placementTokenBytes = 32
+
+// mintPlacementToken returns 32 random bytes, hex-encoded: the form
+// the Kubernetes operator mints (garam-agent-operator ADR-0042).
+func mintPlacementToken() ([]byte, error) {
+	raw := make([]byte, placementTokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return nil, errorx.Wrap(err, "mint placement token")
+	}
+	return []byte(hex.EncodeToString(raw)), nil
 }
 
 // report sends what was observed of m, once for each change, and the

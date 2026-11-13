@@ -33,6 +33,13 @@ yet (#1689).
 - `crates/grant/` — role links, guardrails and `permit`s:
   schema-validated writes, append-only versions, and the reads of a
   policy and of an organization's policies.
+- `crates/audit/` — the record of every policy write and every denial
+  (ADR-0148): a write is recorded in the transaction that makes it, a
+  denial collapses with its hour's identical ones and an organization
+  keeps at most 10,000 live ones, and a denial is removed 90 days after
+  it was last made, by an hourly sweep and by the read. `grant` records
+  its writes through it, and `ListAuditRecords` reads them for the
+  platform on `iam:audit.read`.
 - `crates/entity/` — the containment and membership decisions read, and
   the sequenced write owners reach it by.
 - `crates/access-report/` — the policies naming a subject or a resource.

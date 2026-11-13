@@ -1,10 +1,21 @@
+use audit::{Origin, Outcome, Write, record_write};
 use decision::{Cause, OrgGrn, OrgPolicies, PolicySource};
+use sqlx::postgres::PgRow;
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::body::{Body, BodyKind, Stored, StoredPolicy};
 use crate::error::Error;
 use crate::permit_right::PermitRight;
+use crate::step::{Step, action_for};
+
+/// The kind of a policy, which its first version holds.
+macro_rules! kind_sql {
+    () => {
+        "(SELECT body->>'kind' FROM policy_versions
+          WHERE policy_grn = $1 AND version = 1)"
+    };
+}
 
 /// The summary query with a trailing clause, as one static string.
 macro_rules! summary_sql {
@@ -70,16 +81,62 @@ pub struct Summary {
     pub kind: BodyKind,
 }
 
-/// The policies in the service's own database.
+/// The policies in the service's own database. Every write is
+/// recorded in its own transaction, as made by the store's origin
+/// (ADR-0148).
 #[derive(Debug, Clone)]
 pub struct PolicyStore {
     pool: PgPool,
+    origin: Origin,
 }
 
 impl PolicyStore {
-    /// A store over this pool.
+    /// A store over this pool, writing as the policy service itself
+    /// with no subject.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            origin: Origin {
+                service: "policy".to_owned(),
+                subject: None,
+            },
+        }
+    }
+
+    /// This store, writing as `origin`: the calling service and the
+    /// subject that asked.
+    #[must_use]
+    pub fn acting(&self, origin: Origin) -> Self {
+        Self {
+            pool: self.pool.clone(),
+            origin,
+        }
+    }
+
+    /// Records a write of `kind` in the transaction that makes it.
+    async fn record(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        org: &OrgGrn,
+        policy: &str,
+        (kind, step): (BodyKind, Step),
+        change: (Outcome, Option<i32>, Option<i32>),
+    ) -> Result<(), Error> {
+        let (outcome, from, to) = change;
+        record_write(
+            transaction,
+            &self.origin,
+            &Write {
+                org: org.as_str(),
+                action: action_for(kind, step),
+                policy,
+                outcome,
+                from,
+                to,
+            },
+        )
+        .await
+        .map_err(Error::Record)
     }
 
     /// Stores a policy as a draft holding version 1. Its GRN is under
@@ -108,6 +165,14 @@ impl PolicyStore {
             1,
             &policy.body,
             policy.created_by,
+        )
+        .await?;
+        self.record(
+            &mut transaction,
+            policy.org,
+            policy.grn,
+            (policy.body.kind(), Step::Create),
+            (Outcome::Created, None, Some(1)),
         )
         .await?;
         transaction.commit().await.map_err(Error::Store)
@@ -151,6 +216,14 @@ impl PolicyStore {
         .await
         .map_err(Error::Store)?;
         insert_version(&mut transaction, grn, version, body, created_by).await?;
+        self.record(
+            &mut transaction,
+            org,
+            grn,
+            (body.kind(), Step::Append),
+            (Outcome::VersionAdded, None, Some(version)),
+        )
+        .await?;
         transaction.commit().await.map_err(Error::Store)?;
         Ok(version)
     }
@@ -203,24 +276,43 @@ impl PolicyStore {
         permits: bool,
     ) -> Result<(), Error> {
         owned(org, grn)?;
-        let moved = sqlx::query(
+        let mut transaction = self.pool.begin().await.map_err(Error::Store)?;
+        let from: Option<i32> =
+            sqlx::query_scalar("SELECT default_version FROM policies WHERE grn = $1 FOR UPDATE")
+                .bind(grn)
+                .fetch_optional(&mut *transaction)
+                .await
+                .map_err(Error::Store)?;
+        let moved = sqlx::query(concat!(
             "UPDATE policies SET default_version = $2, updated_at = now()
              WHERE grn = $1
                AND EXISTS (SELECT 1 FROM policy_versions
                            WHERE policy_grn = $1 AND version = $2)
                AND ($3 OR NOT EXISTS (SELECT 1 FROM policy_versions
                                       WHERE policy_grn = $1 AND version = $2
-                                        AND body->>'kind' = 'permit'))",
-        )
+                                        AND body->>'kind' = 'permit'))
+             RETURNING ",
+            kind_sql!(),
+            " AS kind"
+        ))
         .bind(grn)
         .bind(version)
         .bind(permits)
-        .execute(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await
         .map_err(Error::Store)?;
-        if moved.rows_affected() > 0 {
-            return Ok(());
+        if let Some(row) = moved {
+            self.record(
+                &mut transaction,
+                org,
+                grn,
+                (kind_of(grn, &row)?, Step::RollBack),
+                (Outcome::RolledBack, from, Some(version)),
+            )
+            .await?;
+            return transaction.commit().await.map_err(Error::Store);
         }
+        drop(transaction);
         let permit: Option<bool> = sqlx::query_scalar(
             "SELECT body->>'kind' = 'permit' FROM policy_versions
              WHERE policy_grn = $1 AND version = $2",
@@ -272,24 +364,38 @@ impl PolicyStore {
         expected: Option<i32>,
     ) -> Result<(), Error> {
         owned(org, grn)?;
-        let updated = sqlx::query(
+        let mut transaction = self.pool.begin().await.map_err(Error::Store)?;
+        let updated = sqlx::query(concat!(
             "UPDATE policies SET status = 'active', updated_at = now()
              WHERE grn = $1
                AND ($3::int IS NULL OR default_version = $3)
                AND ($2 OR NOT EXISTS (SELECT 1 FROM policy_versions
                                       WHERE policy_grn = $1
                                         AND version = policies.default_version
-                                        AND body->>'kind' = 'permit'))",
-        )
+                                        AND body->>'kind' = 'permit'))
+             RETURNING default_version, ",
+            kind_sql!(),
+            " AS kind"
+        ))
         .bind(grn)
         .bind(permits)
         .bind(expected)
-        .execute(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await
         .map_err(Error::Store)?;
-        if updated.rows_affected() > 0 {
-            return Ok(());
+        if let Some(row) = updated {
+            let default: i32 = row.try_get("default_version").map_err(Error::Store)?;
+            self.record(
+                &mut transaction,
+                org,
+                grn,
+                (kind_of(grn, &row)?, Step::Activate),
+                (Outcome::Activated, None, Some(default)),
+            )
+            .await?;
+            return transaction.commit().await.map_err(Error::Store);
         }
+        drop(transaction);
         let default: Option<(i32, bool)> = sqlx::query_as(
             "SELECT policies.default_version,
                     policy_versions.body->>'kind' = 'permit' FROM policies
@@ -317,15 +423,31 @@ impl PolicyStore {
     /// Retires a policy: it goes with its versions (ADR-0117).
     pub async fn delete(&self, org: &OrgGrn, grn: &str) -> Result<(), Error> {
         owned(org, grn)?;
-        let deleted = sqlx::query("DELETE FROM policies WHERE grn = $1")
+        let mut transaction = self.pool.begin().await.map_err(Error::Store)?;
+        let held = sqlx::query(concat!(
+            "SELECT ",
+            kind_sql!(),
+            " AS kind FROM policies WHERE grn = $1 FOR UPDATE"
+        ))
+        .bind(grn)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(Error::Store)?
+        .ok_or_else(|| Error::NotFound(grn.to_owned()))?;
+        sqlx::query("DELETE FROM policies WHERE grn = $1")
             .bind(grn)
-            .execute(&self.pool)
+            .execute(&mut *transaction)
             .await
             .map_err(Error::Store)?;
-        if deleted.rows_affected() == 0 {
-            return Err(Error::NotFound(grn.to_owned()));
-        }
-        Ok(())
+        self.record(
+            &mut transaction,
+            org,
+            grn,
+            (kind_of(grn, &held)?, Step::Remove),
+            (Outcome::Removed, None, None),
+        )
+        .await?;
+        transaction.commit().await.map_err(Error::Store)
     }
 
     /// One policy of the organization, without its versions.
@@ -438,6 +560,15 @@ fn owned(org: &OrgGrn, grn: &str) -> Result<(), Error> {
         return Ok(());
     }
     Err(Error::ForeignPolicy(grn.to_owned()))
+}
+
+/// The kind of the policy a statement answered with its `kind`.
+fn kind_of(grn: &str, row: &PgRow) -> Result<BodyKind, Error> {
+    let tag: String = row.try_get("kind").map_err(Error::Store)?;
+    BodyKind::from_tag(&tag).ok_or_else(|| Error::StoredBody {
+        policy: grn.to_owned(),
+        source: "unknown kind".into(),
+    })
 }
 
 async fn insert_version(

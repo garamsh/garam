@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+audit = { path = "../audit" }
 cedar-policy.workspace = true
 decision = { path = "../decision" }
 serde.workspace = true

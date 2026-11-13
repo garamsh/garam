@@ -25,9 +25,52 @@ pub struct Service<P, E> {
     pub(crate) policies: P,
     pub(crate) entities: E,
     pub(crate) store: Option<grant::PolicyStore>,
+    pub(crate) recorder: Option<audit::Recorder>,
 }
 
 impl<P, E> Service<P, E> {
+    /// Gives the service the recorder every denial is recorded to
+    /// (ADR-0148) and the audit read reads from. Without it nothing is
+    /// recorded and the read answers `UNAVAILABLE`.
+    #[must_use]
+    pub fn recording_to(mut self, recorder: audit::Recorder) -> Self {
+        self.recorder = Some(recorder);
+        self
+    }
+
+    /// Records a denial the engine decided, unless the question was a
+    /// probe. The record never changes the answer: a failure to write
+    /// it is logged and counted by the recorder.
+    pub(crate) async fn note_denial(
+        &self,
+        principal: &Principal,
+        asked: &Evaluation<'_>,
+        decision: &Decision,
+    ) {
+        let Some(recorder) = &self.recorder else {
+            return;
+        };
+        let mut policies: Vec<String> = decision
+            .reasons
+            .iter()
+            .map(|reason| match reason {
+                Reason::Policy(policy) => policy.to_string(),
+                Reason::Error { .. } => audit::FAULT.to_owned(),
+            })
+            .collect();
+        policies.sort();
+        policies.dedup();
+        recorder
+            .deny(&audit::Denial {
+                service: &principal.sub(),
+                subject: asked.subject.id,
+                action: asked.action,
+                resource: asked.resource.id,
+                policies: &policies,
+            })
+            .await;
+    }
+
     /// The manifests the engine decides under, which the HTTP binding
     /// reads a GRN's type through.
     pub(crate) fn manifests(&self) -> &manifest::Manifests {
@@ -41,6 +84,7 @@ impl<P, E> Service<P, E> {
             policies,
             entities,
             store: None,
+            recorder: None,
         }
     }
 }
@@ -60,6 +104,7 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
                 action: request.action.as_ref(),
                 resource: request.resource.as_ref(),
                 context: request.context.as_ref(),
+                probe: request.probe,
             },
         )
         .await
@@ -78,6 +123,9 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
             .engine
             .evaluate(&self.policies, &self.entities, &evaluation)
             .await?;
+        if decision.outcome == Outcome::Deny && !question.probe {
+            self.note_denial(principal, &evaluation, &decision).await;
+        }
         Ok(response(&decision))
     }
 
@@ -312,6 +360,17 @@ where
             .map_err(|e| to_status(&e))?;
         Ok(Response::new(done))
     }
+
+    async fn list_audit_records(
+        &self,
+        request: Request<proto::ListAuditRecordsRequest>,
+    ) -> Result<Response<proto::ListAuditRecordsResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::list_audit_records(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
+    }
 }
 
 /// The caller the interceptor verified, which nothing else sets.
@@ -330,6 +389,9 @@ struct Question<'a> {
     action: Option<&'a proto::Action>,
     resource: Option<&'a proto::Resource>,
     context: Option<&'a prost_types::Struct>,
+    /// Whether the caller states it is deciding what to show, so a
+    /// denial is not recorded (ADR-0148 item 2).
+    probe: bool,
 }
 
 impl<'a> Question<'a> {
@@ -339,6 +401,7 @@ impl<'a> Question<'a> {
             action: request.action.as_ref(),
             resource: request.resource.as_ref(),
             context: request.context.as_ref(),
+            probe: request.probe,
         }
     }
 
@@ -348,6 +411,7 @@ impl<'a> Question<'a> {
             action: entry.action.as_ref().or(request.action.as_ref()),
             resource: entry.resource.as_ref().or(request.resource.as_ref()),
             context: entry.context.as_ref().or(request.context.as_ref()),
+            probe: entry.probe.unwrap_or(request.probe),
         }
     }
 

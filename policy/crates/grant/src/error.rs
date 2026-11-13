@@ -88,4 +88,7 @@ pub enum Error {
     /// The store failed.
     #[error("the policy store failed")]
     Store(#[source] sqlx::Error),
+    /// The write could not be recorded, so it was not made.
+    #[error("the write could not be recorded")]
+    Record(#[source] audit::Error),
 }

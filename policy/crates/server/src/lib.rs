@@ -14,7 +14,9 @@ mod status;
 mod tls;
 
 use std::future::Future;
+use std::time::Duration;
 
+use audit::Recorder;
 use decision::{Engine, EntitySource, PolicySource};
 use entity::EntityStore;
 use grant::PolicyStore;
@@ -115,12 +117,14 @@ pub async fn serve(
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), Error> {
     let engine = Engine::load().map_err(Error::Engine)?;
+    let recorder = Recorder::new(pool.clone());
     let service = Service::new(
         engine.clone(),
         PolicyStore::new(pool.clone()),
         EntityStore::new(pool.clone(), engine),
     )
-    .writing_to(PolicyStore::new(pool.clone()));
+    .writing_to(PolicyStore::new(pool.clone()))
+    .recording_to(recorder.clone());
     let incoming = Incoming::new(listeners.contract, identity.acceptor().map_err(Error::Tls)?);
     // The binding's routes join the contract's beside it: one listener,
     // one TLS, and the same service and verifier behind both.
@@ -134,5 +138,24 @@ pub async fn serve(
     tokio::select! {
         served = contract => served.map_err(Error::Transport),
         answered = probes::answer(listeners.probes, pool) => answered.map_err(Error::Probes),
+        () = sweeping(recorder) => Ok(()),
+    }
+}
+
+/// How often the denials past their retention are removed. The read
+/// answers none of them in between (ADR-0148 item 2).
+const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
+
+/// Removes the denials past their retention at start and then every
+/// [`SWEEP_EVERY`], and never returns. A failed sweep is logged and
+/// tried again at the next one: the read does not depend on it.
+async fn sweeping(recorder: Recorder) {
+    let mut tick = tokio::time::interval(SWEEP_EVERY);
+    loop {
+        tick.tick().await;
+        match recorder.sweep().await {
+            Ok(removed) => tracing::info!(removed, "swept the denials past their retention"),
+            Err(error) => tracing::error!(error = ?error, "the denial sweep failed"),
+        }
     }
 }

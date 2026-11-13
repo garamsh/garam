@@ -48,6 +48,9 @@ pub(super) struct Evaluation {
     action: Option<Action>,
     resource: Option<Entity>,
     context: Option<Map<String, Value>>,
+    /// Whether the question is a probe, not recorded when denied
+    /// (ADR-0148): a field this binding adds beside AuthZEN's.
+    probe: Option<bool>,
 }
 
 /// AuthZEN's request of the Access Evaluations API.
@@ -57,6 +60,7 @@ pub(super) struct Evaluations {
     action: Option<Action>,
     resource: Option<Entity>,
     context: Option<Map<String, Value>>,
+    probe: Option<bool>,
     options: Option<Options>,
     evaluations: Option<Vec<Evaluation>>,
 }
@@ -77,6 +81,7 @@ impl Evaluation {
             resource: resource(self.resource, manifests)?,
             context: self.context.map(structure),
             read: 0,
+            probe: self.probe.unwrap_or_default(),
         })
     }
 }
@@ -105,6 +110,7 @@ impl Evaluations {
                     action: action(entry.action)?,
                     resource: resource(entry.resource, manifests)?,
                     context: entry.context.map(structure),
+                    probe: entry.probe,
                 })
             })
             .collect::<Result<_, ServiceError>>()?;
@@ -115,6 +121,7 @@ impl Evaluations {
             context: self.context.map(structure),
             read: 0,
             evaluations,
+            probe: self.probe.unwrap_or_default(),
         })
     }
 }

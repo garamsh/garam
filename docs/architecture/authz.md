@@ -206,11 +206,17 @@ true of the platform.
   `Allow`.
 - **cowork asks the service alone,** and its path through
   `checkPermissions` goes.
-- Every denial and every write of a policy is recorded by the policy
-  service for the organization of the resource, and an organization's
-  owners and administrators read it on `iam:audit.read`
+- Built in the policy service (#1785), not yet relayed by the
+  platform: every denial and every write of a policy is recorded by
+  the policy service for the organization of the resource, and an
+  organization's owners and administrators read it on
+  `iam:audit.read`
   ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)).
-  Not built.
+  A write is recorded in its own transaction, so one that cannot be
+  recorded is not made. A denial is recorded after the engine decides
+  it, and one whose record cannot be written is answered anyway, the
+  failure logged and counted in process. Not built: the platform's
+  relay of `ListAuditRecords`, and a metric for the failures.
 
 [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md) makes a
 message between two agents of two consenting organizations tenant

@@ -18,7 +18,11 @@ GAON_REFUSED = $(wildcard $(GAON_DIR)/ci/refused/*.yaml)
 # and cowork-web's are its env.ts, parsed as the other two web apps' are
 # but for a line that carries a default after the read.
 GAON_COWORK_ENV = $(shell grep -hoE '^[[:space:]]*env[A-Za-z0-9]+[[:space:]]*= "COWORK_[A-Z0-9_]*"' ../../cowork/internal/cli/cli.go | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
-GAON_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1\( .*\)\{0,1\},$$/\1/p' ../../platform-web/src/env.ts ../../site-web/src/env.ts ../../cowork-web/src/env.ts | sort -u)
+GAON_ENV_TS = sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1\( .*\)\{0,1\},$$/\1/p'
+GAON_CONSOLE_ENV = $(shell $(GAON_ENV_TS) ../../platform-web/src/env.ts | sort -u)
+GAON_SITE_ENV = $(shell $(GAON_ENV_TS) ../../site-web/src/env.ts | sort -u)
+GAON_COWORKWEB_ENV = $(shell $(GAON_ENV_TS) ../../cowork-web/src/env.ts | sort -u)
+GAON_WEB_ENV = $(sort $(GAON_CONSOLE_ENV) $(GAON_SITE_ENV) $(GAON_COWORKWEB_ENV))
 
 # What the chart declares it does not set, from the README table that
 # carries the reasons.
@@ -56,6 +60,15 @@ gaon-render:
 		printf '%s\n' $(CHART_GO_ENV) $(GAON_COWORK_ENV) $(GAON_WEB_ENV) $(CHART_POLICY_ENV) | sort -u > "$$out/source"; \
 		both="$$(comm -12 "$$out/rendered" "$$out/unset")"; \
 		test -z "$$both" || { echo "gaon-render: rendered and declared unset at once:"; echo "$$both"; exit 1; }; \
+		for v in $(GAON_VALUES); do awk -f $(GAON_DIR)/ci/envs.awk "$$out/$$(basename "$$v")"; done | sort -u > "$$out/pairs"; \
+		for p in platform:'$(CHART_GO_ENV)' cowork:'$(GAON_COWORK_ENV)' policy:'$(CHART_POLICY_ENV)' console:'$(GAON_CONSOLE_ENV)' site:'$(GAON_SITE_ENV)' coworkweb:'$(GAON_COWORKWEB_ENV)'; do \
+			proc="$${p%%:*}"; \
+			printf '%s\n' $${p#*:} | sort -u > "$$out/own"; \
+			awk -v p="$$proc" '$$1 == p { print $$2 }' "$$out/pairs" > "$$out/theirs"; \
+			test -s "$$out/theirs" || { echo "gaon-render: no variable rendered for $$proc — the object-name parse in ci/envs.awk is broken"; exit 1; }; \
+			stray="$$(comm -23 "$$out/theirs" "$$out/own")"; \
+			test -z "$$stray" || { echo "gaon-render: rendered on $$proc, and not read by the source of $$proc:"; echo "$$stray"; exit 1; }; \
+		done; \
 		stray="$$(comm -23 "$$out/rendered" "$$out/source")"; \
 		test -z "$$stray" || { echo "gaon-render: rendered, and read by no source this check sweeps:"; echo "$$stray"; exit 1; }; \
 		missing="$$(comm -13 "$$out/rendered" "$$out/source" | comm -23 - "$$out/unset")"; \
@@ -134,7 +147,7 @@ gaon-guards:
 				|| { echo "gaon-guards: the control render of $$c was refused — the guards refuse a chart that should install"; exit 1; }; \
 		done; \
 		for v in $(GAON_REFUSED); do \
-			want="$$(basename "$$v" .yaml)"; \
+			want="$$(basename "$$v" .yaml | sed 's/@.*//')"; \
 			if $(HELM) template garam $(GAON_DIR) --values $(GAON_DIR)/ci/minimal-values.yaml --values "$$v" >/dev/null 2>"$$out/err"; then \
 				echo "gaon-guards: $$v rendered, and the guard for $$want did not fire"; exit 1; \
 			fi; \

@@ -38,6 +38,21 @@ and is not checked against any later one. Gaon's API group is
 gaon has no namespaces
 (`docs/architecture/resource-api.md`).
 
+The sections §How a claim about gaon is read, §Order, §Names and
+§What gaon does not yet serve were revised for
+[ADR-0155](./adr/0155-garam-ships-a-second-helm-chart-that-renders-the-gaon-kinds.md)
+and hold for gaon at commit
+`cfb148dea568674525207bd329a94f1d9ccc912f` (its `main` when they were
+revised), read from the file or issue cited. The other sections keep
+the commit above.
+
+The chart in
+[deploy/charts/garam-gaon/](../../deploy/charts/garam-gaon/README.md)
+renders the objects of this document, so that aurora supplies values
+and writes no template of garam's. Nothing applies that chart to a gaon
+cluster: what is shown is that it renders, with the pinned Helm, the
+fields below and no others, and the cluster-facing claim is not shown.
+
 The gaon operator
 ([ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md))
 is out of scope. It is built by another change; once built it is
@@ -54,7 +69,7 @@ which one it rests on.
   marked served below rest on gaon's code or issues, and each names the
   issue or document that says so.
 
-Two cases decide most of this document:
+These cases decide most of this document:
 
 - The Deployment, Job, CronJob and StatefulSet kinds, the MicroVM's
   `env`, `files`, `ports`, probes and `terminationGracePeriodSeconds`,
@@ -63,13 +78,33 @@ Two cases decide most of this document:
   `resource-api.md` and `node-agent.md` describe them as built, and
   ADR 0020, 0024, 0026, 0029 and 0030 decide them
   (`docs/architecture/adr/` of gaon at the same commit).
-- `Service`, `Endpoints` and `NetworkPolicy` are contract only.
-  `resource-api.md` §Service, Endpoints and NetworkPolicy says the API
-  server's serving of them, the endpoints controller and enforcement
-  are later issues; that is garamsh/gaon#182, open. A search of
-  gaon's non-test Go files at the commit above for the routes of these
-  kinds found nothing, and it was not shown to find a route that does
-  exist. ADR 0027 decides that the core serves them.
+- `Service`, `Endpoints` and `NetworkPolicy` are served at
+  `cfb148dea568674525207bd329a94f1d9ccc912f`, by the commits that
+  gaon's log names: the kinds and Service addresses by
+  `02eecea16a2ef114b3dfbf77010c5286caa19026` (#190), a selector
+  Service's endpoints by
+  `fb9ea18eaa9a2788da8802092fa610e5a21093f7` (#202), enforcement by
+  the network plugin by `99a1f863e74b524ef0db70c2d0ccd6980ca77b20`
+  (#204) and the CLI's reach of them by
+  `0496411c9ec2d37010ae6dc7d353a99f10b0266d` (#208). garamsh/gaon#182
+  and #165 are closed. This replaces the earlier reading of these kinds
+  as contract only, which held at
+  `c7e8436d85cd6e49e57ba2c39a75221edc6d8a4e`.
+- `gaon apply -f -` applies a Helm-rendered stream, by
+  `e80efe9b3ec7058735831dc451a13d088e05af79` (#206) and `cli.md`
+  §Applying a Helm-rendered stream: it keeps Helm's order, and offers
+  no hook, no prune and no history.
+- The gateway is contract only. `gateway.md`, from
+  `70abdf8a0909b175261090e5ff4851a9ab275f72` (#200), states its kinds
+  and ADR 0032 decides them; gaon has no unit that serves them at the
+  commit above.
+- DNS for a `Service` is contract (`dns.md`, from
+  `215c7949564c1b55360b9fe0de50a15c2d7cae8f`, #203) and a `dns/` unit,
+  `gaon-dns`, exists (`cfb148dea568674525207bd329a94f1d9ccc912f`,
+  #225). `dns.md` says a MicroVM resolves nothing until the network
+  plugin implements Service addresses, garamsh/gaon#196, which was open
+  at that commit. That a MicroVM's resolver reaches the unit is not
+  shown.
 
 A field name appears below only where a gaon document shows it. Where
 none does, the gap table says so.
@@ -242,6 +277,16 @@ document does not say a rotation by restart works
 
 ## Order
 
+The chart holds this order by a required value, `stage`: `migrate`
+renders the three `Job`s alone and `serve` renders everything else, so
+a deployer renders and applies the first, waits for the three `Job`s to
+complete, and then renders and applies the second. One render is not
+used because `helm template` emits a `Deployment` before a `Job`, and
+`gaon apply -f -` keeps that order and has no hook
+(`cli.md` §Applying a Helm-rendered stream). garamsh/gaon#201, which
+asked for it, is closed with that answer in ADR 0035. The deployer's
+script, which waits, is not in the chart and is not shown.
+
 Gaon holds no order between kinds. Neither `workloads.md` nor
 `deployment.md` gives a field by which a `Deployment` waits for a `Job`,
 and `resource-api.md` gives none by which one object waits for another;
@@ -286,51 +331,64 @@ wait on its probe.
 
 A public name is a host a person or a process opens
 ([deployment-needs.md](./deployment-needs.md) §Public names, which says
-what must agree with each). Gaon's served surface has no object that
-serves a host: the objects named below are contract or decision, and
-the gap table lists each.
+what must agree with each). Gaon serves no object that serves a host:
+the `Gateway`, `HTTPRoute` and `TLSRoute` named below are contract
+(`gateway.md`, ADR 0032), not served, and the gap table lists them.
+Their group is `gateway.gaon.garam.sh/v1alpha1`.
 
 **Public names**
 
 | Name | Objects that serve it | Where TLS ends |
 |---|---|---|
-| The site | a `Service` for `garam/site` on port 3000 and a gateway route on the site's host, path prefix `/` | at the gateway |
-| The console | a `Service` for `garam/console` on port 3000 and a route on the console's host, path prefix `/` | at the gateway |
-| cowork's host | `Service`s for `cowork serve` and `garam/cowork-web` and three routes on one host: path prefix `/api/` to cowork with the prefix replaced by `/`, `/mcp` to cowork unchanged, and `/` to cowork-web | at the gateway |
-| The user-content origin | a `Service` for `cowork serve`'s `COWORK_USERCONTENT_ADDR` port and a route on its own host | at the gateway |
-| The machine listener | a `Service` of `type: LoadBalancer` for `serve machine`'s port 8443, or a gateway listener that passes TLS through by SNI | in `serve machine`, which presents the certificate of `GARAM_MACHINE_TLS_CERT_FILE` |
+| The site | a `Service` for `garam/site` on port 3000 and an `HTTPRoute` on the site's host, path prefix `/` | at the gateway |
+| The console | a `Service` for `garam/console` on port 3000 and an `HTTPRoute` on the console's host, path prefix `/` | at the gateway |
+| cowork's host | `Service`s for `cowork serve` and `garam/cowork-web` and one `HTTPRoute` on one host with three rules: path prefix `/api/` to cowork with a `URLRewrite` of `ReplacePrefixMatch` to `/`, `/mcp` to cowork unchanged, and `/` to cowork-web | at the gateway |
+| The user-content origin | a `Service` for `cowork serve`'s `COWORK_USERCONTENT_ADDR` port and an `HTTPRoute` on its own host | at the gateway |
+| The machine listener | a `Service` of `type: LoadBalancer` for `serve machine`'s port 8443, or a `Gateway` listener of protocol `TLS` with `Passthrough` and a `TLSRoute` that selects it by server name | in `serve machine`, which presents the certificate of `GARAM_MACHINE_TLS_CERT_FILE` |
 | The identity issuer | `/api` on the site's host: the route above reaches `garam/site`, which proxies `/api/*` to the api | at the gateway |
 | The token endpoint | `serve machine`'s `/oauth/token`, on the machine listener's host | in `serve machine` |
 
-- **The gateway is decided, not documented.** The body of
-  garamsh/gaon#117 records, in D6, a TLS-terminating gateway as a
-  workload kind delivered as an extension; in D16, `Host` and the path
-  forwarded unmodified; and in D18, a gateway with a listener per
-  port, plain HTTP, TLS terminated or TLS passed through by SNI, routes
-  by host and by path prefix, a prefix replacement that a route opts
-  into, and `X-Forwarded-For` and `X-Forwarded-Proto` added to a
-  forwarded request with `Host` and the path otherwise unmodified.
-  No gaon document at the commit above states its kind or fields:
-  `resource-api.md` §Open questions lists "Gateway" among default
-  extensions of `apps.gaon.garam.sh` that none is written for yet.
-  Its contract is garamsh/gaon#187. No field name is given here for it.
+- **The gateway is contract, not served.** `gateway.md` at
+  `cfb148dea568674525207bd329a94f1d9ccc912f`, read in full, states
+  three kinds and ADR 0032 decides them; gaon has no unit that serves
+  them.
+  - A `Gateway` has `listeners` (a `name`, a `port`, a `protocol`, a
+    `hostname` and `tls`) and at most one of `addresses`. A port holds
+    one protocol. `HTTPS` takes `tls.mode: Terminate` and one
+    `certificateRefs` entry naming a `Secret`; `TLS` takes
+    `Passthrough` and no certificate.
+  - An `HTTPRoute` has `parentRefs` (a `name` and a `sectionName`),
+    `hostnames` and `rules`. A rule has `matches` of a `PathPrefix`,
+    at most one filter, `URLRewrite` with `ReplacePrefixMatch`, which
+    takes exactly one match, and exactly one backend, a `Service`
+    `name` and `port`.
+  - A `TLSRoute` has the same references and exactly one rule of one
+    backend.
+  - `Host` and the path are forwarded unmodified unless a rewrite is
+    declared. A certificate is a `Secret` with the keys `tls.crt` and
+    `tls.key`. There is no `GatewayClass`, no `allowedRoutes` and no
+    namespace.
+  The chart renders these kinds behind `gateway.enabled`, which is off
+  by default; with it on, the output is what the contract states, not
+  what a cluster has shown to work.
 - **The machine listener** ends TLS in the process, with the
   certificate of `GARAM_MACHINE_TLS_CERT_FILE`, so a gateway that
   terminated it would present another. A `LoadBalancer` `Service` is L4
   and passes the connection through (`resource-api.md` §Service,
-  Endpoints and NetworkPolicy); gateway passthrough by SNI is the
-  other decided form.
+  Endpoints and NetworkPolicy); a `TLS` listener with `Passthrough`
+  and a `TLSRoute` is the other form. The chart renders the `Service`
+  and, behind `gateway.enabled`, the listener and the route.
 - **The route to the three web images** need not split `/api`: the
   console and the site proxy `/api/*` themselves
   ([deployment-needs.md](./deployment-needs.md) §Public names).
 - **The names a person types** are the host names of the gateway
   routes; which addresses they resolve to belong to the cluster owner.
-  Gaon's decision D6 on garamsh/gaon#117 serves DNS for Services as a
-  workload; its contract is garamsh/gaon#187, and no document at the
-  commit above describes it.
-- **A gateway can hold a LAN address** through a `LoadBalancer`
-  `Service` that names `loadBalancerIP` (`resource-api.md`); that
-  serving is garamsh/gaon#182.
+  `dns.md` covers what a MicroVM resolves, not these.
+- **A gateway can hold a LAN address** through a `Gateway`'s
+  `addresses`, or a `LoadBalancer` `Service` that names
+  `loadBalancerIP` (`resource-api.md`). The `Service`'s address is
+  served (garamsh/gaon#182, closed); announcing it on the LAN is the
+  network plugin's, and is not shown.
 - **What codehub reaches** is the policy listener, `/oauth/token` and
   `/oauth/introspect` on the api, and the issuer's discovery document
   and key set; it is a caller, and its needs are in
@@ -341,10 +399,13 @@ the gap table lists each.
 
 A `Service`'s name is a DNS label of at most 63 characters starting
 with a letter (`resource-api.md`). The names below are chosen by this
-document and are the deployment's to change; each is both the
-`Service` name and the address the settings carry.
+document and are the deployment's to change; each is the `Service`
+name, and the address the settings carry is that name in full,
+`<service>.default.svc.<zone>`, with `cluster.local` as the default
+zone (`dns.md` §Names). The short form is not resolved, as the Guest
+Agent writes no search line, so no setting carries it.
 
-| Name | Serves | Carried by |
+| Name | Serves | Carried by, as `<name>.default.svc.<zone>` |
 |---|---|---|
 | `garam-api` | `serve api` | `GARAM_API_URL` on the three web images; `COWORK_PLATFORM_URL` on cowork |
 | `garam-authz` | `serve authz`'s gRPC port | `GARAM_AUTHZ_ADDR` on the api and on `serve machine` |
@@ -356,15 +417,20 @@ document and are the deployment's to change; each is both the
 - **A name that is also in a certificate.** The policy service
   presents a certificate that `GARAM_POLICY_CA_FILE` and
   `COWORK_POLICY_CA_FILE` trust, so the name in `GARAM_POLICY_ADDR` and
-  `COWORK_POLICY_ADDR` must be one that certificate names. Which names
-  it carries is the deployment's and is not established by
-  [deployment-needs.md](./deployment-needs.md) §garam/policy.
-- **Until a `Service` is served,** a setting that carries an internal
-  address takes the address of the MicroVM, which the deployer reads
-  from the MicroVM's `status.addresses` (`resource-api.md`). It
-  changes at every replacement of that MicroVM, so every setting that
-  carries it is then rewritten and the MicroVMs that read it at start
-  are restarted by replacement: the gap table's first entry.
+  `COWORK_POLICY_ADDR` must be one that certificate names. That name
+  is `garam-policy.default.svc.<zone>`, so the policy service's
+  certificate must name it. The same holds for any certificate a
+  garam process presents to another by a `Service` name: it names that
+  `Service`'s full name, as the caller connects to the full name. That
+  [deployment-needs.md](./deployment-needs.md) §garam/policy does not
+  establish which names the certificate carries is why this is stated
+  here.
+- **A setting names a `Service`, not a MicroVM.** A `Service` is served
+  at the commit above, so a setting no longer takes the MicroVM's
+  `status.addresses`. That a MicroVM's resolver reaches the DNS unit is
+  not shown (§How a claim about gaon is read): the name is the right
+  one to carry, and a cluster where it does not resolve yet is the gap
+  table's DNS entry.
 
 ## Databases and object storage
 
@@ -463,19 +529,17 @@ titles, and is for the PM to file; no number is invented here.
 
 | Need | Gaon issue | Until it is served |
 |---|---|---|
-| `Service`, `Endpoints` and address allocation served by the API server | garamsh/gaon#182, open | a setting that carries an internal address takes a MicroVM's address from `status.addresses` and is rewritten at every replacement; the deployer does the rewriting |
-| `NetworkPolicy` kind and its enforcement, for egress limits on `serve machine`, `cowork serve` and codehub | garamsh/gaon#165, open | no policy; every MicroVM can reach every other. Where garam's reach is limited, the cluster owner does it outside gaon |
-| A gateway: kind, fields, hosts, prefix replacement, TLS | garamsh/gaon#187, open; decided on #117 | the deployer runs a TLS-terminating proxy as a `Deployment` of its own with the host and path split of §Names, and reaches it as the cluster owner decides |
-| DNS names for `Service`s | garamsh/gaon#187, open (decided as D6 on #117) | settings carry addresses, as in the first row |
-| A `LoadBalancer` address for the machine listener | garamsh/gaon#182, open | the machine listener is reached at the address of its MicroVM, or through the proxy in L4 passthrough |
+| The kinds `Gateway`, `HTTPRoute` and `TLSRoute` served: hosts, the `/api/` prefix rewrite, TLS from a `Secret`, passthrough by server name | contract in `gateway.md` (garamsh/gaon#200, ADR 0032); no unit serves it, and no open issue for one was read | the chart renders the kinds behind `gateway.enabled`, off by default; with it off the deployer runs a TLS-terminating proxy of its own with the host and path split of §Names |
+| A MicroVM resolving a `Service`'s name | `dns.md` (garamsh/gaon#203, ADR 0033); the `dns/` unit exists; garamsh/gaon#196, Service addresses in the network plugin, open at the commit above | every address is the full `<service>.default.svc.<zone>` name; that a MicroVM resolves it is not shown, and a deployment where it does not carries the address of the MicroVM |
+| A `LoadBalancer` address announced on the LAN for the machine listener | garamsh/gaon#196, open at the commit above | the `Service` names `loadBalancerIP`; that the address answers on the LAN is not shown |
 | `env` and `files` resolved again at each restart, and `workingDir` | garamsh/gaon#170, open (waits on garamsh/mvmd#519) | a changed `Secret` reaches a key file by in-place replacement and an `env` entry only at a replacement of the MicroVM; no object here sets `workingDir` |
-| `nodeSelector` has no effect, as a Node has no labels | garamsh/gaon#181, open | none of the objects here states a `nodeSelector` |
+| `nodeSelector` binds only to Nodes whose labels match, by `e72e153f30f67c2e320ccab16eaeeb79b5ab645c` | garamsh/gaon#181, closed | none of the objects here states a `nodeSelector` |
 | Spread of a replicated workload across Nodes | no gaon issue found (decided in a comment on #117, not in `scheduler.md`) | every `Deployment` is one replica, so none is needed |
 | A `Deployment`'s minimum ready time, or a ReplicaSet | no gaon issue found | `Recreate`, as above |
-| Order between kinds: a `Deployment` that waits for a `Job` | no gaon issue found; garamsh/gaon#125 gives the order to garam | the deployer sequences it, as in §Order |
+| Order between kinds: a `Deployment` that waits for a `Job`, and hooks in an applied stream | garamsh/gaon#125 gives the order to garam; garamsh/gaon#201, closed, answers that `apply` keeps Helm's order with no hooks (ADR 0035) | the chart's `stage` value gives two renders that the deployer applies in turn, as in §Order |
 | A `Job` with `parallelism` | no gaon issue found | none needed |
 | `OnDemand` run strategy, and a volume's `mountPath` mounting | no gaon issue read | no object here uses either |
-| A `Deployment`'s `maxSurge` and `maxUnavailable` as an integer | garamsh/gaon#186, open | no object here states them, `Recreate` being used |
+| A `Deployment`'s `maxSurge` and `maxUnavailable` as an integer | garamsh/gaon#186, closed (`34d75c3170c239a1b2b96f2efd41ef3eb6b7318b`) | no object here states them, `Recreate` being used |
 
 None of these blocks writing the objects of this document: each
 object above is stated so that it does without.
@@ -483,10 +547,12 @@ object above is stated so that it does without.
 The identity file form's two issues, garamsh/gaon#161 and #162, are not
 in the table: they are closed.
 
-garamsh/gaon#117, #125, #159, #161, #162, #164, #170, #182 and #187
-were read with their comments. The state of every other issue named
-is that of the list of titles and states, and its thread was not
-read.
+garamsh/gaon#117, #125, #159, #161, #162, #164 and #170 were read with
+their comments when this document was first written, and #201 when it
+was revised. The state of every other issue named is that read from the
+issue on 2026-11-13, and its thread was not read; garamsh/gaon#196 was
+open at the commit above and was closed afterwards, by a change this
+document does not read.
 
 ## Not established
 
@@ -505,7 +571,10 @@ Not guessed. Each is what the documents read do not state.
   read.
 - **How the machine listener and the issuer are reached from outside
   the cluster.** That is the cluster owner's and the gateway's, and
-  neither is documented ([Names](#names)).
+  the gateway is contract only ([Names](#names)).
+- **That the chart applies to a gaon cluster.** Nothing applies it;
+  what is shown is its render, checked against the fields gaon's
+  files name.
 - **The gid of `user`.** `user` is `uid:gid`; the group of the
   account is in the image's group file and is not read here.
 - **Whether a MicroVM's `status.addresses` carries one address or

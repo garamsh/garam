@@ -1,9 +1,19 @@
-# What `make codehub-e2e` adds to docker-compose.yml, always with the
-# `policy` profile and never in the default stack: garam's OIDC issuer
-# (ADR-0141), the machine listener that answers codehub's token
-# requests, the policy service trusting that issuer, and the delivery
-# loop feeding it. tooling/codehub-e2e.sh writes the key material this
-# reads, names the project, and removes both at the end.
+# What `make codehub-e2e` changes in docker-compose.yml, never in the
+# default stack. The default file already runs the machine listener,
+# the identity issuer and the policy service; this one swaps the keys
+# they read for the run's own and moves the ports:
+# - api and machine: the issuer's signing key and the service keys file
+#   (codehub's public key, not cowork's) come from the `codehub-keys`
+#   volume, and the machine listener's certificate, key and
+#   key-encryption key too, in place of `machine-material` and
+#   `cowork-keys`;
+# - policy: trusts the issuer's own keys, fetched from the running api,
+#   in place of the key `policy-keys` made;
+# - ports: the api, the machine listener and the policy service each
+#   take a free loopback port, and postgres and authz publish none.
+# Run without the default file's cowork profile. tooling/codehub-e2e.sh
+# writes the key material this reads, names the project, and removes
+# both at the end.
 #
 # Nothing here publishes a port the default stack does, so a run can sit
 # beside it: the api and the machine listener take a free port each,
@@ -54,9 +64,9 @@ services:
       policy-tls:
         condition: service_completed_successfully
 
-  # `serve machine` is not in the default stack, because key material
-  # made on the host is not readable by the image's account (ADR-0017);
-  # codehub-keys makes it readable here.
+  # The default file's `machine` reads key material its own one-shot
+  # made in a volume. This run's is made on the host, which the image's
+  # account cannot read (ADR-0017); codehub-keys makes it readable here.
   machine:
     build:
       context: ../..

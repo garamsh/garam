@@ -241,7 +241,11 @@ file belongs to uid 10001, which is the account of the `garam` and
 volume read-only and the service keys file alone of cowork's, by volume
 subpath. cowork mounts its volume read-only and never the machine
 listener's. Nothing prints a key and nothing commits one. The files
-stay across `up`, and a fresh set comes only with `down -v`.
+stay across `up`, and a fresh set comes only with `down -v`. The
+machine listener's certificate is valid for 30 days and is not made
+again while its volume holds the set, so from day 31 cowork and the
+callers that verify it refuse it as expired; `down -v` makes a new one,
+as it does for the policy service's pair.
 
 cowork is given its four policy settings: `COWORK_POLICY_ADDR`,
 `COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL` and

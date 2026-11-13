@@ -10,6 +10,10 @@ set -eu
 
 owner=${1:?the user that owns the key files}
 
+# Nothing below is readable by another account at any instant: the
+# files are made owner-only, and narrowed or widened after.
+umask 077
+
 # Compose runs this again whenever a service that waits on it is brought
 # up, and a listener holds what it started with: what is there stays.
 # kek.hex is written last, so its presence says the set is whole.

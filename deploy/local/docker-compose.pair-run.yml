@@ -1,11 +1,21 @@
 # What `make -C gaon-operator pair-run` adds to docker-compose.yml,
-# never in the default stack: garam's machine listener (the operator's
-# and the control service's token exchange and the agent's mint, report
-# and introspection all go to it), and the control service of
+# never in the default stack: the control service of
 # garamsh/garam-agent-operator at the digest below, with a database of
-# its own on the stack's postgres. gaon-operator/pair-run/pair-run.sh
-# writes the key material these read into $PAIR_RUN_KEYS_DIR, names the
-# project and removes both at the end.
+# its own on the stack's postgres. It also changes the default file's
+# `machine` (the operator's and the control service's token exchange
+# and the agent's mint, report and introspection go to it) and `api`:
+# - machine: the certificate, key and key-encryption key come from the
+#   `machine-keys` volume, in place of `machine-material`, and it
+#   publishes a free loopback port; the default's issuer, policy
+#   signing key and service keys file stay on it;
+# - api: publishes a free loopback port and names the listener's token
+#   URL, and postgres and authz publish none.
+# The default file's cowork is not part of this run: the profile that
+# starts it is not given, and cowork would trust `machine-material`'s
+# certificate, which this run's listener does not serve.
+# gaon-operator/pair-run/pair-run.sh writes the key material these read
+# into $PAIR_RUN_KEYS_DIR, names the project and removes both at the
+# end.
 #
 # The control image is in a private registry. Compose pulls it with the
 # login the caller already holds; nothing is pushed, tagged or deleted.

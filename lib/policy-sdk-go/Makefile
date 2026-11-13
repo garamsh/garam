@@ -14,6 +14,7 @@ format:
 
 lint:
 	$(go-vet)
+	$(go-tidy-check)
 
 build:
 	$(go-build)

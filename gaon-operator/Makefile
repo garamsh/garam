@@ -11,8 +11,18 @@ ci: format lint test build
 format:
 	$(go-format)
 
+# lint also fails where go mod tidy would change go.mod or go.sum, and
+# names the files. tidy reads every build tag and every package of the
+# module bar testdata, so a file that only gaon's module builds, as
+# pair-run/testdata/gaonharness is, belongs under testdata.
+define tidy-check
+@out="$$(go mod tidy -diff)" || { files="$$(printf '%s\n' "$$out" | sed -n 's|^+++ tidy/||p' | paste -sd ' ' -)"; echo "lint (go mod tidy): go mod tidy would change: $${files:-no file it names, see the error above}; run go mod tidy in gaon-operator"; exit 1; }
+@echo "lint (go mod tidy): go.mod and go.sum are as go mod tidy leaves them"
+endef
+
 lint:
 	$(go-vet)
+	$(tidy-check)
 
 test:
 	$(go-test)

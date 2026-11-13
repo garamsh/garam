@@ -29,14 +29,15 @@
 # - standin (the default): tests/gaonstandin, as above;
 # - gaon (`make pair-run-gaon`): gaon's own built services from the
 #   commit GAON_COMMIT of the checkout GAON_REPO, with authorization on
-#   (pair-run/gaon-build.sh, pair-run/gaonharness): an embedded etcd,
-#   gaon-apiserver with --authorization-mode=RBAC, gaon-controllers,
-#   gaon-scheduler and one gaon-node-agent over a minimal mvmd that
-#   runs nothing. The harness issues the operator a client certificate
-#   with CN garam-gaon-operator and no Organization, and the run, as the
-#   administrator, binds it the role the document states. The model-key
-#   Secret is put as the administrator and the MicroVM's status is
-#   written by the Node Agent, so the stand-in's admin path is not used.
+#   (pair-run/gaon-build.sh, pair-run/testdata/gaonharness): an
+#   embedded etcd, gaon-apiserver with --authorization-mode=RBAC,
+#   gaon-controllers, gaon-scheduler and one gaon-node-agent over a
+#   minimal mvmd that runs nothing. The harness issues the operator a
+#   client certificate with CN garam-gaon-operator and no Organization,
+#   and the run, as the administrator, binds it the role the document
+#   states. The model-key Secret is put as the administrator and the
+#   MicroVM's status is written by the Node Agent, so the stand-in's
+#   admin path is not used.
 #
 # PAIR_RUN_PROJECT names the compose project. The control image is in a
 # private registry: log in first, as the Makefile's comment says.

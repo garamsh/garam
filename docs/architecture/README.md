@@ -1473,3 +1473,12 @@ ADRs:
   no writer creates there, and only a team's or a project's link on
   itself; every other rule of 0161 holds for it; no migration;
   accepted, built (#1898); extends 0161
+- [0165](./adr/0165-every-request-that-changes-a-fed-entity-answers-after-its-delivery-by-the-marks-its-own-write-raised.md)
+  — every request whose write raises an outbox mark waits on those
+  marks, read by their kind's state function under one bound and
+  answering at once for none, with ADR-0159's bound and ADR-0160's
+  two answers and no new reason; a delete that cascades records the
+  marks of its own transaction; a first sign-in waits and a repeat one
+  does not, nor does a replacement of an agent; the machine listener
+  waits through a gate that observes the outbox with no loop, with no
+  new setting; accepted, built (#1909); extends 0159 and 0162

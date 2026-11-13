@@ -42,6 +42,18 @@ type State struct {
 	Operations []string
 }
 
+// The mark kinds of the entities themselves, as policy_outbox_track
+// writes them. The marks of the links follow.
+const (
+	OrgType        = "Iam::Org"
+	OrgMembersType = "Iam::OrgMembers"
+	TeamType       = "Iam::Team"
+	ProjectType    = "Iam::Project"
+	UserType       = "Iam::User"
+	AgentType      = "Iam::Agent"
+	OperatorType   = "Iam::Operator"
+)
+
 // RoleLinkType is the mark kind of a member's role link (ADR-0146
 // item 4). Its id is the organization's GRN and the member's, with a
 // space between them, so a link's mark is told from an entity's by its

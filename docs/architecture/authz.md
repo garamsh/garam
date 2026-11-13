@@ -515,10 +515,28 @@ membership routes do (`Gate.AwaitScoped`, the same bound and the same
 two reasons). An update waits only when its body wrote the roles; one
 that did not is answered at once, whatever mark of its owner is set
 aside, since it asked nothing of the policy service. A write of the
-roles is answered by what the service then says. The other requests
-that change a fed entity do not wait yet, among them deleting an
-organization, which waits for its members' links and not for the
-scoped marks its groups' and projects' deletions raise.
+roles is answered by what the service then says.
+
+Every other request that changes a fed entity waits as well, on the
+marks its own write raised (ADR-0165): `Gate.AwaitMarks` reads each
+by its kind's state function under one bound and answers at once for
+none. These wait: creating an organization, deleting an organization
+(on every mark its cascade raised, collected from its own transaction
+by `policyfeedpg.Record` as the group's and the project's deletions
+are), creating and deleting a group or a project, adding and removing
+a member of either, registering and deleting an operator, writing and
+ending an operator's delegation, granting and withdrawing a
+consent, registration, accepting an invitation, the first sign-in
+that created the user, and on the machine listener creating a managed
+agent, admitting an enrollment of a new agent and enrolling a new
+standalone agent. A repeat sign-in, a replacement of an agent that
+exists, a rename, and every other write raise no mark and answer at
+once, whatever older mark is set aside. A first sign-in that times
+out has set the session. The machine process holds a gate with no
+loop (`NewObservingGate`) over the same outbox: it answers when the
+api's loop has delivered, at once with the feed off, and `503` at the
+bound with the feed on and no loop. With the feed off or not
+configured no route waits.
 
 `garam policy-feed start` marks every membership, group and project
 with the rest of the backfill, and so do migrations 000075 and 000079

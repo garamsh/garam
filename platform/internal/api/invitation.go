@@ -10,6 +10,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 )
 
 // defaultInvitationTTL applies when the request omits expiresInHours.
@@ -181,6 +182,12 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 		return
 	}
 	if err := s.awaitLinks(r.Context(), m.Organization.String(), u.GRN.String()); err != nil {
+		writeError(w, err)
+		return
+	}
+	// The membership marks the user's entity, whose parent it now is.
+	if err := s.awaitMarks(r.Context(), m.Organization.String(),
+		policyfeed.Entity{Type: policyfeed.UserType, ID: u.GRN.String()}); err != nil {
 		writeError(w, err)
 		return
 	}

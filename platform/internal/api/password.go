@@ -12,6 +12,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
@@ -81,6 +82,14 @@ func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 	// answer at the bound carries the session and names the
 	// organization.
 	if err := s.awaitLinks(r.Context(), m.Organization.String(), u.GRN.String()); err != nil {
+		writeError(w, err)
+		return
+	}
+	// The user's own entity is marked by its creation and again by the
+	// membership, and a registration is the one request that stored
+	// both.
+	if err := s.awaitMarks(r.Context(), m.Organization.String(),
+		policyfeed.Entity{Type: policyfeed.UserType, ID: u.GRN.String()}); err != nil {
 		writeError(w, err)
 		return
 	}

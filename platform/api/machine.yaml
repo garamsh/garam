@@ -1471,6 +1471,12 @@ paths:
         another audience's; a reference of another kind is 403, and so
         is one current state no longer authorizes. Authority garam
         cannot read as current is 503.
+
+
+        The answer, either status, waits until the policy service holds
+        the agent (ADR-0165). A 503 on that wait means the agent is
+        stored and not yet applied: repeat the request under the same
+        `requestId`, which answers the same agent.
       parameters:
         - $ref: '#/components/parameters/enrollmentContractVersion'
         - $ref: '#/components/parameters/controller'
@@ -1563,6 +1569,13 @@ paths:
         `direct` is a host whose supervisor attaches to a runtime
         already running there and starts nothing (ADR-0111). garam
         places, registers and fences both alike.
+
+
+        An answer that creates an agent, or replays its creation, waits
+        until the policy service holds the agent (ADR-0165); a 503 on
+        that wait means the agent is stored and not yet applied, and an
+        identical retry answers it. A replacement raises nothing and is
+        answered at once.
       security: []
       parameters:
         - $ref: '#/components/parameters/standaloneContractVersion'
@@ -1745,6 +1758,12 @@ paths:
         replacement, an agent that was active names the activation the
         replacement ended in `replaces` instead. Neither delivery nor
         admission activates anything by itself.
+
+
+        An admission of a new agent waits until the policy service holds
+        the agent (ADR-0165); a 503 on that wait means the agent is
+        stored and not yet applied, and an identical retry answers it. A
+        replacement raises nothing and is answered at once.
       parameters:
         - $ref: '#/components/parameters/agentEnrollmentContractVersion'
         - $ref: '#/components/parameters/approval'

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 
+	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
+	"github.com/garamsh/garam/platform/internal/user"
 )
 
 // WithFeed makes a request that changes an organization's membership
@@ -68,6 +71,56 @@ func (s *Server) awaitScoped(ctx context.Context, orgGRN, ownerGRN string) error
 		return nil
 	}
 	return namesStored(s.feed.AwaitScoped(ctx, ownerGRN), orgGRN)
+}
+
+// awaitMarks holds the answer of a request that has committed a change
+// to what the marks name until the policy service has applied them
+// (ADR-0165 item 2), and answers as awaitLinks does, naming the
+// organization. The marks are the ones the request's own write raised,
+// so a request that raised none passes none and is answered at once.
+func (s *Server) awaitMarks(ctx context.Context, orgGRN string, marks ...policyfeed.Entity) error {
+	if s.feed == nil {
+		return nil
+	}
+	return namesStored(s.feed.AwaitMarks(ctx, marks), orgGRN)
+}
+
+// recording returns ctx with a collection the request's delete fills
+// with the marks its own transaction raised, for a write that cascades
+// to marks no handler can name (ADR-0165 item 3). Without a feed it
+// returns ctx and nil, and awaitRaised then waits for nothing.
+func (s *Server) recording(ctx context.Context) (context.Context, *policyfeed.Raised) {
+	if s.feed == nil {
+		return ctx, nil
+	}
+	return policyfeed.WithRaised(ctx)
+}
+
+// awaitRaised holds the answer until the policy service has applied
+// the marks the request's delete raised, and answers as awaitMarks
+// does.
+func (s *Server) awaitRaised(ctx context.Context, raised *policyfeed.Raised, orgGRN string) error {
+	if raised == nil {
+		return nil
+	}
+	return s.awaitMarks(ctx, orgGRN, raised.Entities()...)
+}
+
+// memberMark is the mark a change to a group's or a project's members
+// raises for the member: its user's or its agent's entity, which
+// carries the group as a parent. A member the policy service holds no
+// entity for raises none (policy_outbox_track).
+func memberMark(member grn.GRN) []policyfeed.Entity {
+	if member.Service != "iam" {
+		return nil
+	}
+	switch member.ServiceType {
+	case user.ServiceType:
+		return []policyfeed.Entity{{Type: policyfeed.UserType, ID: member.String()}}
+	case agent.ServiceType:
+		return []policyfeed.Entity{{Type: policyfeed.AgentType, ID: member.String()}}
+	}
+	return nil
 }
 
 // namesStored wraps an error that says the change is stored but not

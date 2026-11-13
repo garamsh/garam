@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/authn"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
@@ -108,7 +109,7 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 		writeError(w, err)
 		return
 	}
-	u, err := s.upsertUser(r, identity)
+	u, created, err := s.upsertUser(r, identity)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -142,6 +143,17 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 	destination, ok := safeDestination(returnPath)
 	if !ok {
 		destination = "/console"
+	}
+	// Only the sign-in that created the user waits: it stored the one
+	// mark no member's change will raise again, and a user whose entity
+	// was written earlier is not held by a feed that is behind. No
+	// organization is stored, so the answer names the user.
+	if created {
+		if err := s.awaitMarks(r.Context(), u.GRN.String(),
+			policyfeed.Entity{Type: policyfeed.UserType, ID: u.GRN.String()}); err != nil {
+			writeError(w, err)
+			return
+		}
 	}
 	http.Redirect(w, r, destination, http.StatusFound)
 }
@@ -188,29 +200,29 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 
 // upsertUser returns the user for the identity, creating it on first
 // login. The provider subject becomes the user's GRN identifier.
-func (s *Server) upsertUser(r *http.Request, identity *authn.Identity) (*user.User, error) {
+func (s *Server) upsertUser(r *http.Request, identity *authn.Identity) (*user.User, bool, error) {
 	if reservedSubject(identity.Subject) {
-		return nil, errorx.New(errorx.KindUnauthenticated, "provider subject claims a reserved identifier")
+		return nil, false, errorx.New(errorx.KindUnauthenticated, "provider subject claims a reserved identifier")
 	}
 	g := userGRN(identity.Subject)
 	// The provider chooses the subject, so it is checked before it is
 	// stored: a GRN written to a row it cannot be read back out of is
 	// the one failure no later boundary can catch.
 	if err := g.Validate(); err != nil {
-		return nil, errorx.Wrap(err, "provider subject")
+		return nil, false, errorx.Wrap(err, "provider subject")
 	}
 	u, err := s.users.Get(r.Context(), g)
 	if err == nil {
-		return u, nil
+		return u, false, nil
 	}
 	if !errorx.IsKind(err, errorx.KindNotFound) {
-		return nil, err
+		return nil, false, err
 	}
 	u = user.New(g, identity.Nickname)
 	if err := s.users.Create(r.Context(), u); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return u, nil
+	return u, true, nil
 }
 
 // currentUser resolves the presented session to the user.

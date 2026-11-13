@@ -24,6 +24,13 @@ type recordingGate struct {
 	asked    []string
 	entities []policyfeed.Entity
 	scoped   []string
+	// marked holds the marks each AwaitMarks call named.
+	marked [][]policyfeed.Entity
+}
+
+func (g *recordingGate) AwaitMarks(_ context.Context, marks []policyfeed.Entity) error {
+	g.marked = append(g.marked, marks)
+	return g.err
 }
 
 func (g *recordingGate) AwaitScoped(_ context.Context, owner string) error {

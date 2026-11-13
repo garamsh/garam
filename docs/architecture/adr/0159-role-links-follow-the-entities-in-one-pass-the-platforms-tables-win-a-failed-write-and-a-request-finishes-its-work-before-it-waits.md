@@ -14,7 +14,9 @@
 > (item 2, for a link the service refuses for good) and extended by
 > [ADR-0162](./0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)
 > (item 4's second kind of mark is the first of a family, which gains
-> a third)
+> a third) and by
+> [ADR-0165](./0165-every-request-that-changes-a-fed-entity-answers-after-its-delivery-by-the-marks-its-own-write-raised.md)
+> (item 3's wait reaches every route that raises a mark)
 > Date: 2026-11-13
 
 Drafted for #1878, which reserves this number. It records four

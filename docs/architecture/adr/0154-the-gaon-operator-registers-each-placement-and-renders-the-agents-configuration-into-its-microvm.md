@@ -109,8 +109,8 @@ would land in its agent's environment. The Secret must exist when the
 MicroVM is rendered and carry both `garam.sh/role=model-key` and
 `garam.sh/organization=<digest>`, where the digest is the label the
 operator puts on that agent's own objects: the first 32 hex digits of
-the SHA-256 of the organization's GRN string (`grn:org:<org>`), since a
-label value holds 63 characters. Any other reference, absent,
+the SHA-256 of the organization's GRN (`grn:root/iam/org/<id>`), since
+a label value holds 63 characters. Any other reference, absent,
 unlabelled, another organization's or the operator's own, starts nothing
 for that agent and fails its pass with an error naming the reference and
 no value. The operator finds the Secrets by label with a second gaon

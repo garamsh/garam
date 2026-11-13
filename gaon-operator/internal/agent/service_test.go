@@ -1036,3 +1036,15 @@ func TestReconcile_NoKeyValueReachesASpec(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(spec), h.keys.value, "the listed data is never rendered")
 }
+
+// The label is documented to a deployer as the first 32 hex digits of
+// the SHA-256 of "grn:root/iam/org/<id>"; this pins the document's
+// worked example to the code.
+func TestModelKeyLabels_TheOrganizationDigestIsTheDocumentedExample(t *testing.T) {
+	labels := agent.ModelKeyLabels(grn.New("org1", "agent", "a1"))
+
+	assert.Equal(t, "37a401b54d687a3e792937666c548e11", labels["garam.sh/organization"])
+	assert.Equal(t, "model-key", labels["garam.sh/role"])
+	sum := sha256.Sum256([]byte("grn:root/iam/org/org1"))
+	assert.Equal(t, hex.EncodeToString(sum[:])[:32], labels["garam.sh/organization"])
+}

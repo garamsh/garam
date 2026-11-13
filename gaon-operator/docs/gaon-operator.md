@@ -256,9 +256,17 @@ above.
   the agents' `apiKeyRef`, holding the key, labelled
   `garam.sh/role=model-key` and `garam.sh/organization=<digest>`. The
   digest is the first 32 hex digits of the SHA-256 of the organization's
-  GRN string, `grn:org:<org>`, the value the operator labels that
-  organization's own objects with. The operator creates none and never
-  uses or logs a value; gaon resolves the `valueFrom` when the MicroVM
+  GRN, `grn:root/iam/org/<id>`, the value the operator labels that
+  organization's own objects with. For the organization id `org1` the
+  string is `grn:root/iam/org/org1` and the digest is
+  `37a401b54d687a3e792937666c548e11`; a test pins that example to the
+  code. It is computed with this command:
+
+  ```sh
+  printf '%s' 'grn:root/iam/org/<id>' | sha256sum | cut -c1-32
+  ```
+
+  The operator creates none and never uses or logs a value; gaon resolves the `valueFrom` when the MicroVM
   starts, so a Secret created later is not seen by a MicroVM already
   started. A name is one Secret, labelled for one organization.
 - **A gaon role for the operator** that also reads Secrets labelled

@@ -1299,7 +1299,9 @@ ADRs:
   attribute of its entity that a system policy per operation reads, and
   a `permit` written by an owner alone; not yet built, except that the
   policy service holds an operator's operations and the system policy
-  per operation (#1805) and serves the write (#1822); supersedes 0140
+  per operation (#1805) and serves the write (#1822), and the platform
+  feeds an operator's operations and its place among its organization's
+  members (#1891); supersedes 0140
   in part, on the feed's "off by default" and its entities alone
 - [0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
   — a message between two agents of two organizations is tenant

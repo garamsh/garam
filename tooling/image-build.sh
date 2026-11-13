@@ -14,9 +14,9 @@
 # tagged `<host>/<repository>:<tag>`, the repository the release
 # publishes to (ADR-0134), and `--tag` names a commit-derived or
 # prerelease tag, defaulting to the first twelve hex digits of HEAD
-# (ADR-0071). A bare release version is refused, as is any other tag,
-# before anything is built. The resulting references are what a person
-# pushes; this script pushes nothing.
+# (ADR-0071). A release version or release tag form is refused, as is
+# any other tag, before anything is built. The resulting references
+# are what a person pushes; this script pushes nothing.
 #
 # `--only <repository>` builds that one image, for a caller needing a
 # single image as the release builds it (gaon-operator's guest-run).
@@ -90,9 +90,12 @@ refuse() {
 #   - prerelease: `X.Y.Z-<identifiers>` as semver 2.0.0 writes one,
 #     without build metadata, which a registry tag cannot carry.
 #
-# A bare `X.Y.Z` is the release's (ADR-0039) and in an IMMUTABLE
-# repository a development push of one would take that version from the
-# release for good, so it is refused by name.
+# A bare `X.Y.Z` is a release's (ADR-0039), and so is any `0.1.0-dev.*`
+# or `0.1.0-rc.*`, the forms a release takes until launch (ADR-0157).
+# In an IMMUTABLE repository a development push of one would take that
+# version from the release for good, so each is refused by name. Those
+# two lines are reserved whole, a number a release refuses included, so
+# no tag of them reads as anything but a release.
 if [ "$dev" = true ]; then
 	[ -n "$registry" ] \
 		|| refuse "--tag names a development tag, and --registry names the registry it is for; none was given"
@@ -104,7 +107,9 @@ if [ "$dev" = true ]; then
 	num='(0|[1-9][0-9]*)'
 	ident='([0-9]*[A-Za-z-][0-9A-Za-z-]*|0|[1-9][0-9]*)'
 	if printf '%s' "$devtag" | grep -Eq "^v?$num\\.$num\\.$num\$"; then
-		refuse "$devtag is a release version, which only a vX.Y.Z tag through $workflow publishes (ADR-0039)"
+		refuse "$devtag is a release version, which only a release tag through $workflow publishes (ADR-0039)"
+	elif printf '%s' "$devtag" | grep -Eq '^0\.1\.0-(dev|rc)\.'; then
+		refuse "$devtag is a release tag form, which only a v$devtag tag through $workflow publishes (ADR-0157)"
 	elif printf '%s' "$devtag" | grep -Eq '^[0-9a-f]{7,40}$'; then
 		case $revision in
 		"$devtag"*) ;;
@@ -125,8 +130,9 @@ fi
 # repository is the path of its `tags:` under the registry (#857). A
 # build argument holding `${{` is one only a run resolves, so it is
 # listed in <per-run> (`-` for none) and passed nothing outside a
-# development build (#1020). Steps seen are counted against lines written, so a step
-# this no longer parses fails rather than reading as every image built.
+# development build (#1020). Steps seen are counted against lines
+# written, so a step this no longer parses fails rather than reading as
+# every image built.
 images=$(awk '
 	function emit() {
 		if (build && path != "") {

@@ -555,15 +555,15 @@ changes and names no garam version.
 
 The images are pinned separately, through `image.server.tag`,
 `image.web.tag`, `image.site.tag` and `image.policy.tag`. A release is a
-`vX.Y.Z` git tag
-and the image tag is that tag with the `v` dropped; one commit publishes
-every image under one version, so a deployment pins one version across
-them (ADR-0039). A release tag is immutable, so the tag answers what is
-deployed on its own. Each image has one repository, `garam/server`,
-`garam/console`, `garam/site` or `garam/policy`, and a development build
-is in the same
-one, tagged by a commit prefix or `X.Y.Z-<prerelease>` rather than a
-bare version (ADR-0071,
+git tag, `v0.1.0-dev.N`, `v0.1.0-rc.N` or `v0.1.0` until launch
+(ADR-0157), and the image tag is that tag with the `v` dropped; one
+commit publishes every image under one version, so a deployment pins
+one version across them (ADR-0039). A release tag is immutable, so
+the tag answers what is deployed on its own. Each image has one
+repository, `garam/server`, `garam/console`, `garam/site` or
+`garam/policy`, and a development build is in the same one, tagged by
+a commit prefix or `X.Y.Z-<prerelease>` rather than a release tag
+(ADR-0071,
 [ADR-0134](../../../docs/architecture/adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)),
 so running one sets the tag alone, and pins a build nobody released.
 A release publishes `garam/policy` with the other images.

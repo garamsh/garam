@@ -301,7 +301,7 @@ on hosted runners.
   `release.yml` declares none, and the absence is what enforces it: a
   group cancels a pending run of that group when a newer one queues
   behind it, whichever way `cancel-in-progress` is set, so a group there
-  could leave a `vX.Y.Z` tag publishing nothing at all, and a run
+  could leave a release tag publishing nothing at all, and a run
   cancelled mid-publish leaves the version half-published with the next
   version as the only repair (ADR-0039 §Consequences). What reads the
   guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
@@ -345,10 +345,11 @@ on hosted runners.
   hosted runners share. Its `429 toomanyrequests: Data limit exceeded`
   failed both attempts of v0.4.0's release run 39120748198 (#1532).
 - **No run here reaches a deployment, so `main` is not what a caller
-  meets.** `release.yml` publishes eight images on a `vX.Y.Z` tag and no
-  other workflow pushes one, so a merge to `main` publishes nothing;
-  an operator pushes the test image, from a checkout, to an ECR
-  repository no deployment pulls (ADR-0092, ADR-0093);
+  meets.** `release.yml` publishes eight images on a release tag
+  (ADR-0157) and no other workflow pushes one, so a merge to
+  `main` publishes nothing; an operator pushes the test image, from a
+  checkout, to an ECR repository no deployment pulls (ADR-0092,
+  ADR-0093);
   the only cluster a recipe here reaches is the local minikube, and
   what it runs there it built from the working tree (`Makefile`,
   `minikube-images`). What a running garam serves is fixed by the image
@@ -358,10 +359,11 @@ on hosted runners.
   a surface is the half this repository holds, and #1020 moved it from
   the tag onto the artifact: `release.yml` passes the commit
   `git rev-parse HEAD` names in the run that built the image, and the
-  version of its `vX.Y.Z` tag (ADR-0039), to each Dockerfile, which
-  record the pair as `org.opencontainers.image.revision` and
-  `…version` — so `docker image inspect -f '{{json .Config.Labels}}'`
-  names the commit whose `platform/api/openapi.yaml` and
+  version of its release tag (ADR-0039, ADR-0157), to each
+  Dockerfile, which record the pair as
+  `org.opencontainers.image.revision` and `…version` — so
+  `docker image inspect -f '{{json .Config.Labels}}'` names the
+  commit whose `platform/api/openapi.yaml` and
   `platform/api/machine.yaml` a caller of that deployment meets. **A
   label is what the build claimed and not a property of the bytes.**
   Nothing derives it from the layers, so this replaces an unenforced
@@ -611,8 +613,9 @@ ADRs:
   superseded in part by 0071, which lets a person push a development
   build, by 0092 for non-release artifacts, whose test-image registry
   and publishing 0093 supersedes in turn, and by 0134 on the repository
-  names and on two images being all a release publishes, and by 0150 on
-  a published web image being bound to one API URL
+  names and on two images being all a release publishes, by 0150 on
+  a published web image being bound to one API URL, and by 0157 on a
+  release being a `vX.Y.Z` tag until launch
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart; its client certificates, the
@@ -737,7 +740,8 @@ ADRs:
   build `make image-build` produces locally and pushes nowhere.
   Supersedes ADR-0039's "the only trigger that publishes" in part; its
   one repository per image was superseded by 0095 and is restored by
-  0134
+  0134, and its bare `X.Y.Z` for a release is superseded in part by
+  0157
 - [0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)
   — the console presents a group as a team with a page of its own:
   Teams and People replace Groups and Members in the console, a team
@@ -1182,7 +1186,8 @@ ADRs:
   `garam/server`, `garam/console`, `garam/site`, `garam/cowork` and
   `garam/cowork-web`, and the test image moves to `garam/test` once
   garamsh/aurora#711 creates it; supersedes 0097, 0093's repository URI
-  and 0039's names and image count; superseded in part by 0150
+  and 0039's names and image count; superseded in part by 0150 and,
+  for the release tag's form, by 0157
   (§Decision 5, on the site baking the address)
 - [0135](./adr/0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
   — the site hands a sign-in to a fixed list of apps, the console and
@@ -1391,3 +1396,12 @@ ADRs:
   `garam/gaon-guest-build`, which leaves its final stage unproven until
   a release; accepted, built in `release.yml`; supersedes 0150's six
   images and 0134's §Decision 6 for the guest, in part
+- [0157](./adr/0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md)
+  — until launch a release is `v0.1.0-dev.N`, `v0.1.0-rc.N` or
+  `v0.1.0`, N a positive integer without a leading zero, and
+  `tooling/release-version.sh` refuses every other tag; the
+  `0.1.0-dev.*` and `0.1.0-rc.*` image tags are reserved to releases,
+  so `tooling/image-build.sh` refuses them for a development build;
+  from `v0.1.0` the form is `vX.Y.Z` again; accepted, built in
+  `release.yml`; supersedes in part 0039's `vX.Y.Z`, 0071's bare
+  `X.Y.Z` and 0134's §Decision 3

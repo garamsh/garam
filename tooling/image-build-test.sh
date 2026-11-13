@@ -95,6 +95,20 @@ refused 'is a release version' --names --registry "$reg" --tag 1.2.3
 refused 'is a release version' --registry "$reg" --tag 1.2.3
 refused 'is a release version' --registry "$reg" --tag v1.2.3
 accepted ". $reg/garam/server:1.2.3-rc.1" --names --registry "$reg" --tag 1.2.3-rc.1
+
+# The forms a release takes until launch (ADR-0157) are prereleases
+# too, so what keeps a development build off them is the refusal. Each
+# is read beside the neighbouring prerelease of another line, which the
+# same mechanism accepts.
+for tag in 0.1.0-dev.16 0.1.0-rc.1 0.1.0-dev.0 0.1.0-dev.1.2 0.1.0-rc.x; do
+	refused 'is a release tag form' --names --registry "$reg" --tag "$tag"
+	refused 'is a release tag form' --registry "$reg" --tag "$tag"
+done
+for tag in 0.1.0-wip.1 0.1.0-devx.1 0.1.1-dev.1 0.2.0-rc.1 1.0.0-dev.1; do
+	accepted ". $reg/garam/server:$tag" --names --registry "$reg" --tag "$tag"
+done
+refused 'is a release version' --names --registry "$reg" --tag 0.1.0
+refused 'is a release version' --names --registry "$reg" --tag 0.9.0
 accepted ". $reg/garam/server:1.2.3-0.dev.x-1" --names --registry "$reg" --tag 1.2.3-0.dev.x-1
 
 # A commit prefix names HEAD or is refused.

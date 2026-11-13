@@ -41,11 +41,13 @@ lint:
 	@cd $(REPO_ROOT) && $(SHFMT) -ln posix $(SHELL_SCRIPTS) >/dev/null
 
 # The script tests, none of which needs Docker:
-# tooling/image-build-test.sh (ADR-0071, ADR-0134),
+# tooling/image-build-test.sh (ADR-0071, ADR-0134, ADR-0157),
+# tooling/release-version-test.sh (ADR-0157),
 # tooling/image-test-ecr-test.sh (ADR-0093) and
 # tooling/ci/affected-test.sh (#1661).
 test:
 	@cd $(REPO_ROOT) && tooling/image-build-test.sh
+	@cd $(REPO_ROOT) && tooling/release-version-test.sh
 	@cd $(REPO_ROOT) && tooling/image-test-ecr-test.sh
 	@cd $(REPO_ROOT) && tooling/ci/affected-test.sh
 

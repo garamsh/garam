@@ -610,7 +610,8 @@ policy address has no gate; the machine listener's gate is always
 there.
 
 `garam policy-feed start` marks every membership, group, project and
-current supervisor registration with the rest of the backfill, and so
+supervisor registration, ended or not, with the rest of the backfill,
+and so
 do migrations 000075, 000079 and 000080 for a feed already on, each
 raising a mark's generation if it is there, so running them again
 rewrites the same policies and no second one. Migration 000079's down
@@ -785,17 +786,20 @@ fed, and no longer holds for a replaced supervisor, which item 1
 covers: wait on the marks the write raised. An organization delete
 records the supervisors it takes as it records the rest.
 
-**What stays when the feed is turned off and on.** `start` marks the
-registrations that are current, so a supervisor enrolled or moved while
-the feed was off is written. A registration that ended while it was off
-is not deleted in the policy service: nothing marks it and `start`
-enumerates current rows only, as for a membership. The entity there
-stays as it was when it was last delivered. Revoke before `stop`, and
-let the outbox empty.
+**What stays when the feed is turned off and on.** `start` marks every
+registration, so a supervisor enrolled or moved while the feed was off
+is written, and one revoked while it was off is deleted: an ended
+registration has no state and is delivered as a delete, which the
+service takes as the removal of an entity it may not hold. What stays
+is only what has no row to enumerate, a registration deleted by the
+cascade from a deleted agent or organization while the feed was off
+(ADR-0140's case, as for a membership): its entity stays in the
+policy service as it was when last delivered. Delete agents and
+organizations only with the feed on, and let the outbox empty.
 
 Migration 000080 takes `agent_supervisors` and `agent_assignments`
-in share mode and marks every current registration for a feed that is
-already on, raising a mark's generation if it is there. Its down
+in share mode and marks every registration for a feed that is already
+on, raising a mark's generation if it is there. Its down
 removes the triggers and the supervisor marks and leaves the entities
 already written.
 

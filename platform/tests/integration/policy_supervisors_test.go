@@ -331,11 +331,12 @@ func TestPolicyDelivery_ASupervisorIsDeliveredWithItsAgentAndItsEndAsADelete(t *
 	assert.Empty(t, outboxMarks(t, p))
 }
 
-// TestPolicyFeedStart_MarksTheSupervisorsThatStand holds that start
-// marks each registration that stands and no ended one, and that those
-// marks are the ones the triggers raise for the same state built with
-// the feed on, so the backfill and the triggers do not drift apart.
-func TestPolicyFeedStart_MarksTheSupervisorsThatStand(t *testing.T) {
+// TestPolicyFeedStart_MarksEveryRegistrationEndedOrNot holds that
+// start marks each registration, an ended one included (it is delivered
+// as a delete), and that those marks are the ones the triggers raise
+// for the same state built with the feed on, so the backfill and the
+// triggers do not drift apart.
+func TestPolicyFeedStart_MarksEveryRegistrationEndedOrNot(t *testing.T) {
 	p := pool(t)
 	build := func() {
 		a := supervisorSeed{org: "acme", agent: "a1", supervisor: "s1"}
@@ -359,8 +360,11 @@ func TestPolicyFeedStart_MarksTheSupervisorsThatStand(t *testing.T) {
 			got = append(got, k)
 		}
 	}
-	want := []string{supervisorMark("grn:acme/iam/supervisor/s1"), supervisorMark("grn:globex/iam/supervisor/gs1")}
-	assert.Equal(t, want, got, "a registration that ended is not marked")
+	want := []string{
+		supervisorMark("grn:acme/iam/supervisor/s1"), supervisorMark("grn:acme/iam/supervisor/s2"),
+		supervisorMark("grn:globex/iam/supervisor/gs1"),
+	}
+	assert.Equal(t, want, got, "a registration that ended is marked too")
 
 	execSQL(t, p, `DELETE FROM orgs`)
 	execSQL(t, p, `DELETE FROM policy_outbox`)
@@ -372,6 +376,48 @@ func TestPolicyFeedStart_MarksTheSupervisorsThatStand(t *testing.T) {
 		}
 	}
 	assert.Subset(t, got, want, "the triggers mark each the backfill does")
+}
+
+// TestPolicyFeedStart_DeletesTheSupervisorOfARegistrationEndedWhileOff
+// holds that a registration ended while the feed was off is delivered
+// as a delete once the feed is started, so the service does not keep
+// the supervisor with the agent it held.
+func TestPolicyFeedStart_DeletesTheSupervisorOfARegistrationEndedWhileOff(t *testing.T) {
+	p := pool(t)
+	fake, key := newFake(t)
+	d := newDeliverer(t, p, fake, key)
+	startFeed(t, p)
+	a := supervisorSeed{org: "acme", agent: "a1", supervisor: "s1"}
+	a.exec(t, p, a.agentSQL("")...)
+	a.exec(t, p, a.registrationSQL("")...)
+	a.exec(t, p, a.assignSQL("", a.supervisorGRN()))
+	_, err := d.pass(t)
+	require.NoError(t, err)
+	mark := supervisorMark(a.supervisorGRN())
+	var held bool
+	for _, req := range fake.received() {
+		if c, ok := changesByEntity(req)[mark]; ok {
+			held = c.GetUpsert().GetAgent().GetId() == a.agentGRN()
+		}
+	}
+	require.True(t, held, "the service holds the supervisor with its agent")
+
+	_, err = policyfeedpg.New(p).Stop(context.Background())
+	require.NoError(t, err)
+	execSQL(t, p, `UPDATE agent_supervisors SET ended_at = now() WHERE grn = $1`, a.supervisorGRN())
+	require.Empty(t, outboxMarks(t, p), "the feed is off and marks nothing")
+	startFeed(t, p)
+	before := len(fake.received())
+	_, err = d.pass(t)
+	require.NoError(t, err)
+
+	var deleted bool
+	for _, req := range fake.received()[before:] {
+		if c, ok := changesByEntity(req)[mark]; ok {
+			deleted = c.GetDelete() != nil
+		}
+	}
+	assert.True(t, deleted, "the fake received the delete")
 }
 
 // TestPolicyFeedStart_WaitsOutAWriterOfARegistrationThatReadTheFeedAsOff
@@ -432,8 +478,8 @@ func TestPolicyFeedStart_WaitsOutAWriterOfARegistrationThatReadTheFeedAsOff(t *t
 
 // TestMigration000080_MarksEverySupervisorThatStandsOfAFeedThatIsOn
 // applies 000080 over registrations that exist: a feed that is on marks
-// each that stands and not the one that ended, one that is off marks
-// none, and the way down removes the triggers, the marks of the kind
+// each registration, the one that ended included, one that is off
+// marks none, and the way down removes the triggers, the marks of the kind
 // and the kind itself.
 func TestMigration000080_MarksEverySupervisorThatStandsOfAFeedThatIsOn(t *testing.T) {
 	for _, on := range []bool{true, false} {
@@ -469,7 +515,7 @@ func TestMigration000080_MarksEverySupervisorThatStandsOfAFeedThatIsOn(t *testin
 				want = 1
 			}
 			assert.Equal(t, want, marked(standing), "a registration that stands")
-			assert.Zero(t, marked(ended), "one that ended is not marked")
+			assert.Equal(t, want, marked(ended), "one that ended, to be deleted")
 
 			_, err = p.Exec(ctx, "UPDATE "+schema+".agent_supervisors SET ended_at = now() WHERE grn = '"+standing.supervisorGRN()+"'")
 			require.NoError(t, err)

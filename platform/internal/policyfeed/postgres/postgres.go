@@ -39,7 +39,8 @@ const lockSources = `LOCK TABLE agents, group_members, groups, operators,
 // the six tables that own an entity. A member's row marks its user or
 // agent, which those tables already name, each organization
 // membership marks its role link, each group and project marks its
-// scoped link, and each registration that stands marks its supervisor.
+// scoped link, and each registration, ended or not, marks its
+// supervisor (an ended one is delivered as a delete).
 const backfill = `
 INSERT INTO policy_outbox (entity_type, entity_id)
 SELECT t, id FROM (
@@ -51,7 +52,6 @@ SELECT t, id FROM (
 	UNION ALL SELECT 'Iam::Agent', grn FROM agents
 	UNION ALL SELECT 'Iam::Operator', grn FROM operators
 	UNION ALL SELECT 'Iam::Supervisor', grn FROM agent_supervisors
-		WHERE ended_at IS NULL
 	UNION ALL SELECT 'Iam::RoleLink', org_grn || ' ' || user_grn FROM org_members
 	UNION ALL SELECT 'Iam::ScopedRoleLink', grn FROM groups
 	UNION ALL SELECT 'Iam::ScopedRoleLink', grn FROM projects

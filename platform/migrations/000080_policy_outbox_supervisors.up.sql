@@ -13,14 +13,14 @@
 -- What this does to stored rows: agent_supervisors and
 -- agent_assignments are read and not written, and policy_outbox keeps
 -- every mark. A feed that is already on marks each current
--- supervisor, below, so a registration made before this migration is
--- delivered.
+-- registration, below, so a registration made before this migration is
+-- delivered, and one that ended while the feed was off is deleted.
 
 -- agent_supervisors and agent_assignments are locked before
 -- policy_outbox, the order a writer of either takes (its row, then
 -- the mark its trigger writes) and `garam policy-feed start` takes
--- (postgres.go lockSources), so a live writer and this migration wait
--- on each other and never deadlock.
+-- (postgres.go lockSources), so a live writer of either takes the same
+-- locks in the same order as this migration.
 LOCK TABLE agent_supervisors, agent_assignments IN SHARE MODE;
 
 ALTER TABLE policy_outbox DROP CONSTRAINT policy_outbox_entity_type_check;
@@ -210,11 +210,12 @@ LANGUAGE sql STABLE AS $$
 $$;
 
 -- A feed that is already on was started before registrations were
--- marked, and holds no supervisor. Marking every current registration
--- is what `garam policy-feed start` does for a feed that is off, and a
+-- marked, and holds no supervisor. Marking every registration, ended
+-- or not (an ended one has no state and is delivered as a delete), is
+-- what `garam policy-feed start` does for a feed that is off, and a
 -- mark already there only has its generation raised.
 INSERT INTO policy_outbox (entity_type, entity_id)
 SELECT 'Iam::Supervisor', grn FROM agent_supervisors
-WHERE ended_at IS NULL AND (SELECT enabled FROM policy_feed)
+WHERE (SELECT enabled FROM policy_feed)
 ON CONFLICT (entity_type, entity_id)
 DO UPDATE SET generation = policy_outbox.generation + 1;

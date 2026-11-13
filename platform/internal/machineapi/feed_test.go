@@ -222,3 +222,44 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 		})
 	}
 }
+
+// TestEnrollStandaloneAgent_WaitsOnTheMarksTheEnrollmentRaised holds
+// what the route waits on in each case, whole: the supervisor's mark
+// always, and the agent's only when the enrollment created the agent,
+// the replay of a creation included (the store's Replaced says which).
+func TestEnrollStandaloneAgent_WaitsOnTheMarksTheEnrollmentRaised(t *testing.T) {
+	controller := operatorGRN("acme")
+	newAgent := agentGRN("acme", "0a1b2c3d4e5f6071")
+	supervisor := grn.New("acme", "supervisor", "0a1b2c3d4e5f6071")
+	supervisorMark := policyfeed.Entity{Type: policyfeed.SupervisorType, ID: supervisor.String()}
+	agentMark := policyfeed.Entity{Type: policyfeed.AgentType, ID: newAgent.String()}
+	enrollment := agent.EnrollmentResult{Placement: agent.PlacementStandalone, Agent: newAgent,
+		Supervisor: supervisor, Epoch: 1}
+	replacement := enrollment
+	replacement.Replaced = true
+
+	table := []struct {
+		name    string
+		result  agent.EnrollmentResult
+		created bool
+		marks   []policyfeed.Entity
+	}{
+		{name: "new", result: enrollment, created: true, marks: []policyfeed.Entity{supervisorMark, agentMark}},
+		{name: "replaced", result: replacement, created: true, marks: []policyfeed.Entity{supervisorMark}},
+		{name: "replayed new", result: enrollment, marks: []policyfeed.Entity{supervisorMark, agentMark}},
+		{name: "replayed replacement", result: replacement, marks: []policyfeed.Entity{supervisorMark}},
+	}
+	for _, c := range table {
+		t.Run(c.name, func(t *testing.T) {
+			gate := &markGate{}
+			srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+				&enrolling{result: c.result, created: c.created}, nil, nil).WithFeed(gate)
+			url, client := serveTLS(t, srv, controller)
+			status := post(t, client, url+"/agent-enrollments", `{"requestId":"r-1"}`,
+				map[string]string{"Garam-Contract-Version": agent.CredentialStandaloneContractVersion,
+					"Authorization": "Garam-Bootstrap secret"})
+			assert.Contains(t, []int{http.StatusOK, http.StatusCreated}, status)
+			assert.Equal(t, [][]policyfeed.Entity{c.marks}, gate.marked)
+		})
+	}
+}

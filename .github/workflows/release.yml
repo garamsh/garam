@@ -32,6 +32,8 @@ jobs:
       id-token: write
     outputs:
       version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      make-latest: ${{ steps.version.outputs.make_latest }}
       registry: ${{ steps.ecr.outputs.registry }}
       server-digest: ${{ steps.push.outputs.server-digest }}
       console-digest: ${{ steps.push.outputs.console-digest }}
@@ -48,14 +50,16 @@ jobs:
       # without the `v` (ADR-0039). The trigger admits every `v*`,
       # and the repositories are IMMUTABLE, so any other tag is
       # refused by tooling/release-version.sh rather than published
-      # under a name nothing can take back. The tag name reaches the
-      # shell through the environment.
+      # under a name nothing can take back. The same script says how
+      # the release is marked, so this file matches no tag itself. The
+      # tag name reaches the shell through the environment.
       - id: version
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
           version=$(tooling/release-version.sh "$REF_NAME")
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          tooling/release-version.sh --marks "$REF_NAME" >> "$GITHUB_OUTPUT"
 
       # The commit the build reads, taken from the checked-out tree
       # rather than from `github.sha`. The two agree on this trigger —
@@ -68,13 +72,14 @@ jobs:
         run: echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # The push role, as `garam-dev-ecr-push`, was assumed once, by
-      # `v0.1.0` on 2026-09-01, and it succeeded — so no failure of the
-      # step below has been seen, and a successful
-      # AssumeRoleWithWebIdentity event does not record the subject
-      # presented. Printing the presented subject makes such a failure
-      # readable by eye against the pattern quoted at the top of this
-      # file. It verifies nothing, it calls no AWS API, and it stands
-      # after the version guard so a malformed tag still costs nothing.
+      # `v0.1.0-dev.1` (then `v0.1.0`) on 2026-09-01, and it succeeded
+      # — so no failure of the step below has been seen, and a
+      # successful AssumeRoleWithWebIdentity event does not record the
+      # subject presented. Printing the presented subject makes such a
+      # failure readable by eye against the pattern quoted at the top
+      # of this file. It verifies nothing, it calls no AWS API, and it
+      # stands after the version guard so a malformed tag still costs
+      # nothing.
       - run: tooling/oidc-subject.sh
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
@@ -238,8 +243,17 @@ jobs:
       # ADR-0039: the release records each image's digest alongside its
       # tag, so a consumer that would rather pin a digest reads one here
       # instead of discovering it.
+      #
+      # `prerelease` and `make_latest` are inputs of this action's
+      # v3.0.4 (its action.yml): a `-dev.N` or `-rc.N` release is a
+      # pre-release and not latest, and `v0.1.0` is the first one
+      # marked latest (ADR-0157). Both values come from
+      # tooling/release-version.sh. The action states that a
+      # pre-release cannot be set as latest.
       - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
+          prerelease: ${{ needs.images.outputs.prerelease }}
+          make_latest: ${{ needs.images.outputs.make-latest }}
           body: |
             ${{ needs.images.outputs.registry }}/garam/server:${{ needs.images.outputs.version }}
             ${{ needs.images.outputs.server-digest }}

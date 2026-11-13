@@ -583,15 +583,15 @@ credential it issues expires. `image.pullSecrets` is one way to supply
 one and the chart does not require it; a node credential minted per pull
 is another.
 
-**`0.1.0` is the first released version.** `v0.1.0` ran
-`.github/workflows/release.yml` on 2026-09-01, and both repositories
-hold `0.1.0` under the digests the release that tag created records
-(ADR-0039). The two tags stay required all the same: the version a
-deployment runs is its own to name, and a default here would go on
-naming `0.1.0` once the next release lands, with nothing in the chart
-changed to say so. `Chart.yaml` still carries no `appVersion` — ADR-0042
-records that the change publishing the first release sets it, and no
-change since has.
+**`0.1.0-dev.1` is the first released version.** `v0.1.0-dev.1`
+(then `v0.1.0`) ran `.github/workflows/release.yml` on 2026-09-01, and
+both repositories hold `0.1.0-dev.1` (then `0.1.0`) under the digests
+the release that tag created records (ADR-0039). The two tags stay
+required all the same: the version a deployment runs is its own to
+name, and a default here would go on naming `0.1.0-dev.1` once the next
+release lands, with nothing in the chart changed to say so. `Chart.yaml`
+still carries no `appVersion` — ADR-0042 records that the change
+publishing the first release sets it, and no change since has.
 
 ## What keeps it true
 

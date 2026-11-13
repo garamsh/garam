@@ -9,10 +9,22 @@
 # `v0.1.0-dev.16` publishes `0.1.0-dev.16`. The repositories are
 # IMMUTABLE, so a tag outside these forms is refused here rather than
 # published under a name nothing can take back.
+#
+# With `--marks` it prints instead how the GitHub release is marked, as
+# two `name=value` lines the workflow appends to its step outputs: a
+# `-dev.N` or `-rc.N` release is a pre-release and not latest, and
+# `v0.1.0` is not a pre-release and is latest. The one pattern below
+# decides both, so the workflow holds none.
 set -eu
 
+marks=false
+if [ "${1-}" = --marks ]; then
+	marks=true
+	shift
+fi
+
 test $# -eq 1 \
-	|| { echo 'release-version: takes one argument, the git tag name; nothing published' >&2; exit 2; }
+	|| { echo 'release-version: takes one argument, the git tag name, after an optional --marks; nothing published' >&2; exit 2; }
 
 tag=$1
 
@@ -30,4 +42,13 @@ esac
 
 printf '%s' "$tag" | grep -Eq '^v0\.1\.0(-(dev|rc)\.[1-9][0-9]*)?$' || refuse
 
-echo "${tag#v}"
+if [ "$marks" = false ]; then
+	echo "${tag#v}"
+	exit 0
+fi
+
+# Only the two prerelease forms carry a `-` past the pattern above.
+case $tag in
+*-*) printf 'prerelease=true\nmake_latest=false\n' ;;
+*) printf 'prerelease=false\nmake_latest=true\n' ;;
+esac

@@ -29,12 +29,31 @@ var ErrNotApplied = errorx.NewWithReason(errorx.KindUnavailable,
 	errorx.Reason{Code: ReasonChangeNotApplied},
 	"the change is stored and the policy service has not yet applied it")
 
+// ReasonChangeRefused is the reason of the unavailable answer a
+// request gets when the policy service refused the role link of its
+// change for good (api/openapi.yaml `Error.reason`). Unlike
+// ReasonChangeNotApplied, nothing the loop does will apply it.
+const ReasonChangeRefused = "change_refused"
+
+// ErrLinkSetAside answers a change whose role link the service refused
+// with a code no retry clears, so the link is set aside and no wait
+// ends it (ADR-0160). The change is committed, and the answer is at
+// once: waiting would not change it. Unlike ErrNotApplied it does not
+// say that delivery goes on: the member's role links were removed with
+// the refusal, so the service holds no role for the member until the
+// membership is written again or an operator restarts the feed, and
+// the member is denied meanwhile.
+var ErrLinkSetAside = errorx.NewWithReason(errorx.KindUnavailable,
+	errorx.Reason{Code: ReasonChangeRefused},
+	"the policy service refused the role link and it is set aside")
+
 // Gate holds a request until the role links its change marked have
 // been applied.
 type Gate interface {
 	// Await wakes the delivery loop and returns once the outbox holds
 	// no mark of the role link of user in org, or of any member of org
-	// where user is empty. It returns ErrNotApplied at the bound.
+	// where user is empty. It returns ErrNotApplied at the bound, and
+	// ErrLinkSetAside as soon as a mark is set aside.
 	Await(ctx context.Context, org, user string) error
 }
 
@@ -56,11 +75,13 @@ func (g *gate) Await(ctx context.Context, org, user string) error {
 	tick := time.NewTicker(pollEvery)
 	defer tick.Stop()
 	for {
-		pending, err := g.store.LinkPending(ctx, org, user)
+		state, err := g.store.LinkState(ctx, org, user)
 		switch {
 		case err != nil:
 			return err
-		case !pending:
+		case state == LinkSetAside:
+			return ErrLinkSetAside
+		case state == LinkApplied:
 			return nil
 		}
 		select {

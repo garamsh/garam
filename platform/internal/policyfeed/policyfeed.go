@@ -67,3 +67,15 @@ type Refusal struct {
 	Entity Entity
 	Reason string
 }
+
+// LinkRefusal is a link the policy service refused with a code that
+// retrying cannot clear. The link is set aside: its mark stays in the
+// outbox, recorded with the code and the reason, and no pass reads it
+// again until a write of the membership marks it anew.
+type LinkRefusal struct {
+	Link Link
+	// Code is the gRPC code the service answered, as its name.
+	Code string
+	// Reason is the call that was refused and the service's message.
+	Reason string
+}

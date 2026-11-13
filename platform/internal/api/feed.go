@@ -22,7 +22,8 @@ func (s *Server) WithFeed(gate policyfeed.Gate) *Server {
 // the member the change is about, or empty where it is about all of
 // them. It runs after the request's last write and holds no
 // transaction: the change is stored whatever it returns, and an error
-// says so (policyfeed.ErrNotApplied). That error names the
+// says so (policyfeed.ErrNotApplied, or ErrLinkSetAside where the
+// service refused the link for good). That error names the
 // organization, so a client that cannot repeat the request, one that
 // created the organization or spent an invitation, reads what was
 // stored and goes on from it.
@@ -31,7 +32,8 @@ func (s *Server) awaitLinks(ctx context.Context, orgGRN, userGRN string) error {
 		return nil
 	}
 	err := s.feed.Await(ctx, orgGRN, userGRN)
-	if errors.Is(err, policyfeed.ErrNotApplied) {
+	if errors.Is(err, policyfeed.ErrNotApplied) ||
+		errors.Is(err, policyfeed.ErrLinkSetAside) {
 		return &storedError{error: err, resource: orgGRN}
 	}
 	return err

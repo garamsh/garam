@@ -129,9 +129,13 @@ func (h tracedHandler) WithGroup(name string) slog.Handler {
 }
 
 // metricsHandler serves the registry in the prometheus text format for
-// a scraper to pull.
+// a scraper to pull. A collector that cannot read its source, as the
+// policy feed's when the database is down, leaves its own metric out
+// of the scrape and does not fail the rest of it.
 func (o *observability) metricsHandler() http.Handler {
-	return promhttp.HandlerFor(o.registry, promhttp.HandlerOpts{})
+	return promhttp.HandlerFor(o.registry, promhttp.HandlerOpts{
+		ErrorHandling: promhttp.ContinueOnError,
+	})
 }
 
 // logRequests emits one line per served request. It runs as the

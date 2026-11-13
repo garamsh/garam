@@ -43,11 +43,18 @@ func (g *recordingGate) lastOrg(t *testing.T) grn.GRN {
 // request stored, and none of the chain's own text.
 func notApplied(t *testing.T, rec *httptest.ResponseRecorder, orgGRN grn.GRN) {
 	t.Helper()
+	storedAnswer(t, rec, orgGRN, policyfeed.ReasonChangeNotApplied)
+}
+
+// storedAnswer reads a 503 that carries reason and the organization
+// the request stored.
+func storedAnswer(t *testing.T, rec *httptest.ResponseRecorder, orgGRN grn.GRN, reasonCode string) {
+	t.Helper()
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	body := decodeBody[apigen.Error](t, rec)
 	assert.Equal(t, "unavailable", body.Kind)
 	require.NotNil(t, body.Reason)
-	assert.Equal(t, policyfeed.ReasonChangeNotApplied, *body.Reason)
+	assert.Equal(t, reasonCode, *body.Reason)
 	require.NotNil(t, body.Resource)
 	assert.Equal(t, orgGRN.String(), *body.Resource)
 	assert.Equal(t, "internal error", body.Message, "no text of the chain")
@@ -77,6 +84,35 @@ func TestCreateOrg_AnswersUnavailableWhileTheRoleLinkIsNotApplied(t *testing.T) 
 
 	require.Len(t, gate.asked, 2)
 	notApplied(t, rec, gate.lastOrg(t))
+	_, err := f.orgs.GetOrg(context.Background(), gate.lastOrg(t))
+	assert.NoError(t, err, "the change is stored whatever the wait said")
+}
+
+// TestCreateOrg_AnswersChangeRefusedForASetAsideLink holds that a link
+// the service refused for good is answered with a reason of its own,
+// `change_refused`, and not the bound's `change_not_applied`: the
+// first says delivery goes on and the second that it does not. The
+// 503 and the stored organization are the same.
+//
+// The clear gate is the control: the same request is 201, and the
+// bound's own answer beside it is `change_not_applied`.
+func TestCreateOrg_AnswersChangeRefusedForASetAsideLink(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	gate := &recordingGate{}
+	f.server.WithFeed(gate)
+
+	rec := f.do(t, "POST", "/orgs", `{"name":"acme"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code, "the link is in force")
+
+	gate.err = policyfeed.ErrNotApplied
+	rec = f.do(t, "POST", "/orgs", `{"name":"initech"}`, owner)
+	notApplied(t, rec, gate.lastOrg(t))
+
+	gate.err = policyfeed.ErrLinkSetAside
+	rec = f.do(t, "POST", "/orgs", `{"name":"globex"}`, owner)
+
+	storedAnswer(t, rec, gate.lastOrg(t), policyfeed.ReasonChangeRefused)
 	_, err := f.orgs.GetOrg(context.Background(), gate.lastOrg(t))
 	assert.NoError(t, err, "the change is stored whatever the wait said")
 }

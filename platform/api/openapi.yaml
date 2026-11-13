@@ -4868,6 +4868,15 @@ components:
             answer names the organization in `resource`; do not repeat
             the request. A registration has signed the person in, and
             its session cookie is set on this answer.
+            `change_refused`, on the same 503 when the policy service
+            refused the member's role link for good: the change is
+            stored, but delivery does not go on, and the service holds
+            no role for the member until the membership is written
+            again or an operator restarts the feed, so the member is
+            denied meanwhile. There is nothing to wait for: do not
+            repeat the request and do not poll; an operator reads the
+            set-aside link. It names the organization in `resource`
+            as the answer above does.
             Policy documents, each with `path`:
             `policy_document_malformed`, `policy_document_trailing_data`,
             `policy_document_wrong_type`, `policy_document_unknown_key`,
@@ -4891,10 +4900,10 @@ components:
           type: string
           description: >-
             The GRN of the organization a request stored before it
-            answered `change_not_applied`: the one it created, joined,
-            registered into or deleted. A client that cannot repeat the
-            request reads from it what was stored and goes on. Present
-            only with that reason.
+            answered `change_not_applied` or `change_refused`: the one
+            it created, joined, registered into or deleted. A client
+            that cannot repeat the request reads from it what was
+            stored and goes on. Present only with those reasons.
   headers:
     NoStore:
       description: An answer carrying a credential is never cached (RFC 6749 §5.1).

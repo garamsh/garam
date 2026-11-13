@@ -136,11 +136,13 @@ func writeError(w http.ResponseWriter, err error) {
 	// A reason is a code this project wrote for the client to branch
 	// on, so it is disclosed below 500 whatever the chain's text was,
 	// and on the one 503 that carries a code: a change stored and not
-	// yet applied is told from a service down by it alone. No other
-	// 503 is built with a reason, and this one names no other.
+	// yet applied, and one the service refused for good, are told from
+	// a service down by it alone. No other 503 is built with a reason,
+	// and these two name no other.
 	reason, ok := errorx.ReasonOf(err)
 	notApplied := status == http.StatusServiceUnavailable &&
-		reason.Code == policyfeed.ReasonChangeNotApplied
+		(reason.Code == policyfeed.ReasonChangeNotApplied ||
+			reason.Code == policyfeed.ReasonChangeRefused)
 	if ok && (status < http.StatusInternalServerError || notApplied) {
 		body.Reason = &reason.Code
 		if reason.Path != "" {

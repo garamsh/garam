@@ -261,6 +261,50 @@ guardrails are read as `forbid`s alone and under ids prefixed by its
 organization, and the exception is read by no other action, since
 an `unless` branch names `message.send` and two agents.
 
+**What a decision's reasons name.** The platform explains a permission
+by recomputing the identifiers of the caller's membership links
+([ADR-0161](./adr/0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)
+`grant::link_policy`), and of its teams' and projects' scoped links
+([ADR-0163](./adr/0163-the-platform-alone-writes-under-the-identifier-of-the-scoped-link-it-derives-from-a-groups-or-a-projects-roles.md)
+`grant::scoped_link_policy`), and matching them against the
+`policy_id` of each `Reason` an `Evaluate`, or an entry of
+`Evaluations`, returns; no explanation call is asked of the service
+(#1796). The reasons are those of the policies that decided, and a
+test through the server (`reason_cases`) holds each row:
+
+| decision | the reasons name |
+| --- | --- |
+| allow by a member's link | that link's reserved identifier |
+| allow by a scoped link | that link's reserved identifier |
+| allow by several policies | every one that permits, and no forbid |
+| deny by a guardrail | the guardrails that forbid, not the link |
+| deny by isolation | `tenant-isolation` alone |
+| deny, nothing permits | no reason |
+| deny, a policy failed | the policies that failed, each with its error |
+| deny, the question refused | one reason, no `policy_id`, an error |
+
+- A policy is named by its own identifier: a link, a `permit` or a
+  guardrail by its GRN, not by its template, and a system policy by its
+  file's name. The row for a link names the stored policy, which is why
+  a reserved identifier tells it from a writer's `permit`.
+- A deny names its forbids alone, so a link that would have allowed
+  is not named.
+- The order of the reasons is not stated. Cedar returns the
+  determining policies as a set and the service does not sort them,
+  so a caller compares them as a set.
+- A sender's guardrail that denies a `message.send` to another
+  organization is named `<organization GRN>/<policy GRN>`, as in
+  `grn:root/iam/org/acme/grn:acme/iam/policy/<slug>`. The
+  recipient's is named by its GRN, so two organizations naming a
+  guardrail alike are two reasons.
+- A question refused inside `Evaluations` is a deny with one reason
+  whose `policy_id` is empty. The same question to `Evaluate` is an
+  error status and carries no reason.
+- What a reason does not carry: a statement's `sid`, and the
+  attachment of a policy to a caller or a team. The platform's
+  explanation is the policy's identifier and no finer, and a finer
+  one is a decision of its own.
+
 ### Delivery
 
 `serve api` runs the loop when `GARAM_POLICY_ADDR` is set, and only

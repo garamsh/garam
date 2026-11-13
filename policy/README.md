@@ -247,7 +247,8 @@ one implementation of the decision and of the entity write.
 - **Bodies are the specification's.** A request carries `subject`,
   `action`, `resource` and `context`, and the answer is
   `{"decision": bool}` with the gRPC reasons under
-  `context.reasons`, each a `policy_id` or an `error`. Fields the
+  `context.reasons`, each a `policy_id` or an `error`, which
+  `docs/architecture/authz.md` states the names of. Fields the
   binding does not know are ignored. A `subject` or an `action`
   carrying `properties` is a malformed body, since a decision reads
   those grounds for itself.

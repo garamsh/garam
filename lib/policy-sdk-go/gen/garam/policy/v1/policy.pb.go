@@ -604,11 +604,19 @@ func (x *EvaluateRequest) GetProbe() bool {
 	return false
 }
 
-// Reason names one ground of a decision.
+// Reason names one ground of a decision. An allow names every policy
+// that permits, a deny every policy that forbids and nothing that
+// permits, and a deny nothing matched names none. The order is not
+// stated: compare the reasons as a set.
 type Reason struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// policy_id names a policy that decided, or the policy an evaluation
-	// error arose in. It is empty when the question itself was refused.
+	// error arose in. A stored policy is named by its GRN, so a role link
+	// the platform wrote is named by the reserved identifier it computes
+	// (ADR-0161, ADR-0163), a system policy by its file's name, such as
+	// `tenant-isolation`, and a guardrail of the sending organization
+	// that denies a message.send to another by `<organization GRN>/<its
+	// GRN>`. It is empty when the question itself was refused.
 	PolicyId string `protobuf:"bytes,1,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
 	// error is empty unless the policy failed to evaluate or the question
 	// was refused, and either makes the decision a deny (ADR-0137).

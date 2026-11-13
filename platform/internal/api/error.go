@@ -133,8 +133,11 @@ func writeError(w http.ResponseWriter, err error) {
 	// own sentence replaced a chain naming the constraint and the
 	// SQLSTATE a conflict was refused on.
 	// A reason is a code this project wrote for the client to branch
-	// on, so it is disclosed below 500 whatever the chain's text was.
-	if reason, ok := errorx.ReasonOf(err); ok && status < http.StatusInternalServerError {
+	// on, so it is disclosed below 500 whatever the chain's text was,
+	// and on a 503 too: a change stored and not yet applied is told
+	// from a service down by it alone.
+	reason, ok := errorx.ReasonOf(err)
+	if ok && (status < http.StatusInternalServerError || status == http.StatusServiceUnavailable) {
 		body.Reason = &reason.Code
 		if reason.Path != "" {
 			body.Path = &reason.Path

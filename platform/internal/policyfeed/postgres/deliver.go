@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -92,7 +93,8 @@ func deliver(
 	}
 	result.Marks = len(marks)
 
-	entries, err := readEntries(ctx, tx, marks)
+	entityMarks, linkMarks := splitMarks(marks)
+	entries, err := readEntries(ctx, tx, entityMarks)
 	if err != nil {
 		return result, err
 	}
@@ -101,6 +103,18 @@ func deliver(
 		return result, err
 	}
 	result.Refused = refused
+
+	// Links go after the entities of the pass, and no sequence orders
+	// them: a link is written by name, and written again by it.
+	links, err := readLinks(ctx, tx, linkMarks)
+	if err != nil {
+		return result, err
+	}
+	if len(links) > 0 {
+		if err := sender.SendLinks(ctx, links); err != nil {
+			return result, err
+		}
+	}
 
 	types := make([]string, len(marks))
 	ids := make([]string, len(marks))
@@ -125,6 +139,46 @@ func readMarkRows(ctx context.Context, tx pgx.Tx, limit int) ([]mark, error) {
 		return m, err
 	})
 	return marks, pgxerr.Classify(err, "read marks", nil, nil)
+}
+
+// splitMarks separates the role links' marks from the entities'.
+func splitMarks(marks []mark) (entities, links []mark) {
+	for _, m := range marks {
+		if m.entity.Type == policyfeed.RoleLinkType {
+			links = append(links, m)
+		} else {
+			entities = append(entities, m)
+		}
+	}
+	return entities, links
+}
+
+const readLinkState = `SELECT role FROM policy_role_link_state($1)`
+
+// readLinks reads the role each marked membership holds, in the marks'
+// order. No row is a membership the table no longer holds, and a link
+// with no role.
+func readLinks(ctx context.Context, tx pgx.Tx, marks []mark) ([]policyfeed.Link, error) {
+	batch := &pgx.Batch{}
+	links := make([]policyfeed.Link, len(marks))
+	for i, m := range marks {
+		org, user, ok := strings.Cut(m.entity.ID, " ")
+		if !ok {
+			return nil, errorx.New(errorx.KindInternal, "role link mark names no member")
+		}
+		links[i] = policyfeed.Link{Org: org, User: user}
+		batch.Queue(readLinkState, m.entity.ID)
+	}
+	results := tx.SendBatch(ctx, batch)
+	for i := range marks {
+		switch err := results.QueryRow().Scan(&links[i].Role); {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			_ = results.Close()
+			return nil, pgxerr.Classify(err, "read role link state", nil, nil)
+		}
+	}
+	return links, pgxerr.Classify(results.Close(), "read role link state", nil, nil)
 }
 
 // readEntries reads each marked entity's state, in the marks' order.
@@ -178,6 +232,9 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 func send(
 	ctx context.Context, tx pgx.Tx, sender policyfeed.Sender, entries []policyfeed.Entry,
 ) ([]policyfeed.Refusal, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
 	sequence, err := takeSequence(ctx, tx)
 	if err != nil {
 		return nil, err
@@ -207,6 +264,21 @@ func takeSequence(ctx context.Context, tx pgx.Tx) (int64, error) {
 	var sequence int64
 	err := tx.QueryRow(ctx, nextSequence).Scan(&sequence)
 	return sequence, pgxerr.Classify(err, "take sequence", nil, nil)
+}
+
+const linkPending = `
+SELECT EXISTS (
+	SELECT 1 FROM policy_outbox
+	WHERE entity_type = 'Iam::RoleLink'
+	  AND starts_with(entity_id, $1::text || ' ')
+	  AND ($2::text = '' OR entity_id = $1::text || ' ' || $2::text))`
+
+// LinkPending reports whether a mark of a role link of org, or of the
+// one of user where it is named, is still in the outbox.
+func (s *Store) LinkPending(ctx context.Context, org, user string) (bool, error) {
+	var pending bool
+	err := s.pool.QueryRow(ctx, linkPending, org, user).Scan(&pending)
+	return pending, errorx.Wrap(pgxerr.Classify(err, "read link marks", nil, nil), "await role link")
 }
 
 // Enabled reports whether the feed is on.

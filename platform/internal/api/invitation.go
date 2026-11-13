@@ -180,6 +180,10 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitLinks(r.Context(), m.Organization.String(), u.GRN.String()); err != nil {
+		writeError(w, err)
+		return
+	}
 	nickname := u.Nickname
 	writeJSON(w, http.StatusOK, memberToAPI(m, &nickname))
 }

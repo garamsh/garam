@@ -71,6 +71,10 @@ func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitLinks(r.Context(), m.Organization.String(), u.GRN.String()); err != nil {
+		writeError(w, err)
+		return
+	}
 	identify(r, u)
 	if err := s.startSession(w, r, u); err != nil {
 		writeError(w, err)

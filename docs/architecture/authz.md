@@ -155,7 +155,8 @@ entity store.
 **The switch is decided, and built only in the policy service's write.**
 [ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) has the
 platform's browser and machine listeners decide through the policy
-service alone; nothing below it is yet true of the platform.
+service alone; of what follows, only what a bullet says is built is
+true of the platform.
 
 - **One evaluator.** `garam serve authz`, its gRPC, its policy tables,
   its change notification and `CheckCurrent` are removed, and no
@@ -177,11 +178,18 @@ service alone; nothing below it is yet true of the platform.
   a membership. A policy keeps the kind of its first version.
 - **A member's role is a role link.** The platform writes it from the
   membership, as the caller `platform` and with no writer, and the
-  outbox carries it, so a rebuild rewrites it.
+  outbox carries it, so a rebuild rewrites it. Built for an
+  organization membership (#1878), by the rules of §Role links under
+  Delivery; a role link of a group or a project, and a direct role,
+  are not built.
 - **A writer reads its own write.** A request that changes an entity, a
   membership or a policy waits, up to a bound of 5 seconds, until
   the outbox marks it wrote are applied, and is answered as
-  unavailable if they are not.
+  unavailable if they are not. Built for the four requests that write
+  an organization membership: creating an organization, accepting an
+  invitation, registering by one, and deleting an organization. A
+  request that changes any other entity does not wait, and the
+  policy write is not the platform's yet.
 - **Every present capability has a place.** The ADR's inventory gives
   each origin of a statement and each surface that reads a decision
   its form. A hosted operator's delegation, handed to the evaluator
@@ -256,6 +264,54 @@ that entity's delete under a second sequence, logs an error naming the
 entity and the reason, and deletes its mark. A bad entity then denies
 rather than decides on what it last said (ADR-0137). Nothing retries
 it: a later write to the entity marks it again.
+
+#### Role links
+
+An organization membership is marked as `Iam::RoleLink`, whose id is the
+organization's GRN, a space and the member's GRN (migration 000075). A
+trigger marks it on every insert, delete and change of the role of an
+`org_members` row, so a route written later is covered without a line of
+its own, and the user's own mark on insert and delete stays. The
+cascade of a deleted user or organization marks it as well.
+`policy_role_link_state` reads the role a mark's membership holds, and
+no row is a link to remove.
+
+A pass sends its entities as above, then its links in the same
+transaction, then deletes every mark. The policy service's link calls
+carry no sequence, so a link is ordered by its name instead: one policy
+per member and role, `grn:<org>/iam/policy/link-<role>-<hex of the
+first 16 bytes of the SHA-256 of the member's GRN>`, since a policy's
+identifier is a slug of at most 64 characters. A role held is
+`CreatePolicy` (ALREADY_EXISTS is a link written already) and
+`ActivatePolicy`, which is idempotent, with no writer and the
+organization as resource and `Iam::User` as principal. The member's
+other two roles' policies are then `DeletePolicy` (NOT_FOUND is a link
+removed already). The role is written before the others go, so a role
+that changes is never absent, and a failure between the two leaves the
+member holding both until the next pass. A membership that ended is
+all three deleted. A role changes by writing the new one and deleting
+the old, since a policy with no writer refuses a new version.
+
+**A request reads its own write.** After its last write and with no
+transaction open, a request that wrote a membership wakes the loop
+and reads the outbox every 50 milliseconds until no `Iam::RoleLink`
+mark of that member is left (of any member of the organization, for
+its deletion), then answers. At 5 seconds it answers 503 `unavailable`
+with the reason `change_not_applied`, which the API discloses on a 503
+alone: the change is stored and is not yet applied. The mark stays and
+the loop applies it when the service answers. Until then the
+**platform's tables win**: the service holds the links it last had, so
+a member added is not yet allowed and a member removed is not yet
+denied, and a role changed is the old one's or both. Do not repeat the
+request: registration, for one, has created the account. The wait is on
+the table, so another replica's loop ends it. With
+`GARAM_POLICY_ADDR` unset there is no gate and no request waits, and
+nothing is fed, as for the entities.
+
+`garam policy-feed start` marks every membership with the rest of the
+backfill, and so does migration 000075 for a feed already on, both
+raising a mark's generation if it is there, so running them again
+rewrites the same policies and no second one.
 
 ### The signer
 

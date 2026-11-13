@@ -9,4 +9,10 @@ type Sender interface {
 	// entries the service refused for their own fault; a fault of the
 	// call itself is the error.
 	Send(ctx context.Context, sequence int64, entries []Entry) ([]Refusal, error)
+	// SendLinks makes the policy service hold each link as it says: the
+	// role is written where one is named, and the links of the other
+	// roles are removed, so a member holds one link or none. A link
+	// already written, or already gone, is not a fault, so a pass that
+	// sent a link and was then rolled back sends it again unharmed.
+	SendLinks(ctx context.Context, links []Link) error
 }

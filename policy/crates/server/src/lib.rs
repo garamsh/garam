@@ -123,8 +123,21 @@ pub async fn serve(
     listeners: Listeners,
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), Error> {
-    let engine = Engine::load().map_err(Error::Engine)?;
     let recorder = Recorder::new(pool.clone());
+    serve_recording(pool, verifier, identity, listeners, recorder, shutdown).await
+}
+
+/// [`serve`] recording denials through `recorder`, so a caller sets
+/// the bound of a record.
+pub async fn serve_recording(
+    pool: PgPool,
+    verifier: Verifier,
+    identity: Identity,
+    listeners: Listeners,
+    recorder: Recorder,
+    shutdown: impl Future<Output = ()>,
+) -> Result<(), Error> {
+    let engine = Engine::load().map_err(Error::Engine)?;
     let service = Service::new(
         engine.clone(),
         PolicyStore::new(pool.clone()),

@@ -14,6 +14,7 @@ mod scoped_cases;
 
 use std::str::FromStr;
 
+use audit::Recorder;
 use cedar_policy::{EntityId, EntityTypeName, EntityUid};
 use decision::{Engine, OrgGrn, Role, RoleScope};
 use entity::{EntityChange, EntityStore, Upsert};
@@ -24,7 +25,7 @@ use server::proto::policy_service_client::PolicyServiceClient;
 use server::proto::{
     self as pb, Action, EntityRef, EvaluateRequest, PolicyBody, Resource, Subject,
 };
-use server::{Verifier, serve};
+use server::{Verifier, serve_recording};
 use sqlx::PgPool;
 use sqlx::migrate::Migrator;
 use tonic::transport::Channel;
@@ -209,6 +210,11 @@ async fn platform(pool: PgPool) -> Platform {
 }
 
 async fn as_caller(pool: PgPool, sub: &str) -> Platform {
+    let recorder = Recorder::new(pool.clone());
+    recording_as(pool, sub, recorder).await
+}
+
+async fn recording_as(pool: PgPool, sub: &str, recorder: Recorder) -> Platform {
     let pair = Pair::new();
     let bound = bound().await;
     let verifier = Verifier::from_jwks(
@@ -216,11 +222,12 @@ async fn as_caller(pool: PgPool, sub: &str) -> Platform {
         caller_tokens::ISSUER,
     )
     .unwrap();
-    tokio::spawn(serve(
+    tokio::spawn(serve_recording(
         pool,
         verifier,
         pair.identity(),
         bound.listeners,
+        recorder,
         std::future::pending(),
     ));
     let token = caller_tokens::signer().sign(&caller_tokens::Claims {

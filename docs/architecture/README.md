@@ -1442,3 +1442,13 @@ ADRs:
   and the stored resource; accepted, built (#1882, first half);
   extends 0140 item 11 to a role link and supersedes 0159 in part, on
   item 2 for a link refused for good
+- [0161](./adr/0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)
+  — the identifiers opening `link-owner-`, `link-admin-` or
+  `link-member-` are reserved to the platform's link of one member:
+  only the caller `platform` with no writer creates there, and only
+  that member's link as body; a write naming a writer is refused
+  whatever it holds; the platform's activation and removal there are
+  accepted only for a policy whose every version is that link; every
+  refusal is `PERMISSION_DENIED`, which ADR-0160 sets aside, and a
+  writer's is recorded as a denial; no migration; accepted, built
+  (#1882, second half); supersedes 0146 in part

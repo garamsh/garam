@@ -361,9 +361,9 @@ registered into or deleted). At the bound:
   repeat the delete, which would find it gone.
 
 **A link the service refuses for good is set aside** (ADR-0160). A
-write the service answers with `PERMISSION_DENIED` or `INVALID_ARGUMENT` is not
-retried, because the request is a function of the membership alone and
-is judged the same each time. Those two codes are the whole list
+write the service answers with `PERMISSION_DENIED` or
+`INVALID_ARGUMENT` is not retried, because the request is a function
+of the membership alone and is judged the same each time. Those two codes are the whole list
 (`platform/internal/policyfeed/grpc/links.go`); each rests on
 `policy/crates/server/src/status.rs`:
 

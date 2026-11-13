@@ -445,6 +445,33 @@ platform's is not. A policy that holds such an identifier from before
 is neither changed nor deleted by the service, and is removed by an
 operator from the database.
 
+**The identifier of a team's or a project's scoped link is the
+platform's alone as well**
+([ADR-0163](./adr/0163-the-platform-alone-writes-under-the-identifier-of-the-scoped-link-it-derives-from-a-groups-or-a-projects-roles.md)).
+A group's or a project's roles are held on its own row
+(`groups.roles`, `projects.roles`) and grant their actions to its
+members on its own GRN, so the link the platform derives from them
+has the team (`Iam::Team`) or the project (`Iam::Project`) as
+principal and as resource, in team-or-project scope. The service
+reserves every identifier of an organization's policies opening
+`link-scoped-`, beside the three above. The identifier is
+`grn:<org>/iam/policy/link-scoped-<role>-<hex>`, with `<hex>` the
+first 16 bytes of the SHA-256 of five fields in this order: the
+role's word, the principal's type and id, the resource's type and id,
+each as its length in bytes (8 bytes big-endian) and then its bytes,
+so two principals or two resources never share one. `grant` computes
+it in one function, `scoped_link_policy`, and the platform recomputes
+it. The caller `platform` with no writer creates there only a link
+whose principal and resource are one team or one project and whose
+identifier is that computation; it activates or deletes there only a
+policy every version of which is such a link. Every other rule of the
+paragraph above holds unchanged: a write naming a writer is refused
+for every step, each refusal is `PERMISSION_DENIED` and a writer's is
+recorded as a denial. A link in a team's or a project's scope that a
+person writes through the console, with a user, an agent or another
+team as principal, stays a named writer's under an identifier that
+does not open `link-scoped-`.
+
 `garam policy-feed start` marks every membership with the rest of the
 backfill, and so does migration 000075 for a feed already on, both
 raising a mark's generation if it is there, so running them again

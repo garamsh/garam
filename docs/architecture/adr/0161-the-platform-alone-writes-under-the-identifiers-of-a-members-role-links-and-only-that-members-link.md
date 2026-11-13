@@ -4,7 +4,10 @@
 > `policy/crates/server` (#1882, second half); supersedes
 > [ADR-0146](./0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)
 > in part: its "a writer may write any identifier of its organization"
-> is narrowed for the identifiers below
+> is narrowed for the identifiers below; extended by
+> [ADR-0163](./0163-the-platform-alone-writes-under-the-identifier-of-the-scoped-link-it-derives-from-a-groups-or-a-projects-roles.md),
+> which reserves a fourth prefix for a team's or a project's link and
+> changes nothing held here for a member's
 > Date: 2026-11-14
 
 Drafted for #1882, which reserves this number. It records the

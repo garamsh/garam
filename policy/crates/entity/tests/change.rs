@@ -208,3 +208,28 @@ fn operations_belong_to_an_operator_alone() {
     let control = put(bot, with(vec![]));
     assert!(control.is_ok(), "{control:?}");
 }
+
+#[test]
+fn a_supervisor_states_the_agent_it_holds_and_no_other_type_does() {
+    let host = uid("Iam::Supervisor", "grn:acme/iam/supervisor/host");
+    let bot = uid("Iam::Agent", "grn:acme/iam/agent/bot");
+    let with = |agent: Option<EntityUid>| Upsert {
+        org: acme(),
+        parents: vec![uid("Iam::OrgMembers", ACME), uid("Iam::Org", ACME)],
+        agent,
+        ..Upsert::default()
+    };
+
+    let held = put(host.clone(), with(Some(bot.clone())));
+    assert!(held.is_ok(), "{held:?}");
+    let none = put(host, with(None));
+    assert!(none.is_ok(), "{none:?}");
+
+    let on_an_agent = put(bot.clone(), with(Some(bot.clone())));
+    assert!(
+        matches!(on_an_agent, Err(Error::Attribute("agent"))),
+        "{on_an_agent:?}"
+    );
+    let control = put(bot, with(None));
+    assert!(control.is_ok(), "{control:?}");
+}

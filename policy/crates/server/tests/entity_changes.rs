@@ -326,6 +326,7 @@ fn with_attributes(
             parents,
             consents,
             operations: operations.into_iter().map(str::to_owned).collect(),
+            agent: None,
         })),
     }
 }

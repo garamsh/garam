@@ -8,7 +8,8 @@ pub enum Error {
     #[error("an organization carries itself and its own members")]
     OrgNotItself,
     /// An attribute belongs to a type this entity is not: `consents`
-    /// to an `Org`, `operations` to an `Operator`.
+    /// to an `Org`, `operations` to an `Operator`, `agent` to a
+    /// `Supervisor`.
     #[error("{0} is an attribute of another type")]
     Attribute(&'static str),
     /// An operation no operator may hold.

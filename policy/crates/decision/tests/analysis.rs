@@ -258,18 +258,20 @@ fn action_of(request: &RequestEnv) -> String {
     request.action().to_string()
 }
 
-/// With no link, the tier allows an agent's sending (ADR-0024) and a
-/// hosted operator's ten delegable operations (ADR-0146), and nothing
-/// else, so every other grant is a link someone can read.
+/// With no link, the tier allows an agent's sending (ADR-0024), a
+/// hosted operator's ten delegable operations (ADR-0146) and a
+/// supervisor's activation (ADR-0164), and nothing else, so every
+/// other grant is a link someone can read.
 #[tokio::test]
 #[ignore = "needs cvc5: make -C policy suites"]
-async fn the_tier_alone_allows_only_an_agents_sending_and_an_operators_operations() {
+async fn the_tier_alone_allows_only_sending_delegated_operations_and_a_supervisors_activation() {
     let world = World::new();
     let schema = world.engine.schema();
     let tier = composed(&world, &[]);
     let delegable: Vec<String> = DELEGABLE.iter().map(|wire| cedar_action(wire)).collect();
     let mut solver = compiler();
     let mut sending = 0;
+    let mut supervised = 0;
     let mut delegated = Vec::new();
     let mut proved = 0;
     for request in every_request(schema) {
@@ -278,7 +280,16 @@ async fn the_tier_alone_allows_only_an_agents_sending_and_an_operators_operation
             .await
             .unwrap();
         let operator = request.principal().to_string() == "Iam::Operator";
-        if action_of(&request) == cedar_action("iam:message.send") {
+        let supervisor = request.principal().to_string() == "Iam::Supervisor";
+        if supervisor && action_of(&request) == cedar_action("iam:agent.activate") {
+            if request.resource().to_string() == "Iam::Agent" {
+                assert!(!denied, "the tier stopped allowing a supervisor");
+                supervised += 1;
+            } else {
+                assert!(denied, "the tier alone allows on {request:?}");
+                proved += 1;
+            }
+        } else if action_of(&request) == cedar_action("iam:message.send") {
             assert!(!denied, "the tier stopped allowing an agent's sending");
             sending += 1;
         } else if operator && delegable.contains(&action_of(&request)) {
@@ -290,6 +301,7 @@ async fn the_tier_alone_allows_only_an_agents_sending_and_an_operators_operation
         }
     }
     assert_eq!(sending, 1);
+    assert_eq!(supervised, 1);
     delegated.sort();
     delegated.dedup();
     let mut expected = delegable.clone();

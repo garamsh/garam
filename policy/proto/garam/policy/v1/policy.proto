@@ -176,8 +176,8 @@ message EntityRef {
 }
 
 // EntityUpsert is what an entity now is. It carries containment and
-// membership, and two attributes of the one type each belongs to
-// (ADR-0138, ADR-0146, ADR-0147).
+// membership, and three attributes of the one type each belongs to
+// (ADR-0138, ADR-0146, ADR-0147, ADR-0164).
 message EntityUpsert {
   // org is required of every resource type, and an `Org` names itself.
   EntityRef org = 1;
@@ -196,6 +196,10 @@ message EntityUpsert {
   // may be the principal of, and an upsert of any other type that
   // holds one is refused. Left empty, the `Operator` holds none.
   repeated string operations = 5;
+  // agent is the agent a `Supervisor` holds (ADR-0164). It is an
+  // `Agent`, and an upsert of any other type that names one is refused.
+  // Left unset, the `Supervisor` holds none.
+  EntityRef agent = 6;
 }
 
 // EntityDelete says the owner no longer has the entity.

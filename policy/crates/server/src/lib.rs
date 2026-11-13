@@ -35,7 +35,9 @@ pub use policy_service::Service;
 pub use probes::{ProbeError, probe};
 pub use tls::{Identity, TlsError, load_identity};
 
-/// The generated contract.
+/// The generated contract. The size of its `Operation` is the
+/// generator's, and one write is one message either way.
+#[allow(clippy::large_enum_variant)]
 pub mod proto {
     tonic::include_proto!("garam.policy.v1");
 }

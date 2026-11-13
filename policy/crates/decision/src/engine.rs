@@ -13,8 +13,9 @@ use crate::policy_source::{OrgGrn, OrgPolicies, PolicySource};
 use crate::role_link::RoleLink;
 use crate::system_tier;
 
-/// The entity type of a hosted operator.
-const OPERATOR: &str = "Iam::Operator";
+/// The entity types whose reach is a system policy's alone: a hosted
+/// operator and a standalone host's supervisor.
+const NO_PERMIT: [&str; 2] = ["Iam::Operator", "Iam::Supervisor"];
 
 /// The action that sends, the one a send across organizations is
 /// asked as (ADR-0147).
@@ -134,17 +135,18 @@ impl Engine {
     }
 
     /// Composes for one principal. No organization `permit` reaches an
-    /// `Iam::Operator`: its reach is its delegation alone (ADR-0146
-    /// §A hosted operator's delegation), so its composition holds the
-    /// organization's `forbid`s and no `permit`, whatever the text of a
-    /// `permit` says.
+    /// `Iam::Operator`, whose reach is its delegation alone (ADR-0146
+    /// §A hosted operator's delegation), or an `Iam::Supervisor`, whose
+    /// reach is the agent it holds (ADR-0164), so their composition
+    /// holds the organization's `forbid`s and no `permit`, whatever the
+    /// text of a `permit` says.
     pub fn compose_for(
         &self,
         principal: &EntityUid,
         links: &[RoleLink],
         own: &[Policy],
     ) -> Result<Policies, Error> {
-        if principal.type_name().to_string() != OPERATOR {
+        if !NO_PERMIT.contains(&principal.type_name().to_string().as_str()) {
             return self.compose(links, own);
         }
         let forbids: Vec<Policy> = own

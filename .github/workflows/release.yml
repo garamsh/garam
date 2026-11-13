@@ -39,8 +39,6 @@ jobs:
       cowork-digest: ${{ steps.push.outputs.cowork-digest }}
       cowork-web-digest: ${{ steps.push.outputs.cowork-web-digest }}
       policy-digest: ${{ steps.push.outputs.policy-digest }}
-      gaon-operator-digest: ${{ steps.push.outputs.gaon-operator-digest }}
-      gaon-guest-digest: ${{ steps.push.outputs.gaon-guest-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tooling/record-runner-image.sh
@@ -94,7 +92,7 @@ jobs:
       # driver, whose result stays in a build cache `docker push` cannot
       # reach, and `load` writes each image into the runner's image
       # store. `push: false` defers every push to the step below, which
-      # pushes no image unless all eight were built (ADR-0039
+      # pushes no image unless all six were built (ADR-0039
       # §Consequences, tooling/image-push.sh).
       - id: server
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -205,46 +203,11 @@ jobs:
             IMAGE_VERSION=${{ steps.version.outputs.version }}
           tags: ${{ steps.ecr.outputs.registry }}/garam/policy:${{ steps.version.outputs.version }}
 
-      - id: gaon-operator
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: deploy/local/Dockerfile.gaon-operator
-          platforms: linux/amd64
-          provenance: false
-          sbom: false
-          push: false
-          load: true
-          build-args: |
-            IMAGE_REVISION=${{ steps.revision.outputs.revision }}
-            IMAGE_VERSION=${{ steps.version.outputs.version }}
-          tags: ${{ steps.ecr.outputs.registry }}/garam/gaon-operator:${{ steps.version.outputs.version }}
-
-      # The guest composes three private images read by digest from
-      # this registry (ADR-0156), which the credential above can pull
-      # and a pull request's run cannot. Its Dockerfile names the
-      # commit REVISION rather than IMAGE_REVISION, and
-      # tooling/image-build.sh knows it by that name.
-      - id: gaon-guest
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: gaon-operator/guest/Dockerfile
-          platforms: linux/amd64
-          provenance: false
-          sbom: false
-          push: false
-          load: true
-          build-args: |
-            REVISION=${{ steps.revision.outputs.revision }}
-          tags: ${{ steps.ecr.outputs.registry }}/garam/gaon-guest:${{ steps.version.outputs.version }}
-
-      # All eight images are in the runner's image store and no
+      # All six images are in the runner's image store and no
       # repository has been written to yet. Each reference is named
       # again here rather than read off the step that built it: the
       # `tags:` above are also what tooling/image-build.sh parses to
-      # build the same eight on a pull request (#870, ADR-0156), so
-      # they stay
+      # build the same six on a pull request (#870), so they stay
       # written out, and a rename reaching one site and not the other
       # fails this step before it pushes anything.
       - id: push
@@ -255,9 +218,7 @@ jobs:
           COWORK: ${{ steps.ecr.outputs.registry }}/garam/cowork:${{ steps.version.outputs.version }}
           COWORK_WEB: ${{ steps.ecr.outputs.registry }}/garam/cowork-web:${{ steps.version.outputs.version }}
           POLICY: ${{ steps.ecr.outputs.registry }}/garam/policy:${{ steps.version.outputs.version }}
-          GAON_OPERATOR: ${{ steps.ecr.outputs.registry }}/garam/gaon-operator:${{ steps.version.outputs.version }}
-          GAON_GUEST: ${{ steps.ecr.outputs.registry }}/garam/gaon-guest:${{ steps.version.outputs.version }}
-        run: tooling/image-push.sh "server=$SERVER" "console=$CONSOLE" "site=$SITE" "cowork=$COWORK" "cowork-web=$COWORK_WEB" "policy=$POLICY" "gaon-operator=$GAON_OPERATOR" "gaon-guest=$GAON_GUEST"
+        run: tooling/image-push.sh "server=$SERVER" "console=$CONSOLE" "site=$SITE" "cowork=$COWORK" "cowork-web=$COWORK_WEB" "policy=$POLICY"
 
   release:
     needs: images
@@ -297,9 +258,3 @@ jobs:
 
             ${{ needs.images.outputs.registry }}/garam/policy:${{ needs.images.outputs.version }}
             ${{ needs.images.outputs.policy-digest }}
-
-            ${{ needs.images.outputs.registry }}/garam/gaon-operator:${{ needs.images.outputs.version }}
-            ${{ needs.images.outputs.gaon-operator-digest }}
-
-            ${{ needs.images.outputs.registry }}/garam/gaon-guest:${{ needs.images.outputs.version }}
-            ${{ needs.images.outputs.gaon-guest-digest }}

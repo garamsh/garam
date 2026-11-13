@@ -21,7 +21,7 @@ modules-with = $(strip $(foreach m,$(MODULES),$(if $(shell grep -q '^$(1):' $(m)
 VERBS := ci install format lint test build gen check-gen stack-up suites integration
 
 .PHONY: $(VERBS) affected e2e web-e2e cowork-web-e2e db-up db-down db-prune backend-up
-.PHONY: template-diff search image-build web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e policy-image-e2e gaon-operator-image-e2e codehub-e2e test-image test-image-e2e test-image-push test-image-pin
+.PHONY: template-diff search image-build web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e policy-image-e2e codehub-e2e test-image test-image-e2e test-image-push test-image-pin
 
 $(VERBS):
 	@test -n '$(call modules-with,$@)' || { echo '$@: no module defines it — tooling/ci/modules or a module Makefile is misread'; exit 1; }
@@ -70,15 +70,13 @@ export SEARCH_Q = $(Q)
 search:
 	@tooling/search.sh
 
-# image-build builds the eight images a release publishes, each from
+# image-build builds the six images a release publishes, each from
 # what .github/workflows/release.yml says it is built from; nothing else
 # builds one (#760, #850). IMAGE_REGISTRY makes it a development build
 # of the same repositories in that registry, tagged IMAGE_TAG or HEAD's
 # first twelve hex digits (ADR-0071, ADR-0134); the script refuses any
-# other tag and pushes nothing. IMAGE_PUBLIC_ONLY builds the guest only
-# to its build stage, for a run holding no registry credential
-# (ADR-0156).
-IMAGE_BUILD_ARGS = $(if $(IMAGE_REGISTRY),--registry '$(IMAGE_REGISTRY)') $(if $(IMAGE_TAG),--tag '$(IMAGE_TAG)') $(if $(IMAGE_BUILD_CACHE),--cache '$(IMAGE_BUILD_CACHE)') $(if $(IMAGE_PUBLIC_ONLY),--public-only)
+# other tag and pushes nothing.
+IMAGE_BUILD_ARGS = $(if $(IMAGE_REGISTRY),--registry '$(IMAGE_REGISTRY)') $(if $(IMAGE_TAG),--tag '$(IMAGE_TAG)') $(if $(IMAGE_BUILD_CACHE),--cache '$(IMAGE_BUILD_CACHE)')
 
 image-build:
 	tooling/image-build.sh $(IMAGE_BUILD_ARGS)
@@ -117,11 +115,6 @@ cowork-web-image-e2e: $(if $(COWORK_WEB_IMAGE),,image-build)
 # to check instead, and then nothing is built here.
 policy-image-e2e: $(if $(POLICY_IMAGE),,image-build)
 	POLICY_IMAGE='$(or $(POLICY_IMAGE),$(call image_ref,policy))' tooling/$@.sh
-
-# gaon-operator-image-e2e: what its script states. GAON_OPERATOR_IMAGE
-# names an image to check instead.
-gaon-operator-image-e2e: $(if $(GAON_OPERATOR_IMAGE),,image-build)
-	GAON_OPERATOR_IMAGE='$(or $(GAON_OPERATOR_IMAGE),$(call image_ref,gaon-operator))' tooling/$@.sh
 
 # codehub-e2e: what its script states. It builds the stack's images
 # itself, from this checkout, under a compose project of its own.

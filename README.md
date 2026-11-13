@@ -233,10 +233,10 @@ garamsh/aurora#710).
 checks the console image you built before you push it.
 A deployment running it sets the tag alone.
 
-Without `IMAGE_REGISTRY`, `make image-build` builds all eight as
+Without `IMAGE_REGISTRY`, `make image-build` builds all six as
 `garam/<image>:ci`, which is what `.github/workflows/images.yml` runs
 through `make web-image-e2e site-image-e2e cowork-image-e2e
-cowork-web-image-e2e policy-image-e2e gaon-operator-image-e2e`.
+cowork-web-image-e2e policy-image-e2e`.
 
 ## Test image
 

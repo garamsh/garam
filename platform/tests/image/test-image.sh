@@ -2,13 +2,13 @@
 # Checks the test image (ADR-0092) the way its consumer reads it: with
 # `docker create` and `docker cp`, never running the image. The three
 # paths are there, both executables are static linux/amd64 and answer
-# on this host, /migrations/ is this checkout's migrations/, and the
-# revision label names HEAD.
+# on this host, /migrations/ is this checkout's platform/migrations/,
+# and the revision label names HEAD.
 #
-#   tests/image/test-image.sh <image>
+#   platform/tests/image/test-image.sh <image>
 set -eu
 
-image=${1:?usage: tests/image/test-image.sh <image>}
+image=${1:?usage: platform/tests/image/test-image.sh <image>}
 dir=$(mktemp -d)
 container=
 passed=0
@@ -65,8 +65,8 @@ status=0
 	|| fail "/garam --help names no serve command"
 passed=$((passed + 1))
 
-diff -r migrations "$dir/migrations" >&2 \
-	|| fail "/migrations/ differs from this checkout's migrations/"
+diff -r platform/migrations "$dir/migrations" >&2 \
+	|| fail "/migrations/ differs from this checkout's platform/migrations/"
 passed=$((passed + 1))
 
 echo "test-image-e2e: $passed checks passed against $image ($(find "$dir/migrations" -type f | wc -l | tr -d ' ') migration files, revision $revision)"

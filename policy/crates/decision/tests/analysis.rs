@@ -282,6 +282,9 @@ async fn the_tier_alone_allows_only_sending_delegated_operations_and_a_superviso
         let operator = request.principal().to_string() == "Iam::Operator";
         let supervisor = request.principal().to_string() == "Iam::Supervisor";
         if supervisor && action_of(&request) == cedar_action("iam:agent.activate") {
+            // Only that the tier can allow: a policy admitting every
+            // agent satisfies this too. That it allows the held agent
+            // alone is held by `supervisor_activation.rs`.
             if request.resource().to_string() == "Iam::Agent" {
                 assert!(!denied, "the tier stopped allowing a supervisor");
                 supervised += 1;

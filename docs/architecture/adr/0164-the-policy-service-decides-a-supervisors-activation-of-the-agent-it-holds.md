@@ -107,6 +107,12 @@ What the policy service holds of a supervisor before this decision:
   until then; the policy only compares the agent.
 - A supervisor reassigned to another agent is one upsert of the
   entity.
+- Nothing checks that a supervisor's `org`, its GRN and its
+  `OrgMembers` parent name one organization, as nothing does for an
+  operator. The platform feeds them consistently. A supervisor fed
+  an agent of another organization, or one the store does not hold,
+  is stored, and a decision on it is denied: by tenant isolation for
+  the first, by its failed evaluation for the second.
 - Nothing else changes: no existing decision, action or policy is
   touched, and the supervisor reaches no action but this one.
 - The solver test of the tier now allows exactly two things: sending

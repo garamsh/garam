@@ -174,3 +174,46 @@ fn a_supervisor_is_no_principal_of_any_other_action() {
     assert_eq!(admitting, vec![ACTIVATE.to_owned()]);
     assert!(others > 50, "only {others} other actions were checked");
 }
+
+fn errored_in(reasons: &[Reason], id: &str) -> bool {
+    reasons.iter().any(
+        |reason| matches!(reason, Reason::Error { policy, .. } if *policy == PolicyId::new(id)),
+    )
+}
+
+#[test]
+fn a_supervisor_holding_an_agent_the_store_lacks_is_denied_and_one_holding_a_stored_agent_is_not() {
+    let world = World::new();
+    let policies = world.compose(&[], &[]);
+
+    // The policy's condition holds for the agent it names, and the
+    // agent is in no slice: tenant isolation errors reading its
+    // organization, and a request that errors is denied.
+    let missing = world.ask(&policies, GHOST_HOLDER, ACTIVATE, GHOST);
+    assert_eq!(missing.outcome, Outcome::Deny);
+    assert!(
+        errored_in(&missing.reasons, "tenant-isolation"),
+        "{missing:?}"
+    );
+    // Asked for an agent the store does hold, it matches nothing.
+    let other = world.ask(&policies, GHOST_HOLDER, ACTIVATE, BOT);
+    assert_eq!(other.outcome, Outcome::Deny);
+    assert_eq!(other.reasons, Vec::new());
+    // The control: a supervisor holding an agent the store has.
+    let control = world.ask(&policies, SUPERVISOR, ACTIVATE, BOT);
+    assert_eq!(control.outcome, Outcome::Allow);
+}
+
+#[test]
+fn a_supervisor_is_denied_the_organization_it_serves_and_allowed_the_agent_it_holds() {
+    let world = World::new();
+    let policies = world.compose(&[], &[]);
+
+    // `agent.activate` admits an `Iam::Org` as its resource, and the
+    // held agent is not one.
+    let org = world.ask(&policies, SUPERVISOR, ACTIVATE, ACME);
+    assert_eq!(org.outcome, Outcome::Deny);
+    assert_eq!(org.reasons, Vec::new());
+    let control = world.ask(&policies, SUPERVISOR, ACTIVATE, BOT);
+    assert_eq!(control.outcome, Outcome::Allow);
+}

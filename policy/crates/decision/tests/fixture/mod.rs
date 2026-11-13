@@ -51,6 +51,10 @@ pub const SUPERVISOR: Named = ("Iam::Supervisor", "grn:acme/iam/supervisor/host"
 pub const IDLE_SUPERVISOR: Named = ("Iam::Supervisor", "grn:acme/iam/supervisor/idle");
 /// Acme's supervisor fed holding `RIVAL`, an agent of globex.
 pub const MISFED_SUPERVISOR: Named = ("Iam::Supervisor", "grn:acme/iam/supervisor/misfed");
+/// An agent of acme the store holds no entity for.
+pub const GHOST: Named = ("Iam::Agent", "grn:acme/iam/agent/ghost");
+/// Acme's supervisor fed holding `GHOST`.
+pub const GHOST_HOLDER: Named = ("Iam::Supervisor", "grn:acme/iam/supervisor/ghost");
 /// Globex's supervisor, holding `RIVAL`.
 pub const GLOBEX_SUPERVISOR: Named = ("Iam::Supervisor", "grn:globex/iam/supervisor/host");
 
@@ -223,6 +227,7 @@ fn directory_with_orgs(acme: Value, globex: Value) -> Value {
         supervisor(IDLE_SUPERVISOR, ACME, ACME_MEMBERS, None),
         supervisor(MISFED_SUPERVISOR, ACME, ACME_MEMBERS, Some(RIVAL)),
         supervisor(GLOBEX_SUPERVISOR, GLOBEX, GLOBEX_MEMBERS, Some(RIVAL)),
+        supervisor(GHOST_HOLDER, ACME, ACME_MEMBERS, Some(GHOST)),
         entity(ENG, org(ACME), &[ACME]),
         entity(WEB, org(ACME), &[ACME]),
         entity(API, org(ACME), &[ACME]),

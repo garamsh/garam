@@ -150,10 +150,11 @@ services:
       # Sign-in is the site's, so Google returns the browser there.
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://garam.localhost:3001/api/auth/callback/google}
       # Lets the local stack issue operator keys (ADR-0102), which the
-      # console's key setup and its e2e need, and names the machine
-      # listener's token endpoint as the audience an issued key's
-      # assertions carry.
-      GARAM_MACHINE_TOKEN_URL: ${GARAM_MACHINE_TOKEN_URL:-https://machine:8443/oauth/token}
+      # console's key setup and its e2e need. It is the name a browser
+      # of this host would give the listener, which the key setup shows
+      # and the e2e reads; the listener below is reached at
+      # machine:8443, and nothing here exchanges a key through this URL.
+      GARAM_MACHINE_TOKEN_URL: ${GARAM_MACHINE_TOKEN_URL:-https://machine.garam.localhost/oauth/token}
     ports:
       - "${GARAM_LOCAL_API_PORT:-8080}:8080"
     volumes:

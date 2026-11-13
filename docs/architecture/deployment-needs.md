@@ -376,7 +376,7 @@ job.
   visitor without a session to the site (`proxy.ts:44-62`).
 - **Before start.** Nothing is read: the probes read nothing of the api
   ([ADR-0023](./adr/0023-web-probes.md)). The local stack starts it
-  after the api is healthy (`deploy/local/docker-compose.yml:207-209`),
+  after the api is healthy (`deploy/local/docker-compose.yml:208-210`),
   which is that stack's choice.
 - **Stop.** Not established; see §Not established.
 
@@ -398,7 +398,7 @@ image shape on port 3000.
   (`proxy.ts:21-26`); it redirects `/console/*` and `/device` to
   `GARAM_CONSOLE_URL` (`proxy.ts:27-29,34`).
 - **Before start.** Nothing is read; the local stack starts it after the
-  api is healthy (`deploy/local/docker-compose.yml:233-235`), which is
+  api is healthy (`deploy/local/docker-compose.yml:234-236`), which is
   that stack's choice. **Stop.** Not established.
 
 ## garam/cowork: serve and migrate
@@ -507,7 +507,7 @@ the MCP tools (`cowork/internal/cli/serve.go:178-261`). Image
   without a session is sent to the site (`proxy.ts:18-28`).
 - **Before start.** Nothing is read: the probes read nothing of cowork.
   The local stack starts it after cowork is healthy
-  (`deploy/local/docker-compose.yml:567-569`), which is that stack's
+  (`deploy/local/docker-compose.yml:568-570`), which is that stack's
   choice. **Stop.** Not established.
 
 ## garam/policy: serve and migrate

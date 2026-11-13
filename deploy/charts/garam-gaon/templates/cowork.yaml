@@ -2,6 +2,14 @@
 {{- $ctx := dict "root" $ "word" "cowork" }}
 {{- $cowork := .Values.cowork }}
 {{- $policy := $cowork.policy }}
+{{- if $policy.enabled }}
+{{- if not (include "garam-gaon.identityIssuer" $) }}
+{{- fail "cowork.policy.enabled is true, and identity.issuer is required with it: cowork fetches its caller token from the machine listener's /oauth/token, which serve machine answers only with the identity issuer on" }}
+{{- end }}
+{{- if not $.Values.identity.serviceKeys.configMap }}
+{{- fail "cowork.policy.enabled is true, and identity.serviceKeys is required with it: the exchange answers only for a service the keys file holds a key for, and cowork's is the name cowork" }}
+{{- end }}
+{{- end }}
 # cowork's server: `cowork serve`, the API and the user-content listener
 # on two ports of one process.
 apiVersion: workloads.gaon.garam.sh/v1alpha1
@@ -18,6 +26,7 @@ spec:
   template:
     image: {{ include "garam-gaon.image" (dict "root" $ "image" "cowork") }}
     user: {{ include "garam-gaon.user" (dict "root" $ "image" "cowork") | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" "cowork") | nindent 4 }}
     command:
       - cowork
     args:

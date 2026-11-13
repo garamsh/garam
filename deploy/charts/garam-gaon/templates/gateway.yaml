@@ -18,6 +18,22 @@ know after those it does, in file-name order.
   (dict "listener" "console" "key" "console" "host" $console)
   (dict "listener" "cowork" "key" "cowork" "host" $cowork)
   (dict "listener" "usercontent" "key" "userContent" "host" $content) }}
+{{- /*
+gateway.md: listeners that share a port have the same protocol and
+different hostnames, and one that breaks this is Conflicted and not
+served. The four HTTPS listeners share a port, so their hosts differ, and
+the TLS listener's port is not theirs.
+*/}}
+{{- if eq (int $g.httpsPort) (int $g.machine.port) }}
+{{- fail (printf "gateway.httpsPort is gateway.machine.port, %v: gateway.md marks listeners of one port with different protocols Conflicted and serves neither" $g.httpsPort) }}
+{{- end }}
+{{- $seen := dict }}
+{{- range $h := $hosts }}
+{{- if hasKey $seen $h.host }}
+{{- fail (printf "gateway.%s.host %q is also gateway.%s.host: gateway.md marks two listeners of one port and one hostname Conflicted and serves neither" $h.key $h.host (get $seen $h.host)) }}
+{{- end }}
+{{- $_ := set $seen $h.host $h.key }}
+{{- end }}
 apiVersion: gateway.gaon.garam.sh/v1alpha1
 kind: Gateway
 metadata:

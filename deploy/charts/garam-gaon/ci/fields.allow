@@ -1,11 +1,17 @@
 # The fields the chart may render, as `<Kind> <path>` (ci/paths.awk
 # prints the same form). Each line was compared by hand against the
 # gaon file that states it, at cfb148dea568674525207bd329a94f1d9ccc912f
-# (README §How the rendered objects are checked): the workload kinds
-# against docs/architecture/resource-api.md and deployment.md, Service
-# against resource-api.md §Service, Endpoints and NetworkPolicy, and the
-# gateway kinds against gateway.md. A field is added here with the file
-# that shows it named in the commit; a field no gaon file shows is not.
+# (README §How the rendered objects are checked): the workload kinds'
+# own fields (`replicas`, `selector`, `strategy`, `completions`,
+# `backoffLimit`, `template`) against docs/architecture/workloads.md
+# §The kind, the MicroVM spec under `template` against resource-api.md
+# and its ADR 0020 for the process, ports, files and probes
+# (`resources` is requests and limits of cpu and memory, line 49, and
+# lib/api/microvm.go `ResourceRequirements` and `ResourceList`),
+# Service against resource-api.md §Service, Endpoints and NetworkPolicy,
+# and the gateway kinds against gateway.md. A field is added here with
+# the file that shows it named in the commit; a field no gaon file shows
+# is not.
 Deployment apiVersion=workloads.gaon.garam.sh/v1alpha1
 Deployment kind
 Deployment metadata
@@ -53,6 +59,13 @@ Deployment spec.template.readinessProbe.httpGet
 Deployment spec.template.readinessProbe.httpGet.path
 Deployment spec.template.readinessProbe.httpGet.port
 Deployment spec.template.readinessProbe.timeoutSeconds
+Deployment spec.template.resources
+Deployment spec.template.resources.limits
+Deployment spec.template.resources.limits.cpu
+Deployment spec.template.resources.limits.memory
+Deployment spec.template.resources.requests
+Deployment spec.template.resources.requests.cpu
+Deployment spec.template.resources.requests.memory
 Deployment spec.template.user
 Gateway apiVersion=gateway.gaon.garam.sh/v1alpha1
 Gateway kind
@@ -115,6 +128,13 @@ Job spec.template.env[].valueFrom.secretKeyRef
 Job spec.template.env[].valueFrom.secretKeyRef.key
 Job spec.template.env[].valueFrom.secretKeyRef.name
 Job spec.template.image
+Job spec.template.resources
+Job spec.template.resources.limits
+Job spec.template.resources.limits.cpu
+Job spec.template.resources.limits.memory
+Job spec.template.resources.requests
+Job spec.template.resources.requests.cpu
+Job spec.template.resources.requests.memory
 Job spec.template.user
 Service apiVersion=compute.gaon.garam.sh/v1alpha1
 Service kind

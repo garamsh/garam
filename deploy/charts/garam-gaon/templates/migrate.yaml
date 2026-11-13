@@ -9,9 +9,9 @@ because the image's working directory is not passed; the policy
 service's are compiled into its binary.
 */}}
 {{- range $job := list
-  (dict "word" "migrate" "image" "server" "command" "garam" "database" "garam" "env" "GARAM_DATABASE_URL" "dir" "GARAM_MIGRATIONS_DIR" "backoff" true)
-  (dict "word" "cowork-migrate" "image" "cowork" "command" "cowork" "database" "cowork" "env" "COWORK_DATABASE_URL" "dir" "COWORK_MIGRATIONS_DIR")
-  (dict "word" "policy-migrate" "image" "policy" "command" "policy" "database" "policy" "env" "POLICY_DATABASE_URL") }}
+  (dict "word" "migrate" "resources" "migrate" "image" "server" "command" "garam" "database" "garam" "env" "GARAM_DATABASE_URL" "dir" "GARAM_MIGRATIONS_DIR" "backoff" true)
+  (dict "word" "cowork-migrate" "resources" "coworkMigrate" "image" "cowork" "command" "cowork" "database" "cowork" "env" "COWORK_DATABASE_URL" "dir" "COWORK_MIGRATIONS_DIR")
+  (dict "word" "policy-migrate" "resources" "policyMigrate" "image" "policy" "command" "policy" "database" "policy" "env" "POLICY_DATABASE_URL") }}
 ---
 apiVersion: workloads.gaon.garam.sh/v1alpha1
 kind: Job
@@ -25,6 +25,7 @@ spec:
   template:
     image: {{ include "garam-gaon.image" (dict "root" $ "image" $job.image) }}
     user: {{ include "garam-gaon.user" (dict "root" $ "image" $job.image) | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" $job.resources) | nindent 4 }}
     command:
       - {{ $job.command }}
     args:

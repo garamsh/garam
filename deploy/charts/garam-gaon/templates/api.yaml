@@ -17,6 +17,7 @@ spec:
   template:
     image: {{ include "garam-gaon.image" (dict "root" $ "image" "server") }}
     user: {{ include "garam-gaon.user" (dict "root" $ "image" "server") | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" "api") | nindent 4 }}
     command:
       - garam
     args:
@@ -42,6 +43,9 @@ spec:
       {{- include "garam-gaon.env" (dict "name" "GARAM_POLICY_CA_FILE" "value" "/etc/garam/policy/ca.crt") | nindent 6 }}
       {{- include "garam-gaon.env" (dict "name" "GARAM_POLICY_SIGNING_KEY_FILE" "value" "/etc/garam/policy/signing.key") | nindent 6 }}
       {{- include "garam-gaon.env" (dict "name" "GARAM_POLICY_TOKEN_ISSUER" "value" (required "policy.tokenIssuer is required: it is the issuer the policy service trusts and the api signs under, one value for both" .Values.policy.tokenIssuer)) | nindent 6 }}
+      {{- with include "garam-gaon.identityIssuer" $ }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_IDENTITY_ISSUER" "value" .) | nindent 6 }}
+      {{- end }}
     files:
       {{- include "garam-gaon.fileConfigMap" (dict "file" "/etc/garam/policy/ca.crt" "path" "api.policy.ca" "ref" $policy.ca) | nindent 6 }}
       {{- include "garam-gaon.fileSecret" (dict "file" "/etc/garam/policy/signing.key" "path" "api.policy.signingKey" "ref" $policy.signingKey) | nindent 6 }}

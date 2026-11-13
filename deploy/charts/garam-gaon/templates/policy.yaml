@@ -18,6 +18,7 @@ spec:
   template:
     image: {{ include "garam-gaon.image" (dict "root" $ "image" "policy") }}
     user: {{ include "garam-gaon.user" (dict "root" $ "image" "policy") | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" "policy") | nindent 4 }}
     command:
       - policy
     args:

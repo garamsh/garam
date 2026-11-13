@@ -1,0 +1,4 @@
+# GARAM_IDENTITY_ISSUER and GARAM_POLICY_TOKEN_ISSUER set and different
+# is refused at start.
+identity:
+  issuer: https://garam.example/api

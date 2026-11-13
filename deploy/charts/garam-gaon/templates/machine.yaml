@@ -1,6 +1,8 @@
 {{- if eq (include "garam-gaon.stage" .) "serve" }}
 {{- $ctx := dict "root" $ "word" "machine" }}
 {{- $service := .Values.machine.service }}
+{{- $issuer := include "garam-gaon.identityIssuer" . }}
+{{- $keys := .Values.identity.serviceKeys }}
 {{- if not (has $service.type (list "ClusterIP" "LoadBalancer")) }}
 {{- fail (printf "machine.service.type must be ClusterIP or LoadBalancer, got %q" $service.type) }}
 {{- end }}
@@ -8,9 +10,10 @@
 {{- fail "machine.service.loadBalancerIP is set with a type other than LoadBalancer: an address is held only by a LoadBalancer Service" }}
 {{- end }}
 # The machine listener: `garam serve machine`. It terminates TLS itself
-# and authenticates the client certificate per connection (ADR-0014), so
-# nothing that terminates TLS may stand in front of port 8443; the
-# gateway passes it through by server name.
+# with the certificate it is given and asks the client for none
+# (deployment-needs.md §serve machine), so nothing that terminates TLS
+# may stand in front of port 8443; the gateway passes it through by
+# server name.
 apiVersion: workloads.gaon.garam.sh/v1alpha1
 kind: Deployment
 metadata:
@@ -25,6 +28,7 @@ spec:
   template:
     image: {{ include "garam-gaon.image" (dict "root" $ "image" "server") }}
     user: {{ include "garam-gaon.user" (dict "root" $ "image" "server") | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" "machine") | nindent 4 }}
     command:
       - garam
     args:
@@ -46,11 +50,25 @@ spec:
       {{- with include "garam-gaon.machineTokenUrl" $ }}
       {{- include "garam-gaon.env" (dict "name" "GARAM_MACHINE_TOKEN_URL" "value" .) | nindent 6 }}
       {{- end }}
+      {{- if $issuer }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_IDENTITY_ISSUER" "value" $issuer) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_POLICY_SIGNING_KEY_FILE" "value" "/etc/garam/policy/signing.key") | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_POLICY_TOKEN_ISSUER" "value" (required "policy.tokenIssuer is required: it is the issuer the policy service trusts and the api signs under, one value for both" .Values.policy.tokenIssuer)) | nindent 6 }}
+      {{- end }}
+      {{- if $keys.configMap }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_IDENTITY_SERVICE_KEYS_FILE" "value" "/etc/garam/identity/service-keys.json") | nindent 6 }}
+      {{- end }}
     files:
       {{- include "garam-gaon.fileConfigMap" (dict "file" "/etc/garam/machine/tls.crt" "path" "machine.tlsCert" "ref" .Values.machine.tlsCert) | nindent 6 }}
       {{- include "garam-gaon.fileSecret" (dict "file" "/etc/garam/machine/tls.key" "path" "machine.tlsKey" "ref" .Values.machine.tlsKey) | nindent 6 }}
       {{- include "garam-gaon.fileConfigMap" (dict "file" "/etc/garam/machine/server-root.crt" "path" "machine.serverRoot" "ref" .Values.machine.serverRoot) | nindent 6 }}
       {{- include "garam-gaon.fileSecret" (dict "file" "/etc/garam/machine/ca.key" "path" "machine.caKey" "ref" .Values.machine.caKey) | nindent 6 }}
+      {{- if $issuer }}
+      {{- include "garam-gaon.fileSecret" (dict "file" "/etc/garam/policy/signing.key" "path" "api.policy.signingKey" "ref" .Values.api.policy.signingKey) | nindent 6 }}
+      {{- end }}
+      {{- if $keys.configMap }}
+      {{- include "garam-gaon.fileConfigMap" (dict "file" "/etc/garam/identity/service-keys.json" "path" "identity.serviceKeys" "ref" $keys) | nindent 6 }}
+      {{- end }}
     ports:
       - name: mtls
         port: 8443

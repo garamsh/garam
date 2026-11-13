@@ -4,6 +4,25 @@
 stage: serve
 migrate:
   run: r1
+# The quantities are figures for these fixtures alone.
+resources:
+  api: &resources
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1.5Gi
+  authz: *resources
+  machine: *resources
+  policy: *resources
+  cowork: *resources
+  console: *resources
+  site: *resources
+  coworkWeb: *resources
+  migrate: *resources
+  coworkMigrate: *resources
+  policyMigrate: *resources
 namePrefix: prod-garam
 dnsZone: gaon.example
 image:
@@ -40,10 +59,10 @@ public:
   siteUrl: https://garam.example
   consoleUrl: https://console.garam.example
   coworkUrl: https://cowork.garam.example
-  coworkSyncUrl: wss://cowork.garam.example
+  coworkSyncUrl: wss://cowork.garam.example/api
   coworkWebUrl: https://cowork.garam.example
 policy:
-  tokenIssuer: https://garam.example
+  tokenIssuer: https://garam.example/api
   jwks:
     configMap: policy-jwks
     key: jwks.json
@@ -54,6 +73,11 @@ policy:
     key:
       secret: policy-tls
       key: tls.key
+identity:
+  issuer: https://garam.example/api
+  serviceKeys:
+    configMap: identity-service-keys
+    key: service-keys.json
 api:
   sessionTtl: 24h
   cookieSecure: false
@@ -72,7 +96,7 @@ api:
       key: signing.key
 machine:
   issuer: https://machine.garam.example
-  tokenUrl: https://machine.garam.example/token
+  tokenUrl: https://machine.garam.example/oauth/token
   agentTokenLifetime: 15m
   tlsCert:
     configMap: machine-tls
@@ -90,7 +114,7 @@ machine:
     type: LoadBalancer
     loadBalancerIP: 192.0.2.10
 cowork:
-  webOrigins: https://cowork.garam.example
+  webOrigins: "*.garam.example"
   s3:
     endpoint: https://s3.example
     region: eu-west-1

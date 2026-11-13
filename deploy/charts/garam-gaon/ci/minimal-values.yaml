@@ -1,9 +1,26 @@
 # Every value the chart requires and no optional one. Each name below is
 # a reference to an object the deployment creates; no value of a Secret
-# is here, and the digests are not those of any published image.
+# is here, and the digests are not those of any published image. The
+# quantities are figures for these fixtures alone: the chart has no
+# default and the repository holds no figure for any process.
 stage: serve
 migrate:
   run: r1
+resources:
+  api: &resources
+    requests:
+      cpu: "1"
+      memory: 1Gi
+  authz: *resources
+  machine: *resources
+  policy: *resources
+  cowork: *resources
+  console: *resources
+  site: *resources
+  coworkWeb: *resources
+  migrate: *resources
+  coworkMigrate: *resources
+  policyMigrate: *resources
 image:
   server: &image
     repository: registry.example/garam/server
@@ -38,7 +55,7 @@ public:
   siteUrl: https://garam.example
   consoleUrl: https://console.garam.example
   coworkUrl: https://cowork.garam.example
-  coworkSyncUrl: wss://cowork.garam.example
+  coworkSyncUrl: wss://cowork.garam.example/api
 policy:
   tokenIssuer: https://garam.example
   jwks:
@@ -74,7 +91,7 @@ machine:
     secret: machine-ca
     key: ca.key
 cowork:
-  webOrigins: https://cowork.garam.example
+  webOrigins: "*.garam.example"
   s3:
     bucket: cowork
     accessKey:

@@ -32,9 +32,9 @@ A migration Job's name. A finished Job and its MicroVM are kept, so the
 name carries the run.
 */}}
 {{- define "garam-gaon.jobName" -}}
-{{- $run := required "migrate.run is required: a finished Job keeps its name, so each run of a migration is a Job of a new name" .root.Values.migrate.run -}}
-{{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" (toString $run)) -}}
-{{- fail (printf "migrate.run %q is refused: it is part of a name, lowercase letters, digits and hyphens" $run) -}}
+{{- $run := toString (required "migrate.run is required: a finished Job keeps its name, so each run of a migration is a Job of a new name" .root.Values.migrate.run) -}}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" $run) -}}
+{{- fail (printf "migrate.run %q is refused: it is part of a name, lowercase letters, digits and hyphens, and a number too long to write as one is read as 2.02e+07, so a run that is only digits is quoted" $run) -}}
 {{- end -}}
 {{- include "garam-gaon.name" (dict "root" .root "word" (printf "%s-%s" .word $run)) -}}
 {{- end -}}
@@ -45,8 +45,8 @@ written, so a short name is not.
 */}}
 {{- define "garam-gaon.host" -}}
 {{- $zone := toString .root.Values.dnsZone -}}
-{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$" $zone) -}}
-{{- fail (printf "dnsZone %q is refused: it is the zone of every Service name, lowercase labels joined by dots" $zone) -}}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$" $zone) -}}
+{{- fail (printf "dnsZone %q is refused: it is the zone of every Service name, lowercase labels joined by single dots" $zone) -}}
 {{- end -}}
 {{- printf "%s.default.svc.%s" (include "garam-gaon.name" .) $zone -}}
 {{- end -}}
@@ -58,10 +58,13 @@ app.kubernetes.io/name: {{ include "garam-gaon.name" . }}
 {{- define "garam-gaon.image" -}}
 {{- $i := index .root.Values.image .image -}}
 {{- $repository := required (printf "image.%s.repository is required" .image) $i.repository -}}
+{{- if not (regexMatch "^[^@:]+(:[0-9]+)?(/[^@:]+)*$" (toString $repository)) -}}
+{{- fail (printf "image.%s.repository must hold no tag and no digest, got %q: the chart adds @<digest> and gaon accepts <repository>@sha256:<digest> only, so a tag in the repository is refused when the MicroVM is created" .image $repository) -}}
+{{- end -}}
 {{- if not (regexMatch "^sha256:[0-9a-f]{64}$" (toString $i.digest)) -}}
 {{- fail (printf "image.%s.digest must be sha256: and 64 hexadecimal digits, got %q: gaon refuses an image a digest does not pin" .image $i.digest) -}}
 {{- end -}}
-{{- printf "%s@%s" $repository $i.digest -}}
+{{- printf "%s@%s" $repository $i.digest | quote -}}
 {{- end -}}
 
 {{- define "garam-gaon.user" -}}
@@ -125,4 +128,86 @@ information, query or fragment. Empty renders nothing.
 {{- end -}}
 {{- . -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+A quantity as gaon reads one (lib/api quantity.go): a decimal number and
+an optional m, k, M, G, T, Ki, Mi, Gi or Ti. The message opens with the
+value's dotted name.
+*/}}
+{{- define "garam-gaon.quantity" -}}
+{{- $v := toString (required (printf "%s is required: gaon's node agent refuses a MicroVM whose spec names no cpu or no memory, and the chart holds no figure for any process" .path) .value) -}}
+{{- if not (regexMatch "^[0-9]+(\\.[0-9]+)?(m|k|M|G|T|Ki|Mi|Gi|Ti)?$" $v) -}}
+{{- fail (printf "%s must be a number with an optional m, k, M, G, T, Ki, Mi, Gi or Ti, got %q: gaon decodes no other form of a quantity" .path $v) -}}
+{{- end -}}
+{{- $v -}}
+{{- end -}}
+
+{{/*
+One object's `resources`. The requests are required and have no default:
+the scheduler places a MicroVM by them, and the node agent sizes it from
+the limits, else the requests, and fails a MicroVM that names no cpu or
+no memory (node-agent/internal/microvms/microvms.go at the commit the
+README names). No figure is written in this chart; the deployment
+supplies each one. The limits are optional.
+*/}}
+{{- define "garam-gaon.resources" -}}
+{{- $path := printf "resources.%s" .key -}}
+{{- $r := index .root.Values.resources .key -}}
+resources:
+  requests:
+    cpu: {{ include "garam-gaon.quantity" (dict "path" (printf "%s.requests.cpu" $path) "value" $r.requests.cpu) | quote }}
+    memory: {{ include "garam-gaon.quantity" (dict "path" (printf "%s.requests.memory" $path) "value" $r.requests.memory) | quote }}
+  {{- if or $r.limits.cpu $r.limits.memory }}
+  limits:
+    {{- with $r.limits.cpu }}
+    cpu: {{ include "garam-gaon.quantity" (dict "path" (printf "%s.limits.cpu" $path) "value" .) | quote }}
+    {{- end }}
+    {{- with $r.limits.memory }}
+    memory: {{ include "garam-gaon.quantity" (dict "path" (printf "%s.limits.memory" $path) "value" .) | quote }}
+    {{- end }}
+  {{- end }}
+{{- end -}}
+
+{{/*
+The identity issuer, or nothing where it is off. `serve api` and
+`serve machine` serve it only with both GARAM_IDENTITY_ISSUER and the
+policy signing key set (platform/internal/cli/identity.go), and refuse to
+start where it is not `https://<lowercase host>/api`, is not the
+policy.tokenIssuer, or is the machine issuer. The service keys file is
+read by `serve machine`, which derives the introspection URL from the
+token URL, and that must end /oauth/token. Each is refused here first,
+with the value's name.
+*/}}
+{{- define "garam-gaon.identityIssuer" -}}
+{{- $id := .Values.identity -}}
+{{- $keys := $id.serviceKeys -}}
+{{- $issuer := toString $id.issuer -}}
+{{- if and (or $keys.configMap $keys.key) (not (and $keys.configMap $keys.key)) -}}
+{{- fail "identity.serviceKeys.configMap and identity.serviceKeys.key are set together: the file is one key of one ConfigMap" -}}
+{{- end -}}
+{{- if and (not $issuer) (or $keys.configMap $keys.key) -}}
+{{- fail "identity.issuer is required once identity.serviceKeys is set: the chart renders the signing key on the machine listener only with the issuer, and the exchange the keys serve answers only with it" -}}
+{{- end -}}
+{{- if $issuer -}}
+{{- if not (regexMatch "^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?/api$" $issuer) -}}
+{{- fail (printf "identity.issuer must be https://<lowercase host>/api with no trailing slash and no empty port, got %q: a verifier compares it byte for byte against every token's iss" $issuer) -}}
+{{- end -}}
+{{- if eq $issuer (toString .Values.machine.issuer) -}}
+{{- fail (printf "identity.issuer is machine.issuer, %q: serve refuses to start where the two are equal, so a token of one never verifies as the other" $issuer) -}}
+{{- end -}}
+{{- if ne $issuer (toString .Values.policy.tokenIssuer) -}}
+{{- fail (printf "identity.issuer %q differs from policy.tokenIssuer %q: the policy service trusts one issuer, and serve refuses to start with the two set and different" $issuer .Values.policy.tokenIssuer) -}}
+{{- end -}}
+{{- end -}}
+{{- if or $keys.configMap $keys.key -}}
+{{- $url := toString .Values.machine.tokenUrl -}}
+{{- if not $url -}}
+{{- fail "machine.tokenUrl is required once identity.serviceKeys is set: serve machine derives the introspection URL from it" -}}
+{{- end -}}
+{{- if not (hasSuffix "/oauth/token" $url) -}}
+{{- fail (printf "machine.tokenUrl must end in /oauth/token once identity.serviceKeys is set, got %q: serve machine replaces that tail to name its introspection endpoint" $url) -}}
+{{- end -}}
+{{- end -}}
+{{- $issuer -}}
 {{- end -}}

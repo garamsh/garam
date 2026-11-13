@@ -4,6 +4,17 @@ stage: migrate
 namePrefix: prod-garam
 migrate:
   run: "20261113"
+# The quantities are figures for these fixtures alone.
+resources:
+  migrate: &resources
+    requests:
+      cpu: "1"
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  coworkMigrate: *resources
+  policyMigrate: *resources
 image:
   server: &image
     repository: registry.example/garam/server

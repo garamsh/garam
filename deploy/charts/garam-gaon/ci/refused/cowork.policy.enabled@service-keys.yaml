@@ -1,0 +1,16 @@
+# An issuer, and no service keys for it to answer the exchange with.
+identity:
+  issuer: https://garam.example/api
+policy:
+  tokenIssuer: https://garam.example/api
+machine:
+  tokenUrl: https://machine.garam.example/oauth/token
+cowork:
+  policy:
+    enabled: true
+    ca:
+      configMap: cowork-policy-ca
+      key: ca.crt
+    deploymentKey:
+      secret: cowork-deployment
+      key: deployment.key

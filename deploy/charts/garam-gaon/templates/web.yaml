@@ -26,6 +26,7 @@ spec:
   template:
     image: {{ include "garam-gaon.image" (dict "root" $ "image" $web.image) }}
     user: {{ include "garam-gaon.user" (dict "root" $ "image" $web.image) | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" $web.image) | nindent 4 }}
     command:
       - node
     args:
@@ -45,7 +46,7 @@ spec:
       {{- include "garam-gaon.env" (dict "name" "COWORK_API_URL" "value" (printf "http://%s:8090" (include "garam-gaon.host" (dict "root" $ "word" "cowork")))) | nindent 6 }}
       {{- include "garam-gaon.env" (dict "name" "GARAM_API_URL" "value" $api) | nindent 6 }}
       {{- include "garam-gaon.env" (dict "name" "GARAM_SITE_URL" "value" $site) | nindent 6 }}
-      {{- include "garam-gaon.env" (dict "name" "COWORK_SYNC_URL" "value" (required "public.coworkSyncUrl is required: the ws or wss origin a browser opens a page's sync socket at" $.Values.public.coworkSyncUrl)) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_SYNC_URL" "value" (required "public.coworkSyncUrl is required: a ws or wss URL, cowork's server as the browser reaches it for a page's sync socket, on cowork-web's own host and under /api (deployment-needs.md §garam/cowork-web)" $.Values.public.coworkSyncUrl)) | nindent 6 }}
       {{- end }}
     ports:
       - name: http

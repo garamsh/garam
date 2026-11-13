@@ -16,6 +16,7 @@ spec:
   template:
     image: {{ include "garam-gaon.image" (dict "root" $ "image" "server") }}
     user: {{ include "garam-gaon.user" (dict "root" $ "image" "server") | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" "authz") | nindent 4 }}
     command:
       - garam
     args:

@@ -9,6 +9,7 @@ mod audit_cases;
 mod caller_tokens;
 mod listening;
 mod reserved_cases;
+mod scoped_cases;
 
 use std::str::FromStr;
 

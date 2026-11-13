@@ -111,7 +111,9 @@ it through `garam policy-feed` (#1689, #1888).
   `link-admin-` or `link-member-` are that write's alone: a writer
   changes nothing under one, and the platform makes effective or
   removes only a policy every version of which is that member's link
-  (ADR-0161).
+  (ADR-0161). The identifiers opening `link-scoped-` are the same for
+  the scoped link of a team or a project on itself, named by
+  `grant::scoped_link_policy` (ADR-0163).
 - **A `permit` never reaches an operator.** A decision for an
   `Iam::Operator` composes the organization's guardrails and none of
   its `permit`s, whatever a `permit` says.

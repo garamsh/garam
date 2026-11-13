@@ -47,9 +47,6 @@ impl<P, E> Service<P, E> {
         asked: &Evaluation<'_>,
         decision: &Decision,
     ) {
-        let Some(recorder) = &self.recorder else {
-            return;
-        };
         let mut policies: Vec<String> = decision
             .reasons
             .iter()
@@ -60,13 +57,33 @@ impl<P, E> Service<P, E> {
             .collect();
         policies.sort();
         policies.dedup();
+        self.record_denial(
+            principal,
+            (asked.subject.id, asked.action, asked.resource.id),
+            &policies,
+        )
+        .await;
+    }
+
+    /// Records a denial of `action` on `resource` to `subject`, naming
+    /// the `policies` that decided it. A write refused for want of a
+    /// role is one: no policy decided it, so it names none.
+    pub(crate) async fn record_denial(
+        &self,
+        principal: &Principal,
+        (subject, action, resource): (&str, &str, &str),
+        policies: &[String],
+    ) {
+        let Some(recorder) = &self.recorder else {
+            return;
+        };
         recorder
             .deny(&audit::Denial {
                 service: &principal.sub(),
-                subject: asked.subject.id,
-                action: asked.action,
-                resource: asked.resource.id,
-                policies: &policies,
+                subject,
+                action,
+                resource,
+                policies,
             })
             .await;
     }

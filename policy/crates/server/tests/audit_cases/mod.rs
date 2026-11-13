@@ -198,3 +198,88 @@ async fn a_failing_record_changes_no_answer_and_stops_a_write(pool: PgPool) {
         "a write that cannot be recorded is not made"
     );
 }
+
+/// `User` declares no `nickname`, so this `forbid` errors when read.
+const ERRORING_FORBID: &str = r#"forbid (
+    principal is Iam::User,
+    action == Iam::Action::"agent.read",
+    resource
+) when { principal.nickname == "x" };"#;
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_decision_that_fails_closed_is_recorded_as_a_fault_and_not_as_its_error(pool: PgPool) {
+    seed(&pool).await;
+    let mut service = platform(pool.clone()).await;
+    service
+        .create(Some(OWEN), "broken", guardrail(NO_ONE_READS_BOT))
+        .await
+        .unwrap();
+    service.activate(Some(OWEN), "broken").await.unwrap();
+    sqlx::query(
+        "INSERT INTO policy_versions (policy_grn, version, body, created_by)
+         VALUES ($1, 2, jsonb_build_object('kind', 'guardrail', 'source', $2::text), 'test')",
+    )
+    .bind(policy_of("broken"))
+    .bind(ERRORING_FORBID)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE policies SET default_version = 2 WHERE grn = $1")
+        .bind(policy_of("broken"))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert!(!service.asks(LEE, "iam:agent.read", false).await);
+
+    let recorded = of_kind(
+        service.audit(Some(OWEN), ACME).await.unwrap(),
+        pb::AuditRecordKind::Denial,
+    );
+    let [read] = recorded
+        .iter()
+        .filter(|r| r.action == "iam:agent.read")
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+    assert_eq!(read.policy_ids, ["fault"], "nothing of the error's text");
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_write_refused_for_a_role_the_writer_lacks_is_recorded_as_a_denial(pool: PgPool) {
+    seed(&pool).await;
+    let mut service = platform(pool).await;
+
+    service
+        .create(Some(ADA), "kim-member", role_link(Role::Member, KIM))
+        .await
+        .unwrap();
+    refused(
+        service
+            .create(Some(ADA), "kim-owner", role_link(Role::Owner, KIM))
+            .await,
+        Code::PermissionDenied,
+    );
+
+    let records = service.audit(Some(OWEN), ACME).await.unwrap();
+    let [denial] = of_kind(records.clone(), pb::AuditRecordKind::Denial)
+        .iter()
+        .filter(|r| r.action == "iam:policy.attach")
+        .cloned()
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+    assert_eq!(denial.subject, ADA.1);
+    assert_eq!(denial.resource, ACME);
+    assert_eq!(denial.service, "platform");
+    assert!(denial.policy_ids.is_empty());
+    let writes = of_kind(records, pb::AuditRecordKind::Write);
+    let resources: Vec<_> = writes.iter().map(|w| w.resource.as_str()).collect();
+    assert!(resources.contains(&policy_of("kim-member").as_str()));
+    assert!(
+        !resources.contains(&policy_of("kim-owner").as_str()),
+        "the refused write is a denial and not a write"
+    );
+}

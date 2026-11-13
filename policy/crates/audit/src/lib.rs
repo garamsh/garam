@@ -10,7 +10,10 @@ mod error;
 mod read;
 mod write;
 
-pub use denial::{Denial, FAULT, MAX_LIVE_DENIALS, Recorded, Recorder, organization_of};
+pub use denial::{
+    Denial, FAULT, MAX_FIELD_BYTES, MAX_LIVE_DENIALS, RECORD_BOUND, Recorded, Recorder,
+    organization_of,
+};
 pub use error::Error;
 pub use read::{Kind, Page, RETENTION_DAYS, Record};
-pub use write::{Origin, Outcome, Write, record_write};
+pub use write::{Origin, Outcome, Write, Written, record_write};

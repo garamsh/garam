@@ -1,4 +1,7 @@
-use audit::{Origin, Outcome, Write, record_write};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use audit::{Origin, Outcome, Write, Written, record_write};
 use decision::{Cause, OrgGrn, OrgPolicies, PolicySource};
 use sqlx::postgres::PgRow;
 use sqlx::types::Json;
@@ -83,11 +86,13 @@ pub struct Summary {
 
 /// The policies in the service's own database. Every write is
 /// recorded in its own transaction, as made by the store's origin
-/// (ADR-0148).
+/// (ADR-0148), unless the organization is not held: the write is then
+/// made and its record is left out and counted.
 #[derive(Debug, Clone)]
 pub struct PolicyStore {
     pool: PgPool,
     origin: Origin,
+    unrecorded: Arc<AtomicU64>,
 }
 
 impl PolicyStore {
@@ -100,7 +105,14 @@ impl PolicyStore {
                 service: "policy".to_owned(),
                 subject: None,
             },
+            unrecorded: Arc::default(),
         }
+    }
+
+    /// How many writes were made without a record since start,
+    /// because their organization is not held.
+    pub fn unrecorded(&self) -> u64 {
+        self.unrecorded.load(Ordering::Relaxed)
     }
 
     /// This store, writing as `origin`: the calling service and the
@@ -110,6 +122,7 @@ impl PolicyStore {
         Self {
             pool: self.pool.clone(),
             origin,
+            unrecorded: Arc::clone(&self.unrecorded),
         }
     }
 
@@ -123,7 +136,7 @@ impl PolicyStore {
         change: (Outcome, Option<i32>, Option<i32>),
     ) -> Result<(), Error> {
         let (outcome, from, to) = change;
-        record_write(
+        let written = record_write(
             transaction,
             &self.origin,
             &Write {
@@ -136,7 +149,12 @@ impl PolicyStore {
             },
         )
         .await
-        .map_err(Error::Record)
+        .map_err(Error::Record)?;
+        if written == Written::Omitted {
+            self.unrecorded.fetch_add(1, Ordering::Relaxed);
+            tracing::warn!("a write is made without a record: its organization is not held");
+        }
+        Ok(())
     }
 
     /// Stores a policy as a draft holding version 1. Its GRN is under

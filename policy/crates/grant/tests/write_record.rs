@@ -52,6 +52,18 @@ fn store(pool: PgPool) -> PolicyStore {
     })
 }
 
+/// The organization's entity, which holds it for the record.
+async fn hold(pool: &PgPool) {
+    sqlx::query(
+        "INSERT INTO entities (entity_type, entity_id, sequence, document)
+         VALUES ('Iam::Org', $1, 1, '{}'::jsonb)",
+    )
+    .bind(ACME)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 /// The outcome, action and versions of each write, oldest first.
 async fn written(pool: &PgPool) -> Vec<(String, String, Option<i32>, Option<i32>)> {
     let page = Recorder::new(pool.clone())
@@ -84,6 +96,7 @@ fn entry(
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn every_write_of_a_policy_leaves_its_record_and_a_read_leaves_none(pool: PgPool) {
+    hold(&pool).await;
     let store = store(pool.clone());
     let org = OrgGrn::new(ACME);
 
@@ -124,6 +137,7 @@ async fn every_write_of_a_policy_leaves_its_record_and_a_read_leaves_none(pool: 
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn a_refused_write_leaves_no_record(pool: PgPool) {
+    hold(&pool).await;
     let store = store(pool.clone());
     let org = OrgGrn::new(ACME);
     store.create(draft(role(Role::Member), &org)).await.unwrap();
@@ -142,6 +156,7 @@ async fn a_refused_write_leaves_no_record(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn a_write_whose_record_cannot_be_written_is_not_made(pool: PgPool) {
+    hold(&pool).await;
     let store = store(pool.clone());
     let org = OrgGrn::new(ACME);
     store.create(draft(role(Role::Member), &org)).await.unwrap();
@@ -166,4 +181,31 @@ async fn a_write_whose_record_cannot_be_written_is_not_made(pool: PgPool) {
     };
     assert!(matches!(store.create(created).await, Err(Error::Record(_))));
     assert_eq!(store.list(&org).await.unwrap().len(), 1);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_policy_removed_after_its_organization_s_tombstone_is_removed_and_leaves_no_record(
+    pool: PgPool,
+) {
+    hold(&pool).await;
+    let store = store(pool.clone());
+    let org = OrgGrn::new(ACME);
+    store.create(draft(role(Role::Member), &org)).await.unwrap();
+    assert_eq!(written(&pool).await.len(), 1);
+    assert_eq!(store.unrecorded(), 0);
+
+    sqlx::query("UPDATE entities SET document = NULL WHERE entity_type = 'Iam::Org'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(written(&pool).await.is_empty(), "the tombstone removed it");
+    store.delete(&org, GRANT).await.unwrap();
+
+    assert!(store.get(&org, GRANT).await.is_err(), "the removal stands");
+    assert!(
+        written(&pool).await.is_empty(),
+        "no record outlives the organization"
+    );
+    assert_eq!(store.unrecorded(), 1);
 }

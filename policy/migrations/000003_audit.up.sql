@@ -35,6 +35,9 @@ CREATE TABLE audit_records (
             AND service IS NOT NULL AND subject IS NOT NULL
             AND action IS NOT NULL AND resource IS NOT NULL
             AND outcome = 'deny'
+            AND octet_length(subject) <= 512
+            AND octet_length(action) <= 512
+            AND octet_length(resource) <= 512
             AND identity IS NOT NULL AND bucket IS NOT NULL)
         OR (kind = 'denial-overflow'
             AND service IS NULL AND subject IS NULL AND action IS NULL
@@ -51,12 +54,14 @@ CREATE UNIQUE INDEX audit_denial_collapse
 CREATE UNIQUE INDEX audit_overflow_day
     ON audit_records (org_grn, bucket) WHERE kind = 'denial-overflow';
 
--- The read pages an organization newest first, and the sweep and the
--- cap's count read by last_at.
+-- The read pages an organization newest first, the cap's count reads
+-- an organization's denials by last_at, and the sweep, which names no
+-- organization, reads every denial by last_at.
 CREATE INDEX audit_org_page ON audit_records (org_grn, id DESC);
 CREATE INDEX audit_org_last ON audit_records (org_grn, kind, last_at);
+CREATE INDEX audit_swept ON audit_records (last_at) WHERE kind <> 'write';
 
--- No record outlives its organization (ADR-0148 item 6): the entity's
+-- No record outlives its organization (ADR-0148 item 3): the entity's
 -- owner deletes it by writing its tombstone.
 CREATE FUNCTION audit_forget_org() RETURNS trigger AS $$
 BEGIN

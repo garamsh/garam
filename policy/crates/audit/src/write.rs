@@ -57,13 +57,40 @@ pub struct Write<'a> {
     pub to: Option<i32>,
 }
 
+/// What became of a write's record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Written {
+    /// The record was added.
+    Recorded,
+    /// The organization is not held, or its tombstone is in: the
+    /// record was not added, because nothing would ever remove it.
+    /// The write itself stands.
+    Omitted,
+}
+
 /// Records a write in the transaction that makes it, so a write that
-/// cannot be recorded is not made.
+/// cannot be recorded is not made. The organization's entity row is
+/// locked for the rest of the transaction, so its tombstone cannot
+/// land between the check and the commit and leave the record behind;
+/// where the organization is not held, no record is added.
 pub async fn record_write(
     transaction: &mut Transaction<'_, Postgres>,
     origin: &Origin,
     write: &Write<'_>,
-) -> Result<(), Error> {
+) -> Result<Written, Error> {
+    let held = sqlx::query_scalar::<_, i32>(
+        "SELECT 1 FROM entities
+         WHERE entity_type = 'Iam::Org' AND entity_id = $1
+           AND document IS NOT NULL
+         FOR SHARE",
+    )
+    .bind(write.org)
+    .fetch_optional(&mut **transaction)
+    .await
+    .map_err(Error::Store)?;
+    if held.is_none() {
+        return Ok(Written::Omitted);
+    }
     sqlx::query(
         "INSERT INTO audit_records
              (org_grn, kind, service, subject, action, resource, outcome,
@@ -81,5 +108,5 @@ pub async fn record_write(
     .execute(&mut **transaction)
     .await
     .map_err(Error::Store)?;
-    Ok(())
+    Ok(Written::Recorded)
 }

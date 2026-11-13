@@ -145,6 +145,12 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 )
                 .await?;
             if !holds {
+                self.record_denial(
+                    principal,
+                    (&writer.id, action_for(kind, step), org.as_str()),
+                    &[],
+                )
+                .await;
                 return Err(ServiceError::RoleNotHeld {
                     writer: writer.id.clone(),
                     role: *role,

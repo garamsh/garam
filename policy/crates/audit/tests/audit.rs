@@ -2,8 +2,11 @@
 
 #![cfg(test)]
 
+use std::time::{Duration, Instant};
+
 use audit::{
-    Denial, FAULT, Kind, MAX_LIVE_DENIALS, Origin, Outcome, Recorded, Recorder, Write, record_write,
+    Denial, FAULT, Kind, MAX_FIELD_BYTES, MAX_LIVE_DENIALS, Origin, Outcome, Recorded, Recorder,
+    Write, Written, record_write,
 };
 use sqlx::PgPool;
 use sqlx::migrate::Migrator;
@@ -24,6 +27,29 @@ async fn hold(pool: &PgPool, org: &str) {
     .execute(pool)
     .await
     .unwrap();
+}
+
+async fn write(pool: &PgPool) -> Written {
+    let mut transaction = pool.begin().await.unwrap();
+    let written = record_write(
+        &mut transaction,
+        &Origin {
+            service: "platform".into(),
+            subject: None,
+        },
+        &Write {
+            org: ACME,
+            action: "iam:policy.create",
+            policy: "grn:acme/iam/policy/p",
+            outcome: Outcome::Created,
+            from: None,
+            to: Some(1),
+        },
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+    written
 }
 
 fn denial<'a>(subject: &'a str, policies: &'a [String]) -> Denial<'a> {
@@ -198,17 +224,26 @@ async fn a_denial_past_the_retention_is_unread_and_swept_and_a_write_of_the_same
         .execute(&pool)
         .await
         .unwrap();
+    let young = "grn:acme/iam/user/kim";
+    recorder.deny(&denial(young, &none)).await;
 
     let read = records(&recorder, ACME).await;
-    assert_eq!(read.len(), 1, "the read excludes it before any sweep");
-    assert_eq!(read[0].kind, Kind::Write);
+    assert_eq!(
+        read.len(),
+        2,
+        "the read excludes the old one before any sweep"
+    );
+    assert!(read.iter().any(|r| r.kind == Kind::Write));
+    assert!(read.iter().any(|r| r.subject.as_deref() == Some(young)));
     assert_eq!(recorder.sweep().await.unwrap(), 1);
     let kept: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_records")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(kept, 1);
-    assert_eq!(records(&recorder, ACME).await[0].kind, Kind::Write);
+    assert_eq!(kept, 2, "the write and the young denial stay");
+    let read = records(&recorder, ACME).await;
+    assert!(read.iter().any(|r| r.kind == Kind::Write));
+    assert!(read.iter().any(|r| r.subject.as_deref() == Some(young)));
 }
 
 #[sqlx::test(migrator = "MIGRATIONS")]
@@ -258,4 +293,132 @@ async fn a_denial_that_cannot_be_recorded_is_logged_counted_and_goes_no_further(
         Recorded::Lost
     );
     assert_eq!(recorder.lost(), 1);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_record_that_blocks_is_given_up_at_its_bound_and_counted_as_lost(pool: PgPool) {
+    hold(&pool, ACME).await;
+    let bound = Duration::from_millis(300);
+    let recorder = Recorder::new(pool.clone()).bounded(bound);
+    let none = ids(&[]);
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(ACME)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let started = Instant::now();
+    let recorded = recorder.deny(&denial(LEE, &none)).await;
+
+    assert_eq!(recorded, Recorded::Lost);
+    assert!(
+        started.elapsed() < bound * 5,
+        "answered after {:?}",
+        started.elapsed()
+    );
+    assert_eq!(recorder.lost(), 1);
+    blocker.rollback().await.unwrap();
+    assert_eq!(
+        recorder.deny(&denial(LEE, &none)).await,
+        Recorded::Stored,
+        "the connection the blocked record held is not left behind"
+    );
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_repeated_denial_is_counted_while_the_organization_s_lock_is_held(pool: PgPool) {
+    hold(&pool, ACME).await;
+    let recorder = Recorder::new(pool.clone()).bounded(Duration::from_millis(300));
+    let none = ids(&[]);
+    assert_eq!(recorder.deny(&denial(LEE, &none)).await, Recorded::Stored);
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(ACME)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        recorder.deny(&denial(LEE, &none)).await,
+        Recorded::Collapsed
+    );
+    blocker.rollback().await.unwrap();
+    assert_eq!(records(&recorder, ACME).await[0].count, 2);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_denial_with_a_field_past_the_bound_is_answered_and_left_unrecorded(pool: PgPool) {
+    hold(&pool, ACME).await;
+    let recorder = Recorder::new(pool.clone());
+    let none = ids(&[]);
+    let exact = format!("grn:acme/iam/user/{}", "a".repeat(MAX_FIELD_BYTES - 18));
+    assert_eq!(exact.len(), MAX_FIELD_BYTES);
+    let long = format!("{exact}a");
+
+    assert_eq!(
+        recorder.deny(&denial(&exact, &none)).await,
+        Recorded::Stored
+    );
+    for denial in [
+        denial(&long, &none),
+        Denial {
+            action: &long,
+            ..denial(LEE, &none)
+        },
+        Denial {
+            resource: &format!("grn:acme/iam/agent/{long}"),
+            ..denial(LEE, &none)
+        },
+    ] {
+        assert_eq!(recorder.deny(&denial).await, Recorded::Omitted);
+    }
+
+    assert_eq!(recorder.omitted(), 3);
+    assert_eq!(records(&recorder, ACME).await.len(), 1);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn the_store_itself_refuses_a_denial_field_past_the_bound(pool: PgPool) {
+    hold(&pool, ACME).await;
+    let long = "a".repeat(MAX_FIELD_BYTES + 1);
+
+    let inserted = sqlx::query(
+        "INSERT INTO audit_records
+             (org_grn, kind, service, subject, action, resource, outcome,
+              identity, bucket)
+         VALUES ($1, 'denial', 'platform', $2, 'iam:agent.read', $3, 'deny', 'x', 0)",
+    )
+    .bind(ACME)
+    .bind(&long)
+    .bind(BOT)
+    .execute(&pool)
+    .await;
+
+    assert!(inserted.is_err());
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_write_is_recorded_while_its_organization_is_held_and_not_after_its_tombstone(
+    pool: PgPool,
+) {
+    let recorder = Recorder::new(pool.clone());
+    assert_eq!(write(&pool).await, Written::Omitted, "no entity at all");
+    hold(&pool, ACME).await;
+    assert_eq!(write(&pool).await, Written::Recorded);
+    assert_eq!(records(&recorder, ACME).await.len(), 1);
+
+    sqlx::query("UPDATE entities SET document = NULL WHERE entity_type = 'Iam::Org'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert!(records(&recorder, ACME).await.is_empty());
+    assert_eq!(write(&pool).await, Written::Omitted);
+    assert!(records(&recorder, ACME).await.is_empty());
 }

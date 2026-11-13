@@ -134,8 +134,13 @@ Dockerfile under `deploy/local/`.
   healthchecks); the Go and Rust images carry neither.
 - The local stack (`deploy/local/docker-compose.yml`) is the one place
   all six images run together, and it does not cover everything here:
-  it runs no machine listener, sets no `GARAM_POLICY_*` on the api, and
-  leaves cowork's four policy settings empty. What it orders by
+  it sets `GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
+  `GARAM_POLICY_SIGNING_KEY_FILE` and `GARAM_POLICY_TOKEN_ISSUER` on the
+  api and runs `garam policy-feed start` once the api's database is
+  migrated (`deploy/local/docker-compose.yml`, the `policy-keys` and
+  `policy-feed` services), but it runs no machine listener, leaves the
+  identity issuer off, and leaves cowork's four policy settings empty
+  (garamsh/garam#1895). What it orders by
   `depends_on` is its own choice and is stated under each entry's
   Before start.
 - The Go processes' only probe command is their own:
@@ -370,7 +375,7 @@ job.
   visitor without a session to the site (`proxy.ts:44-62`).
 - **Before start.** Nothing is read: the probes read nothing of the api
   ([ADR-0023](./adr/0023-web-probes.md)). The local stack starts it
-  after the api is healthy (`deploy/local/docker-compose.yml:183-185`),
+  after the api is healthy (`deploy/local/docker-compose.yml:202-204`),
   which is that stack's choice.
 - **Stop.** Not established; see §Not established.
 
@@ -392,7 +397,7 @@ image shape on port 3000.
   (`proxy.ts:21-26`); it redirects `/console/*` and `/device` to
   `GARAM_CONSOLE_URL` (`proxy.ts:27-29,34`).
 - **Before start.** Nothing is read; the local stack starts it after the
-  api is healthy (`deploy/local/docker-compose.yml:209-211`), which is
+  api is healthy (`deploy/local/docker-compose.yml:228-230`), which is
   that stack's choice. **Stop.** Not established.
 
 ## garam/cowork: serve and migrate
@@ -501,7 +506,7 @@ the MCP tools (`cowork/internal/cli/serve.go:178-261`). Image
   without a session is sent to the site (`proxy.ts:18-28`).
 - **Before start.** Nothing is read: the probes read nothing of cowork.
   The local stack starts it after cowork is healthy
-  (`deploy/local/docker-compose.yml:409-411`), which is that stack's
+  (`deploy/local/docker-compose.yml:462-464`), which is that stack's
   choice. **Stop.** Not established.
 
 ## garam/policy: serve and migrate

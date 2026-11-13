@@ -62,8 +62,8 @@ pair() {
 pair "$db_tls" "$db" 70
 pair "$server_tls" "$server" 10001
 
-# The JWKS the server trusts, made as the stack makes it. The signing key
-# beside it is not used here.
+# The JWKS the server trusts, made as the stack makes it. The signing
+# key beside it is not used here.
 docker run --rm -v "$PWD/deploy/local/policy-keys.sh:/policy-keys.sh:ro" -v "$keys:/keys" \
 	"$alpine" sh /policy-keys.sh 10001
 

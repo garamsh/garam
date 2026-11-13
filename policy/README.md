@@ -3,8 +3,8 @@
 The policy service's Cargo workspace (ADR-0130, ADR-0137, ADR-0138,
 ADR-0140). It decides over its own stores and authenticates its callers,
 and an owner writes its entities over `ApplyEntityChanges`. The local
-stack runs its image under the `policy` profile, and nothing calls it
-yet (#1689).
+stack runs its image with no profile, and the api delivers entities to
+it through `garam policy-feed` (#1689, #1888).
 
 - `proto/garam/policy/v1/` — the gRPC contract in AuthZEN's shape.
 - `schema/<service>.cedarschema` — a service's manifest (ADR-0143):

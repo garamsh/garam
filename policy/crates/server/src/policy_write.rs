@@ -120,9 +120,9 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
     /// Settles whether the write may go on, and gives the right to
     /// write a `permit` where the step needs one. A writer holds each
     /// role a link names, and the action its step takes, and writes
-    /// under no identifier reserved to the platform (ADR-0161): that
-    /// refusal is a denial of the step's action, recorded as a missing
-    /// role is.
+    /// under no identifier reserved to the platform (ADR-0161,
+    /// ADR-0163): that refusal is a denial of the step's action,
+    /// recorded as a missing role is.
     async fn authorize(
         &self,
         principal: &Principal,

@@ -489,7 +489,7 @@ export interface paths {
          * Explain why the signed-in caller may or may not take one action. Requires membership.
          * @description Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
          *
-         *     Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+         *     Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
          *
          *     A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
          *
@@ -515,7 +515,7 @@ export interface paths {
         };
         /**
          * List the members and agents the engine allows one action. Requires `iam:org.member-list`.
-         * @description Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
+         * @description Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
          *
          *     It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
          *
@@ -1762,12 +1762,12 @@ export interface components {
          * @enum {string}
          */
         PermissionBasis: "statements" | "operation" | "undefined-action";
-        /** @description One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the four role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone. */
+        /** @description One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the three role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone. */
         ExplainedStatement: {
             /** @enum {string} */
             effect: "Allow" | "Deny";
             /** @enum {string} */
-            source: "org-role" | "direct-role" | "group-role" | "project-role" | "policy" | "unreadable-policy";
+            source: "org-role" | "group-role" | "project-role" | "policy" | "unreadable-policy";
             sid?: string;
             roles?: string[];
             /** @description The group's slug. */

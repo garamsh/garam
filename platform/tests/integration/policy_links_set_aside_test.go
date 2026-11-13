@@ -110,21 +110,26 @@ func TestPolicyLinks_ALinkRefusedForGoodIsSetAsideAndTheRestOfThePassIsDelivered
 			assert.True(t, changed(fake, "Iam::Team "+otherTeam))
 			assert.True(t, changed(fake, "Iam::Team "+outboxTeam), "the refused link's organization's entities too")
 
-			// The refused link's mark stays, with the refusal an
-			// operator reads. Everything else is gone.
+			// The refused links' marks stay, with the refusal an
+			// operator reads: the organization's refusal reaches its
+			// member's link and its groups' and project's scoped links
+			// alike. Everything else is gone.
+			orgLinkMarks := []string{outboxLinkMark,
+				"Iam::ScopedRoleLink " + outboxTeam, "Iam::ScopedRoleLink " + outboxTeam2,
+				"Iam::ScopedRoleLink " + outboxProject}
 			marks := setAsideMarks(t, p)
 			require.Contains(t, marks, outboxLinkMark)
 			assert.Equal(t, code.String(), marks[outboxLinkMark].code)
 			assert.Contains(t, marks[outboxLinkMark].reason, "refused for good")
 			assert.WithinDuration(t, time.Now(), marks[outboxLinkMark].at, time.Minute)
-			assert.Equal(t, []string{outboxLinkMark}, markKeys(outboxMarks(t, p)))
+			assert.Equal(t, orgLinkMarks, markKeys(outboxMarks(t, p)))
 
 			// Not retried: the next pass reads nothing.
 			result, err = d.pass(t)
 			require.NoError(t, err)
 			assert.Zero(t, result.Marks)
 			assert.Empty(t, result.SetAside)
-			assert.Equal(t, []string{outboxLinkMark}, markKeys(outboxMarks(t, p)))
+			assert.Equal(t, orgLinkMarks, markKeys(outboxMarks(t, p)))
 		})
 	}
 }
@@ -261,7 +266,7 @@ func TestPolicyFeed_StandingIsReadFromTheMetrics(t *testing.T) {
 	require.NoError(t, err)
 	got = gatherStanding(t, reg)
 	assert.EqualValues(t, 0, got[`marks{state="pending"}`])
-	assert.EqualValues(t, 1, got[`marks{state="set_aside"}`])
+	assert.EqualValues(t, 4, got[`marks{state="set_aside"}`], "the member's link and the three scoped links")
 }
 
 func TestPolicyFeed_StandingLeavesOutALastSuccessThatNeverCame(t *testing.T) {

@@ -46,6 +46,10 @@ func (s *Server) CreateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), gr.GRN.String()); err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusCreated, groupToAPI(gr))
 }
 
@@ -144,6 +148,15 @@ func (s *Server) UpdateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
+	// Only a body that wrote the roles waits on the scoped link: a
+	// rename asks nothing of the policy service, and an older mark of
+	// the group that was set aside is not its answer to give.
+	if body.Roles != nil {
+		if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), gr.GRN.String()); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, groupToAPI(gr))
 }
 
@@ -159,6 +172,10 @@ func (s *Server) DeleteGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		return
 	}
 	if err := s.orgs.DeleteGroup(r.Context(), groupGRN(orgSlug, groupSlug)); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), groupGRN(orgSlug, groupSlug).String()); err != nil {
 		writeError(w, err)
 		return
 	}

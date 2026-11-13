@@ -39,12 +39,6 @@ function line(statement: ExplainedStatement): GrantLine {
         effect,
         text: `Your organization ${roleList(statement.roles)}`,
       };
-    case "direct-role":
-      return {
-        scope: "you",
-        effect,
-        text: `The ${roleList(statement.roles)} stored on you`,
-      };
     case "group-role":
       return {
         scope: "team",

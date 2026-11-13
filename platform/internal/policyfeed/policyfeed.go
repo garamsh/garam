@@ -60,6 +60,26 @@ type Link struct {
 	Role string
 }
 
+// ScopedRoleLinkType is the mark kind of the scoped role links of a
+// group or a project (ADR-0162). Its id is the GRN of the group or the
+// project, which is both principal and resource of each link. With
+// RoleLinkType, and the entities' own types, it makes the outbox a
+// family of mark kinds (ADR-0159 item 4).
+const ScopedRoleLinkType = "Iam::ScopedRoleLink"
+
+// ScopedLink is the scoped role links the platform writes for one
+// group or project, one for each role it holds. Like a member's link
+// it is written with no writer, and is named by what it says, so a
+// role added is the write of its link and a role removed is the removal
+// of its link.
+type ScopedLink struct {
+	// Owner is the GRN of the group or the project.
+	Owner string
+	// Roles are the roles it holds, each once, and none where the
+	// owner holds none or no longer exists.
+	Roles []string
+}
+
 // Entry is one entity a pass delivers.
 type Entry struct {
 	Entity Entity
@@ -80,6 +100,17 @@ type Refusal struct {
 // again until a write of the membership marks it anew.
 type LinkRefusal struct {
 	Link Link
+	// Code is the gRPC code the service answered, as its name.
+	Code string
+	// Reason is the call that was refused and the service's message.
+	Reason string
+}
+
+// ScopedLinkRefusal is a scoped link the policy service refused with a
+// code that retrying cannot clear. It is set aside as a LinkRefusal is,
+// on the mark of the group or the project.
+type ScopedLinkRefusal struct {
+	Link ScopedLink
 	// Code is the gRPC code the service answered, as its name.
 	Code string
 	// Reason is the call that was refused and the service's message.

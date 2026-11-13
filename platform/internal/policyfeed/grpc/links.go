@@ -142,16 +142,25 @@ func linkPolicy(orgGRN grn.GRN, user string, role org.Role) string {
 }
 
 func (s *Sender) writeLink(ctx context.Context, orgGRN grn.GRN, user string, role org.Role) error {
-	policy := linkPolicy(orgGRN, user, role)
-	body := &policyv1.PolicyBody{Body: &policyv1.PolicyBody_RoleLink{RoleLink: &policyv1.RoleLink{
-		Role:      protoRole(role),
-		Scope:     policyv1.RoleScope_ROLE_SCOPE_ORGANIZATION,
-		Principal: &policyv1.EntityRef{Type: "Iam::User", Id: user},
-		Resource:  &policyv1.EntityRef{Type: "Iam::Org", Id: orgGRN.String()},
-	}}}
+	return s.writePolicy(ctx, orgGRN, linkPolicy(orgGRN, user, role), "role link "+string(role),
+		&policyv1.RoleLink{
+			Role:      protoRole(role),
+			Scope:     policyv1.RoleScope_ROLE_SCOPE_ORGANIZATION,
+			Principal: &policyv1.EntityRef{Type: "Iam::User", Id: user},
+			Resource:  &policyv1.EntityRef{Type: "Iam::Org", Id: orgGRN.String()},
+		})
+}
+
+// writePolicy creates the role link policy and activates it. A policy
+// already created is not a fault, so a write sent again activates what
+// is there.
+func (s *Sender) writePolicy(
+	ctx context.Context, orgGRN grn.GRN, policy, name string, link *policyv1.RoleLink,
+) error {
+	body := &policyv1.PolicyBody{Body: &policyv1.PolicyBody_RoleLink{RoleLink: link}}
 	err := s.call(ctx, func(ctx context.Context) error {
 		_, err := s.client.CreatePolicy(ctx, &policyv1.CreatePolicyRequest{
-			Org: orgGRN.String(), Policy: policy, Name: "role link " + string(role), Body: body,
+			Org: orgGRN.String(), Policy: policy, Name: name, Body: body,
 		})
 		return err
 	})
@@ -167,9 +176,15 @@ func (s *Sender) writeLink(ctx context.Context, orgGRN grn.GRN, user string, rol
 }
 
 func (s *Sender) removeLink(ctx context.Context, orgGRN grn.GRN, user string, role org.Role) error {
+	return s.removePolicy(ctx, orgGRN, linkPolicy(orgGRN, user, role))
+}
+
+// removePolicy deletes a role link policy. A policy already gone is
+// not a fault.
+func (s *Sender) removePolicy(ctx context.Context, orgGRN grn.GRN, policy string) error {
 	err := s.call(ctx, func(ctx context.Context) error {
 		_, err := s.client.DeletePolicy(ctx, &policyv1.DeletePolicyRequest{
-			Org: orgGRN.String(), Policy: linkPolicy(orgGRN, user, role),
+			Org: orgGRN.String(), Policy: policy,
 		})
 		return err
 	})

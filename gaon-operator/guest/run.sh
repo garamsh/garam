@@ -1,7 +1,9 @@
 #!/bin/sh
 # run.sh runs the composed guest image as one container, the way a
-# MicroVM would run it (ADR-0153): one image, its one entrypoint, user
-# 0:0, the credentials as files owned by 65532, mode 0400. It shows the
+# MicroVM would run it (ADR-0153): the command, the environment and the
+# credential files are what the operator's render.go renders for one
+# agent, written out by cmd/gaon-render and not typed here; user 0:0.
+# Where the render changes, this run changes with it. It shows the
 # three programs starting in order, the readiness port answering, each
 # program's account and capabilities, a command run as 10001 refused the
 # store, the outbox, the credentials and the runtime's environment, and
@@ -10,9 +12,11 @@
 # SYS_ADMIN is added because the container's bounding set must hold the
 # workspace's five capabilities, as a MicroVM's root does.
 #
-# The credentials are placeholders: a self-signed root and fixed token
-# text, so the adapter runs but no call it makes reaches garam. What it
-# does with an admitted agent, and a real Exec, are not shown here.
+# The credentials are placeholders: a self-signed root, fixed token text
+# for the two garam minted, a placement token the render mints, and the
+# model credential from a file standing for the deployment's Secret. The
+# adapter runs but no call it makes reaches garam. What it does with an
+# admitted agent, and a real Exec, are not shown here.
 #
 # usage: run.sh <image>
 set -eu
@@ -20,8 +24,10 @@ set -eu
 image="${1:?usage: run.sh <image>}"
 name="${GUEST_DEMO_NAME:-gaon-guest-demo-$$}"
 grn=grn:demo/iam/agent/0000000000000001
+model_env=MODEL_API_KEY
 model_key=demo-model-credential
 scratch="$(mktemp -d)"
+here="$(cd "$(dirname "$0")/.." && pwd)"
 
 remove_container() { docker rm -f -v "$name" >/dev/null 2>&1 || true; }
 cleanup() {
@@ -33,30 +39,32 @@ remove_container
 
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=demo \
 	-keyout "$scratch/key.pem" -out "$scratch/root.pem" 2>/dev/null
-mkdir "$scratch/files"
-for f in garam-root.pem control-root.pem; do
-	cp "$scratch/root.pem" "$scratch/files/$f"
-done
-for f in agent-token placement-token control-token; do
-	echo demo-token >"$scratch/files/$f"
-done
+printf '%s' "$model_key" >"$scratch/model-key"
+mkdir "$scratch/render"
+(cd "$here" && go run ./cmd/gaon-render \
+	-image "$image" -agent "$grn" -epoch 1 \
+	-machine-url https://127.0.0.1:9 -control-url https://127.0.0.1:9 \
+	-model-env "$model_env" -model-secret model-credentials \
+	-model-secret-key api-key -model-key-file "$scratch/model-key" \
+	-root-file "$scratch/root.pem" -out "$scratch/render")
+[ "$(wc -l <"$scratch/render/modes")" = 1 ] || { echo "the render gives the files more than one mode and owner"; exit 1; }
+IFS=: read -r file_mode file_uid file_gid <"$scratch/render/modes"
+credential_files="$(ls "$scratch/render/files")"
+echo "== rendered: command $(cat "$scratch/render/entrypoint"), env $(cut -d= -f1 "$scratch/render/env.list" | tr '\n' ' ')"
+echo "== rendered files: $(echo $credential_files)"
 
 echo "== image labels"
 docker image inspect "$image" --format \
 	'{{range $k, $v := .Config.Labels}}{{$k}}={{$v}}{{"\n"}}{{end}}' | sort
 
 docker create --name "$name" --user 0:0 --cap-add SYS_ADMIN \
-	-e GUEST_AGENT_GRN="$grn" \
-	-e GUEST_ASSIGNMENT_EPOCH=1 \
-	-e GUEST_MACHINE_URL=https://127.0.0.1:9 \
-	-e GUEST_CONTROL_URL=https://127.0.0.1:9 \
-	-e GUEST_RUNTIME_ENV=MODEL_API_KEY \
-	-e MODEL_API_KEY="$model_key" \
+	--entrypoint "$(cat "$scratch/render/entrypoint")" \
+	--env-file "$scratch/render/env.list" \
 	"$image" >/dev/null
 # Named entries, not ".": the directory's own mode stays the image's.
-tar -C "$scratch/files" --owner=65532 --group=65532 --mode=0400 -cf - \
-	garam-root.pem control-root.pem agent-token placement-token control-token |
-	docker cp - "$name":/run/garam
+# shellcheck disable=SC2086
+tar -C "$scratch/render/files" --owner="$file_uid" --group="$file_gid" --mode="0$file_mode" -cf - \
+	$credential_files | docker cp - "$name":/run/garam
 docker start "$name" >/dev/null
 
 echo "== readiness: waiting for port 8088 to answer"
@@ -98,7 +106,7 @@ echo "== the model credential reaches the runtime alone"
 # process of another account refuses it even to root without
 # CAP_SYS_PTRACE.
 for program in runtime workspace adapter; do
-	if docker exec --user "$(field $program Uid | cut -f1)" "$name" grep -qa "MODEL_API_KEY=$model_key" "/proc/$(pid_of $program)/environ"; then
+	if docker exec --user "$(field $program Uid | cut -f1)" "$name" grep -qa "$model_env=$model_key" "/proc/$(pid_of $program)/environ"; then
 		echo "$program: has it"
 		[ "$program" = runtime ] || fail "$program holds the model credential"
 	else
@@ -112,7 +120,7 @@ docker exec "$name" stat -c '%n %U:%G %a' /var/lib/garam/memory /var/lib/garam/m
 [ "$(docker exec "$name" stat -c '%u:%g:%a' /var/lib/garam/memory)" = 65532:65532:700 ] || fail "the store is not 0700 owned by 65532"
 [ "$(docker exec "$name" stat -c '%u:%g:%a' /var/lib/garam/memory/outbox)" = 65532:65532:700 ] || fail "the outbox is not 0700 owned by 65532"
 docker exec "$name" sh -c 'stat -c "%n %U:%G %a" /run/garam/*'
-[ "$(docker exec "$name" sh -c 'stat -c "%u:%g:%a" /run/garam/* | sort -u')" = 65532:65532:400 ] || fail "a credential is not 0400 owned by 65532"
+[ "$(docker exec "$name" sh -c 'stat -c "%u:%g:%a" /run/garam/* | sort -u')" = "$file_uid:$file_gid:$file_mode" ] || fail "a credential is not 0400 owned by 65532"
 
 echo "== as 10001, the executor's child: each is refused"
 refused() { # refused <description> <command...>
@@ -127,7 +135,7 @@ refused() { # refused <description> <command...>
 refused "list the store" ls /var/lib/garam/memory
 refused "list the outbox" ls /var/lib/garam/memory/outbox
 refused "write into the store" touch /var/lib/garam/memory/x
-for f in agent-token control-token placement-token garam-root.pem control-root.pem; do
+for f in $credential_files; do
 	refused "read /run/garam/$f" cat "/run/garam/$f"
 done
 refused "read the runtime's environment" cat "/proc/$(pid_of runtime)/environ"
@@ -135,6 +143,7 @@ refused "read the adapter's environment" cat "/proc/$(pid_of adapter)/environ"
 echo "== the same reads as 65532 succeed, so each refusal above is a permission"
 docker exec --user 65532:65532 "$name" ls /var/lib/garam/memory >/dev/null || fail "65532 cannot list the store"
 docker exec --user 65532:65532 "$name" cat /run/garam/agent-token >/dev/null || fail "65532 cannot read its token"
+[ "$(docker exec --user 65532:65532 "$name" sh -c 'wc -c </run/garam/placement-token')" = 64 ] || fail "the placement token is not 64 hex digits"
 echo "65532 lists the store and reads its token"
 
 echo "== SIGTERM: docker stop sends it to the supervisor, which is PID 1"

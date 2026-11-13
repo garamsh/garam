@@ -34,12 +34,12 @@ const workspaceCaps = "-all,+setuid,+setgid,+chown,+sys_admin,+kill"
 // CredentialsDir, and the supervisor's value for a runtime variable
 // reaches the runtime alone.
 const (
-	envAgent         = "GUEST_AGENT_GRN"
-	envEpoch         = "GUEST_ASSIGNMENT_EPOCH"
-	envMachineURL    = "GUEST_MACHINE_URL"
-	envControlURL    = "GUEST_CONTROL_URL"
-	envRuntimeConfig = "GUEST_RUNTIME_CONFIG"
-	envRuntimeEnv    = "GUEST_RUNTIME_ENV"
+	EnvAgent         = "GUEST_AGENT_GRN"
+	EnvEpoch         = "GUEST_ASSIGNMENT_EPOCH"
+	EnvMachineURL    = "GUEST_MACHINE_URL"
+	EnvControlURL    = "GUEST_CONTROL_URL"
+	EnvRuntimeConfig = "GUEST_RUNTIME_CONFIG"
+	EnvRuntimeEnv    = "GUEST_RUNTIME_ENV"
 )
 
 // inherited are the variables a program takes from the supervisor's
@@ -49,20 +49,20 @@ var inherited = []string{"PATH", "SSL_CERT_FILE", "SHERLOCK_TOOLS_DIR"}
 // FromEnv reads one generation's settings and returns it with the three
 // programs in start order: runtime, workspace, adapter.
 func FromEnv(getenv func(string) string, stdout, stderr io.Writer, log *slog.Logger) (Config, error) {
-	agent, err := parseAgent(getenv(envAgent))
+	agent, err := parseAgent(getenv(EnvAgent))
 	if err != nil {
 		return Config{}, err
 	}
-	epoch := getenv(envEpoch)
+	epoch := getenv(EnvEpoch)
 	if n, err := strconv.ParseUint(epoch, 10, 63); err != nil || strconv.FormatUint(n, 10) != epoch {
-		return Config{}, errorx.New(errorx.KindInvalidArgument, envEpoch+" is not a canonical decimal string")
+		return Config{}, errorx.New(errorx.KindInvalidArgument, EnvEpoch+" is not a canonical decimal string")
 	}
-	machineURL, controlURL := getenv(envMachineURL), getenv(envControlURL)
+	machineURL, controlURL := getenv(EnvMachineURL), getenv(EnvControlURL)
 	if machineURL == "" {
-		return Config{}, errorx.New(errorx.KindInvalidArgument, envMachineURL+" is required")
+		return Config{}, errorx.New(errorx.KindInvalidArgument, EnvMachineURL+" is required")
 	}
 	if controlURL == "" {
-		return Config{}, errorx.New(errorx.KindInvalidArgument, envControlURL+" is required")
+		return Config{}, errorx.New(errorx.KindInvalidArgument, EnvControlURL+" is required")
 	}
 
 	var base, runtimeOnly []string
@@ -71,7 +71,7 @@ func FromEnv(getenv func(string) string, stdout, stderr io.Writer, log *slog.Log
 			base = append(base, k+"="+v)
 		}
 	}
-	for _, name := range runtimeNames(getenv(envRuntimeEnv)) {
+	for _, name := range runtimeNames(getenv(EnvRuntimeEnv)) {
 		if v := getenv(name); v != "" {
 			runtimeOnly = append(runtimeOnly, name+"="+v)
 		}
@@ -84,7 +84,7 @@ func FromEnv(getenv func(string) string, stdout, stderr io.Writer, log *slog.Log
 		"--memory-path", MemoryDir + "/memory.db",
 		"--addr", gatewayAddr, "--workspace-addr", workspaceAddr,
 	}
-	if config := getenv(envRuntimeConfig); config != "" {
+	if config := getenv(EnvRuntimeConfig); config != "" {
 		runtime = append(runtime, "--config", config)
 	}
 	// The runtime and the adapter run as UID with no capability and no
@@ -120,7 +120,7 @@ func FromEnv(getenv func(string) string, stdout, stderr io.Writer, log *slog.Log
 func parseAgent(s string) (string, error) {
 	g, err := grn.Parse(s)
 	if err != nil || g.ServiceType != "agent" || g.Locator != "" || g.String() != s {
-		return "", errorx.New(errorx.KindInvalidArgument, envAgent+" is not a canonical agent GRN")
+		return "", errorx.New(errorx.KindInvalidArgument, EnvAgent+" is not a canonical agent GRN")
 	}
 	return s, nil
 }

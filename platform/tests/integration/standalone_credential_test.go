@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
+	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
@@ -261,6 +263,17 @@ func TestStandaloneCredential_AReplacementEndsTheRetryWindow(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, body)
 	replaced := credentialOf(t, s.spend(t, next.secret, next.enrollment(t)))
 	require.Equal(t, first.agent, replaced.agent, "the replacement holds the same agent")
+	// The agent was never activated, so the answer names no activation
+	// and reads as a new agent's; the stored approval says it moved one
+	// (ADR-0165 item 5: the machine listener's wait decides by it).
+	held := func(secret string) bool {
+		e, err := agentpg.New(p).GetEnrollmentBySecret(t.Context(), sha256.Sum256([]byte(secret)))
+		require.NoError(t, err)
+		require.NotNil(t, e.Spent)
+		return e.Spent.Result.Replaced
+	}
+	assert.True(t, held(next.secret), "a replacement of an agent never activated is a replacement")
+	assert.False(t, held(h.secret), "control: a new agent's enrollment is not")
 
 	after := s.spend(t, h.secret, h.enrollment(t))
 	assert.Equal(t, http.StatusConflict, after.status, "the replaced registration's retry: %s", after.body)

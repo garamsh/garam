@@ -9,6 +9,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 )
 
 // CreateGroup creates a group in the org. Requires the admin role.
@@ -46,7 +47,9 @@ func (s *Server) CreateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), gr.GRN.String()); err != nil {
+	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(),
+		policyfeed.Entity{Type: policyfeed.TeamType, ID: gr.GRN.String()},
+		scopedLinkMark(gr.GRN.String())); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -171,11 +174,12 @@ func (s *Server) DeleteGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	if err := s.orgs.DeleteGroup(r.Context(), groupGRN(orgSlug, groupSlug)); err != nil {
+	ctx, raised := s.recording(r.Context())
+	if err := s.orgs.DeleteGroup(ctx, groupGRN(orgSlug, groupSlug)); err != nil {
 		writeError(w, err)
 		return
 	}
-	if err := s.awaitScoped(r.Context(), orgGRN(orgSlug).String(), groupGRN(orgSlug, groupSlug).String()); err != nil {
+	if err := s.awaitRaised(r.Context(), raised, orgGRN(orgSlug).String()); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -232,6 +236,10 @@ func (s *Server) AddGroupMember(w http.ResponseWriter, r *http.Request, orgSlug 
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(), memberMark(member)...); err != nil {
+		writeError(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -253,6 +261,10 @@ func (s *Server) RemoveGroupMember(w http.ResponseWriter, r *http.Request, orgSl
 		return
 	}
 	if err := s.orgs.RemoveGroupMember(r.Context(), groupGRN(orgSlug, groupSlug), member); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(), memberMark(member)...); err != nil {
 		writeError(w, err)
 		return
 	}

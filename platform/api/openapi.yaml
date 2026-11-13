@@ -140,6 +140,12 @@ paths:
         the user, creates a session, and sets the `garam_session`
         cookie. Redirects on success to the console path the login was
         started with (`POST /auth/login/{provider}`), or to `/console`.
+        A first sign-in waits up to five seconds for the policy
+        service to apply the new user, and redirects as on success
+        whether or not it did: the session is stored and a redirect
+        cannot carry a 503 a browser would show. The first request that
+        needs the user in the policy service waits on it again
+        (ADR-0165).
       security: []
       parameters:
         - $ref: '#/components/parameters/provider'
@@ -4857,10 +4863,10 @@ components:
             refuses issuing one where this garam has no token endpoint
             configured.
             Role links: `change_not_applied`, on the 503 that answers a
-            request which changed an organization's membership (creating
-            the organization, accepting an invitation, registering by
-            one, deleting the organization) when the policy service has
-            not applied the role links within five seconds. The change
+            request which changed what the policy service decides from
+            (an organization, its membership, a group or project and
+            its members, a registration, an operator) when the policy service has not applied the
+            change within five seconds. The change
             is stored and stays so; the service decides by the roles it
             last held until it applies them, so a member added is not
             yet allowed and a member removed is not yet denied. The
@@ -4908,7 +4914,7 @@ components:
             The GRN of the organization a request stored before it
             answered `change_not_applied` or `change_refused`: the one
             it created, joined, registered into, deleted, or granted or
-            withdrew consent for. A client
+            withdrew consent for, or that owns what the request changed. A client
             that cannot repeat the request reads from it what was
             stored and goes on. Present only with those reasons.
   headers:

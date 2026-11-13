@@ -71,8 +71,8 @@ func (s *Store) UpdateOrg(ctx context.Context, g grn.GRN, p org.Patch) (*org.Org
 // DeleteOrg removes the Organization and, via foreign keys, its
 // Groups, Projects, Memberships, and Invitations.
 func (s *Store) DeleteOrg(ctx context.Context, g grn.GRN) error {
-	n, err := s.q.DeleteOrg(ctx, g.String())
-	return classifyRows(n, err, "delete org", org.ErrOrgNotFound)
+	return s.deleteRecording(ctx, "delete org", org.ErrOrgNotFound,
+		func(q *db.Queries) (int64, error) { return q.DeleteOrg(ctx, g.String()) })
 }
 
 // CountOrgContents counts the Groups, Projects, Memberships and

@@ -55,6 +55,10 @@ func (s *Server) CreateManagedAgent(w http.ResponseWriter, r *http.Request, cont
 		writeError(w, withinBudget(r, err))
 		return
 	}
+	if err := s.awaitAgent(r.Context(), creation.Agent); err != nil {
+		writeError(w, withinBudget(r, err))
+		return
+	}
 	writeJSON(w, createdOrReplayed(created), machinegen.ManagedAgent{
 		Grn: creation.Agent.String(), Epoch: strconv.Itoa(creation.Epoch),
 	})

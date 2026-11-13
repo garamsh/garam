@@ -1473,3 +1473,11 @@ ADRs:
   no writer creates there, and only a team's or a project's link on
   itself; every other rule of 0161 holds for it; no migration;
   accepted, built (#1898); extends 0161
+- [0164](./adr/0164-the-policy-service-decides-a-supervisors-activation-of-the-agent-it-holds.md)
+  — the policy service decides a supervisor's activation of the agent
+  it holds: `Iam::Supervisor in [OrgMembers, Org]` carries an optional
+  `agent`, written by the caller `platform` alone, is a principal of
+  `iam:agent.activate` alone, and the system policy
+  `supervisor-agent-activate` permits it where the resource is that
+  agent; no `permit` of an organization reaches it; accepted, built in
+  the policy service (#1905); corrects row 6 of 0146's inventory

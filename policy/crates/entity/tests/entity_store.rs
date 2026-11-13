@@ -376,3 +376,73 @@ async fn a_slice_carries_the_operations_an_operator_holds(pool: PgPool) {
         .unwrap();
     assert_eq!(held.outcome, Outcome::Allow, "{held:?}");
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_slice_carries_the_agent_a_supervisor_holds(pool: PgPool) {
+    let store = store(pool).await;
+    let engine = Engine::load().unwrap();
+    let host: Named = ("Iam::Supervisor", "grn:acme/iam/supervisor/host");
+    let peer: Named = ("Iam::Agent", "grn:acme/iam/agent/peer");
+    store
+        .apply(&[upsert(peer, 1, Some(ORG), &[MEMBERS, ORG])])
+        .await
+        .unwrap();
+    let supervisor = |sequence: i64, agent: Option<Named>| {
+        EntityChange::upsert(
+            &engine,
+            uid(host),
+            sequence,
+            Upsert {
+                org: Some(uid(ORG)),
+                parents: vec![uid(MEMBERS), uid(ORG)],
+                agent: agent.map(uid),
+                ..Upsert::default()
+            },
+        )
+        .unwrap()
+    };
+    let activate = |agent: Named| Evaluation {
+        subject: EntityRef {
+            entity_type: host.0,
+            id: host.1,
+        },
+        action: "iam:agent.activate",
+        resource: EntityRef {
+            entity_type: agent.0,
+            id: agent.1,
+        },
+        context: json!({}),
+    };
+
+    store.apply(&[supervisor(1, None)]).await.unwrap();
+    let none = engine
+        .evaluate(&NoPolicies, &store, &activate(BOT))
+        .await
+        .unwrap();
+    assert_eq!(none.outcome, Outcome::Deny, "{none:?}");
+
+    store.apply(&[supervisor(2, Some(BOT))]).await.unwrap();
+    let held = engine
+        .evaluate(&NoPolicies, &store, &activate(BOT))
+        .await
+        .unwrap();
+    assert_eq!(held.outcome, Outcome::Allow, "{held:?}");
+    let other = engine
+        .evaluate(&NoPolicies, &store, &activate(peer))
+        .await
+        .unwrap();
+    assert_eq!(other.outcome, Outcome::Deny, "{other:?}");
+
+    store.apply(&[supervisor(3, Some(peer))]).await.unwrap();
+    let moved = engine
+        .evaluate(&NoPolicies, &store, &activate(BOT))
+        .await
+        .unwrap();
+    assert_eq!(moved.outcome, Outcome::Deny, "{moved:?}");
+    let now = engine
+        .evaluate(&NoPolicies, &store, &activate(peer))
+        .await
+        .unwrap();
+    assert_eq!(now.outcome, Outcome::Allow, "{now:?}");
+}

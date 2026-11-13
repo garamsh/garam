@@ -35,7 +35,14 @@ pub use policy_service::Service;
 pub use probes::{ProbeError, probe};
 pub use tls::{Identity, TlsError, load_identity};
 
-/// The generated contract.
+/// The generated contract. The size of its `Operation` is the
+/// generator's, and one write is one message either way.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the generated `EntityChange` operation holds an upsert \
+              beside a delete; boxing it would change every \
+              construction of the variant"
+)]
 pub mod proto {
     tonic::include_proto!("garam.policy.v1");
 }

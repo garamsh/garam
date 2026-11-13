@@ -1037,8 +1037,8 @@ func (x *EntityRef) GetId() string {
 }
 
 // EntityUpsert is what an entity now is. It carries containment and
-// membership, and two attributes of the one type each belongs to
-// (ADR-0138, ADR-0146, ADR-0147).
+// membership, and three attributes of the one type each belongs to
+// (ADR-0138, ADR-0146, ADR-0147, ADR-0164).
 type EntityUpsert struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// org is required of every resource type, and an `Org` names itself.
@@ -1057,7 +1057,11 @@ type EntityUpsert struct {
 	// `iam:agent.activate` (ADR-0146). Each is an action `Iam::Operator`
 	// may be the principal of, and an upsert of any other type that
 	// holds one is refused. Left empty, the `Operator` holds none.
-	Operations    []string `protobuf:"bytes,5,rep,name=operations,proto3" json:"operations,omitempty"`
+	Operations []string `protobuf:"bytes,5,rep,name=operations,proto3" json:"operations,omitempty"`
+	// agent is the agent a `Supervisor` holds (ADR-0164). It is an
+	// `Agent`, and an upsert of any other type that names one is refused.
+	// Left unset, the `Supervisor` holds none.
+	Agent         *EntityRef `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1123,6 +1127,13 @@ func (x *EntityUpsert) GetConsents() []*EntityRef {
 func (x *EntityUpsert) GetOperations() []string {
 	if x != nil {
 		return x.Operations
+	}
+	return nil
+}
+
+func (x *EntityUpsert) GetAgent() *EntityRef {
+	if x != nil {
+		return x.Agent
 	}
 	return nil
 }
@@ -2820,7 +2831,7 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\vevaluations\x18\x01 \x03(\v2!.garam.policy.v1.EvaluateResponseR\vevaluations\"/\n" +
 	"\tEntityRef\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id\"\x80\x02\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"\xb2\x02\n" +
 	"\fEntityUpsert\x12,\n" +
 	"\x03org\x18\x01 \x01(\v2\x1a.garam.policy.v1.EntityRefR\x03org\x124\n" +
 	"\amembers\x18\x02 \x01(\v2\x1a.garam.policy.v1.EntityRefR\amembers\x124\n" +
@@ -2828,7 +2839,8 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\bconsents\x18\x04 \x03(\v2\x1a.garam.policy.v1.EntityRefR\bconsents\x12\x1e\n" +
 	"\n" +
 	"operations\x18\x05 \x03(\tR\n" +
-	"operations\"\x0e\n" +
+	"operations\x120\n" +
+	"\x05agent\x18\x06 \x01(\v2\x1a.garam.policy.v1.EntityRefR\x05agent\"\x0e\n" +
 	"\fEntityDelete\"\xdd\x01\n" +
 	"\fEntityChange\x122\n" +
 	"\x06entity\x18\x01 \x01(\v2\x1a.garam.policy.v1.EntityRefR\x06entity\x12\x1a\n" +
@@ -3066,64 +3078,65 @@ var file_garam_policy_v1_policy_proto_depIdxs = []int32{
 	16, // 20: garam.policy.v1.EntityUpsert.members:type_name -> garam.policy.v1.EntityRef
 	16, // 21: garam.policy.v1.EntityUpsert.parents:type_name -> garam.policy.v1.EntityRef
 	16, // 22: garam.policy.v1.EntityUpsert.consents:type_name -> garam.policy.v1.EntityRef
-	16, // 23: garam.policy.v1.EntityChange.entity:type_name -> garam.policy.v1.EntityRef
-	17, // 24: garam.policy.v1.EntityChange.upsert:type_name -> garam.policy.v1.EntityUpsert
-	18, // 25: garam.policy.v1.EntityChange.delete:type_name -> garam.policy.v1.EntityDelete
-	19, // 26: garam.policy.v1.ApplyEntityChangesRequest.changes:type_name -> garam.policy.v1.EntityChange
-	21, // 27: garam.policy.v1.ApplyEntityChangesResponse.refusals:type_name -> garam.policy.v1.EntityChangeRefusal
-	1,  // 28: garam.policy.v1.RoleLink.role:type_name -> garam.policy.v1.Role
-	2,  // 29: garam.policy.v1.RoleLink.scope:type_name -> garam.policy.v1.RoleScope
-	16, // 30: garam.policy.v1.RoleLink.principal:type_name -> garam.policy.v1.EntityRef
-	16, // 31: garam.policy.v1.RoleLink.resource:type_name -> garam.policy.v1.EntityRef
-	23, // 32: garam.policy.v1.PolicyBody.role_link:type_name -> garam.policy.v1.RoleLink
-	24, // 33: garam.policy.v1.PolicyVersion.body:type_name -> garam.policy.v1.PolicyBody
-	4,  // 34: garam.policy.v1.PolicySummary.status:type_name -> garam.policy.v1.PolicyStatus
-	3,  // 35: garam.policy.v1.PolicySummary.kind:type_name -> garam.policy.v1.PolicyKind
-	6,  // 36: garam.policy.v1.CreatePolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	24, // 37: garam.policy.v1.CreatePolicyRequest.body:type_name -> garam.policy.v1.PolicyBody
-	6,  // 38: garam.policy.v1.AppendPolicyVersionRequest.writer:type_name -> garam.policy.v1.Subject
-	24, // 39: garam.policy.v1.AppendPolicyVersionRequest.body:type_name -> garam.policy.v1.PolicyBody
-	6,  // 40: garam.policy.v1.ActivatePolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	6,  // 41: garam.policy.v1.RollBackPolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	6,  // 42: garam.policy.v1.DeletePolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	6,  // 43: garam.policy.v1.GetPolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	26, // 44: garam.policy.v1.GetPolicyResponse.policy:type_name -> garam.policy.v1.PolicySummary
-	25, // 45: garam.policy.v1.GetPolicyResponse.versions:type_name -> garam.policy.v1.PolicyVersion
-	6,  // 46: garam.policy.v1.ListPoliciesRequest.writer:type_name -> garam.policy.v1.Subject
-	26, // 47: garam.policy.v1.ListPoliciesResponse.policies:type_name -> garam.policy.v1.PolicySummary
-	5,  // 48: garam.policy.v1.AuditRecord.kind:type_name -> garam.policy.v1.AuditRecordKind
-	45, // 49: garam.policy.v1.AuditRecord.first_at:type_name -> google.protobuf.Timestamp
-	45, // 50: garam.policy.v1.AuditRecord.last_at:type_name -> google.protobuf.Timestamp
-	45, // 51: garam.policy.v1.AuditRecord.day:type_name -> google.protobuf.Timestamp
-	6,  // 52: garam.policy.v1.ListAuditRecordsRequest.writer:type_name -> garam.policy.v1.Subject
-	41, // 53: garam.policy.v1.ListAuditRecordsResponse.records:type_name -> garam.policy.v1.AuditRecord
-	9,  // 54: garam.policy.v1.PolicyService.Evaluate:input_type -> garam.policy.v1.EvaluateRequest
-	14, // 55: garam.policy.v1.PolicyService.Evaluations:input_type -> garam.policy.v1.EvaluationsRequest
-	20, // 56: garam.policy.v1.PolicyService.ApplyEntityChanges:input_type -> garam.policy.v1.ApplyEntityChangesRequest
-	27, // 57: garam.policy.v1.PolicyService.CreatePolicy:input_type -> garam.policy.v1.CreatePolicyRequest
-	29, // 58: garam.policy.v1.PolicyService.AppendPolicyVersion:input_type -> garam.policy.v1.AppendPolicyVersionRequest
-	31, // 59: garam.policy.v1.PolicyService.ActivatePolicy:input_type -> garam.policy.v1.ActivatePolicyRequest
-	33, // 60: garam.policy.v1.PolicyService.RollBackPolicy:input_type -> garam.policy.v1.RollBackPolicyRequest
-	35, // 61: garam.policy.v1.PolicyService.DeletePolicy:input_type -> garam.policy.v1.DeletePolicyRequest
-	37, // 62: garam.policy.v1.PolicyService.GetPolicy:input_type -> garam.policy.v1.GetPolicyRequest
-	39, // 63: garam.policy.v1.PolicyService.ListPolicies:input_type -> garam.policy.v1.ListPoliciesRequest
-	42, // 64: garam.policy.v1.PolicyService.ListAuditRecords:input_type -> garam.policy.v1.ListAuditRecordsRequest
-	12, // 65: garam.policy.v1.PolicyService.Evaluate:output_type -> garam.policy.v1.EvaluateResponse
-	15, // 66: garam.policy.v1.PolicyService.Evaluations:output_type -> garam.policy.v1.EvaluationsResponse
-	22, // 67: garam.policy.v1.PolicyService.ApplyEntityChanges:output_type -> garam.policy.v1.ApplyEntityChangesResponse
-	28, // 68: garam.policy.v1.PolicyService.CreatePolicy:output_type -> garam.policy.v1.CreatePolicyResponse
-	30, // 69: garam.policy.v1.PolicyService.AppendPolicyVersion:output_type -> garam.policy.v1.AppendPolicyVersionResponse
-	32, // 70: garam.policy.v1.PolicyService.ActivatePolicy:output_type -> garam.policy.v1.ActivatePolicyResponse
-	34, // 71: garam.policy.v1.PolicyService.RollBackPolicy:output_type -> garam.policy.v1.RollBackPolicyResponse
-	36, // 72: garam.policy.v1.PolicyService.DeletePolicy:output_type -> garam.policy.v1.DeletePolicyResponse
-	38, // 73: garam.policy.v1.PolicyService.GetPolicy:output_type -> garam.policy.v1.GetPolicyResponse
-	40, // 74: garam.policy.v1.PolicyService.ListPolicies:output_type -> garam.policy.v1.ListPoliciesResponse
-	43, // 75: garam.policy.v1.PolicyService.ListAuditRecords:output_type -> garam.policy.v1.ListAuditRecordsResponse
-	65, // [65:76] is the sub-list for method output_type
-	54, // [54:65] is the sub-list for method input_type
-	54, // [54:54] is the sub-list for extension type_name
-	54, // [54:54] is the sub-list for extension extendee
-	0,  // [0:54] is the sub-list for field type_name
+	16, // 23: garam.policy.v1.EntityUpsert.agent:type_name -> garam.policy.v1.EntityRef
+	16, // 24: garam.policy.v1.EntityChange.entity:type_name -> garam.policy.v1.EntityRef
+	17, // 25: garam.policy.v1.EntityChange.upsert:type_name -> garam.policy.v1.EntityUpsert
+	18, // 26: garam.policy.v1.EntityChange.delete:type_name -> garam.policy.v1.EntityDelete
+	19, // 27: garam.policy.v1.ApplyEntityChangesRequest.changes:type_name -> garam.policy.v1.EntityChange
+	21, // 28: garam.policy.v1.ApplyEntityChangesResponse.refusals:type_name -> garam.policy.v1.EntityChangeRefusal
+	1,  // 29: garam.policy.v1.RoleLink.role:type_name -> garam.policy.v1.Role
+	2,  // 30: garam.policy.v1.RoleLink.scope:type_name -> garam.policy.v1.RoleScope
+	16, // 31: garam.policy.v1.RoleLink.principal:type_name -> garam.policy.v1.EntityRef
+	16, // 32: garam.policy.v1.RoleLink.resource:type_name -> garam.policy.v1.EntityRef
+	23, // 33: garam.policy.v1.PolicyBody.role_link:type_name -> garam.policy.v1.RoleLink
+	24, // 34: garam.policy.v1.PolicyVersion.body:type_name -> garam.policy.v1.PolicyBody
+	4,  // 35: garam.policy.v1.PolicySummary.status:type_name -> garam.policy.v1.PolicyStatus
+	3,  // 36: garam.policy.v1.PolicySummary.kind:type_name -> garam.policy.v1.PolicyKind
+	6,  // 37: garam.policy.v1.CreatePolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	24, // 38: garam.policy.v1.CreatePolicyRequest.body:type_name -> garam.policy.v1.PolicyBody
+	6,  // 39: garam.policy.v1.AppendPolicyVersionRequest.writer:type_name -> garam.policy.v1.Subject
+	24, // 40: garam.policy.v1.AppendPolicyVersionRequest.body:type_name -> garam.policy.v1.PolicyBody
+	6,  // 41: garam.policy.v1.ActivatePolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	6,  // 42: garam.policy.v1.RollBackPolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	6,  // 43: garam.policy.v1.DeletePolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	6,  // 44: garam.policy.v1.GetPolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	26, // 45: garam.policy.v1.GetPolicyResponse.policy:type_name -> garam.policy.v1.PolicySummary
+	25, // 46: garam.policy.v1.GetPolicyResponse.versions:type_name -> garam.policy.v1.PolicyVersion
+	6,  // 47: garam.policy.v1.ListPoliciesRequest.writer:type_name -> garam.policy.v1.Subject
+	26, // 48: garam.policy.v1.ListPoliciesResponse.policies:type_name -> garam.policy.v1.PolicySummary
+	5,  // 49: garam.policy.v1.AuditRecord.kind:type_name -> garam.policy.v1.AuditRecordKind
+	45, // 50: garam.policy.v1.AuditRecord.first_at:type_name -> google.protobuf.Timestamp
+	45, // 51: garam.policy.v1.AuditRecord.last_at:type_name -> google.protobuf.Timestamp
+	45, // 52: garam.policy.v1.AuditRecord.day:type_name -> google.protobuf.Timestamp
+	6,  // 53: garam.policy.v1.ListAuditRecordsRequest.writer:type_name -> garam.policy.v1.Subject
+	41, // 54: garam.policy.v1.ListAuditRecordsResponse.records:type_name -> garam.policy.v1.AuditRecord
+	9,  // 55: garam.policy.v1.PolicyService.Evaluate:input_type -> garam.policy.v1.EvaluateRequest
+	14, // 56: garam.policy.v1.PolicyService.Evaluations:input_type -> garam.policy.v1.EvaluationsRequest
+	20, // 57: garam.policy.v1.PolicyService.ApplyEntityChanges:input_type -> garam.policy.v1.ApplyEntityChangesRequest
+	27, // 58: garam.policy.v1.PolicyService.CreatePolicy:input_type -> garam.policy.v1.CreatePolicyRequest
+	29, // 59: garam.policy.v1.PolicyService.AppendPolicyVersion:input_type -> garam.policy.v1.AppendPolicyVersionRequest
+	31, // 60: garam.policy.v1.PolicyService.ActivatePolicy:input_type -> garam.policy.v1.ActivatePolicyRequest
+	33, // 61: garam.policy.v1.PolicyService.RollBackPolicy:input_type -> garam.policy.v1.RollBackPolicyRequest
+	35, // 62: garam.policy.v1.PolicyService.DeletePolicy:input_type -> garam.policy.v1.DeletePolicyRequest
+	37, // 63: garam.policy.v1.PolicyService.GetPolicy:input_type -> garam.policy.v1.GetPolicyRequest
+	39, // 64: garam.policy.v1.PolicyService.ListPolicies:input_type -> garam.policy.v1.ListPoliciesRequest
+	42, // 65: garam.policy.v1.PolicyService.ListAuditRecords:input_type -> garam.policy.v1.ListAuditRecordsRequest
+	12, // 66: garam.policy.v1.PolicyService.Evaluate:output_type -> garam.policy.v1.EvaluateResponse
+	15, // 67: garam.policy.v1.PolicyService.Evaluations:output_type -> garam.policy.v1.EvaluationsResponse
+	22, // 68: garam.policy.v1.PolicyService.ApplyEntityChanges:output_type -> garam.policy.v1.ApplyEntityChangesResponse
+	28, // 69: garam.policy.v1.PolicyService.CreatePolicy:output_type -> garam.policy.v1.CreatePolicyResponse
+	30, // 70: garam.policy.v1.PolicyService.AppendPolicyVersion:output_type -> garam.policy.v1.AppendPolicyVersionResponse
+	32, // 71: garam.policy.v1.PolicyService.ActivatePolicy:output_type -> garam.policy.v1.ActivatePolicyResponse
+	34, // 72: garam.policy.v1.PolicyService.RollBackPolicy:output_type -> garam.policy.v1.RollBackPolicyResponse
+	36, // 73: garam.policy.v1.PolicyService.DeletePolicy:output_type -> garam.policy.v1.DeletePolicyResponse
+	38, // 74: garam.policy.v1.PolicyService.GetPolicy:output_type -> garam.policy.v1.GetPolicyResponse
+	40, // 75: garam.policy.v1.PolicyService.ListPolicies:output_type -> garam.policy.v1.ListPoliciesResponse
+	43, // 76: garam.policy.v1.PolicyService.ListAuditRecords:output_type -> garam.policy.v1.ListAuditRecordsResponse
+	66, // [66:77] is the sub-list for method output_type
+	55, // [55:66] is the sub-list for method input_type
+	55, // [55:55] is the sub-list for extension type_name
+	55, // [55:55] is the sub-list for extension extendee
+	0,  // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_garam_policy_v1_policy_proto_init() }

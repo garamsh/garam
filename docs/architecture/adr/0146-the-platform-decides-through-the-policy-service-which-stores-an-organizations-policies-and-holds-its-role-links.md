@@ -17,7 +17,9 @@
 > and by
 > [ADR-0162](./0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)
 > (inventory row 2, a user's direct roles, which is removed and not
-> written as a link)
+> written as a link). Row 6 of its inventory is corrected by
+> [ADR-0164](./0164-the-policy-service-decides-a-supervisors-activation-of-the-agent-it-holds.md)
+> (a supervisor's activation of the agent it holds is a system policy)
 > Date: 2026-11-12
 
 Drafted for #1799, under #1796, which holds the owner's decisions of

@@ -43,8 +43,13 @@ namespace Iam {
   entity Operator in [OrgMembers, Org] { org: Org, operations?: Set<String> };
   @grn("policy") @caller("none")
   entity Policy in [Org] { org: Org };
-  @grn("supervisor") @caller("none")
-  entity Supervisor in [Org] { org: Org };
+  // `agent` is the one agent a standalone host's supervisor holds, the
+  // only one its activation is decided for (ADR-0164). A supervisor
+  // sits in its organization's OrgMembers, as an agent does, which is
+  // what tenant isolation reads of a principal. `agent` is optional so
+  // a supervisor stored without one holds none.
+  @grn("supervisor") @caller("platform")
+  entity Supervisor in [OrgMembers, Org] { org: Org, agent?: Agent };
   @grn("service") @caller("none")
   entity Service in [Org] { org: Org };
   @grn("agent") @caller("platform")
@@ -136,9 +141,13 @@ namespace Iam {
     appliesTo { principal: [User, Agent], resource: [Org, Agent] };
 
   // Activating an agent is a delegated operation the platform writes
-  // (ADR-0078). No role holds it, as with `agent.watch`.
+  // (ADR-0078). No role holds it, as with `agent.watch`. A supervisor is
+  // a principal of this action and of no other (ADR-0164).
   action "agent.activate"
-    appliesTo { principal: [User, Agent, Operator], resource: [Org, Agent] };
+    appliesTo {
+      principal: [User, Agent, Operator, Supervisor],
+      resource: [Org, Agent]
+    };
 
   action "agent-template.read", "execution-profile.read"
     in ["role-owner", "role-admin", "role-member"]

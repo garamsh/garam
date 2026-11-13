@@ -306,15 +306,20 @@ on hosted runners.
   version as the only repair (ADR-0039 §Consequences). What reads the
   guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
   two files and not three (#899).
-- **Every image a release publishes is built on a pull request.**
-  `images.yml` builds the six from what `release.yml` says each is
-  built from, once each, and then checks the console's, the site's,
-  cowork's, cowork-web's and the policy service's. The web one is the
-  image a release used to be able to fail on irreversibly: the server
-  image was pushed before the web image was built, and immutability
-  makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds all six and
-  pushes none until all are built (#945), so what a build failure there
-  now costs is the run. Until #850 no image was built by any check.
+- **Every image a release publishes is built on a pull request, the
+  guest to its build stage only.** `images.yml` builds the eight from
+  what `release.yml` says each is built from, once each, and then
+  checks the console's, the site's, cowork's, cowork-web's, the policy
+  service's and the gaon operator's. The guest composes three private
+  images a pull request's run holds no credential to pull, so it is
+  built to its `build` stage under `garam/gaon-guest-build` and its
+  final stage is first built by a release (ADR-0156). The web one is
+  the image a release used to be able to fail on irreversibly: the
+  server image was pushed before the web image was built, and
+  immutability makes the repair the next version (ADR-0039
+  §Consequences). `release.yml` builds all eight and pushes none until
+  all are built (#945), so what a build failure there now costs is the
+  run. Until #850 no image was built by any check.
 - **A pull request's image builds take their layers from the GitHub
   Actions cache and their bases from `mirror.gcr.io`.**
   The `suites` jobs' `make -C <module> stack-up` and `images`'
@@ -340,7 +345,7 @@ on hosted runners.
   hosted runners share. Its `429 toomanyrequests: Data limit exceeded`
   failed both attempts of v0.4.0's release run 39120748198 (#1532).
 - **No run here reaches a deployment, so `main` is not what a caller
-  meets.** `release.yml` publishes six images on a `vX.Y.Z` tag and no
+  meets.** `release.yml` publishes eight images on a `vX.Y.Z` tag and no
   other workflow pushes one, so a merge to `main` publishes nothing;
   an operator pushes the test image, from a checkout, to an ECR
   repository no deployment pulls (ADR-0092, ADR-0093);
@@ -1332,7 +1337,8 @@ ADRs:
   rewrite is made in each app's `proxy.ts` from `GARAM_API_URL`, no
   image holds an address and none is bound to a release name, an unset
   address answers every request with 500, probes included, and
-  `chart-rewrite` is removed; a release publishes six images; supersedes
+  `chart-rewrite` is removed; a release publishes six images (eight
+  since 0156); supersedes
   0056 in full, 0039's bound-to-one-API-URL consequence and 0134's
   site-bakes-the-address sentence
 - [0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)
@@ -1377,3 +1383,11 @@ ADRs:
   and checked in `make -C deploy/charts ci` against the settings the
   source reads and a list of the fields gaon's files name; accepted,
   built in `deploy/charts/garam-gaon/`; supersedes nothing
+- [0156](./adr/0156-a-release-publishes-eight-images-and-a-pull-request-builds-the-guest-only-to-its-build-stage.md)
+  — a release publishes eight images, the six and `garam/gaon-operator`
+  and `garam/gaon-guest`, all or none; the guest reads three private
+  images by digest, the adapter being `garam/server` of an earlier
+  release, and a pull request builds it only to its `build` stage under
+  `garam/gaon-guest-build`, which leaves its final stage unproven until
+  a release; accepted, built in `release.yml`; supersedes 0150's six
+  images and 0134's §Decision 6 for the guest, in part

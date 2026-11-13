@@ -18,6 +18,15 @@
 # before anything is built. The resulting references are what a person
 # pushes; this script pushes nothing.
 #
+# `--only <repository>` builds that one image, for a caller needing a
+# single image as the release builds it (gaon-operator's guest-run).
+#
+# `--public-only` is for a run with no credential for the private
+# registry. An image whose Dockerfile pulls from it (the guest's three
+# sources, ADR-0156) is built only to its `build` stage, under
+# `<repository>-build`, a name that cannot be read as the image the
+# release publishes; the rest are built as usual.
+#
 # `--cache gha` reads and writes each image's layers in the GitHub
 # Actions cache, scoped by repository, and loads the result into the
 # image store (#1519).
@@ -30,10 +39,12 @@ registry=
 devtag=
 dev=false
 cache=
+only=
+public_only=false
 
 usage() {
 	echo "image-build: $1" >&2
-	echo 'usage: tooling/image-build.sh [--names] [--registry <host> [--tag <tag>]] [--cache gha]' >&2
+	echo 'usage: tooling/image-build.sh [--names] [--registry <host> [--tag <tag>]] [--only <repository>] [--public-only] [--cache gha]' >&2
 	exit 2
 }
 
@@ -50,6 +61,12 @@ while [ $# -gt 0 ]; do
 		devtag=$2 dev=true
 		shift
 		;;
+	--only)
+		[ $# -gt 1 ] || usage '--only takes a repository'
+		only=$2
+		shift
+		;;
+	--public-only) public_only=true ;;
 	--cache)
 		[ $# -gt 1 ] && [ "$2" = gha ] || usage '--cache takes gha, the one cache it can name'
 		cache=$2
@@ -162,20 +179,44 @@ ref() {
 	echo "${registry:+$registry/}$1:$tag"
 }
 
+if [ -n "$only" ]; then
+	images=$(printf '%s\n' "$images" | awk -v r="$only" '$1 == r')
+	[ -n "$images" ] || {
+		echo "image-build: $workflow builds no image named $only" >&2
+		exit 1
+	}
+fi
+
+# With --public-only, an image whose Dockerfile names the private
+# registry stops at its `build` stage and takes `<repository>-build`.
+# The stage must exist: an image that cannot be reduced is refused
+# rather than built whole and failing on a pull.
+private() {
+	[ "$public_only" = true ] && grep -q 'dkr\.ecr\.' "$1"
+}
+while read -r repository _ file _; do
+	if private "$file" && ! grep -Eq '^FROM .* AS build$' "$file"; then
+		refuse "$file pulls from the private registry and has no build stage for --public-only to stop at"
+	fi
+done <<EOF
+$images
+EOF
+
 # A development build passes a value for every per-run argument, and
-# it knows two. Any other is refused here rather than after the first
+# it knows three. Any other is refused here rather than after the first
 # image has been built.
 if [ "$dev" = true ]; then
 	for arg in $(printf '%s\n' "$images" | awk '$4 != "-" { print $4 }' | tr ',' ' '); do
 		case $arg in
-		IMAGE_REVISION | IMAGE_VERSION) ;;
+		IMAGE_REVISION | IMAGE_VERSION | REVISION) ;;
 		*) refuse "$workflow resolves $arg per run and a development build has no value for it" ;;
 		esac
 	done
 fi
 
 if [ "$names" = true ]; then
-	while read -r repository context _; do
+	while read -r repository context file _; do
+		if private "$file"; then repository=$repository-build; fi
 		echo "$context $(ref "$repository")"
 	done <<EOF
 $images
@@ -202,8 +243,12 @@ while read -r repository context file perrun args; do
 		echo "image-build: $workflow gives $repository no context or no Dockerfile" >&2
 		exit 1
 	}
-	image=$(ref "$repository")
 	set --
+	if private "$file"; then
+		repository=$repository-build
+		set -- --target build
+	fi
+	image=$(ref "$repository")
 	for arg in $args; do set -- "$@" --build-arg "$arg"; done
 	for arg in $(printf '%s' "$perrun" | tr ',' ' '); do
 		[ "$arg" != - ] || continue
@@ -212,7 +257,7 @@ while read -r repository context file perrun args; do
 			continue
 		fi
 		case $arg in
-		IMAGE_REVISION) set -- "$@" --build-arg "IMAGE_REVISION=$revision" ;;
+		IMAGE_REVISION | REVISION) set -- "$@" --build-arg "$arg=$revision" ;;
 		IMAGE_VERSION) set -- "$@" --build-arg "IMAGE_VERSION=$tag" ;;
 		esac
 	done

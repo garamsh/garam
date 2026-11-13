@@ -1,0 +1,10 @@
+# Build context for deploy/local/Dockerfile.gaon-operator, the
+# repository root. The build compiles the gaon-operator module and the
+# libraries its go.mod replaces.
+*
+!gaon-operator
+!lib/errorx
+!lib/grn
+!lib/platform-sdk-go
+gaon-operator/guest
+gaon-operator/docs

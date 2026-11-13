@@ -20,6 +20,8 @@ repo=$scratch/repo
 mkdir -p "$repo/tooling" "$repo/.github/workflows" "$scratch/bin"
 cp tooling/image-build.sh "$repo/tooling/"
 cp .github/workflows/release.yml "$repo/.github/workflows/"
+mkdir -p "$repo/gaon-operator/guest"
+cp gaon-operator/guest/Dockerfile "$repo/gaon-operator/guest/"
 git -C "$repo" init -q
 git -C "$repo" -c user.name=test -c user.email=test@invalid add -A
 git -C "$repo" -c user.name=test -c user.email=test@invalid commit -qm scratch
@@ -83,7 +85,7 @@ reg=registry.invalid
 # Every image the release publishes, under the repository it publishes
 # to. A development build takes those repositories in the registry it
 # is given, and its tag alone says it is not a release.
-for repository in garam/server garam/console garam/site garam/cowork garam/cowork-web garam/policy; do
+for repository in garam/server garam/console garam/site garam/cowork garam/cowork-web garam/policy garam/gaon-operator garam/gaon-guest; do
 	accepted ". $repository:ci" --names
 	accepted ". $reg/$repository:$short" --names --registry "$reg"
 done
@@ -123,10 +125,12 @@ elif ! grep -Fq -- "build -t $reg/garam/server:1.2.3-rc.1 -f deploy/local/Docker
 	|| ! grep -Fq -- "build -t $reg/garam/cowork:1.2.3-rc.1 -f deploy/local/Dockerfile.cowork " "$log" \
 	|| ! grep -Fq -- "build -t $reg/garam/cowork-web:1.2.3-rc.1 -f deploy/local/Dockerfile.web --build-arg APP=cowork-web --build-arg IMAGE_REVISION=$head " "$log" \
 	|| ! grep -Fq -- "build -t $reg/garam/policy:1.2.3-rc.1 -f deploy/local/Dockerfile.policy --build-arg IMAGE_REVISION=$head " "$log" \
+	|| ! grep -Fq -- "build -t $reg/garam/gaon-operator:1.2.3-rc.1 -f deploy/local/Dockerfile.gaon-operator --build-arg IMAGE_REVISION=$head " "$log" \
+	|| ! grep -Fq -- "build -t $reg/garam/gaon-guest:1.2.3-rc.1 -f gaon-operator/guest/Dockerfile --build-arg REVISION=$head " "$log" \
 	|| ! grep -Fq -- "--build-arg IMAGE_REVISION=$head --build-arg IMAGE_VERSION=1.2.3-rc.1 " "$log"; then
 	fail "built with other arguments: $(cat "$log")"
-elif [ "$(grep -c '^build ' "$log")" != 6 ]; then
-	fail "built other than the six images a release publishes: $(cat "$log")"
+elif [ "$(grep -c '^build ' "$log")" != 8 ]; then
+	fail "built other than the eight images a release publishes: $(cat "$log")"
 fi
 touch "$repo/untracked"
 refused 'differs from HEAD' --registry "$reg" --tag 1.2.3-rc.1
@@ -152,12 +156,53 @@ if ! run --registry "$reg" --tag 1.2.3-rc.1 || ! grep -q '^build ' "$log"; then
 fi
 rm "$scratch/bin/git"
 
+# --public-only stops an image that pulls from the private registry at
+# its build stage and names it so it cannot be read as the release's
+# image; every other image is built as without the flag.
+accepted ". garam/gaon-guest-build:ci" --names --public-only
+accepted ". $reg/garam/gaon-guest-build:$short" --names --public-only --registry "$reg"
+accepted ". garam/server:ci" --names --public-only
+cases=$((cases + 1))
+if ! run --public-only; then
+	fail 'refused the public-only build'
+elif ! grep -Fq -- 'build -t garam/gaon-guest-build:ci -f gaon-operator/guest/Dockerfile --target build .' "$log" \
+	|| grep -Fq -- 'garam/gaon-guest:ci' "$log" \
+	|| ! grep -Fq -- 'build -t garam/gaon-operator:ci -f deploy/local/Dockerfile.gaon-operator .' "$log" \
+	|| [ "$(grep -c -- '--target' "$log")" != 1 ] \
+	|| [ "$(grep -c '^build ' "$log")" != 8 ]; then
+	fail "public-only build ran other arguments: $(cat "$log")"
+fi
+cases=$((cases + 1))
+if ! run; then
+	fail 'refused the full build'
+elif grep -Fq -- '--target' "$log" \
+	|| ! grep -Fq -- 'build -t garam/gaon-guest:ci -f gaon-operator/guest/Dockerfile .' "$log"; then
+	fail "the build without --public-only stopped at a stage: $(cat "$log")"
+fi
+
+# An image that pulls from the private registry and has no build stage
+# is refused before anything is built, rather than built whole.
+sed 's/ AS build$//' "$repo/gaon-operator/guest/Dockerfile" >"$scratch/Dockerfile.nostage"
+cp "$repo/gaon-operator/guest/Dockerfile" "$scratch/Dockerfile.keep"
+cp "$scratch/Dockerfile.nostage" "$repo/gaon-operator/guest/Dockerfile"
+refused 'has no build stage' --public-only
+cp "$scratch/Dockerfile.keep" "$repo/gaon-operator/guest/Dockerfile"
+
+# --only builds the one image and refuses a name the release lacks.
+cases=$((cases + 1))
+if ! run --only garam/gaon-guest; then
+	fail 'refused --only garam/gaon-guest'
+elif [ "$(grep -c '^build ' "$log")" != 1 ] || ! grep -Fq -- 'build -t garam/gaon-guest:ci ' "$log"; then
+	fail "--only built other than the one image: $(cat "$log")"
+fi
+refused 'builds no image named garam/nothing' --only garam/nothing
+
 # The check's build passes neither per-run argument.
 cases=$((cases + 1))
 if ! run; then
 	fail 'refused the check build'
 elif ! grep -Fq -- 'build -t garam/server:ci -f deploy/local/Dockerfile .' "$log" \
-	|| grep -q IMAGE_ "$log"; then
+	|| grep -q 'IMAGE_\|REVISION' "$log"; then
 	fail "check build ran other arguments: $(cat "$log")"
 fi
 

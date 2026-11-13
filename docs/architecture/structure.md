@@ -108,8 +108,9 @@ on are boundaries inside a service.
   its module, the binary `cmd/gaon-operator` and its documents
   ([gaon-operator.md](../../gaon-operator/docs/gaon-operator.md)). The
   reconciler is built; the binary refuses to start until garam's machine
-  client and the control feed client exist, and the image
-  `garam/gaon-operator` is not yet built.
+  client and the control feed client exist, and the images
+  `garam/gaon-operator` and `garam/gaon-guest` are built by a release
+  (ADR-0156).
 - **Dependencies point toward `platform/`**, and none points back.
   `policy/` (ADR-0130, built in part) sits below it: the platform and
   cowork are to call `policy/`, and `policy/` calls no service.

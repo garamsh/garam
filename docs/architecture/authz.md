@@ -216,9 +216,11 @@ true of the platform.
   optional `agent` it holds, a principal of `iam:agent.activate` alone,
   and a system policy permits it that action where the resource is that
   agent. The policy service holds this half (#1905), correcting row 6
-  of ADR-0146's inventory; the platform does not yet feed a supervisor
-  and still decides its activation itself in
-  `lifecycleAuthorization.supervising`. Only an
+  of ADR-0146's inventory. The platform feeds the supervisor and the
+  agent it holds (#1917, §Supervisors under Delivery), and still
+  decides its activation itself in
+  `lifecycleAuthorization.supervising`: the policy service holds the
+  entity and no request asks it about it yet. Only an
   owner writes a `permit`, so an administrator keeps assigning the
   roles it holds and writing guardrails and no longer writes an
   `Allow`.
@@ -581,19 +583,23 @@ are), creating and deleting a group or a project, adding and removing
 a member of either, registering and deleting an operator, writing and
 ending an operator's delegation, granting and withdrawing a
 consent, registration, accepting an invitation, the first sign-in
-that created the user, and on the machine listener creating a managed
-agent, admitting an enrollment of a new agent and enrolling a new
-standalone agent. A request that raised several marks names them in one
-list, role links and scoped links included, and waits under one bound.
-A repeat sign-in, a replacement of an agent that exists (the store
-says which an enrollment was by `EnrollmentResult.Replaced`), a rename,
-and every other write raise no mark and answer at once, whatever older
-mark is set aside. A first sign-in that created the user waits up to the
-bound and then redirects as on success, logging the mark still
-pending: its session is set and a redirect cannot carry a 503, and the
-first request that needs the user in the service waits on the mark
-again. Registration and accepting an invitation keep the 503. The
-machine process holds a gate with no loop (`NewObservingGate`) over the
+that created the user, revoking a standalone host's supervisor
+(`Iam::Supervisor`), and on the machine listener creating a managed
+agent, admitting an enrollment of a new agent, admitting one that
+replaces an agent a supervisor holds (on that supervisor's mark) and
+enrolling a standalone agent, new, replaced or replayed, on the new
+supervisor's mark and also on the agent's when it is new. A request
+that raised several marks names them in one list, role links and
+scoped links included, and waits under one bound. A repeat sign-in, an
+admission that replaces an operator's agent (the store says which an
+enrollment was by `EnrollmentResult.Replaced`), a rename, a withdrawal
+of an approval no host has spent, and every other write raise no mark
+and answer at once, whatever older mark is set aside. A first sign-in
+that created the user waits up to the bound and then redirects as on
+success, logging the mark still pending: its session is set and a
+redirect cannot carry a 503, and the first request that needs the user
+in the service waits on the mark again. Registration and accepting an
+invitation keep the 503. The machine process holds a gate with no loop (`NewObservingGate`) over the
 same outbox, installed whether or not the feed is on: it answers when
 the api's loop has delivered, at once with the feed off, and with the
 feed on and no deliverer every create answers `503` at the bound for
@@ -603,12 +609,13 @@ to that long. With the feed off no route waits, and an api with no
 policy address has no gate; the machine listener's gate is always
 there.
 
-`garam policy-feed start` marks every membership, group and project
-with the rest of the backfill, and so do migrations 000075 and 000079
-for a feed already on, both raising a mark's generation if it is
-there, so running them again rewrites the same policies and no second
-one. Migration 000079's down leaves the scoped links already written,
-as 000075's leaves a member's.
+`garam policy-feed start` marks every membership, group, project and
+supervisor registration, ended or not, with the rest of the backfill,
+and so
+do migrations 000075, 000079 and 000080 for a feed already on, each
+raising a mark's generation if it is there, so running them again
+rewrites the same policies and no second one. Migration 000079's down
+leaves the scoped links already written, as 000075's leaves a member's.
 
 **What stays when the feed is turned off and on.** `stop` empties the
 outbox and the triggers mark nothing while the feed is off, and
@@ -737,6 +744,64 @@ Who decides an operator's authority is unchanged: the `CheckCurrent`
 consumers, the minting of an operation authority and the controller
 proof read the platform's grant, not the attribute. Their own round
 removes that.
+
+#### Supervisors
+
+A standalone host's supervisor is fed as ADR-0164 states (migration
+000080): one `Iam::Supervisor` per registration in
+`agent_supervisors`, with parents `Iam::OrgMembers` and `Iam::Org`,
+the `org` attribute, and `agent`, the agent it holds.
+`policy_entity_state` reads all of it back from the relations at each
+delivery, and the pass sends `agent` as `EntityUpsert.agent`.
+
+**What `agent` is.** The agent the registration names
+(`agent_supervisors.agent_grn`), while the registration is current
+(`ended_at` is null) and `agent_assignments` assigns that agent to this
+supervisor. A current registration whose agent is assigned elsewhere
+(an operator took it by a replacement) is fed with no `agent`, so the
+policy service allows it nothing. This is the test
+`lifecycleAuthorization.supervising` applies, which still decides: no
+request asks the policy service about a supervisor yet, and its tests
+are unchanged. A registration that has ended has no state, so its
+entity is deleted. The organization comes from the agent's row.
+
+No mark kind is added. A trigger on `agent_supervisors` marks the
+registration's supervisor on an insert, a delete and a change of
+`ended_at` or `agent_grn`: enrolling, revoking, replacing and the
+cascade that deletes registrations with an agent or an organization.
+A trigger on `agent_assignments` marks the supervisor that is the
+assignee, the old one and the new one, on an insert, a delete and a
+change of `assignee_grn`, so an agent moved off a supervisor, or onto
+one, is delivered. Any other column (a host's name) marks nothing, and
+neither does withdrawing an approval no host has spent, which writes
+no registration.
+
+**The routes wait on their own marks.** Revoking a supervisor waits on
+its mark, and so do enrolling a standalone agent, a replay and a
+replacement included, and an admission that replaces an agent a
+supervisor holds, as §Delivery says, with the same 503
+`change_not_applied` at 5 seconds. ADR-0165 item 5 says a replacement
+raises no mark; that held while only an agent and its memberships were
+fed, and no longer holds for a replaced supervisor, which item 1
+covers: wait on the marks the write raised. An organization delete
+records the supervisors it takes as it records the rest.
+
+**What stays when the feed is turned off and on.** `start` marks every
+registration, so a supervisor enrolled or moved while the feed was off
+is written, and one revoked while it was off is deleted: an ended
+registration has no state and is delivered as a delete, which the
+service takes as the removal of an entity it may not hold. What stays
+is only what has no row to enumerate, a registration deleted by the
+cascade from a deleted agent or organization while the feed was off
+(ADR-0140's case, as for a membership): its entity stays in the
+policy service as it was when last delivered. Delete agents and
+organizations only with the feed on, and let the outbox empty.
+
+Migration 000080 takes `agent_supervisors` and `agent_assignments`
+in share mode and marks every registration for a feed that is already
+on, raising a mark's generation if it is there. Its down
+removes the triggers and the supervisor marks and leaves the entities
+already written.
 
 ### The signer
 

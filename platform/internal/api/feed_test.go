@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
@@ -350,4 +351,32 @@ func TestScopedRoles_AnswerUnavailableWhileTheScopedLinkIsNotApplied(t *testing.
 			assert.Equal(t, http.StatusNotFound, rec.Code, "the deletion is stored whatever the wait said")
 		})
 	}
+}
+
+// TestRevokeAgentSupervisor_AnswersUnavailableWhileTheDeleteIsNotApplied
+// holds the wait of the request that ends a standalone host's
+// registration (ADR-0164): it asks the gate about that supervisor's
+// entity and nothing else, after the service ended it, and at the bound
+// the answer is 503 naming the organization.
+//
+// The clear gate is the control: the same request is 204.
+func TestRevokeAgentSupervisor_AnswersUnavailableWhileTheDeleteIsNotApplied(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	acme := orgGRNOf(slug)
+	supervisor := grn.New(slug, "supervisor", "0a1b2c3d4e5f6071")
+	f.standalone.EXPECT().Revoke(mock.Anything, userGRNOf("owner-sub"), acme, supervisor).Return(nil).Twice()
+	gate := &recordingGate{}
+	f.server.WithFeed(gate)
+	path := "/orgs/" + slug + "/agent-supervisors/0a1b2c3d4e5f6071"
+	mark := policyfeed.Entity{Type: policyfeed.SupervisorType, ID: supervisor.String()}
+
+	rec := f.do(t, "DELETE", path, "", owner)
+	require.Equal(t, http.StatusNoContent, rec.Code, "the revocation is in force")
+	require.Equal(t, [][]policyfeed.Entity{{mark}}, gate.marked)
+
+	gate.err = policyfeed.ErrNotApplied
+	rec = f.do(t, "DELETE", path, "", owner)
+	notApplied(t, rec, acme)
 }

@@ -13,6 +13,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/listfilter"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 )
 
 // ApproveAgentEnrollment records an administrator's approval of what a
@@ -117,7 +118,9 @@ func (s *Server) WithdrawAgentEnrollment(w http.ResponseWriter, r *http.Request,
 }
 
 // RevokeAgentSupervisor ends a standalone host's supervisor and the
-// activation its agent runs under.
+// activation its agent runs under. It waits for the supervisor's
+// delete in the policy service (ADR-0164), which a repeat of an
+// ended registration finds delivered already.
 func (s *Server) RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, supervisorSlug string) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -130,6 +133,11 @@ func (s *Server) RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, o
 		return
 	}
 	if err := s.standalone.Revoke(r.Context(), u.GRN, orgGRN(orgSlug), supervisor); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(),
+		policyfeed.Entity{Type: policyfeed.SupervisorType, ID: supervisor.String()}); err != nil {
 		writeError(w, err)
 		return
 	}

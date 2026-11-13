@@ -42,7 +42,7 @@ WHERE set_aside_at IS NULL
 ORDER BY entity_type, entity_id LIMIT $1`
 
 const readState = `SELECT org, members, parent_types, parent_ids, consent_ids,
-	operations FROM policy_entity_state($1, $2)`
+	operations, agent FROM policy_entity_state($1, $2)`
 
 const nextSequence = `SELECT nextval('policy_feed_sequence')`
 
@@ -301,8 +301,9 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 		types, ids   []string
 		consents     []string
 		operations   []string
+		agent        *string
 	)
-	switch err := row.Scan(&org, &members, &types, &ids, &consents, &operations); {
+	switch err := row.Scan(&org, &members, &types, &ids, &consents, &operations, &agent); {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, nil
 	case err != nil:
@@ -314,6 +315,9 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 	}
 	if org != nil {
 		state.Org = &policyfeed.Entity{Type: "Iam::Org", ID: *org}
+	}
+	if agent != nil {
+		state.Agent = &policyfeed.Entity{Type: "Iam::Agent", ID: *agent}
 	}
 	if members != nil {
 		state.Members = &policyfeed.Entity{Type: "Iam::OrgMembers", ID: *members}

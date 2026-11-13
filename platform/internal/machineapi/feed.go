@@ -17,17 +17,27 @@ func (s *Server) WithFeed(gate policyfeed.Gate) *Server {
 	return s
 }
 
-// awaitAgent holds the answer of a request that has committed the
-// creation of agent until the policy service has applied its entity,
-// which every later request of the agent is decided from. The agent is
-// stored whatever it returns. At the bound the answer is the 503 every
-// route here gives for what it cannot yet read as current, and its
-// caller repeats the request under the same `requestId`: a replay
-// answers what the first stored and waits again. This surface lists no
-// reason for it (ADR-0086), so the body carries the kind alone.
-func (s *Server) awaitAgent(ctx context.Context, agent grn.GRN) error {
-	if s.feed == nil {
+// awaitMarks holds the answer of a request that has committed a change
+// until the policy service has applied the entities it marked, which
+// every later request is decided from. The change is stored whatever
+// it returns. At the bound the answer is the 503 every route here gives
+// for what it cannot yet read as current, and its caller repeats the
+// request under the same `requestId`: a replay answers what the first
+// stored and waits again. This surface lists no reason for it
+// (ADR-0086), so the body carries the kind alone.
+func (s *Server) awaitMarks(ctx context.Context, marks ...policyfeed.Entity) error {
+	if s.feed == nil || len(marks) == 0 {
 		return nil
 	}
-	return s.feed.AwaitMarks(ctx, []policyfeed.Entity{{Type: policyfeed.AgentType, ID: agent.String()}})
+	return s.feed.AwaitMarks(ctx, marks)
+}
+
+// agentMark is the mark of an agent's entity, and supervisorMark the
+// mark of a supervisor's (ADR-0164).
+func agentMark(g grn.GRN) policyfeed.Entity {
+	return policyfeed.Entity{Type: policyfeed.AgentType, ID: g.String()}
+}
+
+func supervisorMark(g grn.GRN) policyfeed.Entity {
+	return policyfeed.Entity{Type: policyfeed.SupervisorType, ID: g.String()}
 }

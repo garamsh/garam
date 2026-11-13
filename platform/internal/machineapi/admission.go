@@ -13,6 +13,7 @@ import (
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 
@@ -84,19 +85,33 @@ func (s *Server) AdmitAgentEnrollment(w http.ResponseWriter, r *http.Request, ap
 		return
 	}
 	c := approval.Admitted
-	// A replacement moves an agent that exists and raises no mark, so
-	// it is answered at once whatever an older mark of the agent says.
-	if approval.Binding.Replaces == nil {
-		if err := s.awaitAgent(r.Context(), c.Agent); err != nil {
-			writeError(w, withinBudget(r, err))
-			return
-		}
+	// A new agent raises its mark. A replacement moves an agent that
+	// exists, which raises none of the agent's, and when the assignee
+	// it replaces is a supervisor the move changes what that supervisor
+	// holds (ADR-0164), so it waits for that mark alone.
+	if err := s.awaitMarks(r.Context(), admissionMarks(approval)...); err != nil {
+		writeError(w, withinBudget(r, err))
+		return
 	}
 	writeJSON(w, createdOrReplayed(created), machinegen.AgentAdmission{
 		Grn: c.Agent.String(), Placement: machinegen.AgentAdmissionPlacement(approval.Binding.Placement),
 		Assignee: c.Controller.String(), Epoch: strconv.Itoa(c.Epoch), Lineage: openapi_types.UUID(c.Lineage),
 		Mode: machinegen.AgentAdmissionModeFenced, CredentialDelivery: machinegen.MintAgentToken,
 	})
+}
+
+// admissionMarks are the marks an admission raised that its answer
+// waits for: the agent's when it is new, and the replaced assignee's
+// when that is a supervisor.
+func admissionMarks(approval *agent.EnrollmentApproval) []policyfeed.Entity {
+	r := approval.Binding.Replaces
+	switch {
+	case r == nil:
+		return []policyfeed.Entity{agentMark(approval.Admitted.Agent)}
+	case r.Assignee.ServiceType == agent.ServiceTypeSupervisor:
+		return []policyfeed.Entity{supervisorMark(r.Assignee)}
+	}
+	return nil
 }
 
 // admissionParties stamps agent-enrollment.v1 on the answer and

@@ -1,20 +1,24 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use sqlx::{PgExecutor, PgPool, Postgres, Transaction};
 
 use crate::error::Error;
+use crate::queue::{Counters, Counts, Queue};
 use crate::read::{self, Page, RETENTION_DAYS};
 
 /// How many live denial records an organization holds. Past it a
 /// denial that matches none is counted in its day's overflow record.
 pub const MAX_LIVE_DENIALS: i64 = 10_000;
 
-/// How long a denial's record may take before the denial is answered
-/// without it and counted as lost. Short, because the answer waits on
-/// it: an authorization answer is not worth a longer wait than this to
-/// an audit trail.
+/// How many denials wait for their record at once. A denial offered
+/// to a full queue is answered and counted as lost.
+pub const QUEUE_CAPACITY: usize = 4096;
+
+/// How long the queue's worker gives one denial's record before it is
+/// given up and counted as lost, so a blocked record delays those
+/// behind it by no more than this and holds no connection longer.
 pub const RECORD_BOUND: Duration = Duration::from_secs(2);
 
 /// The longest a denial's subject, action or resource may be, in
@@ -65,87 +69,170 @@ pub enum Recorded {
     Lost,
 }
 
+/// What became of a denial offered to the queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Noted {
+    /// It waits for the worker, which records it.
+    Queued,
+    /// The queue was full or stopped: the denial is not recorded and
+    /// is counted as lost.
+    Lost,
+}
+
+/// What the worker writes a denial with: the database, the bound on a
+/// record and the counts. It holds nothing of the queue, so the queue
+/// closes when the last [`Recorder`] goes.
+#[derive(Debug, Clone)]
+pub(crate) struct Store {
+    pool: PgPool,
+    bound: Duration,
+    pub(crate) counters: Arc<Counters>,
+}
+
 /// Records denials and reads and sweeps the records. A denial's record
-/// never changes the denial's answer: a failure to write it is logged
-/// and counted here and goes no further.
+/// never changes the denial's answer: [`Recorder::note`] only queues
+/// it, and a failure to write it is logged and counted here and goes
+/// no further.
 #[derive(Debug, Clone)]
 pub struct Recorder {
-    pool: PgPool,
-    lost: Arc<AtomicU64>,
-    omitted: Arc<AtomicU64>,
-    bound: Duration,
+    store: Store,
+    capacity: usize,
+    queue: Arc<OnceLock<Queue>>,
 }
 
 impl Recorder {
     /// A recorder over the service's database.
     pub fn new(pool: PgPool) -> Self {
         Self {
-            pool,
-            lost: Arc::default(),
-            omitted: Arc::default(),
-            bound: RECORD_BOUND,
+            store: Store {
+                pool,
+                bound: RECORD_BOUND,
+                counters: Arc::default(),
+            },
+            capacity: QUEUE_CAPACITY,
+            queue: Arc::default(),
         }
     }
 
     /// This recorder, giving a denial's record `bound` instead of
-    /// [`RECORD_BOUND`].
+    /// [`RECORD_BOUND`]. Set before the first [`Recorder::note`]: the
+    /// worker takes it then.
     #[must_use]
     pub fn bounded(mut self, bound: Duration) -> Self {
-        self.bound = bound;
+        self.store.bound = bound;
         self
     }
 
-    /// How many denials could not be recorded since start.
+    /// This recorder, queueing `capacity` denials (at least one)
+    /// instead of [`QUEUE_CAPACITY`]. Set before the first
+    /// [`Recorder::note`].
+    #[must_use]
+    pub fn queueing(mut self, capacity: usize) -> Self {
+        self.capacity = capacity.max(1);
+        self
+    }
+
+    /// How many denials could not be recorded since start: a record
+    /// that failed or passed its bound, a denial offered to a full
+    /// queue, and those still queued when the service stopped.
     pub fn lost(&self) -> u64 {
-        self.lost.load(Ordering::Relaxed)
+        self.counts().lost
     }
 
     /// How many denials were left unrecorded since start because no
     /// organization of the store's is the resource's or a field was
     /// too long.
     pub fn omitted(&self) -> u64 {
-        self.omitted.load(Ordering::Relaxed)
+        self.counts().omitted
     }
 
-    /// Records one denial for the organization of its resource, and
-    /// answers within the recorder's bound, whatever the database
-    /// does.
+    /// Every count the recorder keeps, as of now.
+    pub fn counts(&self) -> Counts {
+        self.store.counters.snapshot()
+    }
+
+    /// Queues one denial and answers at once, whatever the database
+    /// does: the worker records it. A full queue answers
+    /// [`Noted::Lost`] and counts the denial as lost and as
+    /// `queue_full`. The first call starts the worker, so it runs
+    /// inside a Tokio runtime.
+    pub fn note(&self, denial: &Denial<'_>) -> Noted {
+        let queue = self
+            .queue
+            .get_or_init(|| Queue::start(self.store.clone(), self.capacity));
+        queue.offer(&self.store.counters, denial)
+    }
+
+    /// Waits until every denial noted before this call has been
+    /// recorded or given up, for at most `within`, and answers whether
+    /// it did.
+    pub async fn settled(&self, within: Duration) -> bool {
+        match self.queue.get() {
+            Some(queue) => queue.settled(within).await,
+            None => true,
+        }
+    }
+
+    /// Stops the queue at shutdown: waits `within` for it to empty,
+    /// then abandons what is left, counts it as lost, and answers how
+    /// many that was.
+    pub async fn finish(&self, within: Duration) -> u64 {
+        match self.queue.get() {
+            Some(queue) => queue.finish(&self.store.counters, within).await,
+            None => 0,
+        }
+    }
+
+    /// Records one denial for the organization of its resource, now,
+    /// and answers within the recorder's bound, whatever the database
+    /// does. The queue's worker is its caller.
     pub async fn deny(&self, denial: &Denial<'_>) -> Recorded {
-        match tokio::time::timeout(self.bound, self.store(denial)).await {
+        self.store.deny(denial).await
+    }
+
+    /// An organization's records, newest first, `limit` at a time
+    /// after the record `after` names.
+    pub async fn list(&self, org: &str, after: Option<i64>, limit: i64) -> Result<Page, Error> {
+        read::list(&self.store.pool, org, after, limit).await
+    }
+
+    /// Removes the denials past their retention, and answers how many
+    /// went. A write's record stays.
+    pub async fn sweep(&self) -> Result<u64, Error> {
+        read::sweep(&self.store.pool).await
+    }
+}
+
+impl Store {
+    pub(crate) async fn deny(&self, denial: &Denial<'_>) -> Recorded {
+        let counters = &self.counters;
+        match tokio::time::timeout(self.bound, self.write(denial)).await {
             Ok(Ok(Recorded::Omitted)) => {
-                self.omitted.fetch_add(1, Ordering::Relaxed);
+                counters.omitted.fetch_add(1, Ordering::Relaxed);
                 tracing::warn!(
                     "a denial is left unrecorded: no held organization, or a field too long"
                 );
                 Recorded::Omitted
             }
+            Ok(Ok(Recorded::Overflowed)) => {
+                counters.overflowed.fetch_add(1, Ordering::Relaxed);
+                Recorded::Overflowed
+            }
             Ok(Ok(recorded)) => recorded,
             Ok(Err(error)) => {
-                self.lost.fetch_add(1, Ordering::Relaxed);
+                counters.lost.fetch_add(1, Ordering::Relaxed);
                 tracing::error!(error = ?error, "a denial could not be recorded");
                 Recorded::Lost
             }
             Err(_) => {
-                self.lost.fetch_add(1, Ordering::Relaxed);
+                counters.lost.fetch_add(1, Ordering::Relaxed);
                 tracing::error!(bound = ?self.bound, "a denial's record passed its bound");
                 Recorded::Lost
             }
         }
     }
 
-    /// An organization's records, newest first, `limit` at a time
-    /// after the record `after` names.
-    pub async fn list(&self, org: &str, after: Option<i64>, limit: i64) -> Result<Page, Error> {
-        read::list(&self.pool, org, after, limit).await
-    }
-
-    /// Removes the denials past their retention, and answers how many
-    /// went. A write's record stays.
-    pub async fn sweep(&self) -> Result<u64, Error> {
-        read::sweep(&self.pool).await
-    }
-
-    async fn store(&self, denial: &Denial<'_>) -> Result<Recorded, Error> {
+    async fn write(&self, denial: &Denial<'_>) -> Result<Recorded, Error> {
         let Some(org) = organization_of(denial.resource) else {
             return Ok(Recorded::Omitted);
         };

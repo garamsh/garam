@@ -14,6 +14,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	structpb "google.golang.org/protobuf/types/known/structpb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -286,6 +287,65 @@ func (PolicyStatus) EnumDescriptor() ([]byte, []int) {
 	return file_garam_policy_v1_policy_proto_rawDescGZIP(), []int{4}
 }
 
+// AuditRecordKind is what an audit record is.
+type AuditRecordKind int32
+
+const (
+	AuditRecordKind_AUDIT_RECORD_KIND_UNSPECIFIED AuditRecordKind = 0
+	// AUDIT_RECORD_KIND_WRITE is a write of a policy.
+	AuditRecordKind_AUDIT_RECORD_KIND_WRITE AuditRecordKind = 1
+	// AUDIT_RECORD_KIND_DENIAL is a denial, or the identical denials of
+	// one hour, counted.
+	AuditRecordKind_AUDIT_RECORD_KIND_DENIAL AuditRecordKind = 2
+	// AUDIT_RECORD_KIND_DENIAL_OVERFLOW counts the denials of one UTC day
+	// that the organization's cap stored no record for, and holds
+	// nothing else.
+	AuditRecordKind_AUDIT_RECORD_KIND_DENIAL_OVERFLOW AuditRecordKind = 3
+)
+
+// Enum value maps for AuditRecordKind.
+var (
+	AuditRecordKind_name = map[int32]string{
+		0: "AUDIT_RECORD_KIND_UNSPECIFIED",
+		1: "AUDIT_RECORD_KIND_WRITE",
+		2: "AUDIT_RECORD_KIND_DENIAL",
+		3: "AUDIT_RECORD_KIND_DENIAL_OVERFLOW",
+	}
+	AuditRecordKind_value = map[string]int32{
+		"AUDIT_RECORD_KIND_UNSPECIFIED":     0,
+		"AUDIT_RECORD_KIND_WRITE":           1,
+		"AUDIT_RECORD_KIND_DENIAL":          2,
+		"AUDIT_RECORD_KIND_DENIAL_OVERFLOW": 3,
+	}
+)
+
+func (x AuditRecordKind) Enum() *AuditRecordKind {
+	p := new(AuditRecordKind)
+	*p = x
+	return p
+}
+
+func (x AuditRecordKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AuditRecordKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_garam_policy_v1_policy_proto_enumTypes[5].Descriptor()
+}
+
+func (AuditRecordKind) Type() protoreflect.EnumType {
+	return &file_garam_policy_v1_policy_proto_enumTypes[5]
+}
+
+func (x AuditRecordKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AuditRecordKind.Descriptor instead.
+func (AuditRecordKind) EnumDescriptor() ([]byte, []int) {
+	return file_garam_policy_v1_policy_proto_rawDescGZIP(), []int{5}
+}
+
 // Subject is who asks. It carries no properties, unlike AuthZEN's: a
 // subject's attributes are the grounds a caller does not supply.
 type Subject struct {
@@ -461,8 +521,13 @@ type EvaluateRequest struct {
 	Resource *Resource              `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
 	// context is the request's context. The schema declares none yet, so
 	// a context holding a field is refused.
-	Context       *structpb.Struct `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
-	Read          Read             `protobuf:"varint,5,opt,name=read,proto3,enum=garam.policy.v1.Read" json:"read,omitempty"`
+	Context *structpb.Struct `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
+	Read    Read             `protobuf:"varint,5,opt,name=read,proto3,enum=garam.policy.v1.Read" json:"read,omitempty"`
+	// probe states that the question is a probe: the caller is deciding
+	// what to show, as when it filters a list or enables a control. A
+	// denied probe is not recorded (ADR-0148). The default is an
+	// attempt, a request someone made, and a denied attempt is.
+	Probe         bool `protobuf:"varint,6,opt,name=probe,proto3" json:"probe,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -530,6 +595,13 @@ func (x *EvaluateRequest) GetRead() Read {
 		return x.Read
 	}
 	return Read_READ_UNSPECIFIED
+}
+
+func (x *EvaluateRequest) GetProbe() bool {
+	if x != nil {
+		return x.Probe
+	}
+	return false
 }
 
 // Reason names one ground of a decision.
@@ -690,11 +762,13 @@ func (x *EvaluateResponse) GetContext() *DecisionContext {
 // Evaluation is one question of an EvaluationsRequest. A field left
 // unset takes the request's value, as AuthZEN's defaults do.
 type Evaluation struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Subject       *Subject               `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
-	Action        *Action                `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	Resource      *Resource              `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
-	Context       *structpb.Struct       `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Subject  *Subject               `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
+	Action   *Action                `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	Resource *Resource              `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
+	Context  *structpb.Struct       `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
+	// probe, where set, replaces the request's.
+	Probe         *bool `protobuf:"varint,5,opt,name=probe,proto3,oneof" json:"probe,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -757,15 +831,24 @@ func (x *Evaluation) GetContext() *structpb.Struct {
 	return nil
 }
 
+func (x *Evaluation) GetProbe() bool {
+	if x != nil && x.Probe != nil {
+		return *x.Probe
+	}
+	return false
+}
+
 // EvaluationsRequest holds the defaults its evaluations share.
 type EvaluationsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Subject       *Subject               `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
-	Action        *Action                `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	Resource      *Resource              `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
-	Context       *structpb.Struct       `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
-	Read          Read                   `protobuf:"varint,5,opt,name=read,proto3,enum=garam.policy.v1.Read" json:"read,omitempty"`
-	Evaluations   []*Evaluation          `protobuf:"bytes,6,rep,name=evaluations,proto3" json:"evaluations,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Subject     *Subject               `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
+	Action      *Action                `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	Resource    *Resource              `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
+	Context     *structpb.Struct       `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
+	Read        Read                   `protobuf:"varint,5,opt,name=read,proto3,enum=garam.policy.v1.Read" json:"read,omitempty"`
+	Evaluations []*Evaluation          `protobuf:"bytes,6,rep,name=evaluations,proto3" json:"evaluations,omitempty"`
+	// probe is the default of every entry, as EvaluateRequest's is.
+	Probe         bool `protobuf:"varint,7,opt,name=probe,proto3" json:"probe,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -840,6 +923,13 @@ func (x *EvaluationsRequest) GetEvaluations() []*Evaluation {
 		return x.Evaluations
 	}
 	return nil
+}
+
+func (x *EvaluationsRequest) GetProbe() bool {
+	if x != nil {
+		return x.Probe
+	}
+	return false
 }
 
 type EvaluationsResponse struct {
@@ -2384,11 +2474,306 @@ func (x *ListPoliciesResponse) GetPolicies() []*PolicySummary {
 	return nil
 }
 
+// AuditRecord is one record of an organization, all of it readable by
+// the organization's owners and administrators. It holds no policy
+// text, no context, no token and no fault text.
+type AuditRecord struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Kind  AuditRecordKind        `protobuf:"varint,2,opt,name=kind,proto3,enum=garam.policy.v1.AuditRecordKind" json:"kind,omitempty"`
+	// first_at is when a write was made or a denial first occurred.
+	FirstAt *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=first_at,json=firstAt,proto3" json:"first_at,omitempty"`
+	// last_at is when a denial last occurred, and a write's first_at.
+	LastAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
+	// count is how many identical denials the record holds; 1 for a
+	// write.
+	Count int64 `protobuf:"varint,5,opt,name=count,proto3" json:"count,omitempty"`
+	// service is the `sub` of the service that made the request. It is
+	// empty on an overflow record.
+	Service string `protobuf:"bytes,6,opt,name=service,proto3" json:"service,omitempty"`
+	// subject is the GRN of who asked or wrote, and empty for a write
+	// the service made with no writer and on an overflow record.
+	Subject string `protobuf:"bytes,7,opt,name=subject,proto3" json:"subject,omitempty"`
+	// action is in its qualified wire form, such as `iam:permit.write`.
+	Action string `protobuf:"bytes,8,opt,name=action,proto3" json:"action,omitempty"`
+	// resource is the GRN asked about; for a write, the policy's.
+	Resource string `protobuf:"bytes,9,opt,name=resource,proto3" json:"resource,omitempty"`
+	// outcome is `deny`, or `created`, `version-added`, `activated`,
+	// `rolled-back` or `removed`.
+	Outcome string `protobuf:"bytes,10,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	// policy_ids are the policies of a denial's reasons, with `fault`
+	// for a reason that is an evaluation fault; for a write, the
+	// policy.
+	PolicyIds []string `protobuf:"bytes,11,rep,name=policy_ids,json=policyIds,proto3" json:"policy_ids,omitempty"`
+	// version_from is the default a write moved from, or 0.
+	VersionFrom int32 `protobuf:"varint,12,opt,name=version_from,json=versionFrom,proto3" json:"version_from,omitempty"`
+	// version_to is the version a write wrote or moved to, or 0.
+	VersionTo int32 `protobuf:"varint,13,opt,name=version_to,json=versionTo,proto3" json:"version_to,omitempty"`
+	// day is the first second of the UTC day an overflow record holds.
+	Day           *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=day,proto3" json:"day,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuditRecord) Reset() {
+	*x = AuditRecord{}
+	mi := &file_garam_policy_v1_policy_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditRecord) ProtoMessage() {}
+
+func (x *AuditRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_garam_policy_v1_policy_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditRecord.ProtoReflect.Descriptor instead.
+func (*AuditRecord) Descriptor() ([]byte, []int) {
+	return file_garam_policy_v1_policy_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *AuditRecord) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *AuditRecord) GetKind() AuditRecordKind {
+	if x != nil {
+		return x.Kind
+	}
+	return AuditRecordKind_AUDIT_RECORD_KIND_UNSPECIFIED
+}
+
+func (x *AuditRecord) GetFirstAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FirstAt
+	}
+	return nil
+}
+
+func (x *AuditRecord) GetLastAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastAt
+	}
+	return nil
+}
+
+func (x *AuditRecord) GetCount() int64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *AuditRecord) GetService() string {
+	if x != nil {
+		return x.Service
+	}
+	return ""
+}
+
+func (x *AuditRecord) GetSubject() string {
+	if x != nil {
+		return x.Subject
+	}
+	return ""
+}
+
+func (x *AuditRecord) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *AuditRecord) GetResource() string {
+	if x != nil {
+		return x.Resource
+	}
+	return ""
+}
+
+func (x *AuditRecord) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *AuditRecord) GetPolicyIds() []string {
+	if x != nil {
+		return x.PolicyIds
+	}
+	return nil
+}
+
+func (x *AuditRecord) GetVersionFrom() int32 {
+	if x != nil {
+		return x.VersionFrom
+	}
+	return 0
+}
+
+func (x *AuditRecord) GetVersionTo() int32 {
+	if x != nil {
+		return x.VersionTo
+	}
+	return 0
+}
+
+func (x *AuditRecord) GetDay() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Day
+	}
+	return nil
+}
+
+// ListAuditRecordsRequest names the reader, who must hold
+// `iam:audit.read` on the organization.
+type ListAuditRecordsRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Writer *Subject               `protobuf:"bytes,1,opt,name=writer,proto3" json:"writer,omitempty"`
+	Org    string                 `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
+	// page_size is at most the service's bound, and 0 asks the bound.
+	PageSize int32 `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// page_token is the previous response's next_page_token.
+	PageToken     string `protobuf:"bytes,4,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAuditRecordsRequest) Reset() {
+	*x = ListAuditRecordsRequest{}
+	mi := &file_garam_policy_v1_policy_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAuditRecordsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAuditRecordsRequest) ProtoMessage() {}
+
+func (x *ListAuditRecordsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_garam_policy_v1_policy_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAuditRecordsRequest.ProtoReflect.Descriptor instead.
+func (*ListAuditRecordsRequest) Descriptor() ([]byte, []int) {
+	return file_garam_policy_v1_policy_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *ListAuditRecordsRequest) GetWriter() *Subject {
+	if x != nil {
+		return x.Writer
+	}
+	return nil
+}
+
+func (x *ListAuditRecordsRequest) GetOrg() string {
+	if x != nil {
+		return x.Org
+	}
+	return ""
+}
+
+func (x *ListAuditRecordsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListAuditRecordsRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListAuditRecordsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// records are newest first.
+	Records []*AuditRecord `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
+	// next_page_token reads the next page, and is empty at the end.
+	NextPageToken string `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAuditRecordsResponse) Reset() {
+	*x = ListAuditRecordsResponse{}
+	mi := &file_garam_policy_v1_policy_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAuditRecordsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAuditRecordsResponse) ProtoMessage() {}
+
+func (x *ListAuditRecordsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_garam_policy_v1_policy_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAuditRecordsResponse.ProtoReflect.Descriptor instead.
+func (*ListAuditRecordsResponse) Descriptor() ([]byte, []int) {
+	return file_garam_policy_v1_policy_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *ListAuditRecordsResponse) GetRecords() []*AuditRecord {
+	if x != nil {
+		return x.Records
+	}
+	return nil
+}
+
+func (x *ListAuditRecordsResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
 var File_garam_policy_v1_policy_proto protoreflect.FileDescriptor
 
 const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\n" +
-	"\x1cgaram/policy/v1/policy.proto\x12\x0fgaram.policy.v1\x1a\x1cgoogle/protobuf/struct.proto\"-\n" +
+	"\x1cgaram/policy/v1/policy.proto\x12\x0fgaram.policy.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"-\n" +
 	"\aSubject\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\"\x1c\n" +
@@ -2399,13 +2784,14 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x127\n" +
 	"\n" +
 	"properties\x18\x03 \x01(\v2\x17.google.protobuf.StructR\n" +
-	"properties\"\x8b\x02\n" +
+	"properties\"\xa1\x02\n" +
 	"\x0fEvaluateRequest\x122\n" +
 	"\asubject\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\asubject\x12/\n" +
 	"\x06action\x18\x02 \x01(\v2\x17.garam.policy.v1.ActionR\x06action\x125\n" +
 	"\bresource\x18\x03 \x01(\v2\x19.garam.policy.v1.ResourceR\bresource\x121\n" +
 	"\acontext\x18\x04 \x01(\v2\x17.google.protobuf.StructR\acontext\x12)\n" +
-	"\x04read\x18\x05 \x01(\x0e2\x15.garam.policy.v1.ReadR\x04read\";\n" +
+	"\x04read\x18\x05 \x01(\x0e2\x15.garam.policy.v1.ReadR\x04read\x12\x14\n" +
+	"\x05probe\x18\x06 \x01(\bR\x05probe\";\n" +
 	"\x06Reason\x12\x1b\n" +
 	"\tpolicy_id\x18\x01 \x01(\tR\bpolicyId\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"D\n" +
@@ -2413,20 +2799,23 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\areasons\x18\x01 \x03(\v2\x17.garam.policy.v1.ReasonR\areasons\"j\n" +
 	"\x10EvaluateResponse\x12\x1a\n" +
 	"\bdecision\x18\x01 \x01(\bR\bdecision\x12:\n" +
-	"\acontext\x18\x02 \x01(\v2 .garam.policy.v1.DecisionContextR\acontext\"\xdb\x01\n" +
+	"\acontext\x18\x02 \x01(\v2 .garam.policy.v1.DecisionContextR\acontext\"\x80\x02\n" +
 	"\n" +
 	"Evaluation\x122\n" +
 	"\asubject\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\asubject\x12/\n" +
 	"\x06action\x18\x02 \x01(\v2\x17.garam.policy.v1.ActionR\x06action\x125\n" +
 	"\bresource\x18\x03 \x01(\v2\x19.garam.policy.v1.ResourceR\bresource\x121\n" +
-	"\acontext\x18\x04 \x01(\v2\x17.google.protobuf.StructR\acontext\"\xcd\x02\n" +
+	"\acontext\x18\x04 \x01(\v2\x17.google.protobuf.StructR\acontext\x12\x19\n" +
+	"\x05probe\x18\x05 \x01(\bH\x00R\x05probe\x88\x01\x01B\b\n" +
+	"\x06_probe\"\xe3\x02\n" +
 	"\x12EvaluationsRequest\x122\n" +
 	"\asubject\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\asubject\x12/\n" +
 	"\x06action\x18\x02 \x01(\v2\x17.garam.policy.v1.ActionR\x06action\x125\n" +
 	"\bresource\x18\x03 \x01(\v2\x19.garam.policy.v1.ResourceR\bresource\x121\n" +
 	"\acontext\x18\x04 \x01(\v2\x17.google.protobuf.StructR\acontext\x12)\n" +
 	"\x04read\x18\x05 \x01(\x0e2\x15.garam.policy.v1.ReadR\x04read\x12=\n" +
-	"\vevaluations\x18\x06 \x03(\v2\x1b.garam.policy.v1.EvaluationR\vevaluations\"Z\n" +
+	"\vevaluations\x18\x06 \x03(\v2\x1b.garam.policy.v1.EvaluationR\vevaluations\x12\x14\n" +
+	"\x05probe\x18\a \x01(\bR\x05probe\"Z\n" +
 	"\x13EvaluationsResponse\x12C\n" +
 	"\vevaluations\x18\x01 \x03(\v2!.garam.policy.v1.EvaluateResponseR\vevaluations\"/\n" +
 	"\tEntityRef\x12\x12\n" +
@@ -2519,7 +2908,34 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\x06writer\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\x06writer\x12\x10\n" +
 	"\x03org\x18\x02 \x01(\tR\x03org\"R\n" +
 	"\x14ListPoliciesResponse\x12:\n" +
-	"\bpolicies\x18\x01 \x03(\v2\x1e.garam.policy.v1.PolicySummaryR\bpolicies*?\n" +
+	"\bpolicies\x18\x01 \x03(\v2\x1e.garam.policy.v1.PolicySummaryR\bpolicies\"\xe6\x03\n" +
+	"\vAuditRecord\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x124\n" +
+	"\x04kind\x18\x02 \x01(\x0e2 .garam.policy.v1.AuditRecordKindR\x04kind\x125\n" +
+	"\bfirst_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\afirstAt\x123\n" +
+	"\alast_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x14\n" +
+	"\x05count\x18\x05 \x01(\x03R\x05count\x12\x18\n" +
+	"\aservice\x18\x06 \x01(\tR\aservice\x12\x18\n" +
+	"\asubject\x18\a \x01(\tR\asubject\x12\x16\n" +
+	"\x06action\x18\b \x01(\tR\x06action\x12\x1a\n" +
+	"\bresource\x18\t \x01(\tR\bresource\x12\x18\n" +
+	"\aoutcome\x18\n" +
+	" \x01(\tR\aoutcome\x12\x1d\n" +
+	"\n" +
+	"policy_ids\x18\v \x03(\tR\tpolicyIds\x12!\n" +
+	"\fversion_from\x18\f \x01(\x05R\vversionFrom\x12\x1d\n" +
+	"\n" +
+	"version_to\x18\r \x01(\x05R\tversionTo\x12,\n" +
+	"\x03day\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\x03day\"\x99\x01\n" +
+	"\x17ListAuditRecordsRequest\x120\n" +
+	"\x06writer\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\x06writer\x12\x10\n" +
+	"\x03org\x18\x02 \x01(\tR\x03org\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x04 \x01(\tR\tpageToken\"z\n" +
+	"\x18ListAuditRecordsResponse\x126\n" +
+	"\arecords\x18\x01 \x03(\v2\x1c.garam.policy.v1.AuditRecordR\arecords\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken*?\n" +
 	"\x04Read\x12\x14\n" +
 	"\x10READ_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vREAD_CACHED\x10\x01\x12\x10\n" +
@@ -2544,7 +2960,12 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\fPolicyStatus\x12\x1d\n" +
 	"\x19POLICY_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13POLICY_STATUS_DRAFT\x10\x01\x12\x18\n" +
-	"\x14POLICY_STATUS_ACTIVE\x10\x022\xcc\a\n" +
+	"\x14POLICY_STATUS_ACTIVE\x10\x02*\x96\x01\n" +
+	"\x0fAuditRecordKind\x12!\n" +
+	"\x1dAUDIT_RECORD_KIND_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17AUDIT_RECORD_KIND_WRITE\x10\x01\x12\x1c\n" +
+	"\x18AUDIT_RECORD_KIND_DENIAL\x10\x02\x12%\n" +
+	"!AUDIT_RECORD_KIND_DENIAL_OVERFLOW\x10\x032\xb5\b\n" +
 	"\rPolicyService\x12O\n" +
 	"\bEvaluate\x12 .garam.policy.v1.EvaluateRequest\x1a!.garam.policy.v1.EvaluateResponse\x12X\n" +
 	"\vEvaluations\x12#.garam.policy.v1.EvaluationsRequest\x1a$.garam.policy.v1.EvaluationsResponse\x12m\n" +
@@ -2555,7 +2976,8 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\x0eRollBackPolicy\x12&.garam.policy.v1.RollBackPolicyRequest\x1a'.garam.policy.v1.RollBackPolicyResponse\x12[\n" +
 	"\fDeletePolicy\x12$.garam.policy.v1.DeletePolicyRequest\x1a%.garam.policy.v1.DeletePolicyResponse\x12R\n" +
 	"\tGetPolicy\x12!.garam.policy.v1.GetPolicyRequest\x1a\".garam.policy.v1.GetPolicyResponse\x12[\n" +
-	"\fListPolicies\x12$.garam.policy.v1.ListPoliciesRequest\x1a%.garam.policy.v1.ListPoliciesResponseB\xc9\x01\n" +
+	"\fListPolicies\x12$.garam.policy.v1.ListPoliciesRequest\x1a%.garam.policy.v1.ListPoliciesResponse\x12g\n" +
+	"\x10ListAuditRecords\x12(.garam.policy.v1.ListAuditRecordsRequest\x1a).garam.policy.v1.ListAuditRecordsResponseB\xc9\x01\n" +
 	"\x13com.garam.policy.v1B\vPolicyProtoP\x01ZGgithub.com/garamsh/garam/lib/policy-sdk-go/gen/garam/policy/v1;policyv1\xa2\x02\x03GPX\xaa\x02\x0fGaram.Policy.V1\xca\x02\x0fGaram\\Policy\\V1\xe2\x02\x1bGaram\\Policy\\V1\\GPBMetadata\xea\x02\x11Garam::Policy::V1b\x06proto3"
 
 var (
@@ -2570,125 +2992,138 @@ func file_garam_policy_v1_policy_proto_rawDescGZIP() []byte {
 	return file_garam_policy_v1_policy_proto_rawDescData
 }
 
-var file_garam_policy_v1_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_garam_policy_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_garam_policy_v1_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_garam_policy_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_garam_policy_v1_policy_proto_goTypes = []any{
 	(Read)(0),                           // 0: garam.policy.v1.Read
 	(Role)(0),                           // 1: garam.policy.v1.Role
 	(RoleScope)(0),                      // 2: garam.policy.v1.RoleScope
 	(PolicyKind)(0),                     // 3: garam.policy.v1.PolicyKind
 	(PolicyStatus)(0),                   // 4: garam.policy.v1.PolicyStatus
-	(*Subject)(nil),                     // 5: garam.policy.v1.Subject
-	(*Action)(nil),                      // 6: garam.policy.v1.Action
-	(*Resource)(nil),                    // 7: garam.policy.v1.Resource
-	(*EvaluateRequest)(nil),             // 8: garam.policy.v1.EvaluateRequest
-	(*Reason)(nil),                      // 9: garam.policy.v1.Reason
-	(*DecisionContext)(nil),             // 10: garam.policy.v1.DecisionContext
-	(*EvaluateResponse)(nil),            // 11: garam.policy.v1.EvaluateResponse
-	(*Evaluation)(nil),                  // 12: garam.policy.v1.Evaluation
-	(*EvaluationsRequest)(nil),          // 13: garam.policy.v1.EvaluationsRequest
-	(*EvaluationsResponse)(nil),         // 14: garam.policy.v1.EvaluationsResponse
-	(*EntityRef)(nil),                   // 15: garam.policy.v1.EntityRef
-	(*EntityUpsert)(nil),                // 16: garam.policy.v1.EntityUpsert
-	(*EntityDelete)(nil),                // 17: garam.policy.v1.EntityDelete
-	(*EntityChange)(nil),                // 18: garam.policy.v1.EntityChange
-	(*ApplyEntityChangesRequest)(nil),   // 19: garam.policy.v1.ApplyEntityChangesRequest
-	(*EntityChangeRefusal)(nil),         // 20: garam.policy.v1.EntityChangeRefusal
-	(*ApplyEntityChangesResponse)(nil),  // 21: garam.policy.v1.ApplyEntityChangesResponse
-	(*RoleLink)(nil),                    // 22: garam.policy.v1.RoleLink
-	(*PolicyBody)(nil),                  // 23: garam.policy.v1.PolicyBody
-	(*PolicyVersion)(nil),               // 24: garam.policy.v1.PolicyVersion
-	(*PolicySummary)(nil),               // 25: garam.policy.v1.PolicySummary
-	(*CreatePolicyRequest)(nil),         // 26: garam.policy.v1.CreatePolicyRequest
-	(*CreatePolicyResponse)(nil),        // 27: garam.policy.v1.CreatePolicyResponse
-	(*AppendPolicyVersionRequest)(nil),  // 28: garam.policy.v1.AppendPolicyVersionRequest
-	(*AppendPolicyVersionResponse)(nil), // 29: garam.policy.v1.AppendPolicyVersionResponse
-	(*ActivatePolicyRequest)(nil),       // 30: garam.policy.v1.ActivatePolicyRequest
-	(*ActivatePolicyResponse)(nil),      // 31: garam.policy.v1.ActivatePolicyResponse
-	(*RollBackPolicyRequest)(nil),       // 32: garam.policy.v1.RollBackPolicyRequest
-	(*RollBackPolicyResponse)(nil),      // 33: garam.policy.v1.RollBackPolicyResponse
-	(*DeletePolicyRequest)(nil),         // 34: garam.policy.v1.DeletePolicyRequest
-	(*DeletePolicyResponse)(nil),        // 35: garam.policy.v1.DeletePolicyResponse
-	(*GetPolicyRequest)(nil),            // 36: garam.policy.v1.GetPolicyRequest
-	(*GetPolicyResponse)(nil),           // 37: garam.policy.v1.GetPolicyResponse
-	(*ListPoliciesRequest)(nil),         // 38: garam.policy.v1.ListPoliciesRequest
-	(*ListPoliciesResponse)(nil),        // 39: garam.policy.v1.ListPoliciesResponse
-	(*structpb.Struct)(nil),             // 40: google.protobuf.Struct
+	(AuditRecordKind)(0),                // 5: garam.policy.v1.AuditRecordKind
+	(*Subject)(nil),                     // 6: garam.policy.v1.Subject
+	(*Action)(nil),                      // 7: garam.policy.v1.Action
+	(*Resource)(nil),                    // 8: garam.policy.v1.Resource
+	(*EvaluateRequest)(nil),             // 9: garam.policy.v1.EvaluateRequest
+	(*Reason)(nil),                      // 10: garam.policy.v1.Reason
+	(*DecisionContext)(nil),             // 11: garam.policy.v1.DecisionContext
+	(*EvaluateResponse)(nil),            // 12: garam.policy.v1.EvaluateResponse
+	(*Evaluation)(nil),                  // 13: garam.policy.v1.Evaluation
+	(*EvaluationsRequest)(nil),          // 14: garam.policy.v1.EvaluationsRequest
+	(*EvaluationsResponse)(nil),         // 15: garam.policy.v1.EvaluationsResponse
+	(*EntityRef)(nil),                   // 16: garam.policy.v1.EntityRef
+	(*EntityUpsert)(nil),                // 17: garam.policy.v1.EntityUpsert
+	(*EntityDelete)(nil),                // 18: garam.policy.v1.EntityDelete
+	(*EntityChange)(nil),                // 19: garam.policy.v1.EntityChange
+	(*ApplyEntityChangesRequest)(nil),   // 20: garam.policy.v1.ApplyEntityChangesRequest
+	(*EntityChangeRefusal)(nil),         // 21: garam.policy.v1.EntityChangeRefusal
+	(*ApplyEntityChangesResponse)(nil),  // 22: garam.policy.v1.ApplyEntityChangesResponse
+	(*RoleLink)(nil),                    // 23: garam.policy.v1.RoleLink
+	(*PolicyBody)(nil),                  // 24: garam.policy.v1.PolicyBody
+	(*PolicyVersion)(nil),               // 25: garam.policy.v1.PolicyVersion
+	(*PolicySummary)(nil),               // 26: garam.policy.v1.PolicySummary
+	(*CreatePolicyRequest)(nil),         // 27: garam.policy.v1.CreatePolicyRequest
+	(*CreatePolicyResponse)(nil),        // 28: garam.policy.v1.CreatePolicyResponse
+	(*AppendPolicyVersionRequest)(nil),  // 29: garam.policy.v1.AppendPolicyVersionRequest
+	(*AppendPolicyVersionResponse)(nil), // 30: garam.policy.v1.AppendPolicyVersionResponse
+	(*ActivatePolicyRequest)(nil),       // 31: garam.policy.v1.ActivatePolicyRequest
+	(*ActivatePolicyResponse)(nil),      // 32: garam.policy.v1.ActivatePolicyResponse
+	(*RollBackPolicyRequest)(nil),       // 33: garam.policy.v1.RollBackPolicyRequest
+	(*RollBackPolicyResponse)(nil),      // 34: garam.policy.v1.RollBackPolicyResponse
+	(*DeletePolicyRequest)(nil),         // 35: garam.policy.v1.DeletePolicyRequest
+	(*DeletePolicyResponse)(nil),        // 36: garam.policy.v1.DeletePolicyResponse
+	(*GetPolicyRequest)(nil),            // 37: garam.policy.v1.GetPolicyRequest
+	(*GetPolicyResponse)(nil),           // 38: garam.policy.v1.GetPolicyResponse
+	(*ListPoliciesRequest)(nil),         // 39: garam.policy.v1.ListPoliciesRequest
+	(*ListPoliciesResponse)(nil),        // 40: garam.policy.v1.ListPoliciesResponse
+	(*AuditRecord)(nil),                 // 41: garam.policy.v1.AuditRecord
+	(*ListAuditRecordsRequest)(nil),     // 42: garam.policy.v1.ListAuditRecordsRequest
+	(*ListAuditRecordsResponse)(nil),    // 43: garam.policy.v1.ListAuditRecordsResponse
+	(*structpb.Struct)(nil),             // 44: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil),       // 45: google.protobuf.Timestamp
 }
 var file_garam_policy_v1_policy_proto_depIdxs = []int32{
-	40, // 0: garam.policy.v1.Resource.properties:type_name -> google.protobuf.Struct
-	5,  // 1: garam.policy.v1.EvaluateRequest.subject:type_name -> garam.policy.v1.Subject
-	6,  // 2: garam.policy.v1.EvaluateRequest.action:type_name -> garam.policy.v1.Action
-	7,  // 3: garam.policy.v1.EvaluateRequest.resource:type_name -> garam.policy.v1.Resource
-	40, // 4: garam.policy.v1.EvaluateRequest.context:type_name -> google.protobuf.Struct
+	44, // 0: garam.policy.v1.Resource.properties:type_name -> google.protobuf.Struct
+	6,  // 1: garam.policy.v1.EvaluateRequest.subject:type_name -> garam.policy.v1.Subject
+	7,  // 2: garam.policy.v1.EvaluateRequest.action:type_name -> garam.policy.v1.Action
+	8,  // 3: garam.policy.v1.EvaluateRequest.resource:type_name -> garam.policy.v1.Resource
+	44, // 4: garam.policy.v1.EvaluateRequest.context:type_name -> google.protobuf.Struct
 	0,  // 5: garam.policy.v1.EvaluateRequest.read:type_name -> garam.policy.v1.Read
-	9,  // 6: garam.policy.v1.DecisionContext.reasons:type_name -> garam.policy.v1.Reason
-	10, // 7: garam.policy.v1.EvaluateResponse.context:type_name -> garam.policy.v1.DecisionContext
-	5,  // 8: garam.policy.v1.Evaluation.subject:type_name -> garam.policy.v1.Subject
-	6,  // 9: garam.policy.v1.Evaluation.action:type_name -> garam.policy.v1.Action
-	7,  // 10: garam.policy.v1.Evaluation.resource:type_name -> garam.policy.v1.Resource
-	40, // 11: garam.policy.v1.Evaluation.context:type_name -> google.protobuf.Struct
-	5,  // 12: garam.policy.v1.EvaluationsRequest.subject:type_name -> garam.policy.v1.Subject
-	6,  // 13: garam.policy.v1.EvaluationsRequest.action:type_name -> garam.policy.v1.Action
-	7,  // 14: garam.policy.v1.EvaluationsRequest.resource:type_name -> garam.policy.v1.Resource
-	40, // 15: garam.policy.v1.EvaluationsRequest.context:type_name -> google.protobuf.Struct
+	10, // 6: garam.policy.v1.DecisionContext.reasons:type_name -> garam.policy.v1.Reason
+	11, // 7: garam.policy.v1.EvaluateResponse.context:type_name -> garam.policy.v1.DecisionContext
+	6,  // 8: garam.policy.v1.Evaluation.subject:type_name -> garam.policy.v1.Subject
+	7,  // 9: garam.policy.v1.Evaluation.action:type_name -> garam.policy.v1.Action
+	8,  // 10: garam.policy.v1.Evaluation.resource:type_name -> garam.policy.v1.Resource
+	44, // 11: garam.policy.v1.Evaluation.context:type_name -> google.protobuf.Struct
+	6,  // 12: garam.policy.v1.EvaluationsRequest.subject:type_name -> garam.policy.v1.Subject
+	7,  // 13: garam.policy.v1.EvaluationsRequest.action:type_name -> garam.policy.v1.Action
+	8,  // 14: garam.policy.v1.EvaluationsRequest.resource:type_name -> garam.policy.v1.Resource
+	44, // 15: garam.policy.v1.EvaluationsRequest.context:type_name -> google.protobuf.Struct
 	0,  // 16: garam.policy.v1.EvaluationsRequest.read:type_name -> garam.policy.v1.Read
-	12, // 17: garam.policy.v1.EvaluationsRequest.evaluations:type_name -> garam.policy.v1.Evaluation
-	11, // 18: garam.policy.v1.EvaluationsResponse.evaluations:type_name -> garam.policy.v1.EvaluateResponse
-	15, // 19: garam.policy.v1.EntityUpsert.org:type_name -> garam.policy.v1.EntityRef
-	15, // 20: garam.policy.v1.EntityUpsert.members:type_name -> garam.policy.v1.EntityRef
-	15, // 21: garam.policy.v1.EntityUpsert.parents:type_name -> garam.policy.v1.EntityRef
-	15, // 22: garam.policy.v1.EntityUpsert.consents:type_name -> garam.policy.v1.EntityRef
-	15, // 23: garam.policy.v1.EntityChange.entity:type_name -> garam.policy.v1.EntityRef
-	16, // 24: garam.policy.v1.EntityChange.upsert:type_name -> garam.policy.v1.EntityUpsert
-	17, // 25: garam.policy.v1.EntityChange.delete:type_name -> garam.policy.v1.EntityDelete
-	18, // 26: garam.policy.v1.ApplyEntityChangesRequest.changes:type_name -> garam.policy.v1.EntityChange
-	20, // 27: garam.policy.v1.ApplyEntityChangesResponse.refusals:type_name -> garam.policy.v1.EntityChangeRefusal
+	13, // 17: garam.policy.v1.EvaluationsRequest.evaluations:type_name -> garam.policy.v1.Evaluation
+	12, // 18: garam.policy.v1.EvaluationsResponse.evaluations:type_name -> garam.policy.v1.EvaluateResponse
+	16, // 19: garam.policy.v1.EntityUpsert.org:type_name -> garam.policy.v1.EntityRef
+	16, // 20: garam.policy.v1.EntityUpsert.members:type_name -> garam.policy.v1.EntityRef
+	16, // 21: garam.policy.v1.EntityUpsert.parents:type_name -> garam.policy.v1.EntityRef
+	16, // 22: garam.policy.v1.EntityUpsert.consents:type_name -> garam.policy.v1.EntityRef
+	16, // 23: garam.policy.v1.EntityChange.entity:type_name -> garam.policy.v1.EntityRef
+	17, // 24: garam.policy.v1.EntityChange.upsert:type_name -> garam.policy.v1.EntityUpsert
+	18, // 25: garam.policy.v1.EntityChange.delete:type_name -> garam.policy.v1.EntityDelete
+	19, // 26: garam.policy.v1.ApplyEntityChangesRequest.changes:type_name -> garam.policy.v1.EntityChange
+	21, // 27: garam.policy.v1.ApplyEntityChangesResponse.refusals:type_name -> garam.policy.v1.EntityChangeRefusal
 	1,  // 28: garam.policy.v1.RoleLink.role:type_name -> garam.policy.v1.Role
 	2,  // 29: garam.policy.v1.RoleLink.scope:type_name -> garam.policy.v1.RoleScope
-	15, // 30: garam.policy.v1.RoleLink.principal:type_name -> garam.policy.v1.EntityRef
-	15, // 31: garam.policy.v1.RoleLink.resource:type_name -> garam.policy.v1.EntityRef
-	22, // 32: garam.policy.v1.PolicyBody.role_link:type_name -> garam.policy.v1.RoleLink
-	23, // 33: garam.policy.v1.PolicyVersion.body:type_name -> garam.policy.v1.PolicyBody
+	16, // 30: garam.policy.v1.RoleLink.principal:type_name -> garam.policy.v1.EntityRef
+	16, // 31: garam.policy.v1.RoleLink.resource:type_name -> garam.policy.v1.EntityRef
+	23, // 32: garam.policy.v1.PolicyBody.role_link:type_name -> garam.policy.v1.RoleLink
+	24, // 33: garam.policy.v1.PolicyVersion.body:type_name -> garam.policy.v1.PolicyBody
 	4,  // 34: garam.policy.v1.PolicySummary.status:type_name -> garam.policy.v1.PolicyStatus
 	3,  // 35: garam.policy.v1.PolicySummary.kind:type_name -> garam.policy.v1.PolicyKind
-	5,  // 36: garam.policy.v1.CreatePolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	23, // 37: garam.policy.v1.CreatePolicyRequest.body:type_name -> garam.policy.v1.PolicyBody
-	5,  // 38: garam.policy.v1.AppendPolicyVersionRequest.writer:type_name -> garam.policy.v1.Subject
-	23, // 39: garam.policy.v1.AppendPolicyVersionRequest.body:type_name -> garam.policy.v1.PolicyBody
-	5,  // 40: garam.policy.v1.ActivatePolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	5,  // 41: garam.policy.v1.RollBackPolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	5,  // 42: garam.policy.v1.DeletePolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	5,  // 43: garam.policy.v1.GetPolicyRequest.writer:type_name -> garam.policy.v1.Subject
-	25, // 44: garam.policy.v1.GetPolicyResponse.policy:type_name -> garam.policy.v1.PolicySummary
-	24, // 45: garam.policy.v1.GetPolicyResponse.versions:type_name -> garam.policy.v1.PolicyVersion
-	5,  // 46: garam.policy.v1.ListPoliciesRequest.writer:type_name -> garam.policy.v1.Subject
-	25, // 47: garam.policy.v1.ListPoliciesResponse.policies:type_name -> garam.policy.v1.PolicySummary
-	8,  // 48: garam.policy.v1.PolicyService.Evaluate:input_type -> garam.policy.v1.EvaluateRequest
-	13, // 49: garam.policy.v1.PolicyService.Evaluations:input_type -> garam.policy.v1.EvaluationsRequest
-	19, // 50: garam.policy.v1.PolicyService.ApplyEntityChanges:input_type -> garam.policy.v1.ApplyEntityChangesRequest
-	26, // 51: garam.policy.v1.PolicyService.CreatePolicy:input_type -> garam.policy.v1.CreatePolicyRequest
-	28, // 52: garam.policy.v1.PolicyService.AppendPolicyVersion:input_type -> garam.policy.v1.AppendPolicyVersionRequest
-	30, // 53: garam.policy.v1.PolicyService.ActivatePolicy:input_type -> garam.policy.v1.ActivatePolicyRequest
-	32, // 54: garam.policy.v1.PolicyService.RollBackPolicy:input_type -> garam.policy.v1.RollBackPolicyRequest
-	34, // 55: garam.policy.v1.PolicyService.DeletePolicy:input_type -> garam.policy.v1.DeletePolicyRequest
-	36, // 56: garam.policy.v1.PolicyService.GetPolicy:input_type -> garam.policy.v1.GetPolicyRequest
-	38, // 57: garam.policy.v1.PolicyService.ListPolicies:input_type -> garam.policy.v1.ListPoliciesRequest
-	11, // 58: garam.policy.v1.PolicyService.Evaluate:output_type -> garam.policy.v1.EvaluateResponse
-	14, // 59: garam.policy.v1.PolicyService.Evaluations:output_type -> garam.policy.v1.EvaluationsResponse
-	21, // 60: garam.policy.v1.PolicyService.ApplyEntityChanges:output_type -> garam.policy.v1.ApplyEntityChangesResponse
-	27, // 61: garam.policy.v1.PolicyService.CreatePolicy:output_type -> garam.policy.v1.CreatePolicyResponse
-	29, // 62: garam.policy.v1.PolicyService.AppendPolicyVersion:output_type -> garam.policy.v1.AppendPolicyVersionResponse
-	31, // 63: garam.policy.v1.PolicyService.ActivatePolicy:output_type -> garam.policy.v1.ActivatePolicyResponse
-	33, // 64: garam.policy.v1.PolicyService.RollBackPolicy:output_type -> garam.policy.v1.RollBackPolicyResponse
-	35, // 65: garam.policy.v1.PolicyService.DeletePolicy:output_type -> garam.policy.v1.DeletePolicyResponse
-	37, // 66: garam.policy.v1.PolicyService.GetPolicy:output_type -> garam.policy.v1.GetPolicyResponse
-	39, // 67: garam.policy.v1.PolicyService.ListPolicies:output_type -> garam.policy.v1.ListPoliciesResponse
-	58, // [58:68] is the sub-list for method output_type
-	48, // [48:58] is the sub-list for method input_type
-	48, // [48:48] is the sub-list for extension type_name
-	48, // [48:48] is the sub-list for extension extendee
-	0,  // [0:48] is the sub-list for field type_name
+	6,  // 36: garam.policy.v1.CreatePolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	24, // 37: garam.policy.v1.CreatePolicyRequest.body:type_name -> garam.policy.v1.PolicyBody
+	6,  // 38: garam.policy.v1.AppendPolicyVersionRequest.writer:type_name -> garam.policy.v1.Subject
+	24, // 39: garam.policy.v1.AppendPolicyVersionRequest.body:type_name -> garam.policy.v1.PolicyBody
+	6,  // 40: garam.policy.v1.ActivatePolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	6,  // 41: garam.policy.v1.RollBackPolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	6,  // 42: garam.policy.v1.DeletePolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	6,  // 43: garam.policy.v1.GetPolicyRequest.writer:type_name -> garam.policy.v1.Subject
+	26, // 44: garam.policy.v1.GetPolicyResponse.policy:type_name -> garam.policy.v1.PolicySummary
+	25, // 45: garam.policy.v1.GetPolicyResponse.versions:type_name -> garam.policy.v1.PolicyVersion
+	6,  // 46: garam.policy.v1.ListPoliciesRequest.writer:type_name -> garam.policy.v1.Subject
+	26, // 47: garam.policy.v1.ListPoliciesResponse.policies:type_name -> garam.policy.v1.PolicySummary
+	5,  // 48: garam.policy.v1.AuditRecord.kind:type_name -> garam.policy.v1.AuditRecordKind
+	45, // 49: garam.policy.v1.AuditRecord.first_at:type_name -> google.protobuf.Timestamp
+	45, // 50: garam.policy.v1.AuditRecord.last_at:type_name -> google.protobuf.Timestamp
+	45, // 51: garam.policy.v1.AuditRecord.day:type_name -> google.protobuf.Timestamp
+	6,  // 52: garam.policy.v1.ListAuditRecordsRequest.writer:type_name -> garam.policy.v1.Subject
+	41, // 53: garam.policy.v1.ListAuditRecordsResponse.records:type_name -> garam.policy.v1.AuditRecord
+	9,  // 54: garam.policy.v1.PolicyService.Evaluate:input_type -> garam.policy.v1.EvaluateRequest
+	14, // 55: garam.policy.v1.PolicyService.Evaluations:input_type -> garam.policy.v1.EvaluationsRequest
+	20, // 56: garam.policy.v1.PolicyService.ApplyEntityChanges:input_type -> garam.policy.v1.ApplyEntityChangesRequest
+	27, // 57: garam.policy.v1.PolicyService.CreatePolicy:input_type -> garam.policy.v1.CreatePolicyRequest
+	29, // 58: garam.policy.v1.PolicyService.AppendPolicyVersion:input_type -> garam.policy.v1.AppendPolicyVersionRequest
+	31, // 59: garam.policy.v1.PolicyService.ActivatePolicy:input_type -> garam.policy.v1.ActivatePolicyRequest
+	33, // 60: garam.policy.v1.PolicyService.RollBackPolicy:input_type -> garam.policy.v1.RollBackPolicyRequest
+	35, // 61: garam.policy.v1.PolicyService.DeletePolicy:input_type -> garam.policy.v1.DeletePolicyRequest
+	37, // 62: garam.policy.v1.PolicyService.GetPolicy:input_type -> garam.policy.v1.GetPolicyRequest
+	39, // 63: garam.policy.v1.PolicyService.ListPolicies:input_type -> garam.policy.v1.ListPoliciesRequest
+	42, // 64: garam.policy.v1.PolicyService.ListAuditRecords:input_type -> garam.policy.v1.ListAuditRecordsRequest
+	12, // 65: garam.policy.v1.PolicyService.Evaluate:output_type -> garam.policy.v1.EvaluateResponse
+	15, // 66: garam.policy.v1.PolicyService.Evaluations:output_type -> garam.policy.v1.EvaluationsResponse
+	22, // 67: garam.policy.v1.PolicyService.ApplyEntityChanges:output_type -> garam.policy.v1.ApplyEntityChangesResponse
+	28, // 68: garam.policy.v1.PolicyService.CreatePolicy:output_type -> garam.policy.v1.CreatePolicyResponse
+	30, // 69: garam.policy.v1.PolicyService.AppendPolicyVersion:output_type -> garam.policy.v1.AppendPolicyVersionResponse
+	32, // 70: garam.policy.v1.PolicyService.ActivatePolicy:output_type -> garam.policy.v1.ActivatePolicyResponse
+	34, // 71: garam.policy.v1.PolicyService.RollBackPolicy:output_type -> garam.policy.v1.RollBackPolicyResponse
+	36, // 72: garam.policy.v1.PolicyService.DeletePolicy:output_type -> garam.policy.v1.DeletePolicyResponse
+	38, // 73: garam.policy.v1.PolicyService.GetPolicy:output_type -> garam.policy.v1.GetPolicyResponse
+	40, // 74: garam.policy.v1.PolicyService.ListPolicies:output_type -> garam.policy.v1.ListPoliciesResponse
+	43, // 75: garam.policy.v1.PolicyService.ListAuditRecords:output_type -> garam.policy.v1.ListAuditRecordsResponse
+	65, // [65:76] is the sub-list for method output_type
+	54, // [54:65] is the sub-list for method input_type
+	54, // [54:54] is the sub-list for extension type_name
+	54, // [54:54] is the sub-list for extension extendee
+	0,  // [0:54] is the sub-list for field type_name
 }
 
 func init() { file_garam_policy_v1_policy_proto_init() }
@@ -2696,6 +3131,7 @@ func file_garam_policy_v1_policy_proto_init() {
 	if File_garam_policy_v1_policy_proto != nil {
 		return
 	}
+	file_garam_policy_v1_policy_proto_msgTypes[7].OneofWrappers = []any{}
 	file_garam_policy_v1_policy_proto_msgTypes[13].OneofWrappers = []any{
 		(*EntityChange_Upsert)(nil),
 		(*EntityChange_Delete)(nil),
@@ -2710,8 +3146,8 @@ func file_garam_policy_v1_policy_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_garam_policy_v1_policy_proto_rawDesc), len(file_garam_policy_v1_policy_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   35,
+			NumEnums:      6,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

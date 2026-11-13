@@ -55,6 +55,7 @@ var generatedActions = []ActionInfo{
 	{Name: "iam:agent.rename", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Iam::Agent"}},
 	{Name: "iam:agent.replace", Principals: []string{"Iam::User", "Iam::Agent", "Iam::Operator"}, Resources: []string{"Iam::Org", "Iam::Agent"}},
 	{Name: "iam:agent.watch", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Iam::Agent"}},
+	{Name: "iam:audit.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:consent.grant", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:consent.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:consent.withdraw", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},

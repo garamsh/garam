@@ -55,6 +55,9 @@ type Gate interface {
 	// where user is empty. It returns ErrNotApplied at the bound, and
 	// ErrLinkSetAside as soon as a mark is set aside.
 	Await(ctx context.Context, org, user string) error
+	// AwaitEntity wakes the loop and returns once the outbox holds no
+	// mark of the entity, or ErrNotApplied at the bound.
+	AwaitEntity(ctx context.Context, entity Entity) error
 }
 
 type gate struct {
@@ -68,25 +71,42 @@ func NewGate(store Store, svc Service, bound time.Duration) Gate {
 	return &gate{store: store, wake: svc.Wake, bound: bound}
 }
 
+func (g *gate) AwaitEntity(ctx context.Context, entity Entity) error {
+	return g.wait(ctx, "await entity", func() (bool, error) {
+		pending, err := g.store.EntityPending(ctx, entity)
+		return !pending, err
+	})
+}
+
 func (g *gate) Await(ctx context.Context, org, user string) error {
+	return g.wait(ctx, "await role link", func() (bool, error) {
+		state, err := g.store.LinkState(ctx, org, user)
+		switch {
+		case err != nil:
+			return false, err
+		case state == LinkSetAside:
+			return false, ErrLinkSetAside
+		}
+		return state == LinkApplied, nil
+	})
+}
+
+// wait wakes the loop and polls settled until it reports true or
+// fails, and returns ErrNotApplied at the bound.
+func (g *gate) wait(ctx context.Context, what string, settled func() (bool, error)) error {
 	g.wake()
 	deadline := time.NewTimer(g.bound)
 	defer deadline.Stop()
 	tick := time.NewTicker(pollEvery)
 	defer tick.Stop()
 	for {
-		state, err := g.store.LinkState(ctx, org, user)
-		switch {
-		case err != nil:
+		done, err := settled()
+		if err != nil || done {
 			return err
-		case state == LinkSetAside:
-			return ErrLinkSetAside
-		case state == LinkApplied:
-			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return errorx.Wrap(ctx.Err(), "await role link", errorx.KindCanceled)
+			return errorx.Wrap(ctx.Err(), what, errorx.KindCanceled)
 		case <-deadline.C:
 			return ErrNotApplied
 		case <-tick.C:

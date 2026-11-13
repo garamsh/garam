@@ -1306,8 +1306,9 @@ ADRs:
   isolation's one exception, where each organization's `consents`
   attribute on its `Org` holds the other, both organizations'
   guardrails are read for it and a withdrawal denies the next send;
-  built in the policy service (#1805), not yet in the platform, which
-  feeds no `consents` and still refuses before the engine; supersedes
+  built in the policy service (#1805), the platform feeding `consents`
+  since #1887 and its send still refusing before the engine;
+  supersedes
   0035 in part, on the send-path precondition, and 0024 in part, on
   the refusal before the engine
 - [0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)

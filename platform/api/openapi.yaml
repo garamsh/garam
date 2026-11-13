@@ -4868,6 +4868,13 @@ components:
             answer names the organization in `resource`; do not repeat
             the request. A registration has signed the person in, and
             its session cookie is set on this answer.
+            The same reason answers a grant or a withdrawal of an
+            organization's consent when the policy service has not
+            applied it in that time: the half is stored and stays so,
+            and until the service applies it the policy service decides
+            by the consents it last held. Repeating the request changes
+            nothing. The answer names the organization that granted or
+            withdrew in `resource`.
             `change_refused`, on the same 503 when the policy service
             refused the member's role link for good: the change is
             stored, but delivery does not go on, and the service holds
@@ -4901,7 +4908,8 @@ components:
           description: >-
             The GRN of the organization a request stored before it
             answered `change_not_applied` or `change_refused`: the one
-            it created, joined, registered into or deleted. A client
+            it created, joined, registered into, deleted, or granted or
+            withdrew consent for. A client
             that cannot repeat the request reads from it what was
             stored and goes on. Present only with those reasons.
   headers:

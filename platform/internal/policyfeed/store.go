@@ -57,6 +57,11 @@ type Store interface {
 	// is a link applied (ADR-0146 §Reading one's own write); one set
 	// aside outranks one pending, because it will not clear.
 	LinkState(ctx context.Context, org, user string) (LinkState, error)
+	// EntityPending reports whether the outbox holds a mark of the
+	// entity. A mark is deleted only after the service applied the
+	// entity or refused it for good (ADR-0140 item 11), so none is a
+	// change applied.
+	EntityPending(ctx context.Context, entity Entity) (bool, error)
 	// Standing counts the outbox's marks by whether a pass will read
 	// them.
 	Standing(ctx context.Context) (Standing, error)

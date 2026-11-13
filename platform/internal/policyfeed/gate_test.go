@@ -24,6 +24,7 @@ type pendingStore struct {
 	err      error
 	org      string
 	user     string
+	entity   policyfeed.Entity
 }
 
 func (p *pendingStore) LinkState(_ context.Context, org, user string) (policyfeed.LinkState, error) {
@@ -38,6 +39,17 @@ func (p *pendingStore) LinkState(_ context.Context, org, user string) (policyfee
 		return policyfeed.LinkPending, nil
 	}
 	return policyfeed.LinkApplied, nil
+}
+
+// EntityPending reports a mark for the first `pending` reads, as
+// LinkState does, and records the entity it was asked about.
+func (p *pendingStore) EntityPending(_ context.Context, e policyfeed.Entity) (bool, error) {
+	p.reads.Add(1)
+	p.entity = e
+	if p.err != nil {
+		return false, p.err
+	}
+	return p.pending.Add(-1) >= 0, nil
 }
 
 type wakeCounter struct{ wakes atomic.Int64 }
@@ -119,4 +131,41 @@ func TestGate_AwaitStopsWithItsContext(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, errorx.KindCanceled, errorx.KindOf(err))
+}
+
+func TestGate_AwaitEntityReturnsOnceTheMarkIsGone(t *testing.T) {
+	store := &pendingStore{}
+	store.pending.Store(2)
+	svc := &wakeCounter{}
+	org := policyfeed.Entity{Type: "Iam::Org", ID: "grn:o"}
+
+	err := policyfeed.NewGate(store, svc, time.Second).AwaitEntity(context.Background(), org)
+
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, store.reads.Load(), "two reads with the mark, one without")
+	assert.EqualValues(t, 1, svc.wakes.Load(), "the loop is woken")
+	assert.Equal(t, org, store.entity)
+}
+
+func TestGate_AwaitEntityRefusesAtTheBoundWhileTheMarkStays(t *testing.T) {
+	// The control is the test above: the same gate returns nil when the
+	// mark goes. Here it never does.
+	store := &pendingStore{}
+	store.pending.Store(1 << 40)
+
+	err := policyfeed.NewGate(store, &wakeCounter{}, 120*time.Millisecond).
+		AwaitEntity(context.Background(), policyfeed.Entity{Type: "Iam::Org", ID: "grn:o"})
+
+	require.ErrorIs(t, err, policyfeed.ErrNotApplied)
+	assert.Equal(t, errorx.KindUnavailable, errorx.KindOf(err))
+}
+
+func TestGate_AwaitEntityReturnsTheStoresError(t *testing.T) {
+	boom := errors.New("boom")
+	store := &pendingStore{err: boom}
+
+	err := policyfeed.NewGate(store, &wakeCounter{}, time.Second).
+		AwaitEntity(context.Background(), policyfeed.Entity{Type: "Iam::Org", ID: "grn:o"})
+
+	require.ErrorIs(t, err, boom)
 }

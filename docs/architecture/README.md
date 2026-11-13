@@ -339,7 +339,8 @@ on hosted runners.
   anonymous pulls past a per-address limit (#1337), and ECR Public caps
   anonymous callers at 500GB of data a month across the addresses
   hosted runners share. Its `429 toomanyrequests: Data limit exceeded`
-  failed both attempts of v0.4.0's release run 39120748198 (#1532).
+  failed both attempts of the release run 39120748198 of
+  `v0.1.0-dev.4` (then `v0.4.0`) (#1532).
 - **No run here reaches a deployment, so `main` is not what a caller
   meets.** `release.yml` publishes six images on a release tag
   (ADR-0157) and no other workflow pushes one, so a merge to
@@ -367,9 +368,10 @@ on hosted runners.
   immutable, which makes its digest a fact the registry
   enforces, and the single link left resting on trust is the git tag
   still naming the commit it named. What the registry held when #1033
-  merged, 2026-09-04T16:44Z, was published before the change — `0.1.0`
-  carried no labels at all and `0.2.0` a pair a person passed by hand —
-  so the first image carrying them because these files say so is a
+  merged, 2026-09-04T16:44Z, was published before the change —
+  `0.1.0-dev.1` (then `0.1.0`) carried no labels at all and
+  `0.1.0-dev.2` (then `0.2.0`) a pair a person passed by hand — so the
+  first image carrying them because these files say so is a
   release after that reading. A development build, which
   `make image-build` produces when given `IMAGE_REGISTRY`, carries the
   same two labels, the version being its tag (ADR-0071), and reaches

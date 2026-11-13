@@ -64,7 +64,10 @@ Until launch the tag is `v0.1.0-dev.N`, `v0.1.0-rc.N` or `v0.1.0`, and
 `tooling/release-version.sh` is authoritative for the form and refuses
 every other tag
 ([ADR-0157](./adr/0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md));
-from `v0.1.0` it is `vX.Y.Z` again. A development build a person made
+from `v0.1.0` it is `vX.Y.Z` again. The same script says how the GitHub
+release is marked: a `-dev.N` or `-rc.N` release is a pre-release and
+not latest, and `v0.1.0` is the first marked latest. A development
+build a person made
 and pushed carries a commit-derived or prerelease tag outside
 `0.1.0-dev.*` and `0.1.0-rc.*`
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)),

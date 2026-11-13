@@ -373,7 +373,8 @@ func TestPolicyEntityState_ReturnsWhatTheOwnersTablesSay(t *testing.T) {
 		{"an OrgMembers names nothing", "Iam::OrgMembers", outboxOrg, entityState{}},
 		{"a team sits in its org", "Iam::Team", outboxTeam, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
 		{"a project sits in its org", "Iam::Project", outboxProject, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
-		{"an operator sits in its org", "Iam::Operator", outboxOperator, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
+		{"an operator sits in its org and among its members", "Iam::Operator", outboxOperator, entityState{org: ptr(outboxOrg), parents: []string{
+			"Iam::Org " + outboxOrg, "Iam::OrgMembers " + outboxOrg}}},
 		{"a user sits in each membership it holds", "Iam::User", outboxUser, entityState{parents: []string{
 			"Iam::OrgMembers " + outboxOrg, "Iam::Project " + outboxProject, "Iam::Team " + outboxTeam}}},
 		{"an agent is a member and a contained resource", "Iam::Agent", outboxAgent, entityState{org: ptr(outboxOrg), parents: []string{

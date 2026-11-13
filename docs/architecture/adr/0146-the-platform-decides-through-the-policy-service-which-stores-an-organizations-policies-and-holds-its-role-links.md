@@ -3,13 +3,17 @@
 > Status: accepted; not yet built, but for the policy service's
 > delegation of a hosted operator's ten operations (#1805) and its
 > write RPCs (#1822). The platform's listeners still decide with
-> `garam serve authz`, the platform does not feed an operator's
-> `operations`, and the platform does not yet call the write.
+> `garam serve authz`, the platform feeds an operator's `operations`
+> and its place among the organization's members (#1891) and decides
+> an operator's authority itself, and the platform does not yet call
+> the write.
 > Superseded in part by
 > [ADR-0159](./0159-role-links-follow-the-entities-in-one-pass-the-platforms-tables-win-a-failed-write-and-a-request-finishes-its-work-before-it-waits.md)
 > (item 4's "delivered with the entities under the same sequence",
 > and §Reading one's own write's answer at the bound, which gains a
-> reason and the stored resource)
+> reason and the stored resource), and by
+> [ADR-0161](./0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)
+> (a writer writes under no identifier a member's link is named by)
 > Date: 2026-11-12
 
 Drafted for #1799, under #1796, which holds the owner's decisions of

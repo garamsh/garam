@@ -119,14 +119,17 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
 
     /// Settles whether the write may go on, and gives the right to
     /// write a `permit` where the step needs one. A writer holds each
-    /// role a link names, and the action its step takes.
+    /// role a link names, and the action its step takes, and writes
+    /// under no identifier reserved to the platform (ADR-0161): that
+    /// refusal is a denial of the step's action, recorded as a missing
+    /// role is.
     async fn authorize(
         &self,
         principal: &Principal,
         org: &OrgGrn,
         writer: Option<&proto::Subject>,
         (kind, step): (BodyKind, Step),
-        roles: &[Role],
+        (policy, roles): (&str, &[Role]),
     ) -> Result<Option<PermitRight>, ServiceError> {
         let Some(writer) = writer else {
             if kind == BodyKind::RoleLink && unwritten(step) {
@@ -134,6 +137,15 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
             }
             return Err(ServiceError::NoWriter);
         };
+        if grant::reserved(org, policy) {
+            self.record_denial(
+                principal,
+                (&writer.id, action_for(kind, step), org.as_str()),
+                &[],
+            )
+            .await;
+            return Err(ServiceError::Reserved(policy.to_owned()));
+        }
         for role in roles {
             let holds = self
                 .allowed(
@@ -242,10 +254,15 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 &org,
                 writer,
                 (kind_of(wanted)?, Step::Create),
-                &roles,
+                (&request.policy, &roles),
             )
             .await?;
         let body = self.body_of(&org, wanted, right.as_ref())?;
+        if grant::reserved(&org, &request.policy)
+            && !grant::names_link(&org, &request.policy, &body.content())
+        {
+            return Err(ServiceError::Reserved(request.policy.clone()));
+        }
         store
             .create(NewPolicy {
                 grn: &request.policy,
@@ -287,7 +304,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 &org,
                 writer,
                 (existing.kind, Step::Append),
-                &roles,
+                (&request.policy, &roles),
             )
             .await?;
         let body = self.body_of(&org, wanted, right.as_ref())?;
@@ -310,6 +327,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
         let existing = self
             .lookup(principal, store, &org, writer, &request.policy)
             .await?;
+        Self::is_its_link(store, &org, writer, &existing).await?;
         let roles = self.roles_in(store, &org, &existing).await?;
         let right = self
             .authorize(
@@ -317,7 +335,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 &org,
                 writer,
                 (existing.kind, Step::Activate),
-                &roles,
+                (&request.policy, &roles),
             )
             .await?;
         // The version the writer was checked for is the one that goes
@@ -363,7 +381,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 &org,
                 request.writer.as_ref(),
                 (existing.kind, Step::RollBack),
-                &roles,
+                (&request.policy, &roles),
             )
             .await?;
         match right {
@@ -399,6 +417,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 &request.policy,
             )
             .await?;
+        Self::is_its_link(store, &org, request.writer.as_ref(), &existing).await?;
         // Every role any version links, since each one is gone with it.
         let roles = self.roles_in(store, &org, &existing).await?;
         self.authorize(
@@ -406,7 +425,7 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
             &org,
             request.writer.as_ref(),
             (existing.kind, Step::Remove),
-            &roles,
+            (&request.policy, &roles),
         )
         .await?;
         store.delete(&org, &request.policy).await?;
@@ -510,6 +529,28 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 .await?;
         }
         Ok(store.get(org, policy).await?)
+    }
+
+    /// Refuses the platform's write with no writer, an activation or
+    /// a removal, of a policy under a reserved identifier whose every
+    /// version is not the link that identifier names: the platform
+    /// then makes effective or removes only what it wrote. A writer's
+    /// own write under such an identifier is refused by `authorize`.
+    async fn is_its_link(
+        store: &PolicyStore,
+        org: &OrgGrn,
+        writer: Option<&proto::Subject>,
+        policy: &Summary,
+    ) -> Result<(), ServiceError> {
+        if writer.is_some() || !grant::reserved(org, &policy.grn) {
+            return Ok(());
+        }
+        for stored in store.versions(org, &policy.grn).await? {
+            if !grant::names_link(org, &policy.grn, &stored.body.content()) {
+                return Err(ServiceError::Reserved(policy.grn.clone()));
+            }
+        }
+        Ok(())
     }
 
     /// Every role any version of a link policy names. Another kind

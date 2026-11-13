@@ -107,7 +107,11 @@ it through `garam policy-feed` (#1689, #1888).
   same way whether or not the policy exists. Activation takes the
   version the service checked and is refused if the default has moved.
   With no writer, only a role link written or removed from a
-  membership is accepted.
+  membership is accepted, and the identifiers opening `link-owner-`,
+  `link-admin-` or `link-member-` are that write's alone: a writer
+  changes nothing under one, and the platform makes effective or
+  removes only a policy every version of which is that member's link
+  (ADR-0161).
 - **A `permit` never reaches an operator.** A decision for an
   `Iam::Operator` composes the organization's guardrails and none of
   its `permit`s, whatever a `permit` says.

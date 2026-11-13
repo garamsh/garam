@@ -37,6 +37,9 @@ type State struct {
 	// Consents are the organizations toward which an Org holds a
 	// consent half that stands (ADR-0147 item 2).
 	Consents []Entity
+	// Operations are the action names, in their wire form, that an
+	// Operator's current delegation holds (ADR-0146 §A).
+	Operations []string
 }
 
 // RoleLinkType is the mark kind of a member's role link (ADR-0146

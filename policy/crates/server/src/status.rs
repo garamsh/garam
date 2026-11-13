@@ -65,6 +65,11 @@ pub(crate) enum ServiceError {
         /// The role the link names.
         role: decision::Role,
     },
+    /// An identifier reserved to the platform's role link of one
+    /// member, written by anyone else or holding another body
+    /// (ADR-0161).
+    #[error("{0} is reserved for the role link of one member, which the platform alone writes")]
+    Reserved(String),
     /// The policy store refused or failed.
     #[error(transparent)]
     Policy(#[from] grant::Error),
@@ -109,7 +114,8 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
         ServiceError::Policy(inner) => policy_status(error, inner),
         ServiceError::NoWriter
         | ServiceError::WriterDenied { .. }
-        | ServiceError::RoleNotHeld { .. } => {
+        | ServiceError::RoleNotHeld { .. }
+        | ServiceError::Reserved(_) => {
             tracing::info!(error = ?error, "refused a writer");
             Status::permission_denied(error.to_string())
         }

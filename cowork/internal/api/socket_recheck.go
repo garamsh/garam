@@ -68,7 +68,7 @@ func refuses(err error) bool {
 // pageRecheck is one sync connection's re-check, in one request to the
 // platform: reading the page, and writing it as the connection does.
 func (s *Server) pageRecheck(c platform.Caller, org, id string, writable bool) func(context.Context) error {
-	checks := []platform.Check{platform.OnPage(platform.ActionPageRead, id), platform.OnPage(platform.ActionPageWrite, id)}
+	checks := []platform.Check{platform.OnPage(platform.ActionPageRead, id), platform.OnPage(platform.ActionPageWrite, id).AsProbe()}
 	return func(ctx context.Context) error {
 		allowed, err := s.platform.Allowed(ctx, c, org, checks)
 		switch {

@@ -187,8 +187,10 @@ true of the platform.
   the outbox marks it wrote are applied, and is answered as
   unavailable if they are not. Built for the four requests that write
   an organization membership: creating an organization, accepting an
-  invitation, registering by one, and deleting an organization. A
-  request that changes any other entity does not wait, and the
+  invitation, registering by one, and deleting an organization, and
+  for the two requests that write and end an operator's delegation
+  (§Operator operations under Delivery). A request that changes any
+  other entity does not wait, except those §Consents names, and the
   policy write is not the platform's yet.
 - **Every present capability has a place.** The ADR's inventory gives
   each origin of a statement and each surface that reads a decision
@@ -199,8 +201,11 @@ true of the platform.
   `operations`, joins the principals of the ten delegable actions
   alone and sits in its organization's `Iam::OrgMembers`, and a system
   policy per operation permits an operator of the resource's
-  organization that holds it; the platform does not yet feed the
-  attribute. Only an
+  organization that holds it. The platform feeds the attribute and the
+  operator's place among its organization's members (#1891, §Operator
+  operations under Delivery), and still decides an operator's authority
+  itself until its own round: the policy service holds the operations
+  and no request asks it about them yet. Only an
   owner writes a `permit`, so an administrator keeps assigning the
   roles it holds and writing guardrails and no longer writes an
   `Allow`.
@@ -217,6 +222,14 @@ true of the platform.
   it, and one whose record cannot be written is answered anyway, the
   failure logged and counted in process. Not built: the platform's
   relay of `ListAuditRecords`, and a metric for the failures.
+- **cowork states its probes.** Each question cowork asks to filter a
+  list or to decide whether a connection may write carries `probe` on
+  its own entry of the batch, so a denied one is not recorded; every
+  question a person or an agent made states nothing and is an attempt
+  (ADR-0148 item 2). The platform's own questions are not asked of the
+  policy service yet (#1784), and the round that asks them states the
+  same of its filters and controls before the record is deployed
+  with them.
 
 [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md) makes a
 message between two agents of two consenting organizations tenant
@@ -375,10 +388,10 @@ codes are the whole list
 (`platform/internal/policyfeed/grpc/links.go`); each rests on
 `policy/crates/server/src/status.rs`:
 
-- `PERMISSION_DENIED` (lines 100 to 109 and 150 to 153): the caller
+- `PERMISSION_DENIED` (lines 115 to 121 and 167 to 170): the caller
   `platform` may not write this link, as where its identifier is held
-  by a policy of another kind (`NoWriter`).
-- `INVALID_ARGUMENT` (lines 116 to 121 and 166 to 180): the request or
+  by a policy that is not the member's link (`Reserved`, below).
+- `INVALID_ARGUMENT` (lines 130 to 138 and 183 to 197): the request or
   the policy is one the service refuses by its own rules.
 
 Every other code, `UNAVAILABLE`, `INTERNAL`, `DEADLINE_EXCEEDED`,
@@ -419,6 +432,26 @@ sets every link aside and so removes every member's role in the
 policy service. `set_aside` in §Reading the feed's standing shows it,
 and `garam policy-feed start` repairs it once the fault is mended
 ([ADR-0160](./adr/0160-a-role-link-the-policy-service-refuses-for-good-is-set-aside-and-the-members-links-are-removed.md)).
+
+**The identifiers of a member's links are the platform's alone**
+([ADR-0161](./adr/0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)).
+The policy service reserves every identifier of an organization's
+policies that opens `link-owner-`, `link-admin-` or `link-member-`.
+The caller `platform` with no writer creates there a role link of the
+identifier's role in organization scope, whose principal is the
+`Iam::User` whose GRN's hash is the identifier's tail and whose
+resource is the organization, and nothing else. It activates or
+deletes there only a policy every version of which is that link. A
+write naming a writer, the owner's included, and a scoped caller's,
+is refused for every step. Each refusal is `PERMISSION_DENIED`, so
+the platform's create of a link over a policy that is not it reads
+`ALREADY_EXISTS` as written and its activation is refused, which
+sets the link aside as above and leaves the member with no role. A
+writer's refusal is recorded as a denial of the step's action
+(`iam:policy.attach`, `iam:policy.detach` for a removal), and the
+platform's is not. A policy that holds such an identifier from before
+is neither changed nor deleted by the service, and is removed by an
+operator from the database.
 
 `garam policy-feed start` marks every membership with the rest of the
 backfill, and so does migration 000075 for a feed already on, both
@@ -488,6 +521,70 @@ another consent, keeps it waiting until the pass that delivers it.
 The send path still asks the platform's relation before the engine
 (`consentStands`, `platform/internal/machineapi/message.go`) and does
 not read the attribute; its own round removes the check.
+
+#### Operator operations
+
+A hosted operator's delegation is an attribute of its `Iam::Operator`,
+fed as ADR-0146 §A states (migration 000078). `policy_entity_state`
+returns `operations`, the operations of the operator's current grant
+(the `operator_delegations` row with no `ended_at`), and the pass sends
+them as `EntityUpsert.operations`. The relation stays the fact: the
+attribute is read back from it at each delivery and holds no state of
+its own.
+
+The names are the wire form already. `operator_delegations.operations`
+holds the ten `iam:` names of the policy service's Iam manifest
+(`iam:agent.create` and the rest, since migration 000072), which are
+the actions `Iam::Operator` is principal of, so nothing maps one to the
+other. A test holds the platform's names to the manifest's list of ten.
+A name stored that the service does not list as delegable is refused
+whole by the service: the operator's entity is then deleted and logged
+as any refused entity is (ADR-0140 item 11), and it denies.
+
+An operator also sits in its organization's `Iam::OrgMembers`, beside
+its `Iam::Org` parent. Tenant isolation permits a principal that is in
+the resource's `org.members`, and the Operator schema declares the
+operator in `OrgMembers` for that reason, as an agent is. No policy
+grants anything by that membership, so it adds no authority.
+
+No mark kind is added, because the attribute belongs to the entity the
+outbox already holds. A trigger on `operator_delegations` marks the
+`Iam::Operator` the row names on an insert, a delete and a change of
+`ended_at`, which are the whole life of a grant: writing one, ending
+one, replacing one (the end of the old and the insert of the new,
+in one transaction) and the cascade that deletes them with an operator
+or an organization. A delegation is thereby delivered as the operator's
+`operations`, and an end as what then stands, none or the new set, from
+the transaction that wrote it.
+
+**Expiry is not fed.** `expires_at` is a moment, so a grant lapsing
+writes no row and marks nothing, and the fed operations are those the
+row holds whether or not it has lapsed. The platform still refuses an
+ended or lapsed grant before it asks (ADR-0146 §A), because the
+grant's time is its own: a lapsed grant that was not ended is in the
+service with its operations until it is ended or replaced, which is
+why no decision may rest on the attribute alone until the platform's
+own round.
+
+`garam policy-feed start` takes `operator_delegations` among the tables
+it locks and marks every `Iam::Operator`, and migration 000078 marks
+every operator for a feed that is already on, since each gains its
+parent, so a delegation that existed before is delivered.
+
+The write route and the end route of the browser-facing listener read
+their own write as §Role links says, on the `Iam::Operator` mark of the
+operator whose delegation changed: they wait until the outbox holds no
+mark of that entity and answer 503 `unavailable` with
+`change_not_applied` and the operator's organization in `resource` at 5
+seconds. The grant is stored then, and a repeat with the same request
+id answers as it did. The other writes of an operator (its details and
+its control endpoint) do not wait. A later write that marks the same
+operator keeps a wait going until the pass that delivers it.
+
+Who decides an operator's authority is unchanged: the `CheckCurrent`
+consumers, the minting of an operation authority and the controller
+proof read the platform's grant, not the attribute. Their own round
+removes that.
 
 ### The signer
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # gaon-build.sh CLONE COMMIT BINDIR: builds gaon's services and the
-# gaonharness of this directory from COMMIT, in CLONE.
+# gaonharness of this directory's testdata from COMMIT, in CLONE.
 #
 # CLONE is a fresh `git clone --no-hardlinks` of gaon made by the
 # caller, so gaon's own checkout is neither changed nor checked out. The
@@ -29,5 +29,5 @@ for service in gaon-apiserver:./apiserver/cmd/gaon-apiserver gaon-scheduler:./sc
 	CGO_ENABLED=0 go build -o "$bindir/${service%%:*}" "${service#*:}"
 done
 mkdir -p tooling/e2e/gaonharness1862
-cp "$here/gaonharness/main.go" tooling/e2e/gaonharness1862/main.go
+cp "$here/testdata/gaonharness/main.go" tooling/e2e/gaonharness1862/main.go
 (cd tooling/e2e && go build -tags gaonharness -o "$bindir/gaonharness1862" ./gaonharness1862)

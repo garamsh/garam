@@ -277,9 +277,10 @@ above.
   printf '%s' 'grn:root/iam/org/<id>' | sha256sum | cut -c1-32
   ```
 
-  The operator creates none and never uses or logs a value; gaon resolves the `valueFrom` when the MicroVM
-  starts, so a Secret created later is not seen by a MicroVM already
-  started. A name is one Secret, labelled for one organization.
+  The operator creates none and never uses or logs a value. A name is
+  one Secret, labelled for one organization. What gaon's files say of a
+  Secret that changes after a MicroVM exists is under §What is not
+  established.
 - **A gaon role for the operator**, created and bound by an
   administrator to the certificate with CN `garam-gaon-operator` and no
   Organization. In the compute group it holds `list`, `create`,
@@ -303,10 +304,10 @@ above.
   Node Agent with `gaon-storage-local`, and the operator's client
   certificate bound to a role (§Settings, §What the deployment must
   create). The Node Agent runs against a minimal mvmd of
-  `pair-run/gaonharness`, which keeps Machines and Disks in memory and
-  starts nothing. The run shows the MicroVM `Running` and `Ready` as
-  that Node Agent reports it, and shows no guest program: the three
-  programs of the composed guest image never ran.
+  `pair-run/testdata/gaonharness`, which keeps Machines and Disks in
+  memory and starts nothing. The run shows the MicroVM `Running` and
+  `Ready` as that Node Agent reports it, and shows no guest program: the
+  three programs of the composed guest image never ran.
 - **A get refused for lack of labels, and the operator's own watch.**
   The role grants no `get`, and a get of a MicroVM or a Secret by name
   is refused for that, which says nothing about a label. The operator
@@ -318,9 +319,29 @@ above.
   `writerStoppedSha256`, the SHA-256 of the canonical JSON of the stop
   observed on an earlier MicroVM, is not built, so a replaced MicroVM is
   not registered.
-- **A changed configuration.** A MicroVM's spec is immutable and a
-  `valueFrom` is not refreshed, so a changed `configuration` or
-  `apiKeyRef` does not reach a MicroVM that exists.
+- **A changed configuration, and a changed Secret or ConfigMap.** The
+  operator writes only `runStrategy` to a MicroVM that exists
+  (`internal/agent/service.go`), so a changed `configuration` or
+  `apiKeyRef` reaches none. For a Secret or ConfigMap that a `valueFrom`
+  names and that changes, gaon's files at commit
+  `2387cebd0b44b322b7da2ff485144a7456a97c6f` state, and none of it was
+  observed here, since no guest has run under gaon:
+  - an `env` entry: it is resolved when the MicroVM starts and not
+    updated while it runs (`lib/api/microvm_process.go`, the comment on
+    `ValueSource`; `docs/architecture/resource-api.md`, the `env`
+    bullet of §MicroVM). The Node Agent resolves `env` and `files`
+    again at each start of a machine it already holds, so a changed
+    value reaches an `env` entry at the next start and never a running
+    guest's (`docs/architecture/node-agent.md`, the Run strategy and
+    resolution bullet).
+  - a `files` entry: its value is replaced in the running MicroVM when
+    the object changes (`lib/api/microvm_process.go`, the same comment,
+    citing ADR 0029). The file is read again while the MicroVM runs
+    and replaced when the value changes
+    (`docs/architecture/resource-api.md`, the `files` bullet of
+    §MicroVM); a running guest gets a changed file by that replacement
+    (`docs/architecture/node-agent.md`, the same Run strategy and
+    resolution bullet).
 
 `make pair-run` runs the same steps with `tests/gaonstandin` in place
 of gaon, which serves `tests/gaonfake` on a port. It shows none of

@@ -8,9 +8,10 @@
 //
 // It follows gaon's tooling/e2e/extensions (build tag extensions),
 // which cannot be imported: that package is test files only. This
-// module does not build it. pair-run.sh copies it into a clone of
-// gaon's tooling/e2e module, where etcd and mvmd's runtime API are
-// already required, and builds it there.
+// module does not build it, and `go mod tidy` does not read it: it
+// sits under testdata, which go skips. gaon-build.sh copies it into a
+// clone of gaon's tooling/e2e module, where etcd and mvmd's runtime
+// API are already required, and builds it there.
 //
 // It issues the certificates from one CA, writes the administrator's
 // and the operator's client certificates and keys and the CA to -out,

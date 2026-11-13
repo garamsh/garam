@@ -1,8 +1,9 @@
 # Local stack
 
 Runs the whole garam stack on one machine with Docker Compose:
-Postgres, migrations, the authz engine, the API, and — behind
-profiles — the web frontend, cowork and the policy service.
+Postgres, migrations, the authz engine, the policy service with the
+feed that fills it, the API, and — behind profiles — the web frontend
+and cowork.
 
 `garam serve machine` — the listener a machine identity authenticates
 on — is not part of this stack
@@ -18,8 +19,9 @@ starts only its `postgres`, `openbao` and `rustfs` services for the Go
 suites `make integration` and `make e2e`, and `make db-down` removes
 them again; `rustfs` is the S3 API cowork's blob store is tested
 against, under keys that are this stack's alone; `make
-backend-up` starts everything but the profile-gated `web` service, which
-is the backend `make web-e2e` drives. Every concern shares the one
+backend-up` starts everything but the profile-gated `web` service, the
+policy service and its feed included, which is the backend `make
+web-e2e` drives. Every concern shares the one
 compose project `garam-local` and its `postgres-data` volume — there is
 no second compose file.
 
@@ -86,8 +88,8 @@ moves that one server rather than standing up a second.
 
 ## Files
 
-- `docker-compose.yml` — the stack; the `web`, `cowork` and `policy`
-  services are profile-gated.
+- `docker-compose.yml` — the stack; the `web` and `cowork` services are
+  profile-gated.
 - `Dockerfile` — multi-stage build of the `garam` binary; context is the
   repository root.
 - `Dockerfile.cowork` — multi-stage build of the `cowork` binary;
@@ -96,10 +98,10 @@ moves that one server rather than standing up a second.
 - `Dockerfile.policy` — multi-stage build of the `policy` binary;
   context is the repository root, kept to `policy/` by
   `Dockerfile.policy.dockerignore`.
-- `policy-tls.sh` — the throwaway certificate the `policy` profile
-  serves under.
-- `policy-jwks.json` — the public key the `policy` profile verifies
-  against, whose private half was never kept.
+- `policy-tls.sh` — the throwaway certificate the policy service
+  serves under, made once.
+- `policy-keys.sh` — the signing key the api mints policy tokens with
+  and the JWKS the policy service verifies them against, made once.
 - `docker-compose.codehub-e2e.yml`, `codehub-e2e-keys.sh` — what `make
   codehub-e2e` adds to the stack; see codehub-e2e below.
 - `cowork-gateway.Caddyfile` — the path split on cowork's host.
@@ -186,19 +188,42 @@ stack, as `images.yml` does.
 
 ## policy
 
-```sh
-docker compose -f deploy/local/docker-compose.yml --profile policy up --build
-docker compose -f deploy/local/docker-compose.yml --profile policy down
-```
+The default stack runs the policy service, with no profile. It adds six
+services: `policy-db`, a one-shot that creates the `policy` database on
+the one Postgres where absent; `policy-migrate`, which applies
+`policy/migrations/` to it; `policy-tls`, a one-shot that writes a
+throwaway certificate into a volume; `policy-keys`, a one-shot that
+writes the signing key and the JWKS into another; `policy`, the server;
+and `policy-feed`, a one-shot that runs `garam policy-feed start`. No
+port is published.
 
-The `policy` profile adds four services: `policy-db`, a one-shot that
-creates the `policy` database on the one Postgres where absent;
-`policy-migrate`, which applies `policy/migrations/` to it;
-`policy-tls`, a one-shot that writes a new throwaway certificate into a
-volume at each start; and `policy`, the server. Nothing calls the
-service yet, so
-no port is published, and no token verifies against `policy-jwks.json`
-(ADR-0138).
+The api reaches the service at `policy:8443` over TLS, trusting the
+certificate `policy-tls` made as its CA, and signs its tokens with the
+key `policy-keys` made, under the issuer `https://garam.localhost`
+(`GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
+`GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER`; ADR-0146).
+`policy-feed` turns the feed on once `migrate` has applied the api's
+schema and the service is healthy, and backfills the outbox, so what the
+api wrote before is delivered as well. Running it again changes nothing
+but each row's generation.
+
+The key is made here and nowhere else: `policy-keys.sh` runs on first
+start and generates an RSA 2048 key and the JWKS holding its public
+half, whose `kid` is the key's RFC 7638 thumbprint. Both live in the
+`policy-keys` volume, mounted at `/policy-keys` in the api, read-only.
+`signing.pem` belongs to uid 10001, the api's user, at mode 600, and the
+policy service never mounts it: it is given `jwks.json` alone, at mode
+644. Nothing prints the key and nothing commits one. The files stay
+across `up`, and a fresh pair comes only with `down -v`, which drops the
+volume, the certificate with it, and the databases. The JWKS that was
+committed here is gone: nothing held its private half.
+
+cowork is not given its four policy settings here. They name the
+machine listener's token URL and a deployment key issued by the identity
+issuer, and this stack runs neither: `garam serve machine` is not part
+of it, and the issuer is off. A cowork given the four would decide
+through the service and fail every call, so it keeps deciding through
+the platform.
 
 The service serves no plaintext, here or anywhere (`policy/README.md`
 §Transport). The stack's connection to Postgres is the one thing here
@@ -219,8 +244,8 @@ codehub's token client, adapter and outbox. The run prints each
 request and the answer's status and body, with a token cut to its
 header, its claims and the first 12 characters of its signature.
 
-`docker-compose.codehub-e2e.yml` is the override, used with the
-`policy` profile and never by the default stack: it turns the identity
+`docker-compose.codehub-e2e.yml` is the override, never used by the
+default stack: it turns the identity
 issuer on, adds a `machine` service running `serve machine`, points the
 policy service at the issuer's own keys, and publishes the api, the
 machine listener and the policy service each on a free host port. The
@@ -255,10 +280,14 @@ grant the garam CLI uses, approved with the owner's session.
 
 `migrate` runs once against a healthy Postgres and exits; `authz` and
 `api` wait for it to have exited successfully. `api` additionally waits
-for `authz`, and `web` and `site` for `api`. `cowork-migrate` waits
+for `authz`, `policy-tls` and `policy-keys`, and `web` and `site` for
+`api`. `cowork-migrate` waits
 for `cowork-db`, `cowork` for it, `rustfs` and `api`, `cowork-web` for
 `cowork`, and `cowork-gateway` for `cowork-web`. `policy-migrate` waits
-for `policy-db`, and `policy` for it and `policy-tls`. Every server's
+for `policy-db`, `policy` for it, `policy-tls` and `policy-keys`, and
+`policy-feed` for `migrate` and a healthy `policy`. `api` does not wait
+for `policy`: a policy service that is down delays a write by the gate's
+five seconds and never keeps the api from starting. Every server's
 healthcheck is its own readiness probe, so a service is healthy here
 when it can serve a request and not merely when it has bound its port.
 

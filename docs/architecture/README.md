@@ -1452,6 +1452,17 @@ ADRs:
   refusal is `PERMISSION_DENIED`, which ADR-0160 sets aside, and a
   writer's is recorded as a denial; no migration; accepted, built
   (#1882, second half); supersedes 0146 in part; extended by 0163
+- [0162](./adr/0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)
+  — a group's and a project's roles are written as scoped role links
+  under ADR-0163's identifier, from a third kind of mark,
+  `Iam::ScopedRoleLink`, whose id is the owner's GRN; the outbox's
+  kinds are a family, each link kind with its own state function; the
+  pass writes the roles held and deletes the policy of each of the
+  three not held, so a role removed, a role changed and a deleted
+  group or project are one operation; creating, updating and deleting
+  a group or a project wait on the mark; a user's direct roles are
+  removed with migration 000079; accepted, built (#1896); supersedes
+  0146 in part, on inventory row 2, and extends 0159 item 4
 - [0163](./adr/0163-the-platform-alone-writes-under-the-identifier-of-the-scoped-link-it-derives-from-a-groups-or-a-projects-roles.md)
   — the identifiers opening `link-scoped-` are reserved to the scoped
   link the platform derives from a group's or a project's roles,

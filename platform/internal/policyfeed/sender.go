@@ -20,4 +20,11 @@ type Sender interface {
 	// may remove are removed, and the links after it are still sent. Any
 	// other failure is the error and fails the call.
 	SendLinks(ctx context.Context, links []Link) ([]LinkRefusal, error)
+	// SendScopedLinks makes the policy service hold the scoped links of
+	// each group or project as it says: the link of each role named is
+	// written and the link of each of the other roles is removed, so a
+	// role taken away, and a group or a project deleted, leave no link
+	// behind. Writes, removals and refusals are as SendLinks's, and a
+	// refused owner has the links of all its roles removed.
+	SendScopedLinks(ctx context.Context, links []ScopedLink) ([]ScopedLinkRefusal, error)
 }

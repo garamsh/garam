@@ -880,8 +880,7 @@ paths:
         the answer is `deny` because one matched, every matching `Allow`
         when it is `allow`, and none when it is `deny` because nothing
         allows it. Each names the path through which it reaches the
-        caller: their org role, the roles stored on them, a group's or
-        project's roles, or a policy that applies org-wide, is attached
+        caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached
         to them, or is attached to a group they belong to. A policy
         reaching by two paths is named once for each.
 
@@ -930,9 +929,9 @@ paths:
       description: >-
         Answers which principals of the organization the policy engine
         allows `action` on the resource, each asked as enforcement asks
-        it: a member with their org role, the roles stored on them, the
-        roles of the target group or project they belong to, their
-        groups and the policies reaching them; an agent, which holds no
+        it: a member with their org role, the roles of the target group
+        or project they belong to, their groups and the policies
+        reaching them; an agent, which holds no
         role, with its groups and the policies reaching it.
 
 
@@ -3801,7 +3800,7 @@ components:
       description: >-
         One statement that decided and the path through which it
         reaches the caller. `source` says which fields are present:
-        `roles` for the four role sources, `group` for `group-role`,
+        `roles` for the three role sources, `group` for `group-role`,
         `project` for `project-role`, and `sid`, `policy` and
         `attachment` for `policy` — with `group` where `attachment` is
         `group`. `unreadable-policy` carries `effect` alone.
@@ -3813,8 +3812,8 @@ components:
           x-enum-varnames: [StatementEffectAllow, StatementEffectDeny]
         source:
           type: string
-          enum: [org-role, direct-role, group-role, project-role, policy, unreadable-policy]
-          x-enum-varnames: [SourceOrgRole, SourceDirectRole, SourceGroupRole, SourceProjectRole, SourcePolicy, SourceUnreadablePolicy]
+          enum: [org-role, group-role, project-role, policy, unreadable-policy]
+          x-enum-varnames: [SourceOrgRole, SourceGroupRole, SourceProjectRole, SourcePolicy, SourceUnreadablePolicy]
         sid:
           type: string
         roles:

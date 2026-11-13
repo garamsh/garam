@@ -15,8 +15,6 @@ import (
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
-	"github.com/garamsh/garam/platform/internal/user"
-	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
 	"github.com/garamsh/garam/platform/internal/wire"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
@@ -30,17 +28,16 @@ func NewAuthorityService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) op
 	delegations := operatorpg.New(pool)
 	return operator.NewAuthorityService(delegations, delegations, operatorpg.New(pool),
 		agentPlacements{store: agentpg.New(pool)},
-		currentAuthorization{orgs: orgpg.New(pool), users: userpg.New(pool),
-			engine: authzv1.NewAuthzServiceClient(engine)},
+		currentAuthorization{orgs: orgpg.New(pool), engine: authzv1.NewAuthzServiceClient(engine)},
 		operator.Config{})
 }
 
 // currentAuthorization decides a user's authority from current state
-// (operator.Authorizer): the membership, the roles stored on the user
-// and the groups it belongs to, read for this call, and the
-// organization's persisted policies read past the engine's cache by
-// CheckCurrent. An engine that does not serve CheckCurrent answers
-// UNIMPLEMENTED, which refuses rather than falling back to Check.
+// (operator.Authorizer): the membership and the groups the user
+// belongs to, read for this call, and the organization's persisted
+// policies read past the engine's cache by CheckCurrent. An engine that
+// does not serve CheckCurrent answers UNIMPLEMENTED, which refuses
+// rather than falling back to Check.
 //
 // The roles grant what they grant everywhere: on the organization and
 // on everything it owns (authz.md §Statement collection). Neither
@@ -48,7 +45,6 @@ func NewAuthorityService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) op
 // no scoped role is collected.
 type currentAuthorization struct {
 	orgs   org.Store
-	users  user.Store
 	engine authzv1.AuthzServiceClient
 }
 
@@ -57,10 +53,6 @@ func (a currentAuthorization) Authorize(ctx context.Context, actor, orgGRN, obje
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return errorx.New(errorx.KindPermissionDenied, "not a member of this org")
 	}
-	if err != nil {
-		return err
-	}
-	u, err := a.users.Get(ctx, actor)
 	if err != nil {
 		return err
 	}
@@ -75,7 +67,7 @@ func (a currentAuthorization) Authorize(ctx context.Context, actor, orgGRN, obje
 		Statements: []*authzv1.Statement{{
 			Sid:      "member-roles",
 			Effect:   authzv1.Effect_EFFECT_ALLOW,
-			Action:   org.ActionsFor(append([]string{string(m.Role)}, u.Roles...)),
+			Action:   m.Role.Actions(),
 			Resource: []string{orgGRN.String(), grn.OrgPattern(orgGRN.Identifier)},
 		}},
 		SubjectGroups: wire.GRNsToProto(groups),

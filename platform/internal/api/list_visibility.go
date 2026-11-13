@@ -26,7 +26,7 @@ func visible[T any](s *Server, r *http.Request, c *caller, action string, items 
 		Subject:       c.user.GRN,
 		Action:        action,
 		SubjectGroups: c.groups,
-		Statements:    memberStatements(c.org, c.member, c.user),
+		Statements:    memberStatements(c.org, c.member),
 		SubjectOrg:    c.org,
 		Objects:       objects,
 	})

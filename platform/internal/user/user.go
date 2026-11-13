@@ -2,10 +2,10 @@
 //
 // A User is identified by its GRN. Org membership is recorded in the
 // org domain (Membership); the User aggregate does not duplicate it.
-// Roles are stored directly on the User for fast lookup; the api
-// server collects them, along with group- and project-derived access,
-// at check time. Policies are stored but not yet evaluated: attaching
-// a policy to a single subject is future work (ADR-0007).
+// A User holds no role of its own: what it may do is read from its
+// membership, its groups and its projects (ADR-0162). Policies are
+// stored but not yet evaluated: attaching a policy to a single subject
+// is future work (ADR-0007).
 package user
 
 import (
@@ -35,16 +35,14 @@ var ErrUserReferenced = errorx.New(errorx.KindFailedPrecondition, "user is refer
 type User struct {
 	GRN       grn.GRN
 	Nickname  string
-	Roles     []string
 	Policies  []string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
 // New constructs a User, stamping CreatedAt and UpdatedAt from one
-// instant. The optional roles are the ones granted directly to the
-// User.
-func New(g grn.GRN, nickname string, roles ...string) *User {
+// instant.
+func New(g grn.GRN, nickname string) *User {
 	now := time.Now().UTC()
-	return &User{GRN: g, Nickname: nickname, Roles: roles, CreatedAt: now, UpdatedAt: now}
+	return &User{GRN: g, Nickname: nickname, CreatedAt: now, UpdatedAt: now}
 }

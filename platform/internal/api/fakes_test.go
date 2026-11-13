@@ -112,14 +112,6 @@ func (s *fakeUserStore) Delete(_ context.Context, g grn.GRN) error {
 	return nil
 }
 
-// grantRoles replaces the stored user with one carrying the given
-// direct roles; login creates users without any.
-func (s *fakeUserStore) grantRoles(g grn.GRN, roles ...string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.byID[g.String()] = user.New(g, s.byID[g.String()].Nickname, roles...)
-}
-
 // fakeSessionStore is an in-memory authn.SessionStore double. A
 // handoff is held unexpiring and redeemed once; that a sign-out ends
 // the sessions handed off from it is the Postgres store's, which the

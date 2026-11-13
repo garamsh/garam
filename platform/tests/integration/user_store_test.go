@@ -44,11 +44,9 @@ func TestUserStore_RoundTrip(t *testing.T) {
 
 	updated, err := s.Update(ctx, g, user.Patch{
 		Nickname: ptr("ada2"),
-		Roles:    []string{"admin"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "ada2", updated.Nickname)
-	assert.Equal(t, []string{"admin"}, updated.Roles)
 
 	require.NoError(t, s.Delete(ctx, g))
 	_, err = s.Get(ctx, g)

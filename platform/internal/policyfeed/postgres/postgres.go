@@ -36,8 +36,9 @@ const lockSources = `LOCK TABLE agents, group_members, groups, operators,
 
 // backfill marks what policy_outbox_track marks for each insert into
 // the six tables that own an entity. A member's row marks its user or
-// agent, which those tables already name, and each organization
-// membership marks its role link.
+// agent, which those tables already name, each organization
+// membership marks its role link, and each group and project marks its
+// scoped link.
 const backfill = `
 INSERT INTO policy_outbox (entity_type, entity_id)
 SELECT t, id FROM (
@@ -49,6 +50,8 @@ SELECT t, id FROM (
 	UNION ALL SELECT 'Iam::Agent', grn FROM agents
 	UNION ALL SELECT 'Iam::Operator', grn FROM operators
 	UNION ALL SELECT 'Iam::RoleLink', org_grn || ' ' || user_grn FROM org_members
+	UNION ALL SELECT 'Iam::ScopedRoleLink', grn FROM groups
+	UNION ALL SELECT 'Iam::ScopedRoleLink', grn FROM projects
 ) live
 ON CONFLICT (entity_type, entity_id)
 DO UPDATE SET generation = policy_outbox.generation + 1,

@@ -59,6 +59,17 @@ func (s *Server) awaitOperator(ctx context.Context, orgGRN, operatorGRN string) 
 	return namesStored(err, orgGRN)
 }
 
+// awaitScoped holds the answer of a request that has committed a change
+// to the roles of a group or a project, or its end, until the policy
+// service has applied the scoped links they mark (ADR-0162), and
+// answers as awaitLinks does, naming the organization.
+func (s *Server) awaitScoped(ctx context.Context, orgGRN, ownerGRN string) error {
+	if s.feed == nil {
+		return nil
+	}
+	return namesStored(s.feed.AwaitScoped(ctx, ownerGRN), orgGRN)
+}
+
 // namesStored wraps an error that says the change is stored but not
 // applied with the organization it concerns.
 func namesStored(err error, orgGRN string) error {

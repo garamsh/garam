@@ -366,7 +366,6 @@ func (e ExplainedStatementEffect) Valid() bool {
 
 // Defines values for ExplainedStatementSource.
 const (
-	SourceDirectRole       ExplainedStatementSource = "direct-role"
 	SourceGroupRole        ExplainedStatementSource = "group-role"
 	SourceOrgRole          ExplainedStatementSource = "org-role"
 	SourcePolicy           ExplainedStatementSource = "policy"
@@ -377,8 +376,6 @@ const (
 // Valid indicates whether the value is a known member of the ExplainedStatementSource enum.
 func (e ExplainedStatementSource) Valid() bool {
 	switch e {
-	case SourceDirectRole:
-		return true
 	case SourceGroupRole:
 		return true
 	case SourceOrgRole:
@@ -1236,7 +1233,7 @@ type Error struct {
 	Resource *string `json:"resource,omitempty"`
 }
 
-// ExplainedStatement One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the four role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone.
+// ExplainedStatement One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the three role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone.
 type ExplainedStatement struct {
 	// Attachment How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
 	Attachment *ExplainedStatementAttachment `json:"attachment,omitempty"`

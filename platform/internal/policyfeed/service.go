@@ -90,6 +90,12 @@ func (s *service) Run(ctx context.Context) error {
 					slog.String("code", r.Code),
 					slog.String("reason", r.Reason))
 			}
+			for _, r := range result.ScopedSetAside {
+				s.logger.Error("policy service refused a scoped role link for good; it is set aside",
+					slog.String("owner", r.Link.Owner),
+					slog.String("code", r.Code),
+					slog.String("reason", r.Reason))
+			}
 			for _, r := range result.Refused {
 				s.logger.Error("policy service refused an entity; its delete was sent instead",
 					slog.String("entity_type", r.Entity.Type),

@@ -24,6 +24,7 @@ type pendingStore struct {
 	err      error
 	org      string
 	user     string
+	owner    string
 	entity   policyfeed.Entity
 }
 
@@ -39,6 +40,13 @@ func (p *pendingStore) LinkState(_ context.Context, org, user string) (policyfee
 		return policyfeed.LinkPending, nil
 	}
 	return policyfeed.LinkApplied, nil
+}
+
+// ScopedLinkState answers as LinkState does, and records the owner it
+// was asked about.
+func (p *pendingStore) ScopedLinkState(_ context.Context, owner string) (policyfeed.LinkState, error) {
+	p.owner = owner
+	return p.LinkState(context.Background(), "", "")
 }
 
 // EntityPending reports a mark for the first `pending` reads, as
@@ -168,4 +176,39 @@ func TestGate_AwaitEntityReturnsTheStoresError(t *testing.T) {
 		AwaitEntity(context.Background(), policyfeed.Entity{Type: "Iam::Org", ID: "grn:o"})
 
 	require.ErrorIs(t, err, boom)
+}
+
+func TestGate_AwaitScopedReturnsOnceTheMarkIsGone(t *testing.T) {
+	store := &pendingStore{}
+	store.pending.Store(2)
+	svc := &wakeCounter{}
+
+	err := policyfeed.NewGate(store, svc, time.Second).
+		AwaitScoped(context.Background(), "grn:acme/iam/group/eng")
+
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, store.reads.Load(), "two reads with the mark, one without")
+	assert.EqualValues(t, 1, svc.wakes.Load(), "the loop is woken")
+	assert.Equal(t, "grn:acme/iam/group/eng", store.owner)
+}
+
+func TestGate_AwaitScopedRefusesAtTheBoundWhileTheMarkStays(t *testing.T) {
+	store := &pendingStore{}
+	store.pending.Store(1 << 40)
+
+	err := policyfeed.NewGate(store, &wakeCounter{}, 120*time.Millisecond).
+		AwaitScoped(context.Background(), "grn:acme/iam/group/eng")
+
+	require.ErrorIs(t, err, policyfeed.ErrNotApplied)
+}
+
+func TestGate_AwaitScopedAnswersASetAsideLinkAtOnce(t *testing.T) {
+	store := &pendingStore{setAside: true}
+
+	start := time.Now()
+	err := policyfeed.NewGate(store, &wakeCounter{}, time.Hour).
+		AwaitScoped(context.Background(), "grn:acme/iam/group/eng")
+
+	require.ErrorIs(t, err, policyfeed.ErrLinkSetAside)
+	assert.Less(t, time.Since(start), time.Second, "no wait for the bound")
 }

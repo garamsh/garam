@@ -11,7 +11,10 @@
 > (§5, "the outbox is a set" of dirty entities, which also holds a
 > role link) and superseded in part by
 > [ADR-0160](./0160-a-role-link-the-policy-service-refuses-for-good-is-set-aside-and-the-members-links-are-removed.md)
-> (item 2, for a link the service refuses for good)
+> (item 2, for a link the service refuses for good) and extended by
+> [ADR-0162](./0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)
+> (item 4's second kind of mark is the first of a family, which gains
+> a third)
 > Date: 2026-11-13
 
 Drafted for #1878, which reserves this number. It records four

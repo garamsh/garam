@@ -15,6 +15,7 @@ package gaonfake
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -44,7 +45,21 @@ type Server struct {
 // carries the selector, as the operator's does.
 func New(t *testing.T, selector api.Selector) (*Server, *api.Client) {
 	t.Helper()
-	s := &Server{objects: map[string]map[string][]byte{"microvms": {}, "secrets": {}, "volumes": {}}}
+	s := NewServer()
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	s.url = ts.URL
+	return s, api.NewClient(ts.URL, ts.Client(), api.WithLabelSelector(selector))
+}
+
+// NewServer returns a fake that is not listening. Its Handler is what
+// a command serves on a port of its own (tests/gaonstandin).
+func NewServer() *Server {
+	return &Server{objects: map[string]map[string][]byte{"microvms": {}, "secrets": {}, "volumes": {}}}
+}
+
+// Handler serves the three kinds' paths.
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	for kind := range s.objects {
 		mux.HandleFunc("PUT /"+kind+"/{name}", s.put(kind))
@@ -52,10 +67,7 @@ func New(t *testing.T, selector api.Selector) (*Server, *api.Client) {
 		mux.HandleFunc("GET /"+kind+"/{name}", s.get(kind))
 		mux.HandleFunc("GET /"+kind, s.list(kind))
 	}
-	ts := httptest.NewServer(mux)
-	t.Cleanup(ts.Close)
-	s.url = ts.URL
-	return s, api.NewClient(ts.URL, ts.Client(), api.WithLabelSelector(selector))
+	return mux
 }
 
 // URL is the address the fake serves at.
@@ -101,14 +113,27 @@ func (s *Server) Volume(t *testing.T, name string) (api.Volume, bool) {
 // a client's write goes through.
 func (s *Server) SetStatus(t *testing.T, name string, status api.MicroVMStatus) {
 	t.Helper()
-	m, ok := s.MicroVM(t, name)
-	if !ok {
-		t.Fatalf("gaonfake: no microvm %q to set the status of", name)
+	if err := s.WriteStatus(name, status); err != nil {
+		t.Fatalf("gaonfake: %v", err)
 	}
-	m.Status = status
+}
+
+// WriteStatus is SetStatus for a caller with no *testing.T: it answers
+// an error where the MicroVM does not exist.
+func (s *Server) WriteStatus(name string, status api.MicroVMStatus) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	raw, ok := s.objects["microvms"][name]
+	if !ok {
+		return fmt.Errorf("no microvm %q to set the status of", name)
+	}
+	var m api.MicroVM
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return fmt.Errorf("decode microvm %s: %w", name, err)
+	}
+	m.Status = status
 	s.store("microvms", name, &m, &m.Metadata)
+	return nil
 }
 
 // RemoveVolume removes a Volume as a person would, outside the

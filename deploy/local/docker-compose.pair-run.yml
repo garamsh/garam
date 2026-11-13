@@ -1,0 +1,161 @@
+# What `make -C gaon-operator pair-run` adds to docker-compose.yml,
+# never in the default stack: garam's machine listener (the operator's
+# and the control service's token exchange and the agent's mint, report
+# and introspection all go to it), and the control service of
+# garamsh/garam-agent-operator at the digest below, with a database of
+# its own on the stack's postgres. gaon-operator/pair-run/pair-run.sh
+# writes the key material these read into $PAIR_RUN_KEYS_DIR, names the
+# project and removes both at the end.
+#
+# The control image is in a private registry. Compose pulls it with the
+# login the caller already holds; nothing is pushed, tagged or deleted.
+#
+# Nothing here publishes a port the default stack does, so a run can sit
+# beside it: each port is published to a free one on the loopback, which
+# the script asks compose for.
+
+services:
+  postgres:
+    ports: !reset []
+
+  authz:
+    ports: !reset []
+
+  api:
+    ports: !override
+      - "127.0.0.1::8080"
+    environment:
+      GARAM_MACHINE_TOKEN_URL: https://machine:8443/oauth/token
+
+  # Copies what the script made on the host into the volume the machine
+  # listener reads, owned by the account it runs as (ADR-0017): the
+  # image's account cannot read a key made by the host's.
+  machine-keys:
+    image: alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+    command:
+      - sh
+      - -c
+      - >-
+        cp /in/machine.crt /in/machine.key /in/kek.hex /keys/ &&
+        chown 10001 /keys/machine.key /keys/kek.hex &&
+        chmod 600 /keys/machine.key /keys/kek.hex &&
+        chmod 644 /keys/machine.crt
+    volumes:
+      - ${PAIR_RUN_KEYS_DIR:?names the directory of keys the run made}:/in:ro
+      - machine-keys:/keys
+    restart: "no"
+
+  machine:
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+    command: ["serve", "machine"]
+    environment:
+      GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
+      GARAM_AUTHZ_ADDR: authz:9090
+      GARAM_MACHINE_ADDR: ":8443"
+      GARAM_MACHINE_HEALTH_ADDR: ":8444"
+      GARAM_MACHINE_TLS_CERT_FILE: /keys/machine.crt
+      GARAM_MACHINE_TLS_KEY_FILE: /keys/machine.key
+      GARAM_MACHINE_SERVER_ROOT_FILE: /keys/machine.crt
+      GARAM_CA_KEY_FILE: /keys/kek.hex
+      GARAM_MACHINE_ISSUER: https://machine:8443
+      GARAM_MACHINE_TOKEN_URL: https://machine:8443/oauth/token
+    ports:
+      - "127.0.0.1::8443"
+    volumes:
+      - machine-keys:/keys:ro
+    depends_on:
+      machine-keys:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      authz:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/garam", "probe", "http://127.0.0.1:8444/readyz"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # The control service keeps a database of its own on the one server,
+  # made as policy-db makes the policy service's.
+  control-db:
+    image: postgres:17.11-alpine3.24@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      PGHOST: postgres
+      PGUSER: garam
+      PGPASSWORD: garam
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        present=$$(psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='control'") || exit 1;
+        test -n "$$present" || createdb control
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # The files the control service reads, owned by the account its image
+  # runs as (65532): the key garam issued it, its client id and token
+  # URL, its API certificate and key, and the root of garam's listener.
+  # They exist when this runs, because the script registers the pair
+  # and issues the key before it starts the control service.
+  control-keys:
+    image: alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+    command:
+      - sh
+      - -c
+      - >-
+        cp /in/control-operator.key /in/control-client-id /in/control-token-url
+        /in/control-api.crt /in/control-api.key /in/machine.crt /keys/ &&
+        chown 65532 /keys/* && chmod 400 /keys/*
+    volumes:
+      - ${PAIR_RUN_KEYS_DIR:?names the directory of keys the run made}:/in:ro
+      - control-keys:/keys
+    restart: "no"
+
+  # The image's own subcommand publishes the profile (control.md): the
+  # deployment's job, not a console route and not SQL. The file is in
+  # the public directory, which the image's account can read.
+  control-profile:
+    image: &control 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-agent-operator/control@sha256:8a90ac1dcc9e9636802b180daaf6bf03162899ad3f3771c469885eb627dfd745
+    command: ["publish-profile", "--file", "/pub/profile.yaml"]
+    environment:
+      CONTROL_DATABASE_URL: &control-db postgres://garam:garam@postgres:5432/control?sslmode=disable
+    volumes:
+      - ${PAIR_RUN_PUBLIC_DIR:?names the directory of files the run made for the control image}:/pub:ro
+    # Not started with the stack: the script runs it once the control
+    # service has migrated its schema, which the subcommand requires.
+    profiles: ["profile"]
+    restart: "no"
+
+  control:
+    image: *control
+    command:
+      - --api-certificate-file=/keys/control-api.crt
+      - --api-key-file=/keys/control-api.key
+      - --garam-machine-url=https://machine:8443
+      - --garam-server-root-file=/keys/machine.crt
+      - --operator-private-key-file=/keys/control-operator.key
+      - --operator-client-id-file=/keys/control-client-id
+      - --operator-token-url-file=/keys/control-token-url
+    environment:
+      CONTROL_DATABASE_URL: *control-db
+    ports:
+      - "127.0.0.1::8080"
+      - "127.0.0.1::8081"
+    volumes:
+      - control-keys:/keys:ro
+    depends_on:
+      control-db:
+        condition: service_completed_successfully
+      control-keys:
+        condition: service_completed_successfully
+      machine:
+        condition: service_healthy
+
+volumes:
+  machine-keys:
+  control-keys:

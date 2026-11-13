@@ -129,6 +129,15 @@ services:
       GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
       GARAM_HTTP_ADDR: ":8080"
       GARAM_AUTHZ_ADDR: authz:9090
+      # The policy service the feed delivers to (ADR-0140), verifying
+      # its certificate against the pair policy-tls wrote and signing
+      # each call with the key policy-keys made, whose public half the
+      # service trusts. The identity issuer stays off: it needs
+      # GARAM_IDENTITY_ISSUER too.
+      GARAM_POLICY_ADDR: policy:8443
+      GARAM_POLICY_CA_FILE: /policy-tls/tls.crt
+      GARAM_POLICY_SIGNING_KEY_FILE: /policy-keys/signing.pem
+      GARAM_POLICY_TOKEN_ISSUER: https://garam.localhost
       # Plain HTTP locally, so the session cookie cannot be Secure.
       GARAM_COOKIE_SECURE: "false"
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -142,6 +151,12 @@ services:
       GARAM_MACHINE_TOKEN_URL: ${GARAM_MACHINE_TOKEN_URL:-https://machine.garam.localhost/oauth/token}
     ports:
       - "${GARAM_LOCAL_API_PORT:-8080}:8080"
+    volumes:
+      - policy-tls:/policy-tls:ro
+      - policy-keys:/policy-keys:ro
+    # Not on the policy service: the api reads the key and the CA at
+    # start and reaches the service lazily, and the runs that build on
+    # this file bring the api up before, or without, their own.
     depends_on:
       postgres:
         condition: service_healthy
@@ -149,6 +164,10 @@ services:
         condition: service_completed_successfully
       authz:
         condition: service_healthy
+      policy-tls:
+        condition: service_completed_successfully
+      policy-keys:
+        condition: service_completed_successfully
     # /readyz covers the database and the engine channel both, so `web`
     # waits for an api that can serve a request rather than one that has
     # bound its port. The probe is the binary's own subcommand, as for
@@ -287,9 +306,10 @@ services:
       COWORK_USERCONTENT_SECRET: local-stack-only-usercontent-signing-key
       # The policy service cowork asks where these four are set, and
       # the platform where none is. This stack leaves them empty: the
-      # service's CA and cowork's deployment key are files it would
-      # have to mount, and an address without the rest refuses to
-      # start.
+      # token URL is the machine listener's, which this stack does not
+      # run, and a cowork given the four decides through the service
+      # and not the platform, so every call would fail. An address
+      # without the rest refuses to start.
       COWORK_POLICY_ADDR: ${COWORK_LOCAL_POLICY_ADDR:-}
       COWORK_POLICY_CA_FILE: ${COWORK_LOCAL_POLICY_CA_FILE:-}
       COWORK_MACHINE_TOKEN_URL: ${COWORK_LOCAL_MACHINE_TOKEN_URL:-}
@@ -312,10 +332,8 @@ services:
       retries: 10
 
   # The policy service keeps a database of its own on the one Postgres
-  # (ADR-0130), created as cowork-db creates cowork's. Nothing calls the
-  # service yet.
+  # (ADR-0130), created as cowork-db creates cowork's.
   policy-db:
-    profiles: ["policy"]
     image: postgres:17.11-alpine3.24@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     environment:
       PGHOST: postgres
@@ -333,7 +351,6 @@ services:
     restart: "no"
 
   policy-migrate:
-    profiles: ["policy"]
     build:
       context: ../..
       dockerfile: deploy/local/Dockerfile.policy
@@ -346,10 +363,9 @@ services:
     restart: "no"
 
   # policy serves no plaintext, here as anywhere: this one-shot writes
-  # it a certificate only this stack trusts, a new one at each start,
-  # owned by the account the image runs as.
+  # it a certificate only this stack trusts, once, owned by the account
+  # the image runs as. The api trusts that certificate as its CA.
   policy-tls:
-    profiles: ["policy"]
     image: alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
     command: ["sh", "/policy-tls.sh", "policy", "10001"]
     volumes:
@@ -357,11 +373,21 @@ services:
       - policy-tls:/tls
     restart: "no"
 
-  # policy-jwks.json holds a public key whose private half was never
-  # kept, so no token verifies here until the platform's issuer lands
-  # (ADR-0138). The contract's port is published to nothing.
+  # One-shot: makes, once, the key the api signs the service's tokens
+  # with, owned by the account the api runs as, and the JWKS the
+  # service trusts for it. Both are this stack's alone, held in a
+  # volume and printed nowhere.
+  policy-keys:
+    image: alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+    command: ["sh", "/policy-keys.sh", "10001"]
+    volumes:
+      - ./policy-keys.sh:/policy-keys.sh:ro
+      - policy-keys:/keys
+    restart: "no"
+
+  # The contract's port is published to nothing. The service is given
+  # the JWKS alone of the keys volume, never the signing key.
   policy:
-    profiles: ["policy"]
     build:
       context: ../..
       dockerfile: deploy/local/Dockerfile.policy
@@ -375,12 +401,19 @@ services:
       POLICY_TLS_CERT_FILE: /etc/policy/tls/tls.crt
       POLICY_TLS_KEY_FILE: /etc/policy/tls/tls.key
     volumes:
-      - ./policy-jwks.json:/etc/policy/jwks.json:ro
+      - type: volume
+        source: policy-keys
+        target: /etc/policy/jwks.json
+        read_only: true
+        volume:
+          subpath: jwks.json
       - policy-tls:/etc/policy/tls:ro
     depends_on:
       policy-migrate:
         condition: service_completed_successfully
       policy-tls:
+        condition: service_completed_successfully
+      policy-keys:
         condition: service_completed_successfully
     # /readyz, which answers while the database does. The image is
     # scratch, so the check runs the binary's own probe subcommand.
@@ -389,6 +422,26 @@ services:
       interval: 2s
       timeout: 5s
       retries: 10
+
+  # One-shot: turns the feed of the platform's entities on and marks
+  # every live one (ADR-0140 item 10), which the api's loop delivers.
+  # Run again it marks them again, so a run after the service's
+  # database was lost redelivers. Not a dependency of the api: the
+  # runs that add their own policy service start it themselves, and
+  # no write is marked until the feed is on.
+  policy-feed:
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+    command: ["policy-feed", "start"]
+    environment:
+      GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      policy:
+        condition: service_healthy
+    restart: "no"
 
   # cowork-web reads every address at runtime; nothing is baked. Its
   # server reaches cowork and the api inside the network, and the
@@ -441,3 +494,4 @@ services:
 volumes:
   postgres-data:
   policy-tls:
+  policy-keys:

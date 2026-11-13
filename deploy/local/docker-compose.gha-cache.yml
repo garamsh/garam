@@ -1,7 +1,9 @@
 # Layered over docker-compose.yml when IMAGE_BUILD_CACHE=gha (Makefile),
-# so the server image `make backend-up` builds reads and writes its
-# layers in the GitHub Actions cache (#1519). migrate, authz and api
-# build the same image; one writes the cache and all three read it.
+# so the images `make backend-up` builds read and write their layers in
+# the GitHub Actions cache (#1519). migrate, authz, api and policy-feed
+# build the server image; one writes the cache and all four read it.
+# policy-migrate and policy build the policy image the same way, under
+# a scope of their own.
 services:
   migrate:
     build:
@@ -13,3 +15,13 @@ services:
     build:
       cache_from: ["type=gha,scope=backend-up"]
       cache_to: ["type=gha,mode=max,scope=backend-up"]
+  policy-feed:
+    build:
+      cache_from: ["type=gha,scope=backend-up"]
+  policy-migrate:
+    build:
+      cache_from: ["type=gha,scope=backend-up-policy"]
+  policy:
+    build:
+      cache_from: ["type=gha,scope=backend-up-policy"]
+      cache_to: ["type=gha,mode=max,scope=backend-up-policy"]

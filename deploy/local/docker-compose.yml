@@ -6,6 +6,11 @@
 # truncates. See README.md.
 name: garam-local
 
+# The identity issuer's name (ADR-0141), which the api and the machine
+# listener serve and the policy service trusts: one string, because the
+# three refuse to start on two.
+x-identity-issuer: &identity-issuer https://garam.localhost/api
+
 services:
   postgres:
     # Digest as well as tag: the tag resolves through a mutable pointer,
@@ -132,12 +137,12 @@ services:
       # The policy service the feed delivers to (ADR-0140), verifying
       # its certificate against the pair policy-tls wrote and signing
       # each call with the key policy-keys made, whose public half the
-      # service trusts. The identity issuer stays off: it needs
-      # GARAM_IDENTITY_ISSUER too.
+      # service trusts. The same key signs the identity issuer's tokens.
       GARAM_POLICY_ADDR: policy:8443
       GARAM_POLICY_CA_FILE: /policy-tls/tls.crt
       GARAM_POLICY_SIGNING_KEY_FILE: /policy-keys/signing.pem
-      GARAM_POLICY_TOKEN_ISSUER: https://garam.localhost
+      GARAM_POLICY_TOKEN_ISSUER: *identity-issuer
+      GARAM_IDENTITY_ISSUER: *identity-issuer
       # Plain HTTP locally, so the session cookie cannot be Secure.
       GARAM_COOKIE_SECURE: "false"
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -145,9 +150,10 @@ services:
       # Sign-in is the site's, so Google returns the browser there.
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://garam.localhost:3001/api/auth/callback/google}
       # Lets the local stack issue operator keys (ADR-0102), which the
-      # console's key setup and its e2e need. Nothing exchanges them
-      # locally: the stack runs no machine listener, so the URL is only
-      # the audience an issued key's assertions would name.
+      # console's key setup and its e2e need. It is the name a browser
+      # of this host would give the listener, which the key setup shows
+      # and the e2e reads; the listener below is reached at
+      # machine:8443, and nothing here exchanges a key through this URL.
       GARAM_MACHINE_TOKEN_URL: ${GARAM_MACHINE_TOKEN_URL:-https://machine.garam.localhost/oauth/token}
     ports:
       - "${GARAM_LOCAL_API_PORT:-8080}:8080"
@@ -304,19 +310,25 @@ services:
       COWORK_USERCONTENT_ORIGIN: http://localhost:${COWORK_LOCAL_USERCONTENT_PORT:-8092}
       COWORK_USERCONTENT_ADDR: ":8092"
       COWORK_USERCONTENT_SECRET: local-stack-only-usercontent-signing-key
-      # The policy service cowork asks where these four are set, and
-      # the platform where none is. This stack leaves them empty: the
-      # token URL is the machine listener's, which this stack does not
-      # run, and a cowork given the four decides through the service
-      # and not the platform, so every call would fail. An address
-      # without the rest refuses to start.
-      COWORK_POLICY_ADDR: ${COWORK_LOCAL_POLICY_ADDR:-}
-      COWORK_POLICY_CA_FILE: ${COWORK_LOCAL_POLICY_CA_FILE:-}
-      COWORK_MACHINE_TOKEN_URL: ${COWORK_LOCAL_MACHINE_TOKEN_URL:-}
-      COWORK_DEPLOYMENT_KEY_FILE: ${COWORK_LOCAL_DEPLOYMENT_KEY_FILE:-}
+      # The policy service cowork asks what a caller may do, with the
+      # token the machine listener issues it for the deployment key
+      # cowork-keys made. The CA file holds both certificates: the
+      # service's, and the listener's the token request verifies.
+      COWORK_POLICY_ADDR: policy:8443
+      COWORK_POLICY_CA_FILE: /cowork-keys/ca.crt
+      COWORK_MACHINE_TOKEN_URL: https://machine:8443/oauth/token
+      COWORK_DEPLOYMENT_KEY_FILE: /cowork-keys/deployment.pem
     ports:
       - "${COWORK_LOCAL_USERCONTENT_PORT:-8092}:8092"
+    volumes:
+      - cowork-keys:/cowork-keys:ro
     depends_on:
+      cowork-keys:
+        condition: service_completed_successfully
+      machine:
+        condition: service_healthy
+      policy:
+        condition: service_healthy
       cowork-migrate:
         condition: service_completed_successfully
       rustfs:
@@ -396,7 +408,7 @@ services:
       POLICY_ADDR: 0.0.0.0:8443
       POLICY_HEALTH_ADDR: 0.0.0.0:8091
       POLICY_DATABASE_URL: postgres://garam:garam@postgres:5432/policy?sslmode=disable
-      POLICY_TOKEN_ISSUER: https://garam.localhost
+      POLICY_TOKEN_ISSUER: *identity-issuer
       POLICY_JWKS_FILE: /etc/policy/jwks.json
       POLICY_TLS_CERT_FILE: /etc/policy/tls/tls.crt
       POLICY_TLS_KEY_FILE: /etc/policy/tls/tls.key
@@ -442,6 +454,100 @@ services:
       policy:
         condition: service_healthy
     restart: "no"
+
+  # One-shot: writes the machine listener's TLS pair and its
+  # key-encryption key, once, owned by the account the image runs as,
+  # because the listener refuses key material another account owns
+  # (ADR-0017).
+  machine-material:
+    image: alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+    command: ["sh", "/machine-material.sh", "10001"]
+    volumes:
+      - ./machine-material.sh:/machine-material.sh:ro
+      - machine-material:/material
+    restart: "no"
+
+  # One-shot: makes, once, the deployment key cowork proves itself to
+  # the machine listener with, owned by the account cowork runs as, the
+  # service keys file that holds its public half, and the CA file cowork
+  # trusts. The two certificates are mounted alone, never the keys
+  # beside them.
+  cowork-keys:
+    image: alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+    command: ["sh", "/cowork-keys.sh", "10001"]
+    volumes:
+      - ./cowork-keys.sh:/cowork-keys.sh:ro
+      - cowork-keys:/keys
+      - type: volume
+        source: policy-tls
+        target: /policy.crt
+        read_only: true
+        volume:
+          subpath: tls.crt
+      - type: volume
+        source: machine-material
+        target: /machine.crt
+        read_only: true
+        volume:
+          subpath: machine.crt
+    depends_on:
+      policy-tls:
+        condition: service_completed_successfully
+      machine-material:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # The machine listener (ADR-0017): the token endpoint cowork's
+  # principal exchanges its assertion at (ADR-0129), served over the TLS
+  # it terminates itself, with the identity issuer on beside the api's.
+  # Published to nothing; callers reach it as `machine:8443`. It is
+  # given the service keys file alone of cowork's volume.
+  machine:
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+    command: ["serve", "machine"]
+    environment:
+      GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
+      GARAM_AUTHZ_ADDR: authz:9090
+      GARAM_MACHINE_ADDR: ":8443"
+      GARAM_MACHINE_HEALTH_ADDR: ":8444"
+      GARAM_MACHINE_TLS_CERT_FILE: /machine-material/machine.crt
+      GARAM_MACHINE_TLS_KEY_FILE: /machine-material/machine.key
+      GARAM_MACHINE_SERVER_ROOT_FILE: /machine-material/machine.crt
+      GARAM_CA_KEY_FILE: /machine-material/kek.hex
+      GARAM_MACHINE_ISSUER: https://machine:8443
+      GARAM_MACHINE_TOKEN_URL: https://machine:8443/oauth/token
+      GARAM_IDENTITY_ISSUER: *identity-issuer
+      GARAM_POLICY_SIGNING_KEY_FILE: /policy-keys/signing.pem
+      GARAM_IDENTITY_SERVICE_KEYS_FILE: /cowork-keys/service-keys.json
+    volumes:
+      - machine-material:/machine-material:ro
+      - policy-keys:/policy-keys:ro
+      - type: volume
+        source: cowork-keys
+        target: /cowork-keys/service-keys.json
+        read_only: true
+        volume:
+          subpath: service-keys.json
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      authz:
+        condition: service_healthy
+      machine-material:
+        condition: service_completed_successfully
+      policy-keys:
+        condition: service_completed_successfully
+      cowork-keys:
+        condition: service_completed_successfully
+    # /readyz on the listener's own health port, through the binary's
+    # probe subcommand: the image carries no shell or wget.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/garam", "probe", "http://127.0.0.1:8444/readyz"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
 
   # cowork-web reads every address at runtime; nothing is baked. Its
   # server reaches cowork and the api inside the network, and the
@@ -495,3 +601,5 @@ volumes:
   postgres-data:
   policy-tls:
   policy-keys:
+  machine-material:
+  cowork-keys:

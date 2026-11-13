@@ -162,8 +162,8 @@ Addresses and paths, in the environment; none holds a credential.
 | `GARAM_TOKEN_URL` | the token URL the key issuance answered, the assertion's `aud` |
 | `CONTROL_URL`, `CONTROL_ROOT_FILE`, `CONTROL_GRN` | the control service, its root, and its operator GRN |
 | `OPERATOR_KEY_FILE`, `OPERATOR_CLIENT_ID` | the operator's key, and the manager's operator GRN, which is also the `Controller-Grn` |
-| `AGENT_IMAGE` | the composed guest image, as `<repository>@sha256:<64 hex digits>`, the only form gaon's Node Agent starts |
-| `AGENT_CPU`, `AGENT_MEMORY` | optional: the MicroVM's requests and limits, as gaon's quantities; gaon's Node Agent refuses a MicroVM that names neither |
+| `AGENT_IMAGE` | the composed guest image, as `<repository>@sha256:<64 hex digits>`, the only form gaon's Node Agent starts; the operator refuses to start on any other |
+| `AGENT_CPU`, `AGENT_MEMORY` | the MicroVM's requests and limits, each in gaon's quantity form (`1`, `500m`, `1Gi`); gaon's Node Agent refuses a MicroVM that names no cpu or no memory, so the operator refuses to start without either and publishes no figure |
 | `GUEST_MACHINE_URL`, `GUEST_CONTROL_URL` | optional: the addresses the adapter in the guest reaches garam and the control service at; each defaults to `GARAM_MACHINE_URL` and `CONTROL_URL` |
 | `HEALTH_ADDR` | optional, default `:8081` |
 

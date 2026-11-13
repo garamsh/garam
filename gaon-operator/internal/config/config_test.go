@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +16,8 @@ var full = map[string]string{
 	"GARAM_MACHINE_URL": "https://garam.example", "GARAM_ROOT_FILE": "/c/g",
 	"CONTROL_URL": "https://control.example", "CONTROL_ROOT_FILE": "/c/ctl",
 	"OPERATOR_KEY_FILE": "/c/op", "OPERATOR_CLIENT_ID": "op1",
-	"AGENT_IMAGE":     "registry.example/agent:1",
+	"AGENT_IMAGE": "registry.example/agent@sha256:" + strings.Repeat("0", 64),
+	"AGENT_CPU":   "1", "AGENT_MEMORY": "1Gi",
 	"GARAM_TOKEN_URL": "https://garam.example/oauth/token", "CONTROL_GRN": "grn:garam:org1/iam:operator/ctl1",
 }
 
@@ -28,7 +30,7 @@ func TestLoad_ReadsEverySetting(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "https://gaon.example", c.GaonURL)
-	assert.Equal(t, "registry.example/agent:1", c.AgentImage)
+	assert.Equal(t, full["AGENT_IMAGE"], c.AgentImage)
 	assert.Equal(t, "op1", c.OperatorClientID)
 	assert.Equal(t, "https://garam.example/oauth/token", c.GaramTokenURL)
 	assert.Equal(t, "grn:garam:org1/iam:operator/ctl1", c.ControlGRN)
@@ -74,20 +76,55 @@ func TestLoad_NamesEveryMissingSettingAndNoValue(t *testing.T) {
 	assert.NotContains(t, err.Error(), "gaon.example")
 }
 
-func TestLoad_TheMicroVMsResourcesAreOptional(t *testing.T) {
-	c, err := config.Load(get(full))
-	require.NoError(t, err)
-	assert.Empty(t, c.AgentCPU)
-	assert.Empty(t, c.AgentMemory)
-
-	with := map[string]string{"AGENT_CPU": "1", "AGENT_MEMORY": "1Gi"}
+// changed returns full with the given settings changed.
+func changed(changes map[string]string) map[string]string {
+	m := map[string]string{}
 	for k, v := range full {
-		with[k] = v
+		m[k] = v
 	}
-	c, err = config.Load(get(with))
+	for k, v := range changes {
+		m[k] = v
+	}
+	return m
+}
+
+func TestLoad_TheMicroVMsResourcesAreRequired(t *testing.T) {
+	c, err := config.Load(get(full))
 	require.NoError(t, err)
 	assert.Equal(t, "1", c.AgentCPU)
 	assert.Equal(t, "1Gi", c.AgentMemory)
+
+	for _, k := range []string{"AGENT_CPU", "AGENT_MEMORY"} {
+		partial := changed(nil)
+		delete(partial, k)
+		_, err := config.Load(get(partial))
+		require.Error(t, err, k)
+		assert.Contains(t, err.Error(), "missing settings")
+		assert.Contains(t, err.Error(), k)
+	}
+}
+
+func TestLoad_RefusesWhatGaonsNodeAgentWouldRefuse(t *testing.T) {
+	for name, changes := range map[string]map[string]string{
+		"AGENT_CPU":    {"AGENT_CPU": "two"},
+		"AGENT_MEMORY": {"AGENT_MEMORY": "1 Gi"},
+		"AGENT_IMAGE":  {"AGENT_IMAGE": "registry.example/agent:1"},
+	} {
+		_, err := config.Load(get(changed(changes)))
+		require.Error(t, err, name)
+		assert.Contains(t, err.Error(), "malformed settings")
+		assert.Contains(t, err.Error(), name)
+		assert.NotContains(t, err.Error(), "two")
+	}
+
+	for name, changes := range map[string]map[string]string{
+		"millicores": {"AGENT_CPU": "500m"},
+		"decimal":    {"AGENT_MEMORY": "1.5Gi"},
+		"port":       {"AGENT_IMAGE": "registry.example:5000/a/b@sha256:" + strings.Repeat("a", 64)},
+	} {
+		_, err := config.Load(get(changed(changes)))
+		assert.NoError(t, err, name)
+	}
 }
 
 func TestLoad_TheGuestAddressesDefaultToTheOperatorsOwn(t *testing.T) {

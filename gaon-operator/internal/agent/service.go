@@ -28,8 +28,8 @@ type Options struct {
 	// at. They may differ from the operator's own.
 	MachineURL string
 	ControlURL string
-	// Resources are the MicroVM's requests and limits. They may be
-	// empty, which gaon's Node Agent refuses to start.
+	// Resources are the MicroVM's requests and limits. gaon's Node
+	// Agent refuses a MicroVM that names no cpu or no memory.
 	Resources api.ResourceRequirements
 	Logger    *slog.Logger
 	// Now is the clock, time.Now where nil. It only paces how often a

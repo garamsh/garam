@@ -47,6 +47,18 @@ func TestRun_RefusesWithoutSettingsAndNamesThem(t *testing.T) {
 	assert.Contains(t, out.String(), "CONTROL_GRN")
 }
 
+func TestRun_RefusesASettingGaonWouldRefuseAndNamesIt(t *testing.T) {
+	s := newSetup(t)
+	s.env["AGENT_IMAGE"] = "registry.example/agent:1"
+	var out strings.Builder
+
+	err := cli.Run(t.Context(), env(s.env), &out)
+
+	require.Error(t, err)
+	assert.Contains(t, out.String(), "AGENT_IMAGE")
+	assert.Equal(t, 0, s.gaon.Count("PUT", "microvms"))
+}
+
 // pki writes a self-signed certificate and its key, the key as 0600.
 func pki(t *testing.T, dir string) (certPath, keyPath string) {
 	t.Helper()
@@ -131,14 +143,14 @@ func newSetup(t *testing.T) setup {
 			"GARAM_MACHINE_URL": g.URL(), "GARAM_ROOT_FILE": cert, "GARAM_TOKEN_URL": g.TokenURL(),
 			"CONTROL_URL": ctl.URL, "CONTROL_ROOT_FILE": cert, "CONTROL_GRN": grn.New("org1", "operator", "ctl1").String(),
 			"OPERATOR_KEY_FILE": opKey, "OPERATOR_CLIENT_ID": operator,
-			"AGENT_IMAGE": "registry.example/agent:1", "HEALTH_ADDR": freeAddr(t),
+			"AGENT_IMAGE": "registry.example/agent@sha256:" + strings.Repeat("0", 64),
+			"AGENT_CPU":   "1", "AGENT_MEMORY": "1Gi", "HEALTH_ADDR": freeAddr(t),
 		},
 	}
 }
 
 func TestRun_ExchangesReadsTheFeedRendersAndStopsGracefully(t *testing.T) {
 	s := newSetup(t)
-	s.env["AGENT_CPU"], s.env["AGENT_MEMORY"] = "1", "1Gi"
 	runCtx, stop := context.WithCancel(t.Context())
 	var out strings.Builder
 	done := make(chan error, 1)

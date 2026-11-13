@@ -4,7 +4,10 @@
 package config
 
 import (
+	"regexp"
 	"strings"
+
+	"github.com/garamsh/gaon/lib/api"
 
 	"github.com/garamsh/garam/lib/errorx"
 )
@@ -36,7 +39,9 @@ type Config struct {
 	// the controller.
 	OperatorKeyFile  string
 	OperatorClientID string
-	// AgentImage is the composed guest image of this release.
+	// AgentImage is the composed guest image of this release, as
+	// <repository>@sha256:<64 hex digits>, the only form gaon's Node
+	// Agent starts.
 	AgentImage string
 	// GuestMachineURL and GuestControlURL are the addresses the adapter
 	// in the guest reaches garam and the control service at. Each
@@ -45,8 +50,8 @@ type Config struct {
 	GuestControlURL string
 	// AgentCPU and AgentMemory are the MicroVM's requests and limits,
 	// as gaon's quantities ("1", "1Gi"). gaon's Node Agent refuses a
-	// MicroVM that names neither, so a deployment sets them; they are
-	// empty where unset.
+	// MicroVM that names no cpu or no memory, so both are required and
+	// no figure is published here.
 	AgentCPU    string
 	AgentMemory string
 	// HealthAddr is where the probes listen. It defaults to
@@ -77,10 +82,18 @@ var settings = []setting{
 	{"OPERATOR_KEY_FILE", func(c *Config) *string { return &c.OperatorKeyFile }},
 	{"OPERATOR_CLIENT_ID", func(c *Config) *string { return &c.OperatorClientID }},
 	{"AGENT_IMAGE", func(c *Config) *string { return &c.AgentImage }},
+	{"AGENT_CPU", func(c *Config) *string { return &c.AgentCPU }},
+	{"AGENT_MEMORY", func(c *Config) *string { return &c.AgentMemory }},
 }
 
+// imagePattern is the one gaon's Node Agent applies
+// (node-agent/internal/microvms), so an image it would refuse is
+// refused here at load.
+var imagePattern = regexp.MustCompile(
+	`^([^@:]+(?::[0-9]+)?(?:/[^@:]+)*)@(sha256:[0-9a-f]{64})$`)
+
 // Load reads every setting through getenv and names each one that is
-// missing. The error carries variable names, never values.
+// missing or malformed. The error carries variable names, never values.
 func Load(getenv func(string) string) (Config, error) {
 	var c Config
 	var missing []string
@@ -96,15 +109,33 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, errorx.New(errorx.KindInvalidArgument,
 			"missing settings: "+strings.Join(missing, ", "))
 	}
+	if bad := malformed(c); len(bad) > 0 {
+		return Config{}, errorx.New(errorx.KindInvalidArgument,
+			"malformed settings: "+strings.Join(bad, ", "))
+	}
 	c.GuestMachineURL = optional(getenv, "GUEST_MACHINE_URL", c.GaramMachineURL)
 	c.GuestControlURL = optional(getenv, "GUEST_CONTROL_URL", c.ControlURL)
-	c.AgentCPU = optional(getenv, "AGENT_CPU", "")
-	c.AgentMemory = optional(getenv, "AGENT_MEMORY", "")
 	c.HealthAddr = strings.TrimSpace(getenv("HEALTH_ADDR"))
 	if c.HealthAddr == "" {
 		c.HealthAddr = DefaultHealthAddr
 	}
 	return c, nil
+}
+
+// malformed names each setting whose value gaon would refuse: an image
+// not pinned by digest, a resource that is not a quantity.
+func malformed(c Config) []string {
+	var bad []string
+	if !imagePattern.MatchString(c.AgentImage) {
+		bad = append(bad, "AGENT_IMAGE")
+	}
+	if _, err := api.ParseQuantity(c.AgentCPU); err != nil {
+		bad = append(bad, "AGENT_CPU")
+	}
+	if _, err := api.ParseQuantity(c.AgentMemory); err != nil {
+		bad = append(bad, "AGENT_MEMORY")
+	}
+	return bad
 }
 
 // optional returns the setting name, or fallback where it is unset.

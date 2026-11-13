@@ -363,6 +363,9 @@ manager_grn=$(jget .grn)
 control_grn=grn:$org/iam/operator/gaon-control
 expect "manager's GRN" "$manager_grn" "grn:$org/iam/operator/gaon"
 
+# The rotation is `immediate` on purpose: it withdraws every live key
+# and works for an operator with none. `planned` adds a key beside one
+# in use and has not been run here; do not change it without a run.
 issue_key() {
 	call POST "$api/orgs/$org/operators/$1/keys" json '{"rotation":"immediate"}'
 	expect "key issued to $1" "$status" 201
@@ -583,6 +586,9 @@ expect "the feed's epoch" "$(jq -r --arg g "$agent_grn" '.agents[] | select(.age
 
 # ---------------------------------------------------------------------
 step 7 "gaon-operator, built from this checkout, runs as the registered manager"
+# AGENT_CPU, AGENT_MEMORY and AGENT_IMAGE are required and checked at
+# load; the figures and the zero digest are this run's, not the
+# operator's.
 env GAON_API_URL="$gaon" GAON_CA_FILE="$gaon_ca_file" GAON_CLIENT_CERT_FILE="$operator_cert" \
 	GAON_CLIENT_KEY_FILE="$operator_key" GARAM_MACHINE_URL="$machine" GARAM_ROOT_FILE="$tmp/machine.crt" \
 	GARAM_TOKEN_URL="$token_url" CONTROL_URL="$control" CONTROL_ROOT_FILE="$tmp/control-api.crt" \

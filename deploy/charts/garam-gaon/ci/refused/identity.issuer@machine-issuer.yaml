@@ -1,0 +1,8 @@
+# The service issuer is never the machine issuer, which has no path, so
+# the two meet only when machine.issuer is given one.
+identity:
+  issuer: https://garam.example/api
+policy:
+  tokenIssuer: https://garam.example/api
+machine:
+  issuer: https://garam.example/api

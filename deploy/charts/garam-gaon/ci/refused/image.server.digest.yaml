@@ -1,0 +1,5 @@
+# A tag where a digest belongs: gaon refuses an image a digest does not
+# pin.
+image:
+  server:
+    digest: latest

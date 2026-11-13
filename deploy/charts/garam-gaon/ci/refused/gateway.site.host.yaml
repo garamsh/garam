@@ -1,0 +1,14 @@
+# The routes on, and a name left out of them.
+gateway:
+  enabled: true
+  console:
+    host: console.garam.example
+    certificate: console-tls
+  cowork:
+    host: cowork.garam.example
+    certificate: cowork-tls
+  userContent:
+    host: content.garam.example
+    certificate: content-tls
+  machine:
+    host: machine.garam.example

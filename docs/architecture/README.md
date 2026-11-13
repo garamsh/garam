@@ -485,7 +485,10 @@ Responsibility documents:
   codehub must reach, the three databases, and what is not established
 - [deployment-gaon.md](./deployment-gaon.md) — how each of those
   processes is declared on a gaon cluster: the kind, what the object
-  states, the order, the names, and what gaon does not yet serve
+  states, the order, the names, and what gaon does not yet serve; the
+  chart in
+  [deploy/charts/garam-gaon/](../../deploy/charts/garam-gaon/README.md)
+  renders them
 - [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
   gateway, the keys it holds, how it routes and what it records; not
   yet built
@@ -1367,3 +1370,10 @@ ADRs:
   model key as an `env` `valueFrom` of the Secret `apiKeyRef` names;
   `MODEL_KEY_*` is removed, `previous` is not built; closes ADR-0153's
   open dependency, accepted, built in `gaon-operator/`
+- [0155](./adr/0155-garam-ships-a-second-helm-chart-that-renders-the-gaon-kinds.md)
+  — garam ships a second Helm chart, `garam-gaon`, that renders the gaon
+  kinds of deployment-gaon.md and nothing else, with migrations held
+  before services by a required `stage` value that gives two renders,
+  and checked in `make -C deploy/charts ci` against the settings the
+  source reads and a list of the fields gaon's files name; accepted,
+  built in `deploy/charts/garam-gaon/`; supersedes nothing

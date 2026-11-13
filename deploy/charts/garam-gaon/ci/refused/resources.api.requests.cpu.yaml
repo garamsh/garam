@@ -1,0 +1,6 @@
+# A requested cpu left empty: the chart has no default for it.
+resources:
+  api:
+    requests:
+      cpu: ""
+      memory: 1Gi

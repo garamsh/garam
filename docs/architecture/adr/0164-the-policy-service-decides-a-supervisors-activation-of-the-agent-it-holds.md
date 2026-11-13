@@ -1,8 +1,9 @@
 # ADR 0164: The policy service decides a supervisor's activation of the agent it holds
 
 > Status: accepted; built in `policy/` (#1905) for the policy service's
-> half; the platform does not yet feed a supervisor or ask the question,
-> and still decides the activation itself. Corrects row 6 of
+> half; the platform feeds a supervisor and the agent it holds (#1917)
+> but does not yet ask the question, and still decides the activation
+> itself. Corrects row 6 of
 > [ADR-0146](./0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)'s
 > inventory
 > Date: 2026-11-14

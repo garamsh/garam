@@ -26,7 +26,8 @@ const waitsForDelivery = "waits"
 var feedClassification = map[string]string{
 	// api/openapi.yaml, what waits.
 	"createOrg": waitsForDelivery, "deleteOrg": waitsForDelivery,
-	"createGroup": waitsForDelivery, "deleteGroup": waitsForDelivery,
+	"revokeAgentSupervisor": waitsForDelivery,
+	"createGroup":           waitsForDelivery, "deleteGroup": waitsForDelivery,
 	"addGroupMember": waitsForDelivery, "removeGroupMember": waitsForDelivery,
 	"createProject": waitsForDelivery, "deleteProject": waitsForDelivery,
 	"addProjectMember": waitsForDelivery, "removeProjectMember": waitsForDelivery,
@@ -46,9 +47,8 @@ var feedClassification = map[string]string{
 	"updateOrg":        "writes orgs.name, which no trigger watches",
 	"checkPermissions": "reads", "renameAgent": "writes agents.name, which no trigger watches",
 	"approveAgentEnrollment": "stores an approval", "withdrawAgentEnrollment": "ends an approval",
-	"revokeAgentSupervisor": "ends a registration",
-	"updateOperator":        "writes the name and description, which no trigger watches",
-	"issueOperatorKey":      "writes operator_keys", "revokeOperatorKey": "writes operator_keys",
+	"updateOperator":   "writes the name and description, which no trigger watches",
+	"issueOperatorKey": "writes operator_keys", "revokeOperatorKey": "writes operator_keys",
 	"setOperatorManager":           "writes operators.manager, which no trigger watches",
 	"setOperatorControlEndpoint":   "writes operators.control_endpoint, which no trigger watches",
 	"clearOperatorControlEndpoint": "writes operators.control_endpoint, which no trigger watches",
@@ -58,8 +58,8 @@ var feedClassification = map[string]string{
 	"attachPolicy": "the policy store is not fed by the outbox", "detachPolicy": "the policy store is not fed by the outbox",
 	"createInvitation": "writes invitations", "revokeInvitation": "writes invitations",
 	// api/machine.yaml, what waits.
-	"createManagedAgent": waitsForDelivery, "admitAgentEnrollment": waitsForDelivery + " when it admits a new agent",
-	"enrollStandaloneAgent": waitsForDelivery + " when it enrols a new agent",
+	"createManagedAgent": waitsForDelivery, "admitAgentEnrollment": waitsForDelivery + " when it admits a new agent or replaces a supervisor's",
+	"enrollStandaloneAgent": waitsForDelivery,
 	// api/machine.yaml, what raises no mark.
 	"exchangeToken": "mints a token", "exchangeClientAssertion": "mints a token",
 	"introspectIssuedToken": "reads", "mintAgentToken": "mints a token",

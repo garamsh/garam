@@ -97,6 +97,9 @@ func change(e policyfeed.Entry, sequence int64) *policyv1.EntityChange {
 		upsert.Consents = append(upsert.Consents, ref(o))
 	}
 	upsert.Operations = e.State.Operations
+	if e.State.Agent != nil {
+		upsert.Agent = ref(*e.State.Agent)
+	}
 	c.Operation = &policyv1.EntityChange_Upsert{Upsert: upsert}
 	return c
 }

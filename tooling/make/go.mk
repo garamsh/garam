@@ -77,12 +77,10 @@ endef
 GO_MODULE := $(patsubst $(REPO_ROOT)/%,%,$(CURDIR))
 
 # Modules left out of go-tidy-check, each with why. Add one only with
-# tidy's diff reported to the PM; the exclusion is the whole list.
-# - garam-cli imports lib/grn and requires no version of it: only
-#   go.work resolves that import, so go mod tidy adds a requirement on
-#   a pseudo-version of lib/grn fetched from the network, and its
-#   go.sum lines.
-GO_TIDY_EXCLUDE := garam-cli
+# tidy's diff reported to the PM; the exclusion is the whole list. It
+# is empty now: put a module's path from the repository root after the
+# :=, space-separated, with a line here saying why.
+GO_TIDY_EXCLUDE :=
 
 # Fails where go mod tidy would change go.mod or go.sum and names the
 # files. It runs in the module's workspace as the other verbs do; on

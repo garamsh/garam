@@ -5,6 +5,7 @@ go 1.27.4
 require (
 	github.com/garamsh/garam/lib/cowork-sdk-go v0.0.0-00010101000000-000000000000
 	github.com/garamsh/garam/lib/errorx v0.0.0-00010101000000-000000000000
+	github.com/garamsh/garam/lib/grn v0.0.0-00010101000000-000000000000
 	github.com/garamsh/garam/lib/platform-sdk-go v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
@@ -36,5 +37,6 @@ require (
 replace (
 	github.com/garamsh/garam/lib/cowork-sdk-go => ../lib/cowork-sdk-go
 	github.com/garamsh/garam/lib/errorx => ../lib/errorx
+	github.com/garamsh/garam/lib/grn => ../lib/grn
 	github.com/garamsh/garam/lib/platform-sdk-go => ../lib/platform-sdk-go
 )

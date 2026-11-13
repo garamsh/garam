@@ -165,6 +165,7 @@ per process for what differs.
 | `env` | one entry per setting: `value` for a setting that is no secret, `valueFrom.secretKeyRef` or `valueFrom.configMapKeyRef` of `{name, key}` otherwise | `resource-api.md` §MicroVM |
 | `files` | one entry per file, below | `resource-api.md` §MicroVM |
 | `ports` | one named port per listener, a name of at most 15 characters | `resource-api.md` §MicroVM |
+| `resources` | `requests` of `cpu` and `memory` for every object, from a value with no default; `limits` where the deployment sets them. A MicroVM that names no cpu or no memory is `InvalidSpec`, so the field is not optional; the figure is [Not established](#not-established) | `resource-api.md` §MicroVM (line "resources (requests and limits for cpu and memory)"), `lib/api/microvm.go` |
 | `terminationGracePeriodSeconds` | gaon's default of 30 | `resource-api.md` §MicroVM |
 | `runStrategy` | `Always` under a `Deployment`; a `Job` forces `Once` | `workloads.md` |
 
@@ -410,6 +411,7 @@ Agent writes no search line, so no setting carries it.
 | `garam-api` | `serve api` | `GARAM_API_URL` on the three web images; `COWORK_PLATFORM_URL` on cowork |
 | `garam-authz` | `serve authz`'s gRPC port | `GARAM_AUTHZ_ADDR` on the api and on `serve machine` |
 | `garam-policy` | `policy serve`'s contract listener | `GARAM_POLICY_ADDR` and `COWORK_POLICY_ADDR` |
+| `garam-cowork` | `cowork serve`'s API port, 8090 | `COWORK_API_URL` on cowork-web, as `http://<name>.default.svc.<zone>:8090` |
 
 - A `Service` is selected by labels, so each `Deployment`'s template
   carries the label the matching `Service`'s selector names. Port names
@@ -529,10 +531,10 @@ titles, and is for the PM to file; no number is invented here.
 
 | Need | Gaon issue | Until it is served |
 |---|---|---|
-| The kinds `Gateway`, `HTTPRoute` and `TLSRoute` served: hosts, the `/api/` prefix rewrite, TLS from a `Secret`, passthrough by server name | contract in `gateway.md` (garamsh/gaon#200, ADR 0032); no unit serves it, and no open issue for one was read | the chart renders the kinds behind `gateway.enabled`, off by default; with it off the deployer runs a TLS-terminating proxy of its own with the host and path split of §Names |
+| The kinds `Gateway`, `HTTPRoute` and `TLSRoute` served: hosts, the `/api/` prefix rewrite, TLS from a `Secret`, passthrough by server name | contract in `gateway.md` (garamsh/gaon#200, ADR 0032); no `gateway/` unit at the commit above; garamsh/gaon#222 and #223 were opened for one on 2026-11-13 (01:24Z), and when read #223 was open and #222 closed (02:53Z), neither thread read | the chart renders the kinds behind `gateway.enabled`, off by default; with it off the deployer runs a TLS-terminating proxy of its own with the host and path split of §Names |
 | A MicroVM resolving a `Service`'s name | `dns.md` (garamsh/gaon#203, ADR 0033); the `dns/` unit exists; garamsh/gaon#196, Service addresses in the network plugin, open at the commit above | every address is the full `<service>.default.svc.<zone>` name; that a MicroVM resolves it is not shown, and a deployment where it does not carries the address of the MicroVM |
 | A `LoadBalancer` address announced on the LAN for the machine listener | garamsh/gaon#196, open at the commit above | the `Service` names `loadBalancerIP`; that the address answers on the LAN is not shown |
-| `env` and `files` resolved again at each restart, and `workingDir` | garamsh/gaon#170, open (waits on garamsh/mvmd#519) | a changed `Secret` reaches a key file by in-place replacement and an `env` entry only at a replacement of the MicroVM; no object here sets `workingDir` |
+| `env` and `files` resolved again at each restart, and `workingDir` | garamsh/gaon#170, open at the commit above (waits on garamsh/mvmd#519) and closed 2026-11-13 02:44Z, by a change not read | a changed `Secret` reaches a key file by in-place replacement and an `env` entry only at a replacement of the MicroVM; no object here sets `workingDir` |
 | `nodeSelector` binds only to Nodes whose labels match, by `e72e153f30f67c2e320ccab16eaeeb79b5ab645c` | garamsh/gaon#181, closed | none of the objects here states a `nodeSelector` |
 | Spread of a replicated workload across Nodes | no gaon issue found (decided in a comment on #117, not in `scheduler.md`) | every `Deployment` is one replica, so none is needed |
 | A `Deployment`'s minimum ready time, or a ReplicaSet | no gaon issue found | `Recreate`, as above |
@@ -542,7 +544,9 @@ titles, and is for the PM to file; no number is invented here.
 | A `Deployment`'s `maxSurge` and `maxUnavailable` as an integer | garamsh/gaon#186, closed (`34d75c3170c239a1b2b96f2efd41ef3eb6b7318b`) | no object here states them, `Recreate` being used |
 
 None of these blocks writing the objects of this document: each
-object above is stated so that it does without.
+object above is stated so that it does without. `resources` is not in
+the table because it is not a need gaon lacks but one it states and the
+objects must meet (§Not established).
 
 The identity file form's two issues, garamsh/gaon#161 and #162, are not
 in the table: they are closed.
@@ -562,11 +566,15 @@ Not guessed. Each is what the documents read do not state.
   are [deployment-needs.md](./deployment-needs.md) §Not established
   and are not answered by gaon.
 - **The stop period** of the three web images and of `policy serve`.
-- **Resources.** `resources` is a field of a MicroVM
-  (`resource-api.md`), and a Node fits by cpu and memory requests only
-  (`scheduler.md`). No request or limit is stated for any process,
-  as [deployment-needs.md](./deployment-needs.md) §Not established
-  states none.
+- **The figure of a process's resources.** That `resources` is
+  required is established: at the commit above gaon's node agent fails
+  a MicroVM that names no cpu or no memory (`InvalidSpec`), sizing it
+  by the limits and, with none, the requests, and the scheduler places
+  by `Requests`. Every object of the chart therefore carries
+  `resources.requests.{cpu,memory}` and optionally `limits`. The chart
+  has no default and the repository states no figure:
+  [deployment-needs.md](./deployment-needs.md) §Not established
+  states none, so the deployment supplies one per object.
 - **A read-only root filesystem.** Not stated in the MicroVM fields
   read.
 - **How the machine listener and the issuer are reached from outside

@@ -48,12 +48,25 @@ one a gaon file names.
 - A deployer applies two renders in turn and waits between them. That
   script is theirs and is not in the repository.
 - The field check is a list of field paths compared by hand with gaon's
-  files, not a parse with gaon's types, because the workload types are
-  in a package another module cannot import. A field gaon adds is not
-  seen until the list is changed, and a field's value or type is not
-  checked.
+  files, not a parse with gaon's types. Parsing needs a Go module here
+  (a `go.work` and a dependency-bot entry outside the chart's paths).
+  It would reach `MicroVMSpec` and `Service`, which are in gaon's
+  importable `lib/api`, and not the wrapper fields of a `Deployment`
+  and a `Job` (`replicas`, `selector`, `strategy`, `completions`,
+  `backoffLimit`, `template`), which are in `workloads/internal/job`,
+  and not the gateway kinds, which no unit serves. A field gaon adds is
+  not seen until the list is changed, and a field's value or type is
+  not checked.
 - Two charts are two things to keep in step with the settings the source
-  reads; the environment sweep of the first chart's check covers both.
+  reads; `gaon-render` sweeps the second's environment names, per
+  object for cowork, the policy service and each web app, and over one
+  union for the three garam subcommands and the Jobs.
+- Every object states `resources` from a value with no default: gaon
+  fails a MicroVM that names no cpu or no memory. The figure is the
+  deployment's, because the repository holds none.
+- The chart renders the identity issuer and the service keys, which the
+  cowork policy half needs for its token exchange, and refuses an
+  issuer the platform would refuse at start.
 - Nothing applies the chart to a gaon cluster. That it works there is
   not shown.
 
@@ -65,5 +78,7 @@ one a gaon file names.
   field list has missed a type's rule.
 - A deployer needs an order between kinds that two renders cannot give,
   and asks gaon for hooks.
-- gaon's own types become importable and the field list is replaced by
-  a parse, which would show the hand comparison had been too weak.
+- The workload wrapper types become importable, or a Go module in
+  `deploy/charts` is judged worth its cost, and the field list is
+  replaced by a parse, which would show the hand comparison had been
+  too weak.

@@ -14,10 +14,13 @@ registration and the agent's configuration and model key (#1853,
 [ADR-0154](../../docs/architecture/adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)).**
 `cmd/gaon-operator` exchanges its assertion with a key garam issued,
 reads the control service's feed as its registered manager and
-reconciles into gaon. A release publishes the operator's image
-`garam/gaon-operator` and the guest's `garam/gaon-guest`
-([ADR-0156](../../docs/architecture/adr/0156-a-release-publishes-eight-images-and-a-pull-request-builds-the-guest-only-to-its-build-stage.md)),
-and the deployment is not built (§What is not built).
+reconciles into gaon. No release publishes the operator's image or the
+guest's, and the deployment is not built (§What is not built). garam
+carries no gaon operator
+([ADR-0158](../../docs/architecture/adr/0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)):
+this folder is still in the repository and leaves in a later pull
+request, after garamsh/garam-agent-operator holds it at a commit
+passing its own checks, and the documents about it leave with it.
 
 ## Contents
 - What is built
@@ -217,15 +220,12 @@ each is written once.
   garam 0.8.0 for the server; `platform/Makefile` pins Sherlock 0.9.0
   for the runner's tests, so these digests are pinned nowhere else in
   the repository.
-- **Publishing it.** A release builds the image as
-  `garam/gaon-guest` from `guest/Dockerfile` with the repository root
-  as context. A pull request has no credential for the three private
-  sources, so `images.yml` builds it only to its `build` stage as
-  `garam/gaon-guest-build`, and the final stage is first built by a
-  release or by `guest-run`.
+- **Publishing it.** No release publishes the image and no workflow
+  builds it; its final stage is built by `guest-run` alone
+  ([ADR-0158](../../docs/architecture/adr/0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)).
 - **Running it.** `make -C gaon-operator guest-run` builds the image
-  through `tooling/image-build.sh`, as the release does, and starts it
-  as one container with user `0:0` and `SYS_ADMIN` added.
+  from `guest/Dockerfile` with the repository root as context, and
+  starts it as one container with user `0:0` and `SYS_ADMIN` added.
   The entrypoint, the environment and the credential files are what
   `render.go` renders for one agent, written out by `cmd/gaon-render`
   through `agent.Render` and not typed in `guest/run.sh`: it resolves
@@ -350,7 +350,8 @@ is not gaon's.
 
 ## What is not built
 
-- The deployment of `garam/gaon-operator`, and the `NetworkPolicy`.
+- The operator's image, which no release publishes, its deployment,
+  and the `NetworkPolicy`.
 - Renewing an agent's token by restarting its MicroVM.
 - Replacing a MicroVM of another revision.
 - The agent's instructions file and message issuers.

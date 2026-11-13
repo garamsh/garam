@@ -94,6 +94,14 @@ reads it to decide whether a caller is admitted.
 
 ## The gaon operator
 
+garam is to carry no gaon operator
+([ADR-0158](./adr/0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)):
+the one agent operator, for gaon, is garamsh/garam-agent-operator's.
+Today `gaon-operator/` is still in this repository, and no release
+publishes its image. It leaves in a later pull request, after
+garamsh/garam-agent-operator holds it at a commit passing its own
+checks. The rest of this section describes the code until then.
+
 Decided by [ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md): a second operator, in this
 repository, that runs each managed agent as one MicroVM on a gaon
 cluster. It is an operator in this document's sense, so everything
@@ -102,8 +110,7 @@ assertion for a token, calls the machine listener, and garam dials no
 cluster. It is registered as a pair, its own cluster manager and a
 control service whose registration names it, and it reports
 provisioning state from what it observes of the MicroVM.
-`garamsh/garam-agent-operator` stays the Kubernetes operator; this one
-is not a port of it. To gaon it authenticates with its
+To gaon it authenticates with its
 ServiceAccount token once gaon serves one (`garamsh/gaon#161`), and
 with an administrator-issued certificate until then. It renews an
 agent's token by writing it to the MicroVM's `Secret` and restarting
@@ -130,7 +137,7 @@ It registers each agent's first placement with the control service and
 renders the feed's configuration as two inline files and the model key
 as an `env` entry from the organization's labelled model-key Secret
 the agent's `apiKeyRef` names ([ADR-0154](./adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)).
-Unbuilt: the release's image, the `NetworkPolicy`, the token restart,
+Unbuilt: the `NetworkPolicy`, the token restart,
 a placement's `previous` and so a replaced MicroVM's registration, and
 the agent's instructions and message issuers.
 

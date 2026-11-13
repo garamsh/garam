@@ -1,7 +1,10 @@
 # ADR 0151: The gaon operator is a service here that runs each managed agent as one MicroVM
 
 > Status: accepted; not built; superseded in part by ADR-0153 (item 3,
-> the guest's user)
+> the guest's user) and by
+> [ADR-0158](./0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)
+> (item 1's image `garam/gaon-operator`, which no release publishes;
+> in whole when `gaon-operator/` leaves)
 > Date: 2026-11-13
 
 Drafted for #1825, which reserves this number. The direction is the

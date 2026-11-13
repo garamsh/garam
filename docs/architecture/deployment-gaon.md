@@ -55,10 +55,12 @@ fields below and no others, and the cluster-facing claim is not shown.
 
 The gaon operator
 ([ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md))
-is out of scope. A release publishes its image `garam/gaon-operator`
-and the guest's `garam/gaon-guest`
-([ADR-0156](./adr/0156-a-release-publishes-eight-images-and-a-pull-request-builds-the-guest-only-to-its-build-stage.md)),
-and it is deployed as a workload of its own; nothing here depends on it.
+is out of scope, and a release publishes no image of it: it publishes
+six images
+([ADR-0158](./adr/0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)).
+`gaon-operator/` is still in this repository and leaves in a later pull
+request, after garamsh/garam-agent-operator holds it at a commit
+passing its own checks. Nothing here depends on it.
 
 ## How a claim about gaon is read
 

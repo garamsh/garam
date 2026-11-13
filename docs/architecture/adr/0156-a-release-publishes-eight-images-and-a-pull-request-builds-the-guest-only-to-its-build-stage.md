@@ -1,6 +1,9 @@
 # ADR 0156: A release publishes eight images, and a pull request builds the guest only to its build stage
 
-> Status: accepted; built in `.github/workflows/release.yml`
+> Status: superseded by
+> [ADR-0158](./0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)
+> (a release publishes six images again, and ADR-0150 and ADR-0134
+> §Decision 6 stand as they did before this one)
 > Date: 2026-11-13
 
 Drafted for #1857, which reserves this number. It supersedes in part

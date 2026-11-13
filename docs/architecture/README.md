@@ -306,20 +306,16 @@ on hosted runners.
   version as the only repair (ADR-0039 §Consequences). What reads the
   guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
   two files and not three (#899).
-- **Every image a release publishes is built on a pull request, the
-  guest to its build stage only.** `images.yml` builds the eight from
-  what `release.yml` says each is built from, once each, and then
-  checks the console's, the site's, cowork's, cowork-web's, the policy
-  service's and the gaon operator's. The guest composes three private
-  images a pull request's run holds no credential to pull, so it is
-  built to its `build` stage under `garam/gaon-guest-build` and its
-  final stage is first built by a release (ADR-0156). The web one is
-  the image a release used to be able to fail on irreversibly: the
-  server image was pushed before the web image was built, and
-  immutability makes the repair the next version (ADR-0039
-  §Consequences). `release.yml` builds all eight and pushes none until
-  all are built (#945), so what a build failure there now costs is the
-  run. Until #850 no image was built by any check.
+- **Every image a release publishes is built on a pull request.**
+  `images.yml` builds the six from what `release.yml` says each is
+  built from, once each, and then checks the console's, the site's,
+  cowork's, cowork-web's and the policy service's. The web one is the
+  image a release used to be able to fail on irreversibly: the server
+  image was pushed before the web image was built, and immutability
+  makes the repair the next version (ADR-0039 §Consequences).
+  `release.yml` builds all six and pushes none until all are built
+  (#945), so what a build failure there now costs is the run. Until
+  #850 no image was built by any check.
 - **A pull request's image builds take their layers from the GitHub
   Actions cache and their bases from `mirror.gcr.io`.**
   The `suites` jobs' `make -C <module> stack-up` and `images`'
@@ -345,7 +341,7 @@ on hosted runners.
   hosted runners share. Its `429 toomanyrequests: Data limit exceeded`
   failed both attempts of v0.4.0's release run 39120748198 (#1532).
 - **No run here reaches a deployment, so `main` is not what a caller
-  meets.** `release.yml` publishes eight images on a release tag
+  meets.** `release.yml` publishes six images on a release tag
   (ADR-0157) and no other workflow pushes one, so a merge to
   `main` publishes nothing; an operator pushes the test image, from a
   checkout, to an ECR repository no deployment pulls (ADR-0092,
@@ -1343,7 +1339,7 @@ ADRs:
   image holds an address and none is bound to a release name, an unset
   address answers every request with 500, probes included, and
   `chart-rewrite` is removed; a release publishes six images (eight
-  since 0156); supersedes
+  from 0156 to 0158, six again since 0158); supersedes
   0056 in full, 0039's bound-to-one-API-URL consequence and 0134's
   site-bakes-the-address sentence
 - [0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)
@@ -1351,7 +1347,8 @@ ADRs:
   one MicroVM: a `gaon-operator/` folder with its own module and image,
   no custom gaon kind, one composed guest image, one no-ingress network
   policy, a pair registered in garam; accepted, and unbuilt; superseded
-  in part by ADR-0153 (item 3, the guest's user)
+  in part by ADR-0153 (item 3, the guest's user) and by ADR-0158 (item
+  1, where its image is published: no release publishes it)
 - [0152](./adr/0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)
   — garam may hold the Transit token by logging in to OpenBao's JWT auth
   method with a workload identity file beside the token file:
@@ -1395,7 +1392,8 @@ ADRs:
   release, and a pull request builds it only to its `build` stage under
   `garam/gaon-guest-build`, which leaves its final stage unproven until
   a release; accepted, built in `release.yml`; supersedes 0150's six
-  images and 0134's §Decision 6 for the guest, in part
+  images and 0134's §Decision 6 for the guest, in part; superseded by
+  ADR-0158
 - [0157](./adr/0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md)
   — until launch a release is `v0.1.0-dev.N`, `v0.1.0-rc.N` or
   `v0.1.0`, N a positive integer without a leading zero, and
@@ -1405,3 +1403,14 @@ ADRs:
   from `v0.1.0` the form is `vX.Y.Z` again; accepted, built in
   `release.yml`; supersedes in part 0039's `vX.Y.Z`, 0071's bare
   `X.Y.Z` and 0134's §Decision 3
+- [0158](./adr/0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)
+  — garam carries no gaon operator and publishes none: a release
+  publishes six images, all or none, and `images.yml` builds the six;
+  `gaon-operator/` and the documents describing it leave in a later
+  pull request, after
+  garamsh/garam-agent-operator holds it at a commit passing its own
+  checks, and CI builds and tests the module until then;
+  `deploy/charts/garam-gaon` stays; accepted, built in `release.yml`
+  and `tooling/image-build.sh`, and the directory's removal unbuilt;
+  supersedes 0156 in full and 0151 in part now, in whole when the
+  directory leaves; 0153 and 0154 follow 0151 out then

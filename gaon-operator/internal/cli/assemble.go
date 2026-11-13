@@ -71,7 +71,9 @@ func assemble(cfg config.Config, log *slog.Logger) (*operator, error) {
 	}
 	cluster := api.NewClient(cfg.GaonURL, gaonHTTP, api.WithLabelSelector(agent.Selector()))
 	service := agent.NewService(feed, garam, cluster, agent.Options{
-		Image: cfg.AgentImage, GaramRoot: garamRoot, ControlRoot: controlRoot, Logger: log,
+		Image: cfg.AgentImage, GaramRoot: garamRoot, ControlRoot: controlRoot,
+		MachineURL: cfg.GuestMachineURL, ControlURL: cfg.GuestControlURL,
+		ModelKey: modelKey(cfg), Logger: log,
 	})
 	return &operator{service: service, settle: feed.Settle, probe: &health.Probe{}, log: log}, nil
 }
@@ -121,4 +123,13 @@ func transport(pool *x509.CertPool, minVersion uint16, certs []tls.Certificate) 
 		TLSHandshakeTimeout: 10 * time.Second,
 		IdleConnTimeout:     90 * time.Second,
 	}
+}
+
+// modelKey is the model credential's source the settings name, or nil
+// where they name none.
+func modelKey(cfg config.Config) *agent.ModelKey {
+	if cfg.ModelKeyEnv == "" {
+		return nil
+	}
+	return &agent.ModelKey{Env: cfg.ModelKeyEnv, Secret: cfg.ModelKeySecret, Key: cfg.ModelKeySecretKey}
 }

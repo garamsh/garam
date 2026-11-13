@@ -7,8 +7,9 @@ How it sits among garam's operators is
 [operators.md](../../docs/architecture/operators.md) §The gaon operator.
 
 **Built: the reconciler (#1834), garam's and the control service's wire
-clients, the binary that composes them (#1839), and the guest
-supervisor and composed guest image (#1846).**
+clients, the binary that composes them (#1839), the guest supervisor
+and composed guest image (#1846), and the MicroVM's command,
+environment and placement token (#1848).**
 `cmd/gaon-operator` exchanges its assertion with a key garam issued,
 reads the control service's feed as its registered manager and
 reconciles into gaon. The release's image and the deployment are not
@@ -34,11 +35,22 @@ loses.
   Labels are `garam.sh/role=agent` and 32-hex digests of the
   organization and agent; the GRN, epoch and revision are annotations,
   because a label value cannot hold a GRN.
-- **No credential in a spec.** The tokens and the two trust roots live
-  in the `Secret`. The MicroVM's files take them with
-  `valueFrom.secretKeyRef`, mode 0400, owner 65532 (the runtime's
-  and adapter's account; the MicroVM's `user` is `0:0`); no file carries
-  inline content.
+- **No credential in a spec.** The tokens, the placement token and the
+  two trust roots live in the `Secret`. The MicroVM's files take them
+  with `valueFrom.secretKeyRef`, mode 0400, owner 65532 (the runtime's
+  and adapter's account; the MicroVM's `user` is `0:0`); no file
+  carries inline content, and no `env` entry does either where it is a
+  secret.
+- **Command and environment.** `command` is
+  `["/usr/local/bin/gaon-guest"]` and `args` is empty: gaon's
+  `command` replaces the image's entrypoint, and the supervisor builds
+  each program's arguments itself. `env` holds `GUEST_AGENT_GRN` and
+  `GUEST_ASSIGNMENT_EPOCH` from the feed, `GUEST_MACHINE_URL` and
+  `GUEST_CONTROL_URL` from the settings, and, where the model key is
+  set, `GUEST_RUNTIME_ENV` naming the variable and that variable as a
+  `valueFrom.secretKeyRef`.
+  `GUEST_RUNTIME_CONFIG` is not rendered, because the feed's
+  `configuration` is not rendered by the operator.
 - **Volumes are made once.** They are created only where the agent has
   no MicroVM yet. Where the MicroVM exists and a Volume is missing, the
   operator creates nothing for that agent, returns an error naming the
@@ -46,6 +58,10 @@ loses.
   (ADR-0151 §3).
 - **Mint once.** A Secret that exists is never minted over. One that is
   missing is minted again, which is what makes a restart lose nothing.
+  The placement token is minted with it: 32 bytes from `crypto/rand`,
+  hex-encoded, under the key `placement-token`, as
+  garam-agent-operator's ADR-0042 mints it. A Secret that exists keeps
+  what it holds, so one made before this change is not given a token.
 - **Report.** `observe` maps a MicroVM to `provisioned`, `ready` or
   `failed` by the ADR's table, reading the phase through
   `EffectivePhase` so a status of another `bindingEpoch` counts as
@@ -110,6 +126,8 @@ Addresses and paths, in the environment; none holds a credential.
 | `CONTROL_URL`, `CONTROL_ROOT_FILE`, `CONTROL_GRN` | the control service, its root, and its operator GRN |
 | `OPERATOR_KEY_FILE`, `OPERATOR_CLIENT_ID` | the operator's key, and the manager's operator GRN, which is also the `Controller-Grn` |
 | `AGENT_IMAGE` | the composed guest image |
+| `GUEST_MACHINE_URL`, `GUEST_CONTROL_URL` | optional: the addresses the adapter in the guest reaches garam and the control service at; each defaults to `GARAM_MACHINE_URL` and `CONTROL_URL` |
+| `MODEL_KEY_ENV`, `MODEL_KEY_SECRET`, `MODEL_KEY_SECRET_KEY` | optional, all three or none: the variable the runtime reads its model key from, and the Secret and key holding it |
 | `HEALTH_ADDR` | optional, default `:8081` |
 
 ### Key files
@@ -161,8 +179,14 @@ each is written once.
   for the runner's tests, so these digests are pinned nowhere else in
   the repository.
 - **Running it.** `make -C gaon-operator guest-run` builds the image
-  and starts it as one container with user `0:0` and `SYS_ADMIN` added,
-  the credentials as 65532's 0400 files. It checks the start order, the
+  and starts it as one container with user `0:0` and `SYS_ADMIN` added.
+  The entrypoint, the environment and the credential files are what
+  `render.go` renders for one agent, written out by `cmd/gaon-render`
+  through `agent.Render` and not typed in `guest/run.sh`: it resolves
+  each `valueFrom` from the rendered Secret, or from a file standing for
+  the deployment's model Secret, and stops on a source it cannot
+  resolve, on a command of more than one word and on an argument. It
+  checks the start order, the
   readiness port and the SIGTERM drain, each program's user and
   capabilities, that the model credential is in the runtime's
   environment alone, and that a command run as 10001 is refused the
@@ -178,18 +202,49 @@ kernel admits for the workspace executor (the user and network
 namespace clone, refused under Docker's default seccomp) is not known.
 
 Open in the guest: the supervisor does not reap orphaned Exec children
-that reparent to it; `render.go` still renders no command, arguments or
-environment, so no MicroVM carries the `GUEST_*` settings, and the model
-credential has no delivery path (the next issue); and the adapter
-requires a placement token file that no operator can supply yet (see
-the token note below).
+that reparent to it.
 
 Tokens: `agent-token` is the adapter's agent token and `control-token`
 is the agent token minted with the control service as audience, which
 the adapter presents to the lifecycle authority (adapter.md §Token
-mode). The placement token is separate, sent in `Garam-Placement`; the
-Kubernetes operator mints it as 32 random bytes and the standalone
-supervisor draws its own, and nothing here mints or delivers one.
+mode). The placement token is separate, sent in `Garam-Placement`. The
+operator mints it and delivers it as the file `placement-token`, as
+above.
+
+### What the deployment must create
+
+- **The model Secret**, where `MODEL_KEY_*` is set: a gaon `Secret`
+  named by `MODEL_KEY_SECRET` holding the key `MODEL_KEY_SECRET_KEY`.
+  The operator never reads or logs it and creates none; gaon resolves
+  the `valueFrom` when the MicroVM starts. It is one Secret for every
+  agent the operator runs.
+- **The trust roots and the key files** the operator itself reads
+  (§Settings).
+
+### What is not established
+
+- **Registering a placement.** A placement must be registered, or the
+  adapter's activation is refused with 403 `placement_not_current`
+  (garam-agent-operator `docs/architecture/control.md` line 188). The
+  control service serves the route, `POST
+  /v1/operators/self/agents/{agent}/placements` (`control.md` lines
+  163-181; `internal/distribution/server.go` line 54), with the body
+  `{epoch, podUid, pvcUid, tokenSha256, previous}`, all at commit
+  `ac7c9f3c40b9611f6e2bdf1eba62c14e145b4aec`. This operator does not
+  call it: `podUid` and `pvcUid` are a Pod's and a claim's, and
+  `previous.writerStoppedSha256` digests a Pod's `status.writerStopped`
+  (`control.md` line 166). A MicroVM and a Volume are not those, and
+  which of their fields stand for them, and what evidence a MicroVM's
+  replacement writes, is a decision ADR-0153 leaves open. Until it is
+  made, an agent this operator renders cannot activate.
+- **A model key per agent.** The feed's `configuration.model.apiKeyRef`
+  is a per-agent `<secret-name>/<key>` (`control.md` line 113,
+  `agent.md` line 16 of that repository), which this operator parses
+  nowhere because it does not read `configuration`, and the variable
+  name sherlock reads the key from is written in the config file's
+  `model.api-key-env` (`agent.md` line 136), which this operator does
+  not render. The setting above therefore gives every agent one key. An
+  agent configured with another reference is run with this one.
 
 ## What is not built
 
@@ -216,7 +271,8 @@ order, the readiness port opening after all three start, the drain
 order with a wait for each, the drain after one program exits early,
 the settings and account each program receives, and a store path that
 is a symbolic link refused. `guest-run` shows in the built image each
-program's user and capabilities and a command run as 10001 refused.
+program's user and capabilities and a command run as 10001 refused,
+started from what `render.go` renders.
 They do not prove the adapter's calls to garam, which need an admitted
 agent, an Exec under the guest kernel, or gaon's MicroVM start.
 

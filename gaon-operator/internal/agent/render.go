@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"sort"
+	"strconv"
 
 	"github.com/garamsh/gaon/lib/api"
 
@@ -29,12 +30,28 @@ const (
 const (
 	KeyGaramRoot   = guest.GaramRootFile
 	KeyControlRoot = guest.ControlRootFile
+	// KeyPlacementToken is minted by the operator, never by garam.
+	KeyPlacementToken = guest.PlacementTokenFile
 )
 
-// secretFor returns the Secret of d: the credentials, and the two trust
-// roots the guest reads.
-func (s *service) secretFor(d Desired, c Credentials) (*api.Secret, error) {
-	data := map[string][]byte{KeyGaramRoot: s.opts.GaramRoot, KeyControlRoot: s.opts.ControlRoot}
+// ModelKey is where the model's credential comes from: the key of a
+// Secret the deployment creates, and the variable the runtime reads it
+// from. The operator never reads the value.
+type ModelKey struct {
+	// Env is the variable the runtime reads the key from.
+	Env string
+	// Secret and Key name the Secret and the key in it.
+	Secret string
+	Key    string
+}
+
+// secretFor returns the Secret of d: the credentials, the two trust
+// roots the guest reads and the placement token.
+func (s *service) secretFor(d Desired, c Credentials, placement []byte) (*api.Secret, error) {
+	data := map[string][]byte{
+		KeyGaramRoot: s.opts.GaramRoot, KeyControlRoot: s.opts.ControlRoot,
+		KeyPlacementToken: placement,
+	}
 	for name, value := range c {
 		if _, taken := data[name]; taken {
 			return nil, errorx.New(errorx.KindInvalidArgument, fmt.Sprintf("credential file %q collides with a trust root", name))
@@ -46,6 +63,24 @@ func (s *service) secretFor(d Desired, c Credentials) (*api.Secret, error) {
 		Metadata: metaFor(namesOf(d.GRN).secret, d),
 		Data:     data,
 	}, nil
+}
+
+// Render returns the Secret and the MicroVM the operator writes for d
+// when it creates the agent, given the credentials garam minted. It is
+// what a reconcile of a new agent writes and nothing more, so a run of
+// the guest image can start from the rendered object rather than from
+// a copy of it.
+func Render(o Options, d Desired, c Credentials) (*api.Secret, *api.MicroVM, error) {
+	s := &service{opts: o}
+	token, err := mintPlacementToken()
+	if err != nil {
+		return nil, nil, err
+	}
+	secret, err := s.secretFor(d, c, token)
+	if err != nil {
+		return nil, nil, err
+	}
+	return secret, s.microVMFor(d, secret), nil
 }
 
 // volumeFor returns one of d's two Volumes. A Volume outlives its
@@ -87,6 +122,8 @@ func (s *service) microVMFor(d Desired, secret *api.Secret) *api.MicroVM {
 		Metadata: metaFor(n.microvm, d),
 		Spec: api.MicroVMSpec{
 			Image:       s.opts.Image,
+			Command:     []string{guest.BinaryPath},
+			Env:         s.envFor(d),
 			User:        guestUser,
 			Resources:   s.opts.Resources,
 			RunStrategy: strategyFor(d),
@@ -99,6 +136,26 @@ func (s *service) microVMFor(d Desired, secret *api.Secret) *api.MicroVM {
 			ReadinessProbe: &api.Probe{TCPSocket: &api.TCPSocketAction{Port: api.PortRef{Name: supervisorPort}}},
 		},
 	}
+}
+
+// envFor returns the guest's environment: the settings the supervisor
+// reads, each a value that is an address or an identifier, and the
+// model key, which is sourced from a Secret and never given inline.
+func (s *service) envFor(d Desired) []api.EnvVar {
+	env := []api.EnvVar{
+		{Name: guest.EnvAgent, Value: d.GRN.String()},
+		{Name: guest.EnvEpoch, Value: strconv.FormatInt(d.Epoch, 10)},
+		{Name: guest.EnvMachineURL, Value: s.opts.MachineURL},
+		{Name: guest.EnvControlURL, Value: s.opts.ControlURL},
+	}
+	if k := s.opts.ModelKey; k != nil {
+		env = append(env,
+			api.EnvVar{Name: guest.EnvRuntimeEnv, Value: k.Env},
+			api.EnvVar{Name: k.Env, ValueFrom: &api.ValueSource{
+				SecretKeyRef: &api.KeyReference{Name: k.Secret, Key: k.Key},
+			}})
+	}
+	return env
 }
 
 // strategyFor is the run strategy the feed asks for: Always restarts an

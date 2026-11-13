@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/gaon-operator/internal/agent"
+	"github.com/garamsh/garam/gaon-operator/internal/guest"
 	"github.com/garamsh/garam/gaon-operator/tests/gaonfake"
 	"github.com/garamsh/garam/lib/grn"
 )
@@ -110,6 +111,8 @@ func newHarness(t *testing.T) *harness {
 			Image:       "registry.example/garam/agent:1",
 			GaramRoot:   []byte("garam root"),
 			ControlRoot: []byte("control root"),
+			MachineURL:  "https://garam.guest.example",
+			ControlURL:  "https://control.guest.example",
 			Logger:      slog.New(slog.DiscardHandler),
 		},
 	}
@@ -439,4 +442,150 @@ func TestCredentials_NeverPrintTheirValues(t *testing.T) {
 func sha16(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])[:16]
+}
+
+// envOf returns the environment of m by name, and fails the test on a
+// name given twice, which gaon refuses.
+func envOf(t *testing.T, m api.MicroVM) map[string]api.EnvVar {
+	t.Helper()
+	env := map[string]api.EnvVar{}
+	for _, e := range m.Spec.Env {
+		_, dup := env[e.Name]
+		require.False(t, dup, "env %s is given twice", e.Name)
+		env[e.Name] = e
+	}
+	return env
+}
+
+func TestReconcile_TheMicroVMCarriesTheGuestsCommandAndSettings(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	h.feed.set(d)
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	m, ok := h.gaon.MicroVM(t, objectName(t, d))
+	require.True(t, ok)
+	assert.Equal(t, []string{"/usr/local/bin/gaon-guest"}, m.Spec.Command,
+		"a command replaces the image's entrypoint, so it names the supervisor")
+	assert.Empty(t, m.Spec.Args)
+	env := envOf(t, m)
+	assert.Equal(t, d.GRN.String(), env["GUEST_AGENT_GRN"].Value)
+	assert.Equal(t, "3", env["GUEST_ASSIGNMENT_EPOCH"].Value)
+	assert.Equal(t, "https://garam.guest.example", env["GUEST_MACHINE_URL"].Value)
+	assert.Equal(t, "https://control.guest.example", env["GUEST_CONTROL_URL"].Value)
+	assert.Len(t, env, 4, "with no model key, nothing else is rendered")
+	for name, e := range env {
+		assert.Nil(t, e.ValueFrom, name)
+	}
+}
+
+func TestReconcile_TheModelKeyIsAnEnvSourcedFromASecret(t *testing.T) {
+	h := newHarness(t)
+	h.opts.ModelKey = &agent.ModelKey{Env: "MODEL_API_KEY", Secret: "model-credentials", Key: "api-key"}
+	h.restart()
+	d := desired("a1")
+	h.feed.set(d)
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	m, _ := h.gaon.MicroVM(t, objectName(t, d))
+	env := envOf(t, m)
+	key := env["MODEL_API_KEY"]
+	assert.Empty(t, key.Value, "the key is never an inline value")
+	require.NotNil(t, key.ValueFrom)
+	require.NotNil(t, key.ValueFrom.SecretKeyRef)
+	assert.Equal(t, "model-credentials", key.ValueFrom.SecretKeyRef.Name)
+	assert.Equal(t, "api-key", key.ValueFrom.SecretKeyRef.Key)
+	assert.Equal(t, "MODEL_API_KEY", env["GUEST_RUNTIME_ENV"].Value,
+		"the supervisor hands the variable to the runtime alone")
+	_, secret := h.gaon.Secret(t, "model-credentials")
+	assert.False(t, secret, "the operator creates no model Secret")
+}
+
+func TestReconcile_ThePlacementTokenIsMintedOnceIntoTheSecret(t *testing.T) {
+	h := newHarness(t)
+	a, b := desired("a1"), desired("a2")
+	h.feed.set(a, b)
+
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	secretA, _ := h.gaon.Secret(t, objectName(t, a))
+	secretB, _ := h.gaon.Secret(t, objectName(t, b))
+	tokenA := secretA.Data["placement-token"]
+	raw, err := hex.DecodeString(string(tokenA))
+	require.NoError(t, err, "the token is hex")
+	assert.Len(t, raw, 32)
+	assert.NotEqual(t, tokenA, secretB.Data["placement-token"], "each agent has its own")
+
+	m, _ := h.gaon.MicroVM(t, objectName(t, a))
+	var delivered bool
+	for _, f := range m.Spec.Files {
+		if f.Path == guest.CredentialsDir+"placement-token" {
+			delivered = true
+			require.NotNil(t, f.ValueFrom)
+			assert.Equal(t, "placement-token", f.ValueFrom.SecretKeyRef.Key)
+			assert.Empty(t, f.Content)
+		}
+	}
+	assert.True(t, delivered, "the token is a file sourced from the Secret")
+	spec, err := json.Marshal(m)
+	require.NoError(t, err)
+	assert.NotContains(t, string(spec), string(tokenA))
+
+	h.restart()
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	again, _ := h.gaon.Secret(t, objectName(t, a))
+	assert.Equal(t, tokenA, again.Data["placement-token"], "an existing Secret keeps its token")
+}
+
+func TestReconcile_AnExistingSecretIsNotGivenAPlacementToken(t *testing.T) {
+	h := newHarness(t)
+	d := desired("a1")
+	h.feed.set(d)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	secret, _ := h.gaon.Secret(t, objectName(t, d))
+	delete(secret.Data, "placement-token")
+	_, err := h.cluster.PutSecret(t.Context(), &secret)
+	require.NoError(t, err)
+
+	h.restart()
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+
+	after, _ := h.gaon.Secret(t, objectName(t, d))
+	assert.NotContains(t, after.Data, "placement-token",
+		"a Secret that exists is never minted over, whatever it lacks")
+}
+
+// collidingPlacementGaram mints a credential named like the placement
+// token.
+type collidingPlacementGaram struct{ stubGaram }
+
+func (g *collidingPlacementGaram) MintTokens(context.Context, grn.GRN, int64) (agent.Credentials, error) {
+	return agent.Credentials{agent.KeyPlacementToken: []byte("garam_at_x")}, nil
+}
+
+func TestReconcile_ACredentialNamedLikeThePlacementTokenIsRefused(t *testing.T) {
+	h := newHarness(t)
+	h.feed.set(desired("a1"))
+	svc := agent.NewService(h.feed, &collidingPlacementGaram{}, h.cluster, h.opts)
+
+	require.Error(t, svc.Reconcile(t.Context()))
+	assert.Zero(t, h.gaon.Count("PUT", "secrets")+h.gaon.Count("PUT", "microvms"))
+}
+
+func TestRender_IsTheMicroVMAReconcileWrites(t *testing.T) {
+	h := newHarness(t)
+	h.opts.ModelKey = &agent.ModelKey{Env: "MODEL_API_KEY", Secret: "model-credentials", Key: "api-key"}
+	h.restart()
+	d := desired("a1")
+	h.feed.set(d)
+	require.NoError(t, h.svc.Reconcile(t.Context()))
+	written, _ := h.gaon.MicroVM(t, objectName(t, d))
+
+	_, rendered, err := agent.Render(h.opts, d, h.garam.minted[0])
+
+	require.NoError(t, err)
+	assert.Equal(t, written.Spec, rendered.Spec,
+		"a run that starts from Render starts from what the operator writes")
 }

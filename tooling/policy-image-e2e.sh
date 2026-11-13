@@ -40,7 +40,7 @@ fail() {
 }
 
 pinned() {
-	ref=$(awk -v service="$1:" '$1 == service { s = 1 } s && $1 == "image:" { print $2; exit }' deploy/local/docker-compose.yml)
+	ref=$(awk -v service="$1:" '$0 == "  " service { s = 1 } s && $1 == "image:" { print $2; exit }' deploy/local/docker-compose.yml)
 	case $ref in
 	"$2":*@sha256:*) echo "mirror.gcr.io/library/$ref" ;;
 	*) fail "deploy/local/docker-compose.yml names no $2 image by digest for $1; read '$ref'" ;;

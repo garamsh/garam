@@ -223,6 +223,8 @@ function opening(text: string): string {
  * read by its status and kind instead.
  */
 const BY_REASON: Record<string, (path: string | undefined) => string> = {
+  change_not_applied: () =>
+    "Your change is saved but not yet in effect. Wait a moment and check again; don't repeat the request.",
   invitation_accepted: () =>
     "This invitation has already been used. Ask an admin of the organization for a new one.",
   invitation_expired: () =>

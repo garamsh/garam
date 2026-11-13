@@ -1416,3 +1416,14 @@ ADRs:
   and `tooling/image-build.sh`, and the directory's removal unbuilt;
   supersedes 0156 in full and 0151 in part now, in whole when the
   directory leaves; 0153 and 0154 follow 0151 out then
+- [0159](./adr/0159-role-links-follow-the-entities-in-one-pass-the-platforms-tables-win-a-failed-write-and-a-request-finishes-its-work-before-it-waits.md)
+  — a role link is delivered in the same pass and transaction as the
+  entities, after them, ordered by its policy's name and not under a
+  sequence; when a link write fails the platform's tables win and the
+  policy service keeps what it last had; at the bound a request
+  answers unavailable with the reason `change_not_applied` and the
+  stored resource, having finished its own work first; the outbox
+  holds a second kind of mark, the role link, read through its own
+  state function; accepted, built (#1878); supersedes 0146 in part,
+  on item 4's "same sequence" and the answer at the bound, and 0140 in
+  part, on §5's set of dirty entities

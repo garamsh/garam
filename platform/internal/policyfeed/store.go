@@ -24,4 +24,9 @@ type Store interface {
 	// generation it read, and commits. An error from sender, or any
 	// other, rolls the pass back and leaves every mark.
 	Deliver(ctx context.Context, limit int, sender Sender) (Result, error)
+	// LinkPending reports whether the outbox still holds a mark of the
+	// role link of user in org, or of any member of org where user is
+	// empty. A mark is deleted only after the service applied it, so
+	// no mark is a link applied (ADR-0146 §Reading one's own write).
+	LinkPending(ctx context.Context, org, user string) (bool, error)
 }

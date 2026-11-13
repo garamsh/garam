@@ -44,6 +44,10 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitLinks(r.Context(), g.String(), u.GRN.String()); err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusCreated, orgToAPI(o))
 }
 
@@ -133,6 +137,10 @@ func (s *Server) DeleteOrg(w http.ResponseWriter, r *http.Request, orgSlug apige
 		return
 	}
 	if err := s.orgs.DeleteOrg(r.Context(), g); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitLinks(r.Context(), g.String(), ""); err != nil {
 		writeError(w, err)
 		return
 	}

@@ -162,7 +162,7 @@ plaintext HTTP port (`serve.go:51-159`).
 | `GARAM_COOKIE_SECURE` | no | `true`; an unparsable value is refused (`serve.go:85`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URL` | no | no Google sign-in; the first two are set together or neither (`serve.go:215-234`) |
 | `GARAM_MACHINE_TOKEN_URL` | no | no assertion exchange; an absolute https URL when set (`platform/internal/operator/assertion.go:118-137`) |
-| `GARAM_POLICY_ADDR` | no | no policy delivery; when set, the three below are required (`policy_delivery.go:127-151`) |
+| `GARAM_POLICY_ADDR` | no | no policy delivery, and no request that changes a membership waits for one; when set, the three below are required (`policy_delivery.go:127-151`) |
 | `GARAM_POLICY_CA_FILE`, `GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER` | with the address | see above; the key is loaded at start (`policy_delivery.go:175`) |
 | `GARAM_IDENTITY_ISSUER` | no | issuer off (`identity.go:26-56`); the chart does not render it (`deploy/charts/garam/README.md:348`) |
 | `GARAM_MACHINE_ISSUER` | no | read here only to refuse an identity issuer equal to it (`identity.go:26-56`) |

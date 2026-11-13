@@ -232,17 +232,21 @@ compose project (default `garam-codehub-e2e`); the script refuses
 
 The images are built from the checkout. Nothing is pulled from ECR.
 
-What the platform's feed does and does not write. `garam
-policy-feed start` delivers entities: the organization, its members, its
-teams, projects, users, agents and operators. It delivers no role link
-and no policy. The run therefore writes two itself, the owner's and the
-member's role links on the organization, through the policy service's
-`CreatePolicy` as the platform with no writer, and activates them. Every
-allow in the output rests on those two links; a control before them
-shows the member denied. The run also writes the owner's user and
-session row by SQL, as `platform-web/e2e/seed.ts` does, because the
-stack has no sign-in that needs no browser; the member registers through
-an invitation. The run says each of these where it does it.
+What the platform's feed writes. `garam policy-feed start` delivers
+entities (the organization, its members, its teams, projects, users,
+agents and operators) and, from the memberships, each member's role
+link on the organization (ADR-0146 item 4). It delivers no other
+policy. The run writes no link itself: the owner's and the member's
+are the platform's, written when the organization was created and the
+invitation accepted, and the run reads the policy service's database
+to say so. Every allow in the output rests on them. A stranger who is
+no member is denied, though tenant isolation would deny them with or
+without a link; the line that shows a link gone is the read of the
+active policies after the run removes the member by SQL (no route
+removes one). The run also writes the owner's user and session row by
+SQL, as `platform-web/e2e/seed.ts` does, because the stack has no
+sign-in that needs no browser; the member registers through an
+invitation. The run says each of these where it does it.
 
 A person's token for the audience `codehub` comes from the device
 grant the garam CLI uses, approved with the owner's session.

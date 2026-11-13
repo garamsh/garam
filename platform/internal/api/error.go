@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 
@@ -133,11 +134,23 @@ func writeError(w http.ResponseWriter, err error) {
 	// own sentence replaced a chain naming the constraint and the
 	// SQLSTATE a conflict was refused on.
 	// A reason is a code this project wrote for the client to branch
-	// on, so it is disclosed below 500 whatever the chain's text was.
-	if reason, ok := errorx.ReasonOf(err); ok && status < http.StatusInternalServerError {
+	// on, so it is disclosed below 500 whatever the chain's text was,
+	// and on the one 503 that carries a code: a change stored and not
+	// yet applied is told from a service down by it alone. No other
+	// 503 is built with a reason, and this one names no other.
+	reason, ok := errorx.ReasonOf(err)
+	notApplied := status == http.StatusServiceUnavailable &&
+		reason.Code == policyfeed.ReasonChangeNotApplied
+	if ok && (status < http.StatusInternalServerError || notApplied) {
 		body.Reason = &reason.Code
 		if reason.Path != "" {
 			body.Path = &reason.Path
+		}
+		// A request that stored what it names says which it stored.
+		var stored interface{ Resource() string }
+		if notApplied && errors.As(err, &stored) {
+			resource := stored.Resource()
+			body.Resource = &resource
 		}
 	}
 	if recorder, ok := w.(causeRecorder); ok && !disclosed {

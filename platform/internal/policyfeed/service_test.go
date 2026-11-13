@@ -46,6 +46,10 @@ func (s *scriptedStore) Deliver(
 	return st.result, st.err
 }
 
+func (s *scriptedStore) LinkPending(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+
 type syncBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -136,6 +140,35 @@ func TestRun_ReturnsNilWhenContextEndsWhileWaiting(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run kept waiting out an hour after its context ended")
 	}
+}
+
+func TestRun_WakeEndsTheWaitBetweenPasses(t *testing.T) {
+	// Poll is an hour, so the second pass runs only if Wake cut the wait.
+	// The control: the same script without a wake stays in the wait until
+	// the test gives up (TestRun_ReturnsNilWhenContextEndsWhileWaiting
+	// holds the wait itself).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &scriptedStore{script: []step{{}, {}}, cancel: cancel}
+	svc := policyfeed.NewService(store, nil, slog.New(slog.DiscardHandler),
+		policyfeed.Config{Poll: time.Hour, MaxBackoff: time.Hour})
+	done := make(chan error, 1)
+	go func() { done <- svc.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		return store.calls == 1
+	}, 5*time.Second, time.Millisecond, "the first pass runs at once")
+	svc.Wake()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("a wake did not end the wait between passes")
+	}
+	assert.Equal(t, 2, store.calls)
 }
 
 func TestRun_BackoffStopsAtTheCap(t *testing.T) {

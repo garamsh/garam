@@ -36,6 +36,24 @@ type State struct {
 	Parents []Entity
 }
 
+// RoleLinkType is the mark kind of a member's role link (ADR-0146
+// item 4). Its id is the organization's GRN and the member's, with a
+// space between them, so a link's mark is told from an entity's by its
+// type alone.
+const RoleLinkType = "Iam::RoleLink"
+
+// Link is the role link the platform writes for one membership. It is
+// written with no writer, as the caller `platform` (ADR-0146
+// §Security), and is named by the pair, so a role that changes is the
+// replacement of the link that held the old one.
+type Link struct {
+	// Org and User are the GRNs of the organization and the member.
+	Org, User string
+	// Role is the role the membership holds, and empty where it holds
+	// none, which is the link's removal.
+	Role string
+}
+
 // Entry is one entity a pass delivers.
 type Entry struct {
 	Entity Entity

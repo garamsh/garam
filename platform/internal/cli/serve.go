@@ -144,11 +144,12 @@ func serveAPI(cmd *cobra.Command) error {
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
 		WithIdentity(issuer)
 
-	stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger)
+	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger)
 	if err != nil {
 		return err
 	}
 	defer stopDelivery()
+	srv.WithFeed(gate)
 
 	addr := envOr(envHTTPAddr, ":8080")
 	// A request needs both to be served: rows out of the database, and

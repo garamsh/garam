@@ -53,6 +53,11 @@ type fakePolicy struct {
 	refuse  map[string]string // entity id -> reason
 	fail    error
 	onApply func()
+
+	policies  map[string]*fakeLink // policy grn -> role link
+	failLinks error
+	// failOnly names the one link call that fails; empty fails all.
+	failOnly string
 }
 
 func (f *fakePolicy) ApplyEntityChanges(
@@ -77,6 +82,104 @@ func (f *fakePolicy) ApplyEntityChanges(
 		resp.Written++
 	}
 	return resp, nil
+}
+
+// fakeLink is one role-link policy as the fake holds it.
+type fakeLink struct {
+	req    *policyv1.CreatePolicyRequest
+	active bool
+}
+
+// linkFail makes every link call fail with err while it is set.
+func (f *fakePolicy) linkFail(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failLinks, f.failOnly = err, ""
+}
+
+// linkFailOn makes only the named link call (CreatePolicy,
+// ActivatePolicy or DeletePolicy) fail with err while it is set; the
+// others answer as they would.
+func (f *fakePolicy) linkFailOn(method string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failLinks, f.failOnly = err, method
+}
+
+// linkErr is what a call to method answers when the case has set it to
+// fail. The caller holds the lock.
+func (f *fakePolicy) linkErr(method string) error {
+	if f.failOnly != "" && f.failOnly != method {
+		return nil
+	}
+	return f.failLinks
+}
+
+func (f *fakePolicy) CreatePolicy(
+	_ context.Context, req *policyv1.CreatePolicyRequest,
+) (*policyv1.CreatePolicyResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.linkErr("CreatePolicy"); err != nil {
+		return nil, err
+	}
+	if _, ok := f.policies[req.GetPolicy()]; ok {
+		return nil, status.Error(codes.AlreadyExists, "policy exists")
+	}
+	if f.policies == nil {
+		f.policies = map[string]*fakeLink{}
+	}
+	f.policies[req.GetPolicy()] = &fakeLink{req: req}
+	return &policyv1.CreatePolicyResponse{}, nil
+}
+
+func (f *fakePolicy) ActivatePolicy(
+	_ context.Context, req *policyv1.ActivatePolicyRequest,
+) (*policyv1.ActivatePolicyResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.linkErr("ActivatePolicy"); err != nil {
+		return nil, err
+	}
+	l, ok := f.policies[req.GetPolicy()]
+	if !ok {
+		return nil, status.Error(codes.NotFound, "no policy")
+	}
+	l.active = true
+	return &policyv1.ActivatePolicyResponse{}, nil
+}
+
+func (f *fakePolicy) DeletePolicy(
+	_ context.Context, req *policyv1.DeletePolicyRequest,
+) (*policyv1.DeletePolicyResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.linkErr("DeletePolicy"); err != nil {
+		return nil, err
+	}
+	if _, ok := f.policies[req.GetPolicy()]; !ok {
+		return nil, status.Error(codes.NotFound, "no policy")
+	}
+	delete(f.policies, req.GetPolicy())
+	return &policyv1.DeletePolicyResponse{}, nil
+}
+
+// links is the role links in force as "ROLE principal resource", the
+// way the service reads them: an active policy and nothing else.
+func (f *fakePolicy) links() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, l := range f.policies {
+		if !l.active {
+			continue
+		}
+		rl := l.req.GetBody().GetRoleLink()
+		out = append(out, strings.TrimPrefix(rl.GetRole().String(), "ROLE_")+" "+
+			rl.GetPrincipal().GetId()+" "+rl.GetResource().GetId())
+	}
+	slices.Sort(out)
+	return out
 }
 
 func (f *fakePolicy) received() []*policyv1.ApplyEntityChangesRequest {
@@ -238,7 +341,9 @@ func TestPolicyDelivery_SendsWhatTheOwnersTablesSayAndDeletesTheMarks(t *testing
 	calls := fake.received()
 	require.Len(t, calls, 1)
 	changes := changesByEntity(calls[0])
-	require.Len(t, changes, len(outboxEntities))
+	require.Len(t, changes, len(outboxEntities)-1, "the role link is not an entity change")
+	assert.Equal(t, []string{"MEMBER " + outboxUser + " " + outboxOrg}, fake.links(),
+		"the seeded membership reached the service as a link")
 	seqs := map[int64]bool{}
 	for _, c := range changes {
 		seqs[c.GetSequence()] = true

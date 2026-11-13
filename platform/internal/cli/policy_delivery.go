@@ -59,30 +59,33 @@ const (
 )
 
 // startPolicyDelivery starts the delivery loop when a policy service
-// is configured, and returns what stops it and waits for it. With none
-// configured it starts nothing, and logs an error when the feed is on
-// and so nothing delivers it (ADR-0140 §9).
+// is configured, and returns the gate a membership change waits at and
+// what stops the loop and waits for it. With none configured it starts
+// nothing and returns no gate, so no request waits for a delivery that
+// never comes, and logs an error when the feed is on and so nothing
+// delivers it (ADR-0140 §9).
 func startPolicyDelivery(
 	ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger,
-) (func(), error) {
+) (policyfeed.Gate, func(), error) {
 	cfg, err := readPolicyDeliveryConfig()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if cfg == nil {
 		warnIfFeedUndelivered(ctx, policyfeedpg.New(pool), logger)
-		return func() {}, nil
+		return nil, func() {}, nil
 	}
 	key, err := signer.LoadKey(cfg.keyFile)
 	if err != nil {
-		return nil, errorx.Wrap(err, string(envPolicySigningKeyFile))
+		return nil, nil, errorx.Wrap(err, string(envPolicySigningKeyFile))
 	}
 	conn, err := policyfeedgrpc.Dial(cfg.addr, cfg.caFile, cfg.issuer, key)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	store := policyfeedpg.NewStore(pool)
 	service := policyfeed.NewService(
-		policyfeedpg.NewStore(pool),
+		store,
 		policyfeedgrpc.NewSender(policyv1.NewPolicyServiceClient(conn)),
 		logger,
 		policyfeed.Config{Poll: policyPoll, MaxBackoff: policyMaxBackoff},
@@ -94,7 +97,7 @@ func startPolicyDelivery(
 		_ = service.Run(runCtx)
 	}()
 	logger.Info("delivering the policy feed", slog.String("addr", cfg.addr))
-	return func() {
+	return policyfeed.NewGate(store, service, policyfeed.Bound), func() {
 		cancel()
 		<-done
 		_ = conn.Close()

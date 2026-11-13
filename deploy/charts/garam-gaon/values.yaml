@@ -1,0 +1,148 @@
+# Values for the garam-gaon chart (ADR-0155). The chart renders the gaon
+# objects docs/architecture/deployment-gaon.md states, to be applied
+# with `helm template ... | gaon apply -f -`. It creates no Secret and
+# no ConfigMap: every `secret` and `configMap` below names one the
+# deployment creates, and no value of either is in this file.
+
+# Which half of the deployment this render holds. `migrate` renders the
+# three migration Jobs and nothing else; `serve` renders the eight
+# Deployments, their Services and, where `gateway.enabled`, the routes.
+# Required: gaon applies a stream in the order Helm emits it, and Helm
+# emits Deployments before Jobs, so a render holding both would start
+# the services before the migrations ran (README §Order).
+stage: ""
+
+# Every object is named `<namePrefix>-<word>`. Gaon has no namespaces,
+# so this prefix is what keeps two deployments' objects apart.
+namePrefix: garam
+
+# The zone of a Service's name: `<service>.default.svc.<dnsZone>`. A
+# short name is not resolved, so every address a process dials is this
+# full form.
+dnsZone: cluster.local
+
+migrate:
+  # Suffixes the Job names. A finished Job and its MicroVM are kept, so
+  # a release that runs a migration again needs a Job of a new name.
+  run: ""
+
+# Each image is `<repository>@<digest>`; gaon refuses a tag. `user` is
+# `uid:gid`, both numbers: a file with no owner takes the MicroVM's
+# user only in that form.
+image:
+  server: &image
+    repository: ""
+    digest: ""
+    user: ""
+  cowork: *image
+  policy: *image
+  console: *image
+  site: *image
+  coworkWeb: *image
+
+# The Secrets holding the three databases' connection strings.
+database:
+  garam: &ref
+    secret: ""
+    key: ""
+  cowork: *ref
+  policy: *ref
+
+# The origins a browser or another process opens, as
+# docs/architecture/deployment-needs.md §Public names states them.
+public:
+  siteUrl: ""
+  consoleUrl: ""
+  coworkUrl: ""
+  coworkSyncUrl: ""
+  # Optional: where the console links to cowork-web.
+  coworkWebUrl: ""
+
+# The issuer the policy service trusts and the api signs under: one
+# value for both.
+policy:
+  tokenIssuer: ""
+  jwks:
+    configMap: ""
+    key: ""
+  tls:
+    cert:
+      configMap: ""
+      key: ""
+    key: *ref
+
+api:
+  # Optional: unset leaves garam's own default.
+  sessionTtl: ""
+  cookieSecure: true
+  # Set all of these or none of them.
+  google:
+    clientId: ""
+    redirectUrl: ""
+    clientSecret: *ref
+  policy:
+    # The root the policy service's certificate is verified against.
+    ca:
+      configMap: ""
+      key: ""
+    signingKey: *ref
+
+machine:
+  issuer: ""
+  # Optional: an absolute https URL. Unset, garam issues no key and
+  # answers the exchange 503.
+  tokenUrl: ""
+  # Optional: unset leaves garam's own default.
+  agentTokenLifetime: ""
+  tlsCert:
+    configMap: ""
+    key: ""
+  tlsKey: *ref
+  serverRoot:
+    configMap: ""
+    key: ""
+  caKey: *ref
+  service:
+    # ClusterIP, or LoadBalancer where the machine listener is reached
+    # without the gateway.
+    type: ClusterIP
+    loadBalancerIP: ""
+
+cowork:
+  webOrigins: ""
+  s3:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    accessKey: *ref
+    secretKey: *ref
+    pathStyle: false
+    createBucket: false
+  userContent:
+    origin: ""
+    secret: *ref
+  # Set all of these or none of them; `enabled` makes the rest required.
+  policy:
+    enabled: false
+    ca:
+      configMap: ""
+      key: ""
+    deploymentKey: *ref
+
+# The routes, behind a value that is off: gaon documents the gateway
+# kinds and the unit that serves them does not exist yet
+# (docs/architecture/deployment-gaon.md §Names).
+gateway:
+  enabled: false
+  # Optional: the LAN address the Gateway asks for.
+  address: ""
+  httpsPort: 443
+  site: &listener
+    host: ""
+    certificate: ""
+  console: *listener
+  cowork: *listener
+  userContent: *listener
+  machine:
+    host: ""
+    port: 8443

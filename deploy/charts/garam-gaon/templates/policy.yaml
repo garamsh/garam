@@ -1,0 +1,67 @@
+{{- if eq (include "garam-gaon.stage" .) "serve" }}
+{{- $ctx := dict "root" $ "word" "policy" }}
+# The policy service: `policy serve`. The contract port serves TLS
+# alone, so the probes answer on a plaintext listener of their own. Its
+# certificate must name the Service's full name, which is what a caller
+# dials (README §Names).
+apiVersion: workloads.gaon.garam.sh/v1alpha1
+kind: Deployment
+metadata:
+  name: {{ include "garam-gaon.name" $ctx }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "garam-gaon.selector" $ctx | nindent 6 }}
+  template:
+    image: {{ include "garam-gaon.image" (dict "root" $ "image" "policy") }}
+    user: {{ include "garam-gaon.user" (dict "root" $ "image" "policy") | quote }}
+    command:
+      - policy
+    args:
+      - serve
+    env:
+      {{- include "garam-gaon.envSecret" (dict "name" "POLICY_DATABASE_URL" "path" "database.policy" "ref" .Values.database.policy) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "POLICY_ADDR" "value" "0.0.0.0:8443") | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "POLICY_HEALTH_ADDR" "value" "0.0.0.0:8091") | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "POLICY_TOKEN_ISSUER" "value" (required "policy.tokenIssuer is required: it is the issuer the policy service trusts and the api signs under, one value for both" .Values.policy.tokenIssuer)) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "POLICY_JWKS_FILE" "value" "/etc/garam/policy/jwks.json") | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "POLICY_TLS_CERT_FILE" "value" "/etc/garam/policy/tls.crt") | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "POLICY_TLS_KEY_FILE" "value" "/etc/garam/policy/tls.key") | nindent 6 }}
+    files:
+      {{- include "garam-gaon.fileConfigMap" (dict "file" "/etc/garam/policy/jwks.json" "path" "policy.jwks" "ref" .Values.policy.jwks) | nindent 6 }}
+      {{- include "garam-gaon.fileConfigMap" (dict "file" "/etc/garam/policy/tls.crt" "path" "policy.tls.cert" "ref" .Values.policy.tls.cert) | nindent 6 }}
+      {{- include "garam-gaon.fileSecret" (dict "file" "/etc/garam/policy/tls.key" "path" "policy.tls.key" "ref" .Values.policy.tls.key) | nindent 6 }}
+    ports:
+      - name: grpc
+        port: 8443
+        protocol: TCP
+      - name: health
+        port: 8091
+        protocol: TCP
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: health
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: health
+      timeoutSeconds: 3
+---
+apiVersion: compute.gaon.garam.sh/v1alpha1
+kind: Service
+metadata:
+  name: {{ include "garam-gaon.name" $ctx }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "garam-gaon.selector" $ctx | nindent 4 }}
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 8443
+      targetPort: grpc
+{{- end }}

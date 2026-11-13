@@ -1,0 +1,11 @@
+# The policy half of cowork on, and no token endpoint to fetch its
+# caller token from.
+cowork:
+  policy:
+    enabled: true
+    ca:
+      configMap: cowork-policy-ca
+      key: ca.crt
+    deploymentKey:
+      secret: cowork-deployment
+      key: deployment.key

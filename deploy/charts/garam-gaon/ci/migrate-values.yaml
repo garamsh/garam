@@ -1,0 +1,27 @@
+# The first render of a release: the three migration Jobs and nothing
+# else. It sets only what they read.
+stage: migrate
+namePrefix: prod-garam
+migrate:
+  run: "20261113"
+image:
+  server: &image
+    repository: registry.example/garam/server
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
+    user: "1000:1000"
+  cowork:
+    <<: *image
+    repository: registry.example/garam/cowork
+  policy:
+    <<: *image
+    repository: registry.example/garam/policy
+database:
+  garam:
+    secret: garam-database
+    key: url
+  cowork:
+    secret: cowork-database
+    key: url
+  policy:
+    secret: policy-database
+    key: url

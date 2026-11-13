@@ -1,0 +1,10 @@
+apiVersion: v2
+name: garam-gaon
+description: The objects a gaon cluster runs for garam, rendered to be applied with gaon apply — eight Deployments, three migration Jobs, their Services and, behind a value, the gateway routes
+type: application
+# The chart's own version, moved by a change to the chart (ADR-0042,
+# ADR-0057). It is not a garam version: a consumer pins it by a git ref
+# of garamsh/garam and pins the images through image.*.digest.
+version: 0.1.0
+# No appVersion, as deploy/charts/garam/Chart.yaml: the images are named
+# by digest and no release is named here.

@@ -1,0 +1,89 @@
+{{- if eq (include "garam-gaon.stage" .) "serve" }}
+{{- $ctx := dict "root" $ "word" "cowork" }}
+{{- $cowork := .Values.cowork }}
+{{- $policy := $cowork.policy }}
+# cowork's server: `cowork serve`, the API and the user-content listener
+# on two ports of one process.
+apiVersion: workloads.gaon.garam.sh/v1alpha1
+kind: Deployment
+metadata:
+  name: {{ include "garam-gaon.name" $ctx }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "garam-gaon.selector" $ctx | nindent 6 }}
+  template:
+    image: {{ include "garam-gaon.image" (dict "root" $ "image" "cowork") }}
+    user: {{ include "garam-gaon.user" (dict "root" $ "image" "cowork") | quote }}
+    command:
+      - cowork
+    args:
+      - serve
+    env:
+      {{- include "garam-gaon.envSecret" (dict "name" "COWORK_DATABASE_URL" "path" "database.cowork" "ref" .Values.database.cowork) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_PLATFORM_URL" "value" (printf "http://%s:8080" (include "garam-gaon.host" (dict "root" $ "word" "api")))) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_LISTEN_ADDR" "value" ":8090") | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_WEB_ORIGINS" "value" (required "cowork.webOrigins is required: a comma list of host patterns, and none means a browser's WebSocket and a framed artifact come from cowork's own host only" $cowork.webOrigins)) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_BLOB_STORE" "value" "s3") | nindent 6 }}
+      {{- with $cowork.s3.endpoint }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_S3_ENDPOINT" "value" .) | nindent 6 }}
+      {{- end }}
+      {{- with $cowork.s3.region }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_S3_REGION" "value" .) | nindent 6 }}
+      {{- end }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_S3_BUCKET" "value" (required "cowork.s3.bucket is required" $cowork.s3.bucket)) | nindent 6 }}
+      {{- include "garam-gaon.envSecret" (dict "name" "COWORK_S3_ACCESS_KEY" "path" "cowork.s3.accessKey" "ref" $cowork.s3.accessKey) | nindent 6 }}
+      {{- include "garam-gaon.envSecret" (dict "name" "COWORK_S3_SECRET_KEY" "path" "cowork.s3.secretKey" "ref" $cowork.s3.secretKey) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_S3_PATH_STYLE" "value" $cowork.s3.pathStyle) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_S3_CREATE_BUCKET" "value" $cowork.s3.createBucket) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_USERCONTENT_ORIGIN" "value" (required "cowork.userContent.origin is required: the origin HTML artifacts are served from" $cowork.userContent.origin)) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_USERCONTENT_ADDR" "value" ":8092") | nindent 6 }}
+      {{- include "garam-gaon.envSecret" (dict "name" "COWORK_USERCONTENT_SECRET" "path" "cowork.userContent.secret" "ref" $cowork.userContent.secret) | nindent 6 }}
+      {{- if $policy.enabled }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_POLICY_ADDR" "value" (printf "%s:8443" (include "garam-gaon.host" (dict "root" $ "word" "policy")))) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_POLICY_CA_FILE" "value" "/etc/garam/policy/ca.crt") | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_MACHINE_TOKEN_URL" "value" (required "cowork.policy.enabled is true, and machine.tokenUrl is required with it: it is the endpoint cowork's caller token is fetched from" (include "garam-gaon.machineTokenUrl" $))) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_DEPLOYMENT_KEY_FILE" "value" "/etc/garam/policy/deployment.key") | nindent 6 }}
+      {{- end }}
+    {{- if $policy.enabled }}
+    files:
+      {{- include "garam-gaon.fileConfigMap" (dict "file" "/etc/garam/policy/ca.crt" "path" "cowork.policy.ca" "ref" $policy.ca) | nindent 6 }}
+      {{- include "garam-gaon.fileSecret" (dict "file" "/etc/garam/policy/deployment.key" "path" "cowork.policy.deploymentKey" "ref" $policy.deploymentKey) | nindent 6 }}
+    {{- end }}
+    ports:
+      - name: http
+        port: 8090
+        protocol: TCP
+      - name: usercontent
+        port: 8092
+        protocol: TCP
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: http
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: http
+---
+apiVersion: compute.gaon.garam.sh/v1alpha1
+kind: Service
+metadata:
+  name: {{ include "garam-gaon.name" $ctx }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "garam-gaon.selector" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8090
+      targetPort: http
+    - name: usercontent
+      protocol: TCP
+      port: 8092
+      targetPort: usercontent
+{{- end }}

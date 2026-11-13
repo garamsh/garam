@@ -216,13 +216,23 @@ async fn a_writer_changes_nothing_under_a_scoped_identifier_not_even_the_link_it
         "no link was created"
     );
 
-    // Control: an owner writes the same body beside it, and the
-    // platform, which wrote the link, makes it effective and removes
-    // it.
+    // Control: the same five writes, by the same owner, under an
+    // identifier no prefix opens, are accepted, so it is the
+    // reservation that refused above and not a missing role.
+    let owner = Some(OWEN);
     service
-        .create(Some(OWEN), "link-x", own_role(Role::Admin, ENG))
+        .create(owner, "link-x", own_role(Role::Admin, ENG))
         .await
         .unwrap();
+    service
+        .append(owner, "link-x", own_role(Role::Admin, ENG))
+        .await
+        .unwrap();
+    service.activate(owner, "link-x").await.unwrap();
+    service.roll_back(owner, "link-x", 1).await.unwrap();
+    service.delete(owner, "link-x").await.unwrap();
+    // Control: the platform, which wrote the link, makes it
+    // effective and removes it.
     service.activate(None, &eng_admin).await.unwrap();
     service.delete(None, &eng_admin).await.unwrap();
 }
@@ -283,6 +293,18 @@ async fn the_platform_makes_effective_or_removes_only_a_policy_whose_every_versi
         assert!(found.contains(&policy_of(slug)), "{slug} was removed");
     }
 
+    // The platform with no writer makes a role link effective or
+    // removes it and does nothing else: a new version and a
+    // roll-back name a writer, and are refused `PERMISSION_DENIED`
+    // under a scoped identifier as under any other.
+    refused(
+        service.append(None, &own, own_role(Role::Owner, WEB)).await,
+        Code::PermissionDenied,
+    );
+    refused(
+        service.roll_back(None, &own, 1).await,
+        Code::PermissionDenied,
+    );
     service.activate(None, &own).await.unwrap();
     service.delete(None, &own).await.unwrap();
 }

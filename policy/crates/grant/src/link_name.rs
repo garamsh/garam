@@ -321,10 +321,11 @@ mod tests {
         let in_org_scope = Content::RoleLink {
             role: Role::Admin,
             scope: RoleScope::Organization,
-            principal: (ENG.0.to_owned(), ENG.1.to_owned()),
-            resource: (ENG.0.to_owned(), ENG.1.to_owned()),
+            principal: (user.0.to_owned(), user.1.to_owned()),
+            resource: ("Iam::Org".to_owned(), ACME.to_owned()),
         };
-        assert!(!names_link(&org, &grn, &in_org_scope));
+        let id = scoped_link_policy(&org, Role::Admin, user, ("Iam::Org", ACME));
+        assert!(!names_link(&org, &id, &in_org_scope));
         // The same body under the identifier of a member's link.
         let members = link_policy(&org, Role::Admin, ENG.1);
         assert!(!names_link(&org, &members, &own));

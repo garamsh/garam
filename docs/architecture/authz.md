@@ -222,6 +222,14 @@ true of the platform.
   it, and one whose record cannot be written is answered anyway, the
   failure logged and counted in process. Not built: the platform's
   relay of `ListAuditRecords`, and a metric for the failures.
+- **cowork states its probes.** Each question cowork asks to filter a
+  list or to decide whether a connection may write carries `probe` on
+  its own entry of the batch, so a denied one is not recorded; every
+  question a person or an agent made states nothing and is an attempt
+  (ADR-0148 item 2). The platform's own questions are not asked of the
+  policy service yet (#1784), and the round that asks them states the
+  same of its filters and controls before the record is deployed
+  with them.
 
 [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md) makes a
 message between two agents of two consenting organizations tenant

@@ -1,0 +1,19 @@
+# The HTTPS listeners and the TLS one on a single port.
+gateway:
+  enabled: true
+  httpsPort: 8443
+  site:
+    host: garam.example
+    certificate: site-tls
+  console:
+    host: console.garam.example
+    certificate: console-tls
+  cowork:
+    host: cowork.garam.example
+    certificate: cowork-tls
+  userContent:
+    host: content.garam.example
+    certificate: content-tls
+  machine:
+    host: machine.garam.example
+    port: 8443

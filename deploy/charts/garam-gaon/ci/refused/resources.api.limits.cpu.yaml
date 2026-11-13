@@ -1,0 +1,6 @@
+# A limit that is set is held to the quantity form too: the decoder has
+# no exponent.
+resources:
+  api:
+    limits:
+      cpu: "1e3"

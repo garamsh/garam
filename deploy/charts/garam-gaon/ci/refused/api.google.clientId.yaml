@@ -1,0 +1,4 @@
+# One half of the credential: garam refuses to start holding it.
+api:
+  google:
+    redirectUrl: https://garam.example/api/auth/google/callback

@@ -1,0 +1,58 @@
+{{- if eq (include "garam-gaon.stage" .) "serve" }}
+{{- $ctx := dict "root" $ "word" "authz" }}
+# The authorization engine: `garam serve authz`, gRPC on one port and
+# probes on the metrics port.
+apiVersion: workloads.gaon.garam.sh/v1alpha1
+kind: Deployment
+metadata:
+  name: {{ include "garam-gaon.name" $ctx }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "garam-gaon.selector" $ctx | nindent 6 }}
+  template:
+    image: {{ include "garam-gaon.image" (dict "root" $ "image" "server") }}
+    user: {{ include "garam-gaon.user" (dict "root" $ "image" "server") | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" "authz") | nindent 4 }}
+    command:
+      - garam
+    args:
+      - serve
+      - authz
+    env:
+      {{- include "garam-gaon.envSecret" (dict "name" "GARAM_DATABASE_URL" "path" "database.garam" "ref" .Values.database.garam) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_GRPC_ADDR" "value" ":9090") | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_METRICS_ADDR" "value" ":9091") | nindent 6 }}
+    ports:
+      - name: grpc
+        port: 9090
+        protocol: TCP
+      - name: health
+        port: 9091
+        protocol: TCP
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: health
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: health
+---
+apiVersion: compute.gaon.garam.sh/v1alpha1
+kind: Service
+metadata:
+  name: {{ include "garam-gaon.name" $ctx }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "garam-gaon.selector" $ctx | nindent 4 }}
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 9090
+      targetPort: grpc
+{{- end }}

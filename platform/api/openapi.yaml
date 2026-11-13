@@ -4876,7 +4876,7 @@ components:
             denied meanwhile. There is nothing to wait for: do not
             repeat the request and do not poll; an operator reads the
             set-aside link. It names the organization in `resource`
-            as `change_not_applied` does.
+            as the answer above does.
             Policy documents, each with `path`:
             `policy_document_malformed`, `policy_document_trailing_data`,
             `policy_document_wrong_type`, `policy_document_unknown_key`,

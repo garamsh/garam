@@ -112,7 +112,8 @@ which placement bodies it has presented, and it presents them again.
   the environment and names each missing variable, never a value.
 
 gaon's side is `lib/api` at `github.com/garamsh/gaon` commit
-`4d950576aa75baab497f327e0b3bb5381488c740`.
+`2387cebd0b44b322b7da2ff485144a7456a97c6f`, the commit `pair-run-gaon`
+builds.
 
 ### The wire clients and the binary
 
@@ -213,7 +214,7 @@ each is written once.
   `ARG`s and recorded as `sh.garam.guest.*-image` labels. The build
   stops if the runtime image's `/sherlock` and the workspace image's
   differ. The pins are Sherlock 0.10.0 for the two sherlock images and
-  garam 0.7.0 for the server; `platform/Makefile` pins Sherlock 0.9.0
+  garam 0.8.0 for the server; `platform/Makefile` pins Sherlock 0.9.0
   for the runner's tests, so these digests are pinned nowhere else in
   the repository.
 - **Publishing it.** A release builds the image as

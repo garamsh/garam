@@ -57,11 +57,16 @@ the chart's `image.*.repository` names, and `garam/cowork` and
 `garam/cowork-web`, which no chart here deploys. A release publishes
 all six, and no image holds an address chosen when it was built
 ([ADR-0150](./adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)).
-The tag says what a build is. A bare `X.Y.Z` is a release, which only a
-`vX.Y.Z` git tag publishes
-([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
-and a development build a person made and pushed carries a
-commit-derived or prerelease tag
+The tag says what a build is. A release is a git tag, and the image
+tag is that tag without the `v`
+([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
+Until launch the tag is `v0.1.0-dev.N`, `v0.1.0-rc.N` or `v0.1.0`, and
+`tooling/release-version.sh` is authoritative for the form and refuses
+every other tag
+([ADR-0157](./adr/0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md));
+from `v0.1.0` it is `vX.Y.Z` again. A development build a person made
+and pushed carries a commit-derived or prerelease tag outside
+`0.1.0-dev.*` and `0.1.0-rc.*`
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)),
 so a deployment running one sets the tag alone.
 `tooling/image-build.sh` is authoritative for which development
@@ -819,10 +824,14 @@ that would assert one:
   — readiness reports what a replica cannot serve without
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — where the images are published and what triggers a release; the
-  names and the number of images are superseded by ADR-0134
+  names and the number of images are superseded by ADR-0134, and the
+  release tag's form until launch by ADR-0157
 - [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development build is told apart by its tag, which this
-  repository refuses to make a bare release version
+  repository refuses to make a release version
+- [ADR-0157](./adr/0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md)
+  — until launch a release is `v0.1.0-dev.N`, `v0.1.0-rc.N` or
+  `v0.1.0`, and no development build takes those tags
 - [ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
   — each image has one repository named `<publishing
   repository>/<image>`, and its tag says what a build is

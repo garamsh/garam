@@ -100,8 +100,9 @@ already expose, built in parallel rather than gating P3.
   deployment must plan for is
   [deployment-contract.md](../architecture/deployment-contract.md).
   Publishing is built and exercised: `.github/workflows/release.yml`
-  publishes the images on a `vX.Y.Z` tag push under the tag rule
-  ADR-0039 fixed, and `v0.1.0` ran it on 2026-09-01. Both repositories
+  publishes the images on a release tag push under the tag rule
+  ADR-0039 fixed, which until launch is ADR-0157's, and `v0.1.0` ran
+  it on 2026-09-01. Both repositories
   it then wrote held `0.1.0` when ADR-0039's erratum of 2026-09-02 read
   them, and the release that tag created records each image's digest
   beside it. Each image now has one repository, `garam/<image>`, and

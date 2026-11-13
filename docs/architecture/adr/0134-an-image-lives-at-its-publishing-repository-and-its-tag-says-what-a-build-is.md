@@ -4,7 +4,9 @@
 > [ADR-0150](./0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
 > (§Decision 5, on the site baking the address) and by
 > [ADR-0156](./0156-a-release-publishes-eight-images-and-a-pull-request-builds-the-guest-only-to-its-build-stage.md)
-> (§Decision 6, for the guest alone)
+> (§Decision 6, for the guest alone) and by
+> [ADR-0157](./0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md)
+> (§Decision 3, the release tag's form)
 > Date: 2026-10-31
 
 Drafted for #1716, which reserves this number. The direction is the

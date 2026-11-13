@@ -31,8 +31,8 @@ func New(pool *pgxpool.Pool) *Switch {
 // commits, so this waits out any writer that read the feed as it was
 // before the switch, and holds off the next until the switch commits.
 const lockSources = `LOCK TABLE agents, group_members, groups, operators,
-	message_consents, org_members, orgs, project_members, projects,
-	users IN SHARE MODE`
+	message_consents, operator_delegations, org_members, orgs,
+	project_members, projects, users IN SHARE MODE`
 
 // backfill marks what policy_outbox_track marks for each insert into
 // the six tables that own an entity. A member's row marks its user or

@@ -46,6 +46,19 @@ func (s *Server) awaitOrg(ctx context.Context, orgGRN string) error {
 	return namesStored(err, orgGRN)
 }
 
+// awaitOperator holds the answer of a request that has committed a
+// change to what an operator's entity carries, the operations its
+// delegation holds, until the policy service has applied it (ADR-0146
+// §A), and answers as awaitLinks does, naming the operator's
+// organization.
+func (s *Server) awaitOperator(ctx context.Context, orgGRN, operatorGRN string) error {
+	if s.feed == nil {
+		return nil
+	}
+	err := s.feed.AwaitEntity(ctx, policyfeed.Entity{Type: "Iam::Operator", ID: operatorGRN})
+	return namesStored(err, orgGRN)
+}
+
 // namesStored wraps an error that says the change is stored but not
 // applied with the organization it concerns.
 func namesStored(err error, orgGRN string) error {

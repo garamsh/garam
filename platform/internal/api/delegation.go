@@ -56,6 +56,10 @@ func (s *Server) WriteOperatorDelegation(w http.ResponseWriter, r *http.Request,
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitOperator(r.Context(), orgG.String(), hosted.String()); err != nil {
+		writeError(w, err)
+		return
+	}
 	status := http.StatusOK
 	if created {
 		status = http.StatusCreated
@@ -116,6 +120,10 @@ func (s *Server) EndOperatorDelegation(w http.ResponseWriter, r *http.Request, o
 		return
 	}
 	if err := s.authority.EndGrant(r.Context(), u.GRN, orgG, hosted, operator.GrantID(body.GrantId)); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitOperator(r.Context(), orgG.String(), hosted.String()); err != nil {
 		writeError(w, err)
 		return
 	}

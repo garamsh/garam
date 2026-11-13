@@ -16,6 +16,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
@@ -115,6 +116,46 @@ func TestWriteOperatorDelegation_RefusesOverbroadTermsBeforeTheService(t *testin
 		rec := f.doVersioned(t, "PUT", "/orgs/acme/operators/hosted/delegation", operator.ContractVersion, body, cookie)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
 	}
+}
+
+// TestOperatorDelegationRoutes_AnswerUnavailableWhileTheOperatorIsNotApplied
+// holds the wait of a delegation write and of an end (ADR-0146 §A): at
+// the bound the grant is stored whatever the wait said, and the answer
+// is 503 with the reason that tells a stored change from a service
+// down, naming the organization of the operator.
+//
+// The clear gate is the control: the same routes answer 201 and 204,
+// asking the gate about the operator's entity each time.
+func TestOperatorDelegationRoutes_AnswerUnavailableWhileTheOperatorIsNotApplied(t *testing.T) {
+	f := newFixture(t)
+	cookie := f.sessionCookieFor(t, "owner-sub", "Owner")
+	acme := orgGRNForTest("acme")
+	hosted := operatorGRNOf("acme", "hosted")
+	controller := operatorGRNOf("acme", "controller")
+	grant := &operator.Grant{ID: "grant-1", Org: acme, Operator: hosted,
+		Controllers: []grn.GRN{controller}, Operations: []operator.Operation{operator.OperationAgentCreate},
+		ExpiresAt: time.Now().Add(time.Hour), GrantedBy: grn.New("root", user.ServiceType, "owner-sub")}
+	gate := &recordingGate{}
+	f.server.WithFeed(gate)
+	path := "/orgs/acme/operators/hosted/delegation"
+	write := grantBody(controller, time.Now().Add(time.Hour))
+	end := `{"grantId":"grant-1"}`
+	entity := policyfeed.Entity{Type: "Iam::Operator", ID: hosted.String()}
+	f.authority.EXPECT().WriteGrant(mock.Anything, mock.Anything).Return(grant, true, nil).Twice()
+	f.authority.EXPECT().EndGrant(mock.Anything, mock.Anything, mock.Anything, mock.Anything, operator.GrantID("grant-1")).
+		Return(nil).Twice()
+
+	rec := f.doVersioned(t, "PUT", path, operator.ContractVersion, write, cookie)
+	require.Equal(t, http.StatusCreated, rec.Code, "the write is in force")
+	rec = f.doVersioned(t, "DELETE", path, operator.ContractVersion, end, cookie)
+	require.Equal(t, http.StatusNoContent, rec.Code, "the end is in force")
+	require.Equal(t, []policyfeed.Entity{entity, entity}, gate.entities)
+
+	gate.err = policyfeed.ErrNotApplied
+	rec = f.doVersioned(t, "PUT", path, operator.ContractVersion, write, cookie)
+	notApplied(t, rec, acme)
+	rec = f.doVersioned(t, "DELETE", path, operator.ContractVersion, end, cookie)
+	notApplied(t, rec, acme)
 }
 
 // TestMintOperationAuthority_AnswersTheMintedAuthority holds that a

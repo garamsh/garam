@@ -13,6 +13,7 @@ format:
 
 lint:
 	$(go-vet)
+	$(go-tidy-check)
 
 test:
 	$(go-test)

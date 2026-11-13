@@ -27,6 +27,7 @@ lint:
 	@echo 'lint: $(words $(PROTO_FILES)) proto files (buf lint); go vet counted on its own line below'
 	@test -n '$(PROTO_FILES)' || { echo 'lint: nothing to lint — the buf module matched no input'; exit 1; }
 	$(go-vet)
+	$(go-tidy-check)
 	@$(BUF) lint
 
 test:

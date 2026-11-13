@@ -72,6 +72,30 @@ $(call go-packages,lint (go vet),$(GO_SELECT),$(GO_PKGS))
 @go vet $(GO_PKGS)
 endef
 
+# The module's path from the repository root, which names it in the
+# tidy check and in GO_TIDY_EXCLUDE.
+GO_MODULE := $(patsubst $(REPO_ROOT)/%,%,$(CURDIR))
+
+# Modules left out of go-tidy-check, each with why. Add one only with
+# tidy's diff reported to the PM; the exclusion is the whole list.
+# - garam-cli imports lib/grn and requires no version of it: only
+#   go.work resolves that import, so go mod tidy adds a requirement on
+#   a pseudo-version of lib/grn fetched from the network, and its
+#   go.sum lines.
+GO_TIDY_EXCLUDE := garam-cli
+
+# Fails where go mod tidy would change go.mod or go.sum and names the
+# files. It runs in the module's workspace as the other verbs do; on
+# the modules measured, GOWORK=off names the same files. tidy reads
+# every build tag and every package of the module bar testdata and
+# directories starting with . or _, so a file only one build tag
+# compiles still counts.
+define go-tidy-check
+@case ' $(GO_TIDY_EXCLUDE) ' in *' $(GO_MODULE) '*) echo 'lint (go mod tidy): $(GO_MODULE) is in GO_TIDY_EXCLUDE, not checked'; exit 0;; esac; \
+	out="$$(go mod tidy -diff)" || { files="$$(printf '%s\n' "$$out" | sed -n 's|^+++ tidy/||p' | paste -sd ' ' -)"; echo "lint (go mod tidy): $(GO_MODULE): go mod tidy would change: $${files:-no file it names, see the error above}; run go mod tidy in $(GO_MODULE)"; exit 1; }; \
+	echo "lint (go mod tidy): $(GO_MODULE): go.mod and go.sum are as go mod tidy leaves them"
+endef
+
 # go has no negative package pattern, so the sweep is filtered here and
 # the suites needing Postgres or a Docker daemon are named instead; a
 # filter that stops matching sweeps its suite back in to fail rather

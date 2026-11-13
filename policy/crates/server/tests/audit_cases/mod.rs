@@ -1,6 +1,8 @@
 //! What the service records of its own writes and denials, and who
 //! reads it (ADR-0148), against the graph `main` runs.
 
+use std::time::Duration;
+
 use super::*;
 
 impl Platform {
@@ -136,16 +138,22 @@ async fn a_denial_is_recorded_naming_its_policies_and_an_allow_or_a_probe_leaves
     assert_eq!(read.policy_ids, [policy_of("nobody")]);
 }
 
-/// How long a batch of denied entries may take while the record's
-/// store is blocked. Written inline, each entry waits the 2 s bound of
-/// its record, so the batch below takes twenty-four.
-const BATCH_ANSWERS_WITHIN: std::time::Duration = std::time::Duration::from_secs(2);
+/// Stops a hung test and is not what it asserts: the batch is
+/// answered in milliseconds, and an answer that waits for its record
+/// does not come until the lock is released, which the test does
+/// only after the answer.
+const HUNG_AFTER: Duration = Duration::from_secs(10);
+
+/// A record's bound, far past [`HUNG_AFTER`]: the lock is released
+/// once the batch is answered, so no record gives up before it.
+const RECORD_BOUND: Duration = Duration::from_secs(300);
 
 #[sqlx::test(migrator = "MIGRATIONS")]
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn a_batch_of_denied_entries_is_answered_while_the_record_s_store_is_blocked(pool: PgPool) {
     seed(&pool).await;
-    let mut service = platform(pool.clone()).await;
+    let recorder = Recorder::new(pool.clone()).bounded(RECORD_BOUND);
+    let mut service = recording_as(pool.clone(), PLATFORM, recorder).await;
     let strangers: Vec<String> = (0..12)
         .map(|n| format!("grn:globex/iam/user/stranger-{n}"))
         .collect();
@@ -184,22 +192,17 @@ async fn a_batch_of_denied_entries_is_answered_while_the_record_s_store_is_block
         .await
         .unwrap();
 
+    // The answer comes while the lock is still held, as the lock is
+    // released only below.
     let request = service.request(batch);
-    let started = std::time::Instant::now();
-    let answered = service
-        .grpc
-        .evaluations(request)
+    let answered = tokio::time::timeout(HUNG_AFTER, service.grpc.evaluations(request))
         .await
+        .expect("the batch is answered while its records wait on the lock")
         .unwrap()
         .into_inner();
-    let took = started.elapsed();
 
     assert_eq!(answered.evaluations.len(), strangers.len());
     assert!(answered.evaluations.iter().all(|e| !e.decision));
-    assert!(
-        took < BATCH_ANSWERS_WITHIN,
-        "answered after {took:?} with the store blocked"
-    );
     // Control: the entries were denials a record was owed for, and
     // the lock was what held them back.
     blocker.rollback().await.unwrap();

@@ -4,7 +4,7 @@
 use super::*;
 
 impl Platform {
-    async fn audit(
+    pub(super) async fn audit(
         &mut self,
         reader: Option<Named>,
         org: &str,
@@ -24,7 +24,7 @@ impl Platform {
     }
 
     /// Whether the engine allows `who` the action on the bot.
-    async fn asks(&mut self, who: Named, action: &str, probe: bool) -> bool {
+    pub(super) async fn asks(&mut self, who: Named, action: &str, probe: bool) -> bool {
         let request = self.request(EvaluateRequest {
             subject: subject(who),
             action: Some(Action {
@@ -48,7 +48,10 @@ impl Platform {
     }
 }
 
-fn of_kind(records: Vec<pb::AuditRecord>, kind: pb::AuditRecordKind) -> Vec<pb::AuditRecord> {
+pub(super) fn of_kind(
+    records: Vec<pb::AuditRecord>,
+    kind: pb::AuditRecordKind,
+) -> Vec<pb::AuditRecord> {
     records
         .into_iter()
         .filter(|r| r.kind == i32::from(kind))

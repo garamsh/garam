@@ -374,10 +374,10 @@ codes are the whole list
 (`platform/internal/policyfeed/grpc/links.go`); each rests on
 `policy/crates/server/src/status.rs`:
 
-- `PERMISSION_DENIED` (lines 100 to 109 and 150 to 153): the caller
+- `PERMISSION_DENIED` (lines 115 to 121 and 167 to 170): the caller
   `platform` may not write this link, as where its identifier is held
-  by a policy of another kind (`NoWriter`).
-- `INVALID_ARGUMENT` (lines 116 to 121 and 166 to 180): the request or
+  by a policy that is not the member's link (`Reserved`, below).
+- `INVALID_ARGUMENT` (lines 130 to 138 and 183 to 197): the request or
   the policy is one the service refuses by its own rules.
 
 Every other code, `UNAVAILABLE`, `INTERNAL`, `DEADLINE_EXCEEDED`,
@@ -418,6 +418,26 @@ sets every link aside and so removes every member's role in the
 policy service. `set_aside` in §Reading the feed's standing shows it,
 and `garam policy-feed start` repairs it once the fault is mended
 ([ADR-0160](./adr/0160-a-role-link-the-policy-service-refuses-for-good-is-set-aside-and-the-members-links-are-removed.md)).
+
+**The identifiers of a member's links are the platform's alone**
+([ADR-0161](./adr/0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)).
+The policy service reserves every identifier of an organization's
+policies that opens `link-owner-`, `link-admin-` or `link-member-`.
+The caller `platform` with no writer creates there a role link of the
+identifier's role in organization scope, whose principal is the
+`Iam::User` whose GRN's hash is the identifier's tail and whose
+resource is the organization, and nothing else. It activates or
+deletes there only a policy every version of which is that link. A
+write naming a writer, the owner's included, and a scoped caller's,
+is refused for every step. Each refusal is `PERMISSION_DENIED`, so
+the platform's create of a link over a policy that is not it reads
+`ALREADY_EXISTS` as written and its activation is refused, which
+sets the link aside as above and leaves the member with no role. A
+writer's refusal is recorded as a denial of the step's action
+(`iam:policy.attach`, `iam:policy.detach` for a removal), and the
+platform's is not. A policy that holds such an identifier from before
+is neither changed nor deleted by the service, and is removed by an
+operator from the database.
 
 `garam policy-feed start` marks every membership with the rest of the
 backfill, and so does migration 000075 for a feed already on, both

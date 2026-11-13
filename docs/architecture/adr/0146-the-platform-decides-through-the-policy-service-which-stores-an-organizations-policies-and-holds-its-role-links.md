@@ -9,7 +9,9 @@
 > [ADR-0159](./0159-role-links-follow-the-entities-in-one-pass-the-platforms-tables-win-a-failed-write-and-a-request-finishes-its-work-before-it-waits.md)
 > (item 4's "delivered with the entities under the same sequence",
 > and §Reading one's own write's answer at the bound, which gains a
-> reason and the stored resource)
+> reason and the stored resource), and by
+> [ADR-0161](./0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)
+> (a writer writes under no identifier a member's link is named by)
 > Date: 2026-11-12
 
 Drafted for #1799, under #1796, which holds the owner's decisions of

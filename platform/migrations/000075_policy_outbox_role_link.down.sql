@@ -1,7 +1,10 @@
 -- The outbox as 000070 left it. A link mark cannot be delivered by a
 -- schema that does not know the kind, so each is dropped with it: the
--- links already written stay in the policy service, and a later
--- `garam policy-feed start` marks them again once this is applied.
+-- links already written stay in the policy service. A later
+-- `garam policy-feed start` marks the memberships that still exist and
+-- writes their links again; a link whose membership ended meanwhile
+-- stays, and its member stays allowed, until an operator deletes it
+-- (docs/architecture/authz.md §Role links).
 DROP TRIGGER policy_outbox_org_members_role ON org_members;
 
 DROP FUNCTION policy_role_link_state(text);

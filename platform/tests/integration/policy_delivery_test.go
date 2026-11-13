@@ -56,6 +56,8 @@ type fakePolicy struct {
 
 	policies  map[string]*fakeLink // policy grn -> role link
 	failLinks error
+	// failOnly names the one link call that fails; empty fails all.
+	failOnly string
 }
 
 func (f *fakePolicy) ApplyEntityChanges(
@@ -92,7 +94,25 @@ type fakeLink struct {
 func (f *fakePolicy) linkFail(err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.failLinks = err
+	f.failLinks, f.failOnly = err, ""
+}
+
+// linkFailOn makes only the named link call (CreatePolicy,
+// ActivatePolicy or DeletePolicy) fail with err while it is set; the
+// others answer as they would.
+func (f *fakePolicy) linkFailOn(method string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failLinks, f.failOnly = err, method
+}
+
+// linkErr is what a call to method answers when the case has set it to
+// fail. The caller holds the lock.
+func (f *fakePolicy) linkErr(method string) error {
+	if f.failOnly != "" && f.failOnly != method {
+		return nil
+	}
+	return f.failLinks
 }
 
 func (f *fakePolicy) CreatePolicy(
@@ -100,8 +120,8 @@ func (f *fakePolicy) CreatePolicy(
 ) (*policyv1.CreatePolicyResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.failLinks != nil {
-		return nil, f.failLinks
+	if err := f.linkErr("CreatePolicy"); err != nil {
+		return nil, err
 	}
 	if _, ok := f.policies[req.GetPolicy()]; ok {
 		return nil, status.Error(codes.AlreadyExists, "policy exists")
@@ -118,8 +138,8 @@ func (f *fakePolicy) ActivatePolicy(
 ) (*policyv1.ActivatePolicyResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.failLinks != nil {
-		return nil, f.failLinks
+	if err := f.linkErr("ActivatePolicy"); err != nil {
+		return nil, err
 	}
 	l, ok := f.policies[req.GetPolicy()]
 	if !ok {
@@ -134,8 +154,8 @@ func (f *fakePolicy) DeletePolicy(
 ) (*policyv1.DeletePolicyResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.failLinks != nil {
-		return nil, f.failLinks
+	if err := f.linkErr("DeletePolicy"); err != nil {
+		return nil, err
 	}
 	if _, ok := f.policies[req.GetPolicy()]; !ok {
 		return nil, status.Error(codes.NotFound, "no policy")

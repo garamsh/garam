@@ -298,20 +298,55 @@ and reads the outbox every 50 milliseconds until no `Iam::RoleLink`
 mark of that member is left (of any member of the organization, for
 its deletion), then answers. At 5 seconds it answers 503 `unavailable`
 with the reason `change_not_applied`, which the API discloses on a 503
-alone: the change is stored and is not yet applied. The mark stays and
-the loop applies it when the service answers. Until then the
-**platform's tables win**: the service holds the links it last had, so
-a member added is not yet allowed and a member removed is not yet
-denied, and a role changed is the old one's or both. Do not repeat the
-request: registration, for one, has created the account. The wait is on
-the table, so another replica's loop ends it. With
-`GARAM_POLICY_ADDR` unset there is no gate and no request waits, and
-nothing is fed, as for the entities.
+for this code alone: the change is stored and is not yet applied. The
+mark stays and the loop applies it when the service answers. Until
+then the **platform's tables win**: the service holds the links it last
+had, so a member added is not yet allowed and a member removed is not
+yet denied, and a role changed is the old one's or both. The wait is on
+the table, so another replica's loop ends it. With `GARAM_POLICY_ADDR`
+unset there is no gate and no request waits, and nothing is fed, as for
+the entities.
+
+Three of the four requests cannot be repeated, so each finishes its own
+work before it waits, and the 503 names the organization in `resource`
+(the GRN of the one created, joined, registered into or deleted). At the
+bound:
+
+- **Creating an organization** has created it and made the caller its
+  owner. The client reads the organization from `resource` and does
+  not create another: the identifier is random, so a repeat would
+  make a second organization.
+- **Accepting an invitation** has spent it and added the member. A
+  repeat answers 409 `invitation_accepted`; the client reads the
+  membership of `resource`.
+- **Registering by an invitation** has created the account, its
+  credential and its membership, spent the invitation and started the
+  session, which the answer carries as `garam_session`. The person is
+  signed in and goes on from `resource`; a repeat would meet a spent
+  invitation.
+- **Deleting an organization** has deleted it. The client does not
+  repeat the delete, which would find it gone.
 
 `garam policy-feed start` marks every membership with the rest of the
 backfill, and so does migration 000075 for a feed already on, both
 raising a mark's generation if it is there, so running them again
 rewrites the same policies and no second one.
+
+**What stays when the feed is turned off and on.** `stop` empties the
+outbox and the triggers mark nothing while the feed is off, and
+`start` marks the entities and memberships that exist then. So a
+member added, or whose role changed, while the feed was off is
+written by the `start` that follows. A membership that ended while it
+was off is not: nothing marks it and `start` enumerates live rows
+only, so its link stays in the policy service and the member stays
+allowed there. Nothing in the platform lists or removes such a link.
+Before `stop`, end the memberships that are to end, and let the outbox
+empty; after a `start` that follows a period off, an operator deletes
+each link left by `DeletePolicy` as the platform with no writer, under
+the id `grn:<org>/iam/policy/link-<role>-<hex of the first 16 bytes of
+the SHA-256 of the member's GRN>` for each of the three roles (a
+`NOT_FOUND` is a link not held). Migration 000075's down leaves the
+links already written in the same way.
 
 ### The signer
 

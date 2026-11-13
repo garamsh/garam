@@ -135,15 +135,18 @@ func TestPolicyLinks_AFailedWriteKeepsTheMembershipAndTheMarkAndAppliesLater(t *
 
 func TestPolicyLinks_ARoleChangeNeverLeavesAMemberWithNoLink(t *testing.T) {
 	p, fake, d := seedDelivered(t)
-	// Creating the new role's policy is the first call. It fails, so
-	// the old role's link must still be there.
-	fake.linkFail(status.Error(codes.Unavailable, "policy service down"))
+	// Only the removal of the old role's link fails, so the pass
+	// reaches it after the new link is written. Written first, the
+	// member holds both roles at that moment; removed first, the
+	// failure would leave the old one alone and the new one unwritten.
+	fake.linkFailOn("DeletePolicy", status.Error(codes.Unavailable, "policy service down"))
 
 	execSQL(t, p, `UPDATE org_members SET role = 'admin'`)
 	_, err := d.pass(t)
 
 	require.Error(t, err)
-	assert.Equal(t, []string{memberLink}, fake.links(), "the old link stands until the new one is written")
+	assert.Equal(t, []string{"ADMIN " + outboxUser + " " + outboxOrg, memberLink}, fake.links(),
+		"the new link is in force before the old one is removed")
 
 	fake.linkFail(nil)
 	_, err = d.pass(t)

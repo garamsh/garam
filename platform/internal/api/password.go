@@ -71,12 +71,16 @@ func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if err := s.awaitLinks(r.Context(), m.Organization.String(), u.GRN.String()); err != nil {
+	identify(r, u)
+	if err := s.startSession(w, r, u); err != nil {
 		writeError(w, err)
 		return
 	}
-	identify(r, u)
-	if err := s.startSession(w, r, u); err != nil {
+	// The wait is the last of the request's own work: the invitation
+	// is spent and the person is signed in whatever it answers, so an
+	// answer at the bound carries the session and names the
+	// organization.
+	if err := s.awaitLinks(r.Context(), m.Organization.String(), u.GRN.String()); err != nil {
 		writeError(w, err)
 		return
 	}

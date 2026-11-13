@@ -142,7 +142,13 @@ async fn a_denial_is_recorded_naming_its_policies_and_an_allow_or_a_probe_leaves
 /// answered in milliseconds, and an answer that waits for its record
 /// does not come until the lock is released, which the test does
 /// only after the answer.
+///
+/// It is 10 s, not longer, so that an answer made to wait 2 s for each
+/// of twelve entries (24 s) still fails the test.
 const HUNG_AFTER: Duration = Duration::from_secs(10);
+
+/// Ends a run whose recorder never settles; not an assertion.
+const SETTLES_BEFORE: Duration = Duration::from_secs(120);
 
 /// A record's bound, far past [`HUNG_AFTER`]: the lock is released
 /// once the batch is answered, so no record gives up before it.
@@ -153,7 +159,7 @@ const RECORD_BOUND: Duration = Duration::from_secs(300);
 async fn a_batch_of_denied_entries_is_answered_while_the_record_s_store_is_blocked(pool: PgPool) {
     seed(&pool).await;
     let recorder = Recorder::new(pool.clone()).bounded(RECORD_BOUND);
-    let mut service = recording_as(pool.clone(), PLATFORM, recorder).await;
+    let mut service = recording_as(pool.clone(), PLATFORM, recorder.clone()).await;
     let strangers: Vec<String> = (0..12)
         .map(|n| format!("grn:globex/iam/user/stranger-{n}"))
         .collect();
@@ -206,6 +212,10 @@ async fn a_batch_of_denied_entries_is_answered_while_the_record_s_store_is_block
     // Control: the entries were denials a record was owed for, and
     // the lock was what held them back.
     blocker.rollback().await.unwrap();
+    assert!(
+        recorder.settled(SETTLES_BEFORE).await,
+        "every queued denial is recorded once the lock is released"
+    );
     let recorded = of_kind(
         service.audit(Some(OWEN), ACME).await.unwrap(),
         pb::AuditRecordKind::Denial,

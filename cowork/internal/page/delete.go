@@ -10,6 +10,9 @@ import (
 // a page holds its children, as a folder does. It returns the
 // identifier of every page removed, the page first.
 func (s *service) Delete(ctx context.Context, caller platform.Caller, org, id string) ([]string, error) {
+	if err := nameable(org, id); err != nil {
+		return nil, err
+	}
 	if err := platform.Require(ctx, s.platform, caller, org, platform.OnPage(platform.ActionPageWrite, id)); err != nil {
 		return nil, err
 	}

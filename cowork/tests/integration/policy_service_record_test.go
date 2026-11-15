@@ -17,18 +17,6 @@ import (
 	policyv1 "github.com/garamsh/garam/lib/policy-sdk-go/gen/garam/policy/v1"
 )
 
-// refusedPlatform is the platform cowork keeps for who a caller is; it
-// fails the test if asked what is allowed.
-type refusedPlatform struct {
-	platform.Platform
-	t *testing.T
-}
-
-func (p refusedPlatform) Allowed(context.Context, platform.Caller, string, []platform.Check) ([]bool, error) {
-	p.t.Error("the platform was asked what is allowed")
-	return nil, nil
-}
-
 // TestPolicyServiceRecord_DecisionAndRefusalAreLogged records, for
 // #1774's report, what cowork receives from the policy service for a
 // cowork resource and what the service answers a write of a type
@@ -56,7 +44,7 @@ func TestPolicyServiceRecord_DecisionAndRefusalAreLogged(t *testing.T) {
 	t.Cleanup(func() { _ = client.Close() })
 	ada := platform.Caller{GRN: grn.New(grn.RootOwner, "user", "ada")}
 
-	got, err := platformpolicy.New(refusedPlatform{t: t}, client).Allowed(context.Background(), ada, "acme",
+	got, err := platformpolicy.New(nil, client).Allowed(context.Background(), ada, "acme",
 		[]platform.Check{platform.OnPage("cowork:page.read", "abcdefghijkl"), platform.OnPage("cowork:page.write", "abcdefghijkl")})
 	require.NoError(t, err)
 	asked := server.Asked()

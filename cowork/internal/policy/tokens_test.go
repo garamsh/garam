@@ -122,21 +122,3 @@ func TestTokens_AnUnreachableEndpointIsUnavailable(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable))
 	assert.Empty(t, endpoint.Exchanges())
 }
-
-func TestConfig_SomeSettingsWithoutTheRestAreRefused(t *testing.T) {
-	full := policy.Config{Addr: "policy:7000", CAFile: "ca.pem", TokenURL: "https://api/oauth/token", KeyFile: "key.pem"}
-	require.NoError(t, full.Validate())
-	require.NoError(t, policy.Config{}.Validate(), "nothing set is no policy service")
-
-	for name, c := range map[string]policy.Config{
-		"address alone":   {Addr: "policy:7000"},
-		"no address":      {CAFile: "ca.pem", TokenURL: "u", KeyFile: "k"},
-		"no CA file":      {Addr: "a", TokenURL: "u", KeyFile: "k"},
-		"no token URL":    {Addr: "a", CAFile: "c", KeyFile: "k"},
-		"no deployment k": {Addr: "a", CAFile: "c", TokenURL: "u"},
-	} {
-		err := c.Validate()
-		require.Error(t, err, name)
-		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), name)
-	}
-}

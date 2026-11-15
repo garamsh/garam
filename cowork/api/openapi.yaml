@@ -8,13 +8,14 @@ info:
 
     A caller presents what garam's platform issued it: the
     `garam_session` cookie, or a CLI session's bearer (ADR-0120).
-    cowork passes it to the platform as presented, asks who it
-    belongs to, and asks the platform's `checkPermissions` before every
-    read and write: `cowork:page.read` and `cowork:page.write`, on the
+    cowork passes it to the platform as presented and asks who it
+    belongs to, and asks the policy service before every read and
+    write: `cowork:page.read` and `cowork:page.write`, on the
     organization for its page tree and on a page for that page. A
-    caller the platform does not accept is answered 401, one it denies
-    403, and every operation answers 503 when the platform cannot be
-    reached: cowork refuses rather than decide alone.
+    caller the platform does not accept is answered 401, one the
+    policy service denies 403, and every operation answers 503 when
+    the platform or the policy service cannot be reached: cowork
+    refuses rather than decide alone.
 
     A page's content is not here. It is a Yjs document, edited over a
     WebSocket at `GET /orgs/{org}/pages/{page}/sync` in y-websocket's

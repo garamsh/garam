@@ -7,21 +7,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	platformhttp "github.com/garamsh/garam/cowork/internal/platform/http"
 	platformpolicy "github.com/garamsh/garam/cowork/internal/platform/policy"
 	"github.com/garamsh/garam/cowork/internal/policy"
 	"github.com/garamsh/garam/cowork/internal/policy/policytest"
 	"github.com/garamsh/garam/lib/errorx"
 )
 
-func TestWire_WithNothingConfiguredCoworkAsksThePlatform(t *testing.T) {
-	s, err := wire(Config{PlatformURL: "http://platform.invalid"}, nil)
+func TestWire_WithoutAPolicyClientCoworkRefusesToStart(t *testing.T) {
+	_, err := wire(Config{PlatformURL: "http://platform.invalid"}, nil)
 
-	require.NoError(t, err)
-	assert.IsType(t, &platformhttp.Client{}, s.platform)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }
 
-func TestWire_WithAPolicyClientCoworkAsksThePolicyService(t *testing.T) {
+// testPolicyClient is a client of an in-process policy service.
+func testPolicyClient(t *testing.T) *policy.Client {
+	t.Helper()
 	keyFile, pub := policytest.Key(t)
 	endpoint := policytest.NewEndpoint(t, pub)
 	server := policytest.Serve(t, endpoint)
@@ -31,34 +32,64 @@ func TestWire_WithAPolicyClientCoworkAsksThePolicyService(t *testing.T) {
 	client, err := policy.Dial(cfg, tokens)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
+	return client
+}
 
-	s, err := wire(Config{PlatformURL: "http://platform.invalid", PolicyClient: client}, nil)
+func TestWire_WithAPolicyClientCoworkAsksThePolicyService(t *testing.T) {
+	s, err := wire(Config{PlatformURL: "http://platform.invalid", PolicyClient: testPolicyClient(t)}, nil)
 
 	require.NoError(t, err)
 	assert.IsType(t, &platformpolicy.Platform{}, s.platform)
 }
 
-func TestPolicyConfig_AnAddressWithoutTheRestRefusesToStart(t *testing.T) {
-	t.Setenv(envPolicyAddr, "policy.invalid:443")
-	t.Setenv(envPolicyCAFile, "")
-	t.Setenv(envMachineTokenURL, "")
-	t.Setenv(envDeploymentKeyFile, "")
+var policySettings = []string{envPolicyAddr, envPolicyCAFile, envMachineTokenURL, envDeploymentKeyFile}
+
+func TestPolicyConfig_AllFourSetStarts(t *testing.T) {
+	for _, key := range policySettings {
+		t.Setenv(key, key+"-value")
+	}
+
+	cfg, err := policyConfig()
+
+	require.NoError(t, err)
+	assert.Equal(t, policy.Config{
+		Addr: envPolicyAddr + "-value", CAFile: envPolicyCAFile + "-value",
+		TokenURL: envMachineTokenURL + "-value", KeyFile: envDeploymentKeyFile + "-value",
+	}, cfg)
+}
+
+func TestPolicyConfig_ASettingMissingRefusesToStartAndIsNamed(t *testing.T) {
+	for _, missing := range policySettings {
+		t.Run(missing, func(t *testing.T) {
+			for _, key := range policySettings {
+				t.Setenv(key, key+"-value")
+			}
+			t.Setenv(missing, "")
+
+			_, err := policyConfig()
+
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+			for _, key := range policySettings {
+				if key == missing {
+					assert.Contains(t, err.Error(), key)
+				} else {
+					assert.NotContains(t, err.Error(), key)
+				}
+			}
+		})
+	}
+}
+
+func TestPolicyConfig_NothingSetNamesAllFour(t *testing.T) {
+	for _, key := range policySettings {
+		t.Setenv(key, "")
+	}
 
 	_, err := policyConfig()
 
 	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
-}
-
-func TestPolicyConfig_NothingSetIsNoPolicyClient(t *testing.T) {
-	for _, key := range []string{envPolicyAddr, envPolicyCAFile, envMachineTokenURL, envDeploymentKeyFile} {
-		t.Setenv(key, "")
+	for _, key := range policySettings {
+		assert.Contains(t, err.Error(), key)
 	}
-
-	cfg, err := policyConfig()
-	require.NoError(t, err)
-	client, err := policyClient(cfg)
-
-	require.NoError(t, err)
-	assert.Nil(t, client)
 }

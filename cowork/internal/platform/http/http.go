@@ -1,14 +1,12 @@
-// Package http implements platform.Platform against the platform's
+// Package http implements platform.Identity against the platform's
 // browser API, presenting each caller's own credential: `me` for who
-// it is, and `checkPermissions` for what it may do.
+// it is, and `listOrgs` for the organizations it has.
 package http
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	nethttp "net/http"
 	"net/url"
 	"time"
@@ -32,7 +30,7 @@ type Client struct {
 	client *nethttp.Client
 }
 
-var _ platform.Platform = (*Client)(nil)
+var _ platform.Identity = (*Client)(nil)
 
 // New answers a client of the platform at base.
 func New(base string) (*Client, error) {
@@ -43,7 +41,7 @@ func New(base string) (*Client, error) {
 	return &Client{base: u, client: &nethttp.Client{Timeout: requestTimeout}}, nil
 }
 
-// Identify implements platform.Platform.
+// Identify implements platform.Identity.
 func (c *Client) Identify(ctx context.Context, cred platform.Credential) (platform.Caller, error) {
 	if cred.IsZero() {
 		return platform.Caller{}, errorx.New(errorx.KindUnauthenticated, "no credential")
@@ -51,7 +49,7 @@ func (c *Client) Identify(ctx context.Context, cred platform.Credential) (platfo
 	var me struct {
 		GRN string `json:"grn"`
 	}
-	if err := c.do(ctx, cred, nethttp.MethodGet, "/me", nil, &me); err != nil {
+	if err := c.do(ctx, cred, "/me", &me); err != nil {
 		return platform.Caller{}, err
 	}
 	g, err := grn.Parse(me.GRN)
@@ -61,55 +59,13 @@ func (c *Client) Identify(ctx context.Context, cred platform.Credential) (platfo
 	return platform.Caller{GRN: g, Credential: cred}, nil
 }
 
-type permissionResource struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
-}
-
-type permissionCheck struct {
-	Action   string              `json:"action"`
-	Resource *permissionResource `json:"resource,omitempty"`
-}
-
-// Allowed implements platform.Platform. A decision other than allow is
-// not allowed: the platform answers `unknown` only for actions a
-// delegation grant decides, and no cowork action is one.
-func (c *Client) Allowed(ctx context.Context, caller platform.Caller, org string, checks []platform.Check) ([]bool, error) {
-	req := struct {
-		Checks []permissionCheck `json:"checks"`
-	}{Checks: make([]permissionCheck, len(checks))}
-	for i, ch := range checks {
-		req.Checks[i] = permissionCheck{Action: ch.Action}
-		if ch.Kind != "" {
-			req.Checks[i].Resource = &permissionResource{Type: ch.Kind, ID: ch.ID}
-		}
-	}
-	var answer struct {
-		Results []struct {
-			Decision string `json:"decision"`
-		} `json:"results"`
-	}
-	if err := c.do(ctx, caller.Credential, nethttp.MethodPost, "/orgs/"+url.PathEscape(org)+"/permission-checks", req, &answer); err != nil {
-		return nil, err
-	}
-	if len(answer.Results) != len(checks) {
-		return nil, errorx.New(errorx.KindUnavailable,
-			fmt.Sprintf("platform: %d checks answered %d decisions", len(checks), len(answer.Results)))
-	}
-	allowed := make([]bool, len(checks))
-	for i, r := range answer.Results {
-		allowed[i] = r.Decision == "allow"
-	}
-	return allowed, nil
-}
-
-// Organizations implements platform.Platform with `listOrgs`.
+// Organizations implements platform.Identity with `listOrgs`.
 func (c *Client) Organizations(ctx context.Context, caller platform.Caller) ([]platform.Organization, error) {
 	var orgs []struct {
 		GRN  string `json:"grn"`
 		Name string `json:"name"`
 	}
-	if err := c.do(ctx, caller.Credential, nethttp.MethodGet, "/orgs", nil, &orgs); err != nil {
+	if err := c.do(ctx, caller.Credential, "/orgs", &orgs); err != nil {
 		return nil, err
 	}
 	out := make([]platform.Organization, 0, len(orgs))
@@ -123,25 +79,14 @@ func (c *Client) Organizations(ctx context.Context, caller platform.Caller) ([]p
 	return out, nil
 }
 
-// do sends one request as cred and decodes a 200 into out. The
+// do sends one GET as cred and decodes a 200 into out. The
 // platform's refusals keep their meaning: 401 unauthenticated, and 403
 // and 404, which it answers a caller outside the organization,
 // permission denied. Anything else is the platform being unavailable.
-func (c *Client) do(ctx context.Context, cred platform.Credential, method, path string, body, out any) error {
-	var reader io.Reader
-	if body != nil {
-		raw, err := json.Marshal(body)
-		if err != nil {
-			return errorx.Wrap(err, "platform: encode request", errorx.KindInternal)
-		}
-		reader = bytes.NewReader(raw)
-	}
-	req, err := nethttp.NewRequestWithContext(ctx, method, c.base.JoinPath(path).String(), reader)
+func (c *Client) do(ctx context.Context, cred platform.Credential, path string, out any) error {
+	req, err := nethttp.NewRequestWithContext(ctx, nethttp.MethodGet, c.base.JoinPath(path).String(), nil)
 	if err != nil {
 		return errorx.Wrap(err, "platform: request", errorx.KindInternal)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
 	}
 	if cred.Bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+cred.Bearer)
@@ -160,7 +105,7 @@ func (c *Client) do(ctx context.Context, cred platform.Credential, method, path 
 	case nethttp.StatusForbidden, nethttp.StatusNotFound:
 		return errorx.New(errorx.KindPermissionDenied, "not a member of this organization")
 	default:
-		return errorx.New(errorx.KindUnavailable, fmt.Sprintf("platform: %s %s answered %s", method, path, resp.Status))
+		return errorx.New(errorx.KindUnavailable, fmt.Sprintf("platform: GET %s answered %s", path, resp.Status))
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		return errorx.Wrap(err, "platform: decode answer", errorx.KindUnavailable)

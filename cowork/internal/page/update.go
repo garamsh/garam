@@ -15,6 +15,9 @@ func (s *service) Update(ctx context.Context, caller platform.Caller, org, id st
 	if in.Position != nil && *in.Position < 0 {
 		return Page{}, ErrPositionNegative
 	}
+	if err := nameable(org, id); err != nil {
+		return Page{}, err
+	}
 	checks := []platform.Check{platform.OnPage(platform.ActionPageWrite, id)}
 	if in.Parent != nil && *in.Parent != "" {
 		if *in.Parent == id {

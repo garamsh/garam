@@ -69,7 +69,7 @@ func (s *Server) SyncPage(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadLimit(maxMessage)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	go s.recheckSocket(ctx, conn, s.pageRecheck(c, org, id, allowed[0]))
+	go s.recheckSocket(ctx, conn, c, s.pageRecheck(c, org, id, allowed[0]))
 	err = s.collab.Serve(ctx, collab.Room{Org: org, Page: id, Writable: allowed[0]}, wsConn{conn})
 	closeFor(conn, err)
 }

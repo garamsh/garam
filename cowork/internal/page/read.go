@@ -62,6 +62,9 @@ func (s *service) List(ctx context.Context, caller platform.Caller, org string) 
 
 // Get answers one page the caller may read.
 func (s *service) Get(ctx context.Context, caller platform.Caller, org, id string) (Page, error) {
+	if err := nameable(org, id); err != nil {
+		return Page{}, err
+	}
 	if err := platform.Require(ctx, s.platform, caller, org, platform.OnPage(platform.ActionPageRead, id)); err != nil {
 		return Page{}, err
 	}

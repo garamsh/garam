@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,23 +24,32 @@ const (
 )
 
 // policyConfig is the policy service's settings as the environment
-// gives them. An address without the rest is refused, and none set is
-// the zero Config, which leaves cowork asking the platform.
+// gives them. cowork asks that service alone, so a setting missing is
+// refused, and every one missing is named.
 func policyConfig() (policy.Config, error) {
-	cfg := policy.Config{
-		Addr:     envOr(envPolicyAddr, ""),
-		CAFile:   envOr(envPolicyCAFile, ""),
-		TokenURL: envOr(envMachineTokenURL, ""),
-		KeyFile:  envOr(envDeploymentKeyFile, ""),
+	settings := []struct{ key, value string }{
+		{envPolicyAddr, envOr(envPolicyAddr, "")},
+		{envPolicyCAFile, envOr(envPolicyCAFile, "")},
+		{envMachineTokenURL, envOr(envMachineTokenURL, "")},
+		{envDeploymentKeyFile, envOr(envDeploymentKeyFile, "")},
 	}
-	return cfg, cfg.Validate()
+	var missing []string
+	for _, s := range settings {
+		if s.value == "" {
+			missing = append(missing, s.key)
+		}
+	}
+	if len(missing) > 0 {
+		return policy.Config{}, errorx.New(errorx.KindInvalidArgument,
+			"cowork asks the policy service alone; set "+strings.Join(missing, ", "))
+	}
+	return policy.Config{
+		Addr: settings[0].value, CAFile: settings[1].value, TokenURL: settings[2].value, KeyFile: settings[3].value,
+	}, nil
 }
 
-// policyClient is the client for cfg, nil where cfg sets nothing.
+// policyClient is the client for cfg.
 func policyClient(cfg policy.Config) (*policy.Client, error) {
-	if !cfg.Configured() {
-		return nil, nil
-	}
 	tokens, err := policy.NewTokens(cfg, time.Now)
 	if err != nil {
 		return nil, err
@@ -49,31 +59,13 @@ func policyClient(cfg policy.Config) (*policy.Client, error) {
 
 // runFeed delivers the feed until ctx ends, and returns the gate that
 // holds a request until its entity is delivered. It idles while the
-// feed is off, and says so once at start where the feed is on and
-// nothing delivers it, which has no gate to return.
+// feed is off.
 func runFeed(ctx context.Context, pool *pgxpool.Pool, client *policy.Client) policyfeed.Gate {
-	if client == nil {
-		warnIfFeedUndelivered(ctx, feedpg.NewSwitch(pool))
-		return nil
-	}
 	store := feedpg.NewStore(pool)
 	svc := policyfeed.NewService(store, feedgrpc.NewSender(client), slog.Default(),
 		policyfeed.Config{Poll: feedPoll, MaxBackoff: feedMaxBackoff})
 	go func() { _ = svc.Run(ctx) }()
 	return policyfeed.NewGate(store, svc, policyfeed.Bound)
-}
-
-// warnIfFeedUndelivered logs that the outbox is filling with nothing to
-// deliver it, which happens where the feed was started and the policy
-// settings were then removed.
-func warnIfFeedUndelivered(ctx context.Context, sw policyfeed.Switch) {
-	on, err := sw.Enabled(ctx)
-	if err != nil || !on {
-		return
-	}
-	slog.WarnContext(ctx, "cowork: the policy feed is on and no policy service is configured; "+
-		"the outbox grows until it is delivered or stopped",
-		slog.String("set", envPolicyAddr), slog.String("stop", "cowork policy-feed stop"))
 }
 
 // newPolicyFeedCommand constructs `cowork policy-feed start|stop`.

@@ -1,7 +1,8 @@
 // Package integration_test drives cowork's wired server, as
-// cli.NewHandler assembles it, over real Postgres. The platform behind
-// it is substituted: a server answering `me` and `checkPermissions` as
-// the platform's API does, under a policy each test sets.
+// cli.NewHandler assembles it, over real Postgres. What it asks is
+// substituted twice: a server answering `me` and the organization list
+// as the platform's API does, and the policy service's fake deciding
+// what each person may do, under a policy each test sets.
 package integration_test
 
 import (
@@ -23,9 +24,12 @@ import (
 
 	blobmemory "github.com/garamsh/garam/cowork/internal/blob/memory"
 	"github.com/garamsh/garam/cowork/internal/cli"
+	"github.com/garamsh/garam/cowork/internal/policy"
+	"github.com/garamsh/garam/cowork/internal/policy/policytest"
 	"github.com/garamsh/garam/cowork/internal/policyfeed"
 	"github.com/garamsh/garam/cowork/internal/usercontent"
 	"github.com/garamsh/garam/lib/grn"
+	policyv1 "github.com/garamsh/garam/lib/policy-sdk-go/gen/garam/policy/v1"
 )
 
 // migrationsDir is cowork/migrations, found from this file.
@@ -157,38 +161,55 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode([]map[string]string{})
 	case r.URL.Path == "/me":
 		_ = json.NewEncoder(w).Encode(map[string]string{"grn": grn.New(grn.RootOwner, "user", who).String(), "nickname": who})
-	case r.URL.Path == "/orgs/acme/permission-checks" && who != "eve":
-		var body struct {
-			Checks []struct {
-				Action   string `json:"action"`
-				Resource *struct {
-					Type string `json:"type"`
-					ID   string `json:"id"`
-				} `json:"resource"`
-			} `json:"checks"`
-		}
-		raw, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(raw, &body)
-		f.mu.Lock()
-		defer f.mu.Unlock()
-		results := make([]map[string]string, len(body.Checks))
-		for i, ch := range body.Checks {
-			key := ch.Action
-			if ch.Resource != nil {
-				key += "@" + ch.Resource.ID
-			}
-			decision := "allow"
-			if f.deny[key] || f.deny[who+" "+key] {
-				decision = "deny"
-			}
-			results[i] = map[string]string{"decision": decision}
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"results": results})
-	case strings.HasPrefix(r.URL.Path, "/orgs/"):
-		w.WriteHeader(http.StatusForbidden)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// lastSegment is the identifier a GRN ends in.
+func lastSegment(id string) string {
+	return id[strings.LastIndex(id, "/")+1:]
+}
+
+// decide is the policy service's answer to one evaluation: allow, but
+// for the keys deny names. The key is the action, then `@` and the
+// resource's identifier unless it is the organization.
+func (f *fakePlatform) decide(_ string, e *policyv1.Evaluation) bool {
+	who := lastSegment(e.GetSubject().GetId())
+	key := e.GetAction().GetName()
+	if e.GetResource().GetType() != "Iam::Org" {
+		key += "@" + lastSegment(e.GetResource().GetId())
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return !f.deny[key] && !f.deny[who+" "+key]
+}
+
+// member says whether the subject belongs to org: acme's people, bar
+// eve and any removed.
+func (f *fakePlatform) member(org, subject string) bool {
+	who := lastSegment(subject)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return org == "acme" && who != "eve" && !f.removed[who]
+}
+
+// policyClient serves the policy service's fake over the people this
+// platform knows, as the four settings cowork starts with would name
+// it, and answers the client that reaches it.
+func (f *fakePlatform) policyClient(t *testing.T) *policy.Client {
+	t.Helper()
+	keyFile, pub := policytest.Key(t)
+	endpoint := policytest.NewEndpoint(t, pub)
+	server := policytest.Serve(t, endpoint)
+	server.Decide, server.Member = f.decide, f.member
+	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, KeyFile: keyFile}
+	tokens, err := policy.NewTokens(cfg, time.Now)
+	require.NoError(t, err)
+	client, err := policy.Dial(cfg, tokens)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }
 
 // socketRecheck is how often the suite's server asks of an open
@@ -225,7 +246,7 @@ func newStackWith(t *testing.T, feed policyfeed.Gate) *stack {
 	t.Cleanup(content.Close)
 	signer, err := usercontent.NewSigner(content.URL, []byte(strings.Repeat("k", 32)))
 	require.NoError(t, err)
-	cfg := cli.Config{PlatformURL: platformSrv.URL, Blobs: blobmemory.New(), UserContent: signer, WebOrigins: []string{"localhost:3100"}, SocketRecheck: socketRecheck, Feed: feed}
+	cfg := cli.Config{PlatformURL: platformSrv.URL, PolicyClient: fake.policyClient(t), Blobs: blobmemory.New(), UserContent: signer, WebOrigins: []string{"localhost:3100"}, SocketRecheck: socketRecheck, Feed: feed}
 	h, err := cli.NewHandler(cfg, p)
 	require.NoError(t, err)
 	contentHandler, err := cli.NewUserContentHandler(cfg, p)

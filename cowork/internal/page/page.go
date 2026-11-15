@@ -65,3 +65,14 @@ var (
 	ErrTitleTooLong     = errorx.New(errorx.KindInvalidArgument, "a page title is at most 500 bytes")
 	ErrPositionNegative = errorx.New(errorx.KindInvalidArgument, "a position is zero or more")
 )
+
+// nameable answers ErrPageNotFound for an id no GRN can name: such an
+// id cannot identify a page, so there is no decision to ask for. It is
+// asked before the platform is, and an organization that is no GRN is
+// left to the decision's own refusal.
+func nameable(org, id string) error {
+	if grn.Org(org).Validate() != nil || grn.NewIn(org, "cowork", "page", id).Validate() == nil {
+		return nil
+	}
+	return ErrPageNotFound
+}

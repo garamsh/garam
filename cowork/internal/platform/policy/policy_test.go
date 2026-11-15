@@ -17,20 +17,12 @@ import (
 	policyv1 "github.com/garamsh/garam/lib/policy-sdk-go/gen/garam/policy/v1"
 )
 
-// base is the platform as cowork has it where the policy service is
-// not asked: it answers who a credential is and which organizations it
-// has, and fails the test if asked what is allowed.
-type base struct {
-	t *testing.T
-}
+// base is what cowork asks the platform: who a credential is and which
+// organizations it has.
+type base struct{}
 
-func (b base) Identify(_ context.Context, cred platform.Credential) (platform.Caller, error) {
+func (base) Identify(_ context.Context, cred platform.Credential) (platform.Caller, error) {
 	return platform.Caller{GRN: grn.New(grn.RootOwner, "user", "ada"), Credential: cred}, nil
-}
-
-func (b base) Allowed(context.Context, platform.Caller, string, []platform.Check) ([]bool, error) {
-	b.t.Error("the platform was asked what is allowed")
-	return nil, nil
 }
 
 func (base) Organizations(context.Context, platform.Caller) ([]platform.Organization, error) {
@@ -62,7 +54,7 @@ func newFixture(t *testing.T, allowed map[string]bool) *fixture {
 	t.Cleanup(func() { _ = client.Close() })
 	return &fixture{
 		server: server, endpoint: endpoint,
-		adapter: platformpolicy.New(base{t}, client),
+		adapter: platformpolicy.New(base{}, client),
 		ada:     platform.Caller{GRN: grn.New(grn.RootOwner, "user", "ada")},
 	}
 }
@@ -176,7 +168,7 @@ func TestAllowed_AnUnreachableServiceIsUnavailable(t *testing.T) {
 	client, err := policy.Dial(cfg, tokens)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
-	adapter := platformpolicy.New(base{t}, client)
+	adapter := platformpolicy.New(base{}, client)
 
 	_, err = adapter.Allowed(context.Background(), f.ada, "acme", []platform.Check{{Action: "cowork:page.read"}})
 
@@ -195,7 +187,7 @@ func TestAllowed_ATokenEndpointThatRefusesIsUnavailable(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 
-	_, err = platformpolicy.New(base{t}, client).Allowed(context.Background(), f.ada, "acme",
+	_, err = platformpolicy.New(base{}, client).Allowed(context.Background(), f.ada, "acme",
 		[]platform.Check{{Action: "cowork:page.read"}})
 
 	require.Error(t, err)

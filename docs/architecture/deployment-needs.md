@@ -405,7 +405,7 @@ image shape on port 3000.
 ## garam/cowork: serve and migrate
 
 `cowork serve` is cowork's server: pages, channels, tasks, artifacts and
-the MCP tools (`cowork/internal/cli/serve.go:178-261`). Image
+the MCP tools (`cowork/internal/cli/serve.go:189-270`). Image
 `garam/cowork`, commands `serve`, `migrate`, `probe`,
 `policy-feed start|stop` (`cowork/internal/cli/cli.go:73`).
 
@@ -413,20 +413,20 @@ the MCP tools (`cowork/internal/cli/serve.go:178-261`). Image
 
 | Setting | Required | If unset |
 |---|---|---|
-| `COWORK_DATABASE_URL` | yes | invalid argument, exit 2 (`serve.go:185-188`) |
-| `COWORK_PLATFORM_URL` | yes | the same; the root of the platform's browser API, an absolute URL (`platform/http/http.go:38-45`) |
-| `COWORK_LISTEN_ADDR` | no | `:8090` (`serve.go:225`) |
-| `COWORK_WEB_ORIGINS` | no | a comma list of host patterns; none means a browser's WebSocket and a framed artifact come from cowork's own host only (`serve.go:49-52,214`) |
-| `COWORK_BLOB_STORE` | no | artifacts unavailable, a warning logged; `memory` loses them on stop; `s3` reads the six below; any other value is an error (`serve.go:140-166`) |
+| `COWORK_DATABASE_URL` | yes | invalid argument, exit 2 (`serve.go:196-199`) |
+| `COWORK_PLATFORM_URL` | yes | the same; the root of the platform's browser API, an absolute URL (`platform/http/http.go:36-43`) |
+| `COWORK_LISTEN_ADDR` | no | `:8090` (`serve.go:234`) |
+| `COWORK_WEB_ORIGINS` | no | a comma list of host patterns; none means a browser's WebSocket and a framed artifact come from cowork's own host only (`serve.go:50-53,223`) |
+| `COWORK_BLOB_STORE` | no | artifacts unavailable, a warning logged; `memory` loses them on stop; `s3` reads the six below; any other value is an error (`serve.go:151-177`) |
 | `COWORK_S3_ENDPOINT` | no | no endpoint override (`blob/s3/s3.go:63-68`) |
 | `COWORK_S3_REGION` | no | `us-east-1` (`blob/s3/s3.go:50-53`) |
 | `COWORK_S3_BUCKET`, `COWORK_S3_ACCESS_KEY`, `COWORK_S3_SECRET_KEY` | with `s3` | refused (`blob/s3/s3.go:46-49`) |
-| `COWORK_S3_PATH_STYLE` | no | false (`serve.go:149`) |
-| `COWORK_S3_CREATE_BUCKET` | no | false; true creates the bucket when absent (`serve.go:157-161`) |
-| `COWORK_USERCONTENT_ORIGIN` | no | no user-content listener and no HTML artifact view (`serve.go:168-176`) |
-| `COWORK_USERCONTENT_ADDR` | no | `:8092`, only when the origin is set (`serve.go:236`) |
+| `COWORK_S3_PATH_STYLE` | no | false (`serve.go:160`) |
+| `COWORK_S3_CREATE_BUCKET` | no | false; true creates the bucket when absent (`serve.go:168-172`) |
+| `COWORK_USERCONTENT_ORIGIN` | no | no user-content listener and no HTML artifact view (`serve.go:179-187`) |
+| `COWORK_USERCONTENT_ADDR` | no | `:8092`, only when the origin is set (`serve.go:245`) |
 | `COWORK_USERCONTENT_SECRET` | with the origin | refused unless at least 32 bytes (`usercontent/usercontent.go:32,52-54`) |
-| `COWORK_POLICY_ADDR`, `COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL`, `COWORK_DEPLOYMENT_KEY_FILE` | all four or none | a partial set is refused; none means cowork asks the platform what a caller may do (`policy/policy.go:30-43`) |
+| `COWORK_POLICY_ADDR`, `COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL`, `COWORK_DEPLOYMENT_KEY_FILE` | all four | invalid argument, exit 2, naming each one unset: cowork asks the policy service alone and has no other way to decide (`cli/policy_feed.go:26-49`) |
 
 - `COWORK_MIGRATIONS_DIR` is `migrate`'s and not `serve`'s.
 - `COWORK_USERCONTENT_ORIGIN` must be an `http` or `https` origin with
@@ -447,29 +447,29 @@ the MCP tools (`cowork/internal/cli/serve.go:178-261`). Image
 - **Listeners.** `COWORK_LISTEN_ADDR`: HTTP, plaintext,
   `ReadHeaderTimeout` 10s; the API with `/api` already stripped, the
   sync and live WebSockets, `/mcp` with a bearer, and `GET /healthz`
-  and `GET /readyz` on the same port (`serve.go:224-229`,
+  and `GET /readyz` on the same port (`serve.go:233-238`,
   `cowork/internal/api/httpserver.go:16-17`,
   `cowork/internal/mcp/mcp.go:26`, `cowork/internal/api/sync.go:22`,
   `cowork/internal/api/live.go:13`). `COWORK_USERCONTENT_ADDR`: HTTP,
   plaintext, serving only HTML artifact versions at signed addresses
-  (`serve.go:123-135,230-240`).
+  (`serve.go:136-146,239-249`).
 - **Probes.** `/healthz` answers 200; `/readyz` pings the database pool
   and answers 503 on failure, with no time bound read
-  (`serve.go:120`, `cowork/internal/api/httpserver.go:16-17`).
+  (`serve.go:131`, `cowork/internal/api/httpserver.go:16-17`).
 - **Stop.** SIGINT or SIGTERM; one 10s context is shared by the servers
   in turn; a failure of the shutdown returns an error and exit 1,
   otherwise exit 0. A hijacked WebSocket outlives `Shutdown` and ends
-  with the server's context (`serve.go:183,222-258`).
+  with the server's context (`serve.go:194,231-269`).
 - **Before start.** `cowork migrate` complete; whether `serve` checks is
   not established.
 - **Calls.** PostgreSQL (`COWORK_DATABASE_URL`, its own database); the
-  platform's browser API (`COWORK_PLATFORM_URL`), asking `me`,
-  `listOrgs` and permission checks with the caller's own credential
-  (`platform/http/http.go:47-110`); S3 where configured (operations
+  platform's browser API (`COWORK_PLATFORM_URL`), asking `me` and
+  `listOrgs` with the caller's own credential, and no permission check
+  (`platform/http/http.go:45-114`); S3 where configured (operations
   `PutObject`, `GetObject`, `DeleteObject`, and `HeadBucket` and bucket
   creation only under `COWORK_S3_CREATE_BUCKET`;
   `blob/s3/s3.go:73-127`); the policy service and the machine token
-  endpoint where configured.
+  endpoint, always: every decision is the policy service's.
 - **`cowork migrate`.** Two settings: `COWORK_DATABASE_URL`, required,
   exit 2 when unset, and `COWORK_MIGRATIONS_DIR`
   (`cowork/internal/cli/migrate.go`). It listens on nothing, refuses a
@@ -477,7 +477,7 @@ the MCP tools (`cowork/internal/cli/serve.go:178-261`). Image
   the last `000006_policy_outbox`. The migrations library is
   golang-migrate v4.20.1 (`cowork/go.mod:15`).
 - cowork holds no `LISTEN`: its fan-out hub is in the process
-  (`serve.go:92-94`), and a case-sensitive search of `cowork/` and
+  (`serve.go:98`), and a case-sensitive search of `cowork/` and
   `policy/` for `LISTEN`, `pg_notify` and `NOTIFY` in Go, Rust and SQL
   found nothing.
 
@@ -595,7 +595,7 @@ leave the cluster.
 - The browser API's root, without a prefix, is
   `COWORK_PLATFORM_URL` on cowork and the web apps' `GARAM_API_URL`; it
   is internal and need not be a public name
-  (`cowork/internal/platform/http/http.go:38-45`).
+  (`cowork/internal/platform/http/http.go:36-43`).
 - The identity issuer's `/api` sits on the site's host or the
   console's: both web apps proxy `/api/*` to the api
   (`site-web/src/proxy.ts:21-26`, `platform-web/src/proxy.ts:41-43`),
@@ -739,7 +739,7 @@ that depends on one decides it and records it as decided.
 
 - **Replica safety above one**, for every process here. No leader
   election exists. cowork's hub is in memory
-  (`cowork/internal/cli/serve.go:92-94`); whether a second cowork
+  (`cowork/internal/cli/serve.go:98`); whether a second cowork
   replica is safe is not answered. For the three `serve` commands the
   answer is [deployment-contract.md](./deployment-contract.md)
   §Not established.

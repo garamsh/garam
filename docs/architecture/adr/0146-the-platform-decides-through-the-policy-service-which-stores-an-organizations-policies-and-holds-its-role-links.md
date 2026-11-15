@@ -1,8 +1,10 @@
 # ADR 0146: The platform decides through the policy service, which stores an organization's policies and holds its role links
 
 > Status: accepted; not yet built, but for the policy service's
-> delegation of a hosted operator's ten operations (#1805) and its
-> write RPCs (#1822). The platform's listeners still decide with
+> delegation of a hosted operator's ten operations (#1805), its
+> write RPCs (#1822), and item 8 for cowork, which asks the policy
+> service alone and refuses to start without its four settings
+> (#1907). The platform's listeners still decide with
 > `garam serve authz`, the platform feeds an operator's `operations`
 > and its place among the organization's members (#1891) and decides
 > an operator's authority itself, and the platform does not yet call

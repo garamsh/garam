@@ -59,7 +59,7 @@ func (s *Server) ChannelLive(w http.ResponseWriter, r *http.Request) {
 	// The client sends nothing; CloseRead answers its pings and ends
 	// ctx when it leaves.
 	ctx := conn.CloseRead(r.Context())
-	go s.recheckSocket(ctx, conn, func(ctx context.Context) error {
+	go s.recheckSocket(ctx, conn, c, func(ctx context.Context) error {
 		_, err := s.channels.Get(ctx, c, org, id)
 		return err
 	})

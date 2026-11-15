@@ -273,14 +273,14 @@ func TestAwaiting_APageUpdateWaitsOnNothing(t *testing.T) {
 }
 
 func TestWire_WithAFeedEveryCreateWaitsAndWithoutOneNoneDoes(t *testing.T) {
-	without, err := wire(Config{PlatformURL: "http://platform.invalid"}, nil)
+	without, err := wire(Config{PlatformURL: "http://platform.invalid", PolicyClient: testPolicyClient(t)}, nil)
 	require.NoError(t, err)
 	assert.IsType(t, page.NewService(nil, nil), without.pages)
 	assert.IsType(t, channel.NewService(nil, nil, nil), without.channels)
 	assert.IsType(t, task.NewService(nil, nil, nil, nil), without.tasks)
 	assert.IsType(t, artifact.NewService(nil, nil, nil, nil, nil, nil), without.artifacts)
 
-	with, err := wire(Config{PlatformURL: "http://platform.invalid", Feed: &journal{}}, nil)
+	with, err := wire(Config{PlatformURL: "http://platform.invalid", PolicyClient: testPolicyClient(t), Feed: &journal{}}, nil)
 	require.NoError(t, err)
 	assert.IsType(t, awaitingPages{}, with.pages)
 	assert.IsType(t, awaitingChannels{}, with.channels)

@@ -1,6 +1,7 @@
 // Package platform is what cowork asks garam's platform: who presented
-// a credential, and whether that caller may take an action on the
-// organization or on one of its pages (ADR-0127). cowork keeps no
+// a credential and which organizations it has (ADR-0141 §12), and what
+// that caller may take on the organization or on one of its pages,
+// which the policy service answers (ADR-0146 §8). cowork keeps no
 // access list of its own.
 package platform
 
@@ -11,8 +12,8 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 )
 
-// The cowork actions the platform answers for (ADR-0127). Each is
-// asked on the organization, for its page tree, or on one page.
+// The cowork actions the policy service answers for (ADR-0127). Each
+// is asked on the organization, for its page tree, or on one page.
 const (
 	ActionPageRead  = "cowork:page.read"
 	ActionPageWrite = "cowork:page.write"
@@ -40,8 +41,7 @@ type Caller struct {
 	Credential Credential
 }
 
-// The kinds of resource cowork asks about, as the platform's
-// `PermissionResourceType` names them.
+// The kinds of resource cowork asks about.
 const (
 	KindPage     = "cowork-page"
 	KindChannel  = "cowork-channel"
@@ -77,17 +77,24 @@ func OnChannel(action, id string) Check { return Check{Action: action, Kind: Kin
 // OnTask is a check of action on one task.
 func OnTask(action, id string) Check { return Check{Action: action, Kind: KindTask, ID: id} }
 
-// Platform answers for the platform. Identify answers unauthenticated
-// for a credential it does not accept. Allowed answers one decision per
-// check, in order, and permission denied for a caller who is not a
-// member of org. Either answers unavailable when the platform cannot be
-// reached: cowork then refuses rather than guesses.
-type Platform interface {
+// Identity answers for the platform. Identify answers unauthenticated
+// for a credential it does not accept, and either method answers
+// unavailable when the platform cannot be reached: cowork then refuses
+// rather than guesses.
+type Identity interface {
 	Identify(ctx context.Context, cred Credential) (Caller, error)
-	Allowed(ctx context.Context, caller Caller, org string, checks []Check) ([]bool, error)
 	// Organizations answers the organizations the caller belongs to:
 	// the workspaces it has.
 	Organizations(ctx context.Context, caller Caller) ([]Organization, error)
+}
+
+// Platform is what cowork asks to serve a request: Identity, and the
+// decisions of the policy service. Allowed answers one decision per
+// check, in order, and permission denied for a caller who is not a
+// member of org, or unavailable when the service cannot be reached.
+type Platform interface {
+	Identity
+	Allowed(ctx context.Context, caller Caller, org string, checks []Check) ([]bool, error)
 }
 
 // Organization is one the caller belongs to: its identifier, the last
@@ -97,11 +104,11 @@ type Organization struct {
 	Name string
 }
 
-// ErrNotAllowed is a check the platform denied.
+// ErrNotAllowed is a check that was denied.
 var ErrNotAllowed = errorx.New(errorx.KindPermissionDenied, "not allowed")
 
-// Require answers nil when the platform allows every check, and
-// ErrNotAllowed when it denies any.
+// Require answers nil when every check is allowed, and ErrNotAllowed
+// when any is denied.
 func Require(ctx context.Context, p Platform, caller Caller, org string, checks ...Check) error {
 	allowed, err := p.Allowed(ctx, caller, org, checks)
 	if err != nil {

@@ -11,8 +11,8 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 )
 
-// SocketRecheck is how often an open WebSocket's caller is asked of
-// the platform again (ADR-0139). A refusal closes the connection
+// SocketRecheck is how often an open WebSocket's caller is asked
+// again (ADR-0139). A refusal closes the connection
 // within this and one request's timeout.
 const SocketRecheck = 30 * time.Second
 
@@ -29,9 +29,11 @@ const (
 var errWritableChanged = errorx.New(errorx.KindFailedPrecondition, "api: the connection's write access changed")
 
 // recheckSocket runs recheck every s.recheck until ctx ends, and closes
-// conn on a refusal. Anything else decides nothing, so a platform that
+// conn on a refusal. Each round first asks the platform whether c's
+// credential still stands, which the policy service cannot say.
+// Anything else decides nothing, so a platform or a policy service that
 // cannot be reached leaves the connection as it stands.
-func (s *Server) recheckSocket(ctx context.Context, conn *websocket.Conn, recheck func(context.Context) error) {
+func (s *Server) recheckSocket(ctx context.Context, conn *websocket.Conn, c platform.Caller, recheck func(context.Context) error) {
 	ticker := time.NewTicker(s.recheck)
 	defer ticker.Stop()
 	for {
@@ -40,7 +42,10 @@ func (s *Server) recheckSocket(ctx context.Context, conn *websocket.Conn, rechec
 			return
 		case <-ticker.C:
 		}
-		err := recheck(ctx)
+		_, err := s.platform.Identify(ctx, c.Credential)
+		if err == nil {
+			err = recheck(ctx)
+		}
 		switch {
 		case err == nil, ctx.Err() != nil:
 		case refuses(err):
@@ -66,7 +71,8 @@ func refuses(err error) bool {
 }
 
 // pageRecheck is one sync connection's re-check, in one request to the
-// platform: reading the page, and writing it as the connection does.
+// policy service: reading the page, and writing it as the connection
+// does.
 func (s *Server) pageRecheck(c platform.Caller, org, id string, writable bool) func(context.Context) error {
 	checks := []platform.Check{platform.OnPage(platform.ActionPageRead, id), platform.OnPage(platform.ActionPageWrite, id).AsProbe()}
 	return func(ctx context.Context) error {

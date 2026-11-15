@@ -228,7 +228,11 @@ true of the platform.
   roles it holds and writing guardrails and no longer writes an
   `Allow`.
 - **cowork asks the service alone,** and its path through
-  `checkPermissions` goes.
+  `checkPermissions` goes. Built in cowork (#1907): it asks the
+  platform for `me` and the organization list only, and refuses to
+  start without the four policy settings. The platform's
+  `checkPermissions` keeps cowork's kinds until its own round
+  (#1784).
 - Built in the policy service (#1785), not yet relayed by the
   platform: every denial and every write of a policy is recorded by
   the policy service for the organization of the resource, and an
@@ -1191,14 +1195,16 @@ No such subject reaches the engine today from the platform's path.
 supersedes in part ADR-0127 §5: cowork asks the policy service
 itself, under a caller token from `exchangeClientAssertion` with
 `audience` `policy` and `sub` its principal, and not through the
-platform. cowork builds that route (#1758) behind four settings
+platform. cowork builds that route (#1758) and asks nothing else
+(#1907): it refuses to start without its four settings
 (`COWORK_POLICY_ADDR`, `COWORK_POLICY_CA_FILE`,
-`COWORK_MACHINE_TOKEN_URL`, `COWORK_DEPLOYMENT_KEY_FILE`): where they
-are set it asks one `Evaluations` per batch under the token of the
+`COWORK_MACHINE_TOKEN_URL`, `COWORK_DEPLOYMENT_KEY_FILE`), naming the
+missing ones, asks one `Evaluations` per batch under the token of the
 organization asked about, and feeds its channels, pages, tasks and
 artifacts through an outbox, one organization at a time under that
-organization's token; where none is set it asks the platform as
-before. The platform's path goes with #1784.
+organization's token. It asks the platform for who a credential is
+and which organizations it has, and for no decision. The platform's
+own `checkPermissions` path for cowork's kinds goes with #1784.
 
 Where the route is built, a create, and a page's delete, answer after
 the policy service holds the change

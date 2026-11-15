@@ -9,7 +9,7 @@ import (
 )
 
 // Bound is how long a request waits for the policy service to hold
-// the entity it created (ADR-0166).
+// the entity it created, or to drop the one it deleted (ADR-0166).
 const Bound = 5 * time.Second
 
 // pollEvery is how often a waiter reads the outbox. It waits on the
@@ -18,8 +18,8 @@ const Bound = 5 * time.Second
 const pollEvery = 50 * time.Millisecond
 
 // ReasonChangeNotApplied is the reason of the unavailable answer a
-// request gets when what it created is stored and the policy service
-// does not yet hold it (api/openapi.yaml `Error.reason`).
+// request gets when what it created or deleted is stored and the policy
+// service does not yet hold it (api/openapi.yaml `Error.reason`).
 const ReasonChangeNotApplied = "change_not_applied"
 
 // errNotApplied is the cause of every NotApplied answer.

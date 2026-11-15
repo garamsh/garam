@@ -205,10 +205,10 @@ type Error struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 
-	// Reason A stable code a client may branch on where the kind alone does not say which refusal it was. `change_not_applied` answers a create with 503: the entity is stored and the policy service does not yet hold it, so a read of it may be denied for a moment. Read it by `resource`; do not create it again.
+	// Reason A stable code a client may branch on where the kind alone does not say which refusal it was. `change_not_applied` answers a create or a delete with 503: the change is stored and the policy service does not yet hold it. After a create a read of the entity may be denied for a moment: read it by `resource`, do not create it again. After a delete the entity is gone and the call is not repeated.
 	Reason *string `json:"reason,omitempty"`
 
-	// Resource With `change_not_applied`, the GRN of the entity the request stored.
+	// Resource With `change_not_applied`, the GRN of the entity the request created or deleted.
 	Resource *string `json:"resource,omitempty"`
 }
 
@@ -4400,6 +4400,8 @@ type DeletePageResponse struct {
 	JSON403 *Error
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -4415,6 +4417,11 @@ func (r DeletePageResponse) GetJSON403() *Error {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r DeletePageResponse) GetJSON404() *Error {
 	return r.JSON404
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r DeletePageResponse) GetJSON503() *Error {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -6533,6 +6540,13 @@ func ParseDeletePageResponse(rsp *http.Response) (*DeletePageResponse, error) {
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

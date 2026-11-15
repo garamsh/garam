@@ -547,6 +547,13 @@ export interface components {
             /** @description errorx kind, e.g. `not_found`, `permission_denied`. */
             kind: string;
             message: string;
+            /** @description A stable code a client may branch on where the kind alone does not say which refusal it was. `change_not_applied` answers a create or a delete with 503: the change is stored and the policy service does not yet hold it. After a create a read of the entity may be denied for a moment: read it by `resource`, do not create it again. After a delete the entity is gone and the call is not repeated. */
+            reason?: string;
+            /**
+             * @description With `change_not_applied`, the GRN of the entity the request created or deleted.
+             * @example grn:acme/cowork/page/k3v7q2m9x4ab
+             */
+            resource?: string;
         };
         /** @enum {string} */
         TaskStatus: "todo" | "doing" | "done";
@@ -757,6 +764,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The page is stored and the policy service does not yet hold it (`reason` `change_not_applied`, `resource` its GRN), or a service cowork needs cannot be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getPage: {
@@ -809,6 +825,15 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            /** @description The page is deleted and the policy service does not yet hold that (`reason` `change_not_applied`, `resource` its GRN). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     updatePage: {
@@ -898,6 +923,15 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            /** @description The channel is stored and the policy service does not yet hold it (`reason` `change_not_applied`, `resource` its GRN), or a service cowork needs cannot be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getChannel: {
@@ -1185,6 +1219,15 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            /** @description The task is stored and the policy service does not yet hold it (`reason` `change_not_applied`, `resource` its GRN), or a service cowork needs cannot be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getTask: {
@@ -1360,7 +1403,15 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
-            503: components["responses"]["Error"];
+            /** @description The artifact is stored and the policy service does not yet hold it (`reason` `change_not_applied`, `resource` its GRN), or the blob store cannot be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getArtifact: {

@@ -11,11 +11,12 @@ import (
 	"github.com/garamsh/garam/cowork/internal/task"
 )
 
-// The services below answer a create after the policy service holds
-// the entity it created (ADR-0166). Each waits by the entity it names,
-// after the write is committed and holding no transaction, and only
-// where the create succeeded. Every other method is the service's own:
-// a change to a held entity changes nothing the service holds.
+// The services below answer a create, and a delete of a page, after the
+// policy service holds the change (ADR-0166). Each waits by the entity
+// it names, after the write is committed and holding no transaction,
+// and only where the write succeeded. Every other method is the
+// service's own: an update to a held entity changes nothing the service
+// holds.
 
 type awaitingPages struct {
 	page.Service
@@ -28,6 +29,16 @@ func (s awaitingPages) Create(ctx context.Context, caller platform.Caller, org s
 		return p, err
 	}
 	return p, s.gate.Await(ctx, policyfeed.Entity{Type: "page", Org: p.Org, ID: p.ID})
+}
+
+// Delete waits on the page's own mark: the service then no longer holds
+// it. The pages beneath it go with it by foreign key and raise marks of
+// their own, which no request can reach afterwards and none waits on.
+func (s awaitingPages) Delete(ctx context.Context, caller platform.Caller, org, id string) error {
+	if err := s.Service.Delete(ctx, caller, org, id); err != nil {
+		return err
+	}
+	return s.gate.Await(ctx, policyfeed.Entity{Type: "page", Org: org, ID: id})
 }
 
 type awaitingChannels struct {

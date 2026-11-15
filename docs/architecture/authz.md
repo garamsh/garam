@@ -196,8 +196,8 @@ true of the platform.
   mark (§Role links). A request that changes any other entity does not
   wait, except those §Consents names, and the policy write is not the
   platform's yet. cowork's creates of a channel, a page, a task and an
-  artifact wait on the created entity's mark
-  ([ADR-0166](./adr/0166-a-cowork-create-answers-after-the-policy-service-holds-the-entity-it-created.md)),
+  artifact, and its delete of a page, wait on the written entity's mark
+  ([ADR-0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md)),
   where its policy client is configured.
 - **Every present capability has a place.** The ADR's inventory gives
   each origin of a statement and each surface that reads a decision
@@ -1135,16 +1135,17 @@ artifacts through an outbox, one organization at a time under that
 organization's token; where none is set it asks the platform as
 before. The platform's path goes with #1784.
 
-Where the route is built, a create answers after the policy service
-holds the entity it created
-([ADR-0166](./adr/0166-a-cowork-create-answers-after-the-policy-service-holds-the-entity-it-created.md),
+Where the route is built, a create, and a page's delete, answer after
+the policy service holds the change
+([ADR-0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md),
 #1919): without it, the read that follows is denied as a `fault` of
-`tenant-isolation` until the loop has run. The create wakes the loop
+`tenant-isolation` until the loop has run. The request wakes the loop
 and waits up to 5 seconds on the entity's own mark, and answers 503
-`change_not_applied` naming the stored entity's GRN at the bound.
-Updates, deletes, reads and writes through a page's sync connection do
-not wait: the service holds an entity's type, identifier and
-organization, and none of them changes there.
+`change_not_applied` naming the stored entity's GRN at the bound. The
+pages beneath a deleted page go with it and raise marks the delete
+does not wait on. Updates, reads and writes through a page's sync
+connection do not wait: the service holds an entity's type,
+identifier and organization, and none of them changes there.
 
 - **Decided as a machine sender.** Its `postMessage` asks
   `iam:message.send` with its GRN as subject and the recipient as

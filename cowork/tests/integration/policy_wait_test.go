@@ -178,7 +178,6 @@ func TestPolicyWait_AChangeThatFedNothingNewAnswersAtOnce(t *testing.T) {
 		want                     int
 	}{
 		{"a page's retitling", http.MethodPatch, "/orgs/acme/pages/abcdefghijkl", `{"title":"New"}`, http.StatusOK},
-		{"a page's deletion", http.MethodDelete, "/orgs/acme/pages/abcdefghijkl", "", http.StatusNoContent},
 		{"a task's update", http.MethodPatch, "/orgs/acme/tasks/abcdefghijkl", `{"status":"doing"}`, http.StatusOK},
 	}
 	for _, c := range cases {
@@ -192,6 +191,45 @@ func TestPolicyWait_AChangeThatFedNothingNewAnswersAtOnce(t *testing.T) {
 			assert.Equal(t, 1, r.feed.marks(t), "the change did raise a mark, which nothing waited on")
 		})
 	}
+}
+
+// deletedPages is the GRN of every page the service was told to
+// drop, in order.
+func (r *waitRig) deletedPages() []string {
+	var out []string
+	for _, call := range r.feed.server.Applied() {
+		for _, ch := range call.Request.GetChanges() {
+			if ch.GetDelete() != nil && ch.GetEntity().GetType() == "Cowork::Page" {
+				out = append(out, ch.GetEntity().GetId())
+			}
+		}
+	}
+	return out
+}
+
+func TestPolicyWait_APageDeleteAnswersAfterTheServiceDropsIt(t *testing.T) {
+	r := newWaitRig(t, policyfeed.Bound, true, sources[1].insert)
+	r.feed.deliver(t) // the service holds the page before it is deleted
+	require.Empty(t, r.deletedPages())
+
+	status, body := r.call(t, "ada", http.MethodDelete, "/orgs/acme/pages/abcdefghijkl", "")
+
+	require.Equal(t, http.StatusNoContent, status, body)
+	assert.Equal(t, []string{"grn:acme/cowork/page/abcdefghijkl"}, r.deletedPages())
+	assert.Zero(t, r.feed.marks(t))
+}
+
+func TestPolicyWait_AtTheBoundAPageDeleteIsAnsweredUnavailableNamingThePage(t *testing.T) {
+	r := newWaitRig(t, 50*time.Millisecond, false, sources[1].insert)
+	r.feed.deliver(t)
+
+	status, body := r.call(t, "ada", http.MethodDelete, "/orgs/acme/pages/abcdefghijkl", "")
+
+	assert.Equal(t, http.StatusServiceUnavailable, status, body)
+	assert.JSONEq(t, `{"kind":"unavailable","reason":"change_not_applied",
+		"message":"the change is stored and the policy service has not yet applied it",
+		"resource":"grn:acme/cowork/page/abcdefghijkl"}`, body)
+	assert.Equal(t, 1, r.feed.marks(t), "the page's deletion is still marked, so the loop goes on delivering it")
 }
 
 // A create that waited still answers the entity it created.

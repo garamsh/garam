@@ -63,6 +63,16 @@ func (s pages) Get(context.Context, platform.Caller, string, string) (page.Page,
 	return page.Page{ID: "pg1", Org: "acme"}, nil
 }
 
+func (s pages) Delete(context.Context, platform.Caller, string, string) error {
+	s.j.add("delete page")
+	return s.err
+}
+
+func (s pages) Update(context.Context, platform.Caller, string, string, page.UpdateInput) (page.Page, error) {
+	s.j.add("update page")
+	return page.Page{ID: "pg1", Org: "acme"}, s.err
+}
+
 type channels struct {
 	channel.Service
 	j   *journal
@@ -216,6 +226,44 @@ func TestAwaiting_ACreateThatStoredNothingWaitsOnNothing(t *testing.T) {
 			assert.Equal(t, []string{"store " + name}, j.all())
 		})
 	}
+}
+
+// A page is the one entity a route deletes: a channel, a task and an
+// artifact have none.
+func TestAwaiting_APageDeleteWaitsOnThePageAfterDeletingIt(t *testing.T) {
+	j := &journal{}
+
+	err := awaitingPages{pages{j: j}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"delete page", "await page acme pg1"}, j.all())
+}
+
+func TestAwaiting_APageDeleteThatDeletedNothingWaitsOnNothing(t *testing.T) {
+	failed := errorx.New(errorx.KindNotFound, "no such page")
+	j := &journal{}
+
+	err := awaitingPages{pages{j: j, err: failed}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
+
+	assert.Same(t, failed, err)
+	assert.Equal(t, []string{"delete page"}, j.all())
+}
+
+func TestAwaiting_APageDeleteThatIsNotAppliedAnswersThatError(t *testing.T) {
+	j := &journal{err: errorx.New(errorx.KindUnavailable, "not applied")}
+
+	err := awaitingPages{pages{j: j}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
+
+	assert.Same(t, j.err, err)
+}
+
+func TestAwaiting_APageUpdateWaitsOnNothing(t *testing.T) {
+	j := &journal{}
+
+	_, err := awaitingPages{pages{j: j}, j}.Update(context.Background(), platform.Caller{}, "acme", "pg1", page.UpdateInput{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"update page"}, j.all())
 }
 
 func TestWire_WithAFeedEveryCreateWaitsAndWithoutOneNoneDoes(t *testing.T) {

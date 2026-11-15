@@ -13,7 +13,9 @@ import (
 var ErrPrincipalsOff = errorx.New(errorx.KindUnavailable, "identity: the issuer or the service keys are not configured")
 
 // Route is an endpoint of the machine listener that authenticates a
-// service principal. Each has its own per-source bound.
+// service principal. Each has its own per-source bound. An assertion
+// names the issuer and no route, so what keeps one from being admitted
+// on both is its jti, spent once per principal in the database.
 type Route int
 
 const (

@@ -285,8 +285,8 @@ services:
   # Artifacts go to the rustfs above, in a bucket serve creates where it
   # is missing, and HTML artifacts are viewed from a user-content origin
   # of their own on localhost:8092 (ADR-0127 §8). The API is published
-  # only through cowork-gateway, as a deployment serves it. The signing
-  # key, like
+  # through cowork-gateway, as a deployment serves it, and on loopback
+  # for the browser suite. The signing key, like
   # rustfs's keys, is this stack's alone and signs nothing a deployment
   # trusts.
   cowork:
@@ -318,8 +318,12 @@ services:
       COWORK_POLICY_CA_FILE: /cowork-keys/ca.crt
       COWORK_MACHINE_TOKEN_URL: https://machine:8443/oauth/token
       COWORK_DEPLOYMENT_KEY_FILE: /cowork-keys/deployment.pem
+    # The API is published on loopback as well, for the browser suite
+    # that reaches cowork's API from its pages (cowork-web/e2e), which
+    # the gateway's path split does not serve it on.
     ports:
       - "${COWORK_LOCAL_USERCONTENT_PORT:-8092}:8092"
+      - "127.0.0.1:${COWORK_LOCAL_API_PORT:-8091}:8090"
     volumes:
       - cowork-keys:/cowork-keys:ro
     depends_on:
@@ -342,6 +346,23 @@ services:
       interval: 2s
       timeout: 5s
       retries: 10
+
+  # One-shot: turns the feed of cowork's entities on and marks every
+  # live one (ADR-0140), which serve delivers to the policy service.
+  # Until it has run, the service holds none of cowork's pages, tasks or
+  # channels and refuses a member's read of them.
+  cowork-policy-feed:
+    profiles: ["cowork"]
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.cowork
+    command: ["policy-feed", "start"]
+    environment:
+      COWORK_DATABASE_URL: postgres://garam:garam@postgres:5432/cowork?sslmode=disable
+    depends_on:
+      cowork-migrate:
+        condition: service_completed_successfully
+    restart: "no"
 
   # The policy service keeps a database of its own on the one Postgres
   # (ADR-0130), created as cowork-db creates cowork's.

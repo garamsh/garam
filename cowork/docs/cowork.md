@@ -66,6 +66,11 @@ nothing publishes or deploys either.
   request (`make cowork-image-e2e cowork-web-image-e2e`), and
   `deploy/local/docker-compose.yml` runs them behind its `cowork`
   profile, as `deploy/local/README.md` §cowork states.
+- **Its browser suite.** `make -C cowork-web stack-up suites` drives
+  the app and the site in a real browser against the `cowork` service
+  of that stack, the image a deployment runs, asking the policy
+  service; the seed returns once the service holds what it wrote
+  (`deploy/local/README.md` §cowork).
 - **Its host.** The server and the web app share `cowork.garam.sh`,
   split by path at the gateway (ADR-0135,
   [deployment-contract.md](../../docs/architecture/deployment-contract.md)

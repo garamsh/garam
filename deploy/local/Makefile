@@ -5,7 +5,7 @@
 
 include ../../tooling/make/stack.mk
 
-.PHONY: db-up db-down db-prune backend-up
+.PHONY: db-up db-down db-prune backend-up cowork-up
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
@@ -48,6 +48,19 @@ backend-up:
 	@$(COMPOSE_LOCAL) wait policy-feed >/dev/null 2>&1; \
 		test "$$($(COMPOSE_LOCAL) ps -a --status exited --format '{{.ExitCode}}' policy-feed)" = 0 \
 			|| { echo "backend-up: policy-feed did not exit 0" >&2; exit 1; }
+
+# cowork-up starts the `cowork` service of the profile of that name and
+# what it waits on, beside the backend backend-up started: the server
+# image a deployment runs, asking the policy service, and then its feed
+# of cowork's own entities, a one-shot whose exit status is read as
+# backend-up reads the platform's. The profile's web app and gateway
+# stay down; cowork-web's suite runs its own app.
+cowork-up:
+	$(COMPOSE_LOCAL) up -d --build --wait cowork
+	$(COMPOSE_LOCAL) up -d --build cowork-policy-feed
+	@$(COMPOSE_LOCAL) wait cowork-policy-feed >/dev/null 2>&1; \
+		test "$$($(COMPOSE_LOCAL) ps -a --status exited --format '{{.ExitCode}}' cowork-policy-feed)" = 0 \
+			|| { echo "cowork-up: cowork-policy-feed did not exit 0" >&2; exit 1; }
 
 # ---------------------------------------------------------------------
 # deploy/local/minikube — the whole stack on a local Kubernetes cluster.

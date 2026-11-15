@@ -40,6 +40,10 @@ type State struct {
 	// Operations are the action names, in their wire form, that an
 	// Operator's current delegation holds (ADR-0146 §A).
 	Operations []string
+	// Agent is the agent a Supervisor holds: the one its registration
+	// names while that agent's assignment names the supervisor
+	// (ADR-0164).
+	Agent *Entity
 }
 
 // The mark kinds of the entities themselves, as policy_outbox_track
@@ -52,6 +56,7 @@ const (
 	UserType       = "Iam::User"
 	AgentType      = "Iam::Agent"
 	OperatorType   = "Iam::Operator"
+	SupervisorType = "Iam::Supervisor"
 )
 
 // RoleLinkType is the mark kind of a member's role link (ADR-0146

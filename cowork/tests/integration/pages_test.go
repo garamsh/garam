@@ -12,6 +12,7 @@ import (
 
 	"github.com/garamsh/garam/cowork/internal/cli"
 	"github.com/garamsh/garam/cowork/internal/collab"
+	pagepg "github.com/garamsh/garam/cowork/internal/page/postgres"
 	"github.com/garamsh/garam/lib/grn"
 )
 
@@ -89,6 +90,32 @@ func TestPages_DeleteTakesThePagesBeneathAndTheirContent(t *testing.T) {
 	require.NoError(t, s.pool.QueryRow(context.Background(),
 		"SELECT (SELECT count(*) FROM pages) + (SELECT count(*) FROM page_updates) + (SELECT count(*) FROM page_snapshots)").Scan(&rows))
 	assert.Zero(t, rows)
+}
+
+// TestPages_DeleteNamesEveryPageItRemoved deletes a page with a child
+// and a grandchild beside a sibling, and the repository names the three
+// and not the sibling.
+func TestPages_DeleteNamesEveryPageItRemoved(t *testing.T) {
+	s := newStack(t)
+	parent := s.createPage(t, "parent")
+	var ids []string
+	for _, parentOf := range []string{parent, ""} {
+		status, body := s.call(t, "ada", http.MethodPost, "/orgs/acme/pages", `{"title":"x","parent":"`+parentOf+`"}`)
+		require.Equal(t, http.StatusCreated, status, body)
+		var p apiPage
+		require.NoError(t, json.Unmarshal([]byte(body), &p))
+		ids = append(ids, p.ID)
+	}
+	status, body := s.call(t, "ada", http.MethodPost, "/orgs/acme/pages", `{"title":"y","parent":"`+ids[0]+`"}`)
+	require.Equal(t, http.StatusCreated, status, body)
+	var grandchild apiPage
+	require.NoError(t, json.Unmarshal([]byte(body), &grandchild))
+
+	removed, err := pagepg.New(s.pool).Delete(context.Background(), "acme", parent)
+
+	require.NoError(t, err)
+	assert.Equal(t, parent, removed[0])
+	assert.ElementsMatch(t, []string{parent, ids[0], grandchild.ID}, removed)
 }
 
 // TestPages_RefusesAMoveUnderItsOwnDescendant answers 409 to moving a

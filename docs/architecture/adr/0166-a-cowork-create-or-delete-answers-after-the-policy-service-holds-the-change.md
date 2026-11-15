@@ -62,14 +62,17 @@ the row's own entity alone, and only while the feed is on.
    start a pass now, and reads the mark every 50 ms up to a bound of
    5 seconds, the bound of ADR-0159. The loop's own poll stays, so a
    request that waits does not become the only thing that delivers.
-3. **A delete waits on the mark of the entity it deleted.** Deleting
-   a page waits, like a create, on the page's own mark, with the same
-   bound and the same answer. It is the one route that deletes a fed
-   entity: a channel, a task and an artifact have none, a channel's
-   leaving and a task's links are not fed tables. The pages beneath it
-   go with it and raise marks of their own, which no request can read
-   afterwards: the wait is on the deleted page's mark and not on
-   theirs, which the loop delivers in the same pass.
+3. **A delete waits on the marks of every entity it deleted.**
+   Deleting a page waits, like a create, on the page's own mark and on
+   the mark of each page beneath it, which go with it by foreign key
+   and raise marks in the same transaction, as ADR-0165 item 3 has a
+   cascading delete wait on what it raised. The page store names the
+   pages the delete removed, read under the tree lock the delete
+   holds, and `Delete` returns them, the page first. The wrapper waits
+   on each in turn with the gate's bound, and the first to pass it
+   answers 503 naming that page. It is the one route that deletes a
+   fed entity: a channel, a task and an artifact have none, a
+   channel's leaving and a task's links are not fed tables.
 4. **What does not wait.** An update, a read and a write through a
    page's sync connection answer at once: an update re-sends the
    entity the service holds, and a sync write raises no mark, answers
@@ -93,7 +96,8 @@ the row's own entity alone, and only while the feed is on.
    entity has a `Delete` sent and its mark dropped (ADR-0140 item 11),
    so the wait ends with the entity not held and a read is denied.
    cowork has no link to set aside, so it has no `change_refused`
-   reason and no recorder of a cascade's marks: its only reason is
+   reason and no table recording a cascade's marks, since the page
+   store names the pages itself: its only reason is
    `change_not_applied`.
 7. **The mark is read by one query.** `policyfeed.Marks` has one
    method, whether the outbox holds a mark of an entity, and the
@@ -114,8 +118,10 @@ the row's own entity alone, and only while the feed is on.
   The four create operations and `deletePage` declare a `503`.
 - A caller that updated an entity and reads it at once is decided on
   the entity the service already holds, which is the same.
-- A page beneath a deleted page may be allowed an act for up to one
-  delivery after the delete, and no request can reach it.
+- A page delete waits once per page it removed, each a read of the
+  mark that returns at once when the page is delivered, so a large
+  subtree costs a query per page and, past the bound, the first page
+  not delivered answers.
 - An update to a fed entity that gains an attribute, and the platform
   asking the policy service about cowork's entities in #1907, make
   items 4 and 6 the first to re-examine.

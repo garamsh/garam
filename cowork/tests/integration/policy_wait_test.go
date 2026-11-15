@@ -219,6 +219,58 @@ func TestPolicyWait_APageDeleteAnswersAfterTheServiceDropsIt(t *testing.T) {
 	assert.Zero(t, r.feed.marks(t))
 }
 
+// The pages beneath a deleted page go with it by foreign key and each
+// is marked: the answer comes after the service has dropped them all.
+func TestPolicyWait_APageDeleteAnswersAfterTheServiceDropsThePagesBeneathIt(t *testing.T) {
+	r := newWaitRig(t, policyfeed.Bound, true, sources[1].insert)
+	r.feed.exec(t, `INSERT INTO pages (org, id, parent_id, position, created_by, created_at, updated_at)
+		VALUES ('acme', 'childpageaaa', 'abcdefghijkl', 0, 'grn:root/iam/user/ada', now(), now())`)
+	r.feed.deliver(t) // the service holds both pages before the delete
+	require.Empty(t, r.deletedPages())
+
+	status, body := r.call(t, "ada", http.MethodDelete, "/orgs/acme/pages/abcdefghijkl", "")
+
+	require.Equal(t, http.StatusNoContent, status, body)
+	assert.ElementsMatch(t, []string{
+		"grn:acme/cowork/page/abcdefghijkl",
+		"grn:acme/cowork/page/childpageaaa",
+	}, r.deletedPages())
+	assert.Zero(t, r.feed.marks(t))
+}
+
+// A child's mark is waited on in its own right: the service is given
+// the parent's alone, by dropping the parent's mark once the delete has
+// raised both, and the answer names the child.
+func TestPolicyWait_APageDeleteWaitsOnThePageBeneathItToo(t *testing.T) {
+	r := newWaitRig(t, time.Second, false, sources[1].insert)
+	r.feed.exec(t, `INSERT INTO pages (org, id, parent_id, position, created_by, created_at, updated_at)
+		VALUES ('acme', 'childpageaaa', 'abcdefghijkl', 0, 'grn:root/iam/user/ada', now(), now())`)
+	r.feed.deliver(t)
+	dropped := make(chan error, 1)
+	go func() {
+		ctx := context.Background()
+		for {
+			var n int
+			if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM policy_outbox`).Scan(&n); err != nil {
+				dropped <- err
+				return
+			}
+			if n == 2 {
+				_, err := r.pool.Exec(ctx, `DELETE FROM policy_outbox WHERE entity_id = 'abcdefghijkl'`)
+				dropped <- err
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+
+	status, body := r.call(t, "ada", http.MethodDelete, "/orgs/acme/pages/abcdefghijkl", "")
+
+	require.NoError(t, <-dropped)
+	assert.Equal(t, http.StatusServiceUnavailable, status, body)
+	assert.Contains(t, body, `"resource":"grn:acme/cowork/page/childpageaaa"`)
+}
+
 func TestPolicyWait_AtTheBoundAPageDeleteIsAnsweredUnavailableNamingThePage(t *testing.T) {
 	r := newWaitRig(t, 50*time.Millisecond, false, sources[1].insert)
 	r.feed.deliver(t)

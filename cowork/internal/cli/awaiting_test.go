@@ -63,9 +63,13 @@ func (s pages) Get(context.Context, platform.Caller, string, string) (page.Page,
 	return page.Page{ID: "pg1", Org: "acme"}, nil
 }
 
-func (s pages) Delete(context.Context, platform.Caller, string, string) error {
+// Delete removes pg1 and pg2 beneath it.
+func (s pages) Delete(context.Context, platform.Caller, string, string) ([]string, error) {
 	s.j.add("delete page")
-	return s.err
+	if s.err != nil {
+		return nil, s.err
+	}
+	return []string{"pg1", "pg2"}, nil
 }
 
 func (s pages) Update(context.Context, platform.Caller, string, string, page.UpdateInput) (page.Page, error) {
@@ -229,21 +233,23 @@ func TestAwaiting_ACreateThatStoredNothingWaitsOnNothing(t *testing.T) {
 }
 
 // A page is the one entity a route deletes: a channel, a task and an
-// artifact have none.
-func TestAwaiting_APageDeleteWaitsOnThePageAfterDeletingIt(t *testing.T) {
+// artifact have none. The pages beneath it go with it, and each has a
+// mark of its own.
+func TestAwaiting_APageDeleteWaitsOnEveryPageItRemovedAfterDeleting(t *testing.T) {
 	j := &journal{}
 
-	err := awaitingPages{pages{j: j}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
+	removed, err := awaitingPages{pages{j: j}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"delete page", "await page acme pg1"}, j.all())
+	assert.Equal(t, []string{"pg1", "pg2"}, removed)
+	assert.Equal(t, []string{"delete page", "await page acme pg1", "await page acme pg2"}, j.all())
 }
 
 func TestAwaiting_APageDeleteThatDeletedNothingWaitsOnNothing(t *testing.T) {
 	failed := errorx.New(errorx.KindNotFound, "no such page")
 	j := &journal{}
 
-	err := awaitingPages{pages{j: j, err: failed}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
+	_, err := awaitingPages{pages{j: j, err: failed}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
 
 	assert.Same(t, failed, err)
 	assert.Equal(t, []string{"delete page"}, j.all())
@@ -252,7 +258,7 @@ func TestAwaiting_APageDeleteThatDeletedNothingWaitsOnNothing(t *testing.T) {
 func TestAwaiting_APageDeleteThatIsNotAppliedAnswersThatError(t *testing.T) {
 	j := &journal{err: errorx.New(errorx.KindUnavailable, "not applied")}
 
-	err := awaitingPages{pages{j: j}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
+	_, err := awaitingPages{pages{j: j}, j}.Delete(context.Background(), platform.Caller{}, "acme", "pg1")
 
 	assert.Same(t, j.err, err)
 }

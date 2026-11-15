@@ -1141,9 +1141,9 @@ the policy service holds the change
 #1919): without it, the read that follows is denied as a `fault` of
 `tenant-isolation` until the loop has run. The request wakes the loop
 and waits up to 5 seconds on the entity's own mark, and answers 503
-`change_not_applied` naming the stored entity's GRN at the bound. The
-pages beneath a deleted page go with it and raise marks the delete
-does not wait on. Updates, reads and writes through a page's sync
+`change_not_applied` naming the stored entity's GRN at the bound. A page's
+delete waits on the mark of each page it removed, those beneath it
+too. Updates, reads and writes through a page's sync
 connection do not wait: the service holds an entity's type,
 identifier and organization, and none of them changes there.
 

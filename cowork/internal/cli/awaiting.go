@@ -31,14 +31,21 @@ func (s awaitingPages) Create(ctx context.Context, caller platform.Caller, org s
 	return p, s.gate.Await(ctx, policyfeed.Entity{Type: "page", Org: p.Org, ID: p.ID})
 }
 
-// Delete waits on the page's own mark: the service then no longer holds
-// it. The pages beneath it go with it by foreign key and raise marks of
-// their own, which no request can reach afterwards and none waits on.
-func (s awaitingPages) Delete(ctx context.Context, caller platform.Caller, org, id string) error {
-	if err := s.Service.Delete(ctx, caller, org, id); err != nil {
-		return err
+// Delete waits on the mark of every page the delete removed: the page
+// and the pages beneath it, which go with it by foreign key and raise
+// marks of their own in the same transaction. Each wait has the gate's
+// bound and the first to pass it answers the request.
+func (s awaitingPages) Delete(ctx context.Context, caller platform.Caller, org, id string) ([]string, error) {
+	removed, err := s.Service.Delete(ctx, caller, org, id)
+	if err != nil {
+		return nil, err
 	}
-	return s.gate.Await(ctx, policyfeed.Entity{Type: "page", Org: org, ID: id})
+	for _, at := range removed {
+		if err := s.gate.Await(ctx, policyfeed.Entity{Type: "page", Org: org, ID: at}); err != nil {
+			return removed, err
+		}
+	}
+	return removed, nil
 }
 
 type awaitingChannels struct {

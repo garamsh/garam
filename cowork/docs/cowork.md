@@ -411,7 +411,8 @@ so the read that follows is allowed. The request wakes the delivery
 loop and waits up to 5 seconds. At the bound it answers `503` with kind
 `unavailable`, reason `change_not_applied` and `resource` the stored
 entity's GRN: after a create the entity exists, read it and do not
-create it again; after a delete it is gone. An MCP tool answers the
+create it again; after a delete the page is gone, and a `resource` may
+name a page beneath it, which goes with it and is waited on in turn. An MCP tool answers the
 same in words. Updates, reads and writes through a page's sync
 connection do not wait. Where the four
 settings are unset, nothing waits.

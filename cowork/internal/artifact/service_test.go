@@ -331,3 +331,28 @@ func TestList_StatesItsPerArtifactQuestionsAsProbes(t *testing.T) {
 	require.Len(t, p.checked, 1)
 	assert.False(t, p.checked[0].Probe, "a read of one artifact is an attempt")
 }
+
+// unnameable is an id no GRN can name: uppercase, and too long.
+const unnameable = "01JAAAAAAAAAAAAAAAAAAAAAAA"
+
+// TestArtifacts_AnIDNoGRNCanNameIsNotFoundAndNoDecisionIsAsked holds
+// that an artifact id no GRN can name answers not found before the
+// platform is asked, and that an id a GRN can name is still asked
+// about.
+func TestArtifacts_AnIDNoGRNCanNameIsNotFoundAndNoDecisionIsAsked(t *testing.T) {
+	p := &policy{}
+	pg := &pages{}
+	s := artifact.NewService(memory.New(), blobmemory.New(), p, pg, pg, viewer{})
+
+	_, err := s.Get(ctx, ada, "acme", unnameable)
+	assert.ErrorIs(t, err, artifact.ErrArtifactNotFound, "get")
+	_, err = s.Save(ctx, ada, "acme", unnameable, artifact.Content{HTML: "<p>x</p>"})
+	assert.ErrorIs(t, err, artifact.ErrArtifactNotFound, "save")
+	_, err = s.Versions(ctx, ada, "acme", unnameable)
+	assert.ErrorIs(t, err, artifact.ErrArtifactNotFound, "versions")
+	assert.Empty(t, p.checked)
+
+	_, err = s.Get(ctx, ada, "acme", "abcdefghijkl")
+	assert.ErrorIs(t, err, artifact.ErrArtifactNotFound, "control: an artifact a GRN can name but nobody made")
+	assert.NotEmpty(t, p.checked, "control: an id a GRN can name is asked about")
+}

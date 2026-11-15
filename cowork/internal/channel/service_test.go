@@ -9,9 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/cowork/internal/artifact"
 	"github.com/garamsh/garam/cowork/internal/channel"
 	"github.com/garamsh/garam/cowork/internal/channel/memory"
 	fanoutmemory "github.com/garamsh/garam/cowork/internal/fanout/memory"
+	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -295,4 +297,47 @@ func TestList_StatesItsPerChannelQuestionsAsProbes(t *testing.T) {
 	for _, ch := range p.checked {
 		assert.False(t, ch.Probe, "reading a channel's messages is an attempt")
 	}
+}
+
+// unnameable is an id no GRN can name: uppercase, and too long.
+const unnameable = "01JAAAAAAAAAAAAAAAAAAAAAAA"
+
+// TestChannel_AnIDNoGRNCanNameIsNotFoundAndNoDecisionIsAsked holds
+// that a channel, a page a message links and an artifact a message
+// embeds, each with an id no GRN can name, answer their kind's not
+// found before the platform is asked about it, and that an id a GRN
+// can name is still asked about.
+func TestChannel_AnIDNoGRNCanNameIsNotFoundAndNoDecisionIsAsked(t *testing.T) {
+	s, p, _ := newService(t)
+	c := create(t, s, ada, channel.CreateInput{Kind: channel.KindPublic, Name: "general"})
+	p.asked = 0
+	p.checked = nil
+
+	_, err := s.Get(ctx, ada, "acme", unnameable)
+	assert.ErrorIs(t, err, channel.ErrChannelNotFound, "channel")
+	_, err = s.Post(ctx, ada, "acme", unnameable, channel.PostInput{Body: "hi"})
+	assert.ErrorIs(t, err, channel.ErrChannelNotFound, "post to the channel")
+	assert.Zero(t, p.asked, "channel")
+
+	_, err = s.Post(ctx, ada, "acme", c.ID, channel.PostInput{Body: "see", Pages: []string{"open", unnameable}})
+	assert.ErrorIs(t, err, page.ErrPageNotFound, "linked page")
+	_, err = s.Linking(ctx, ada, "acme", unnameable)
+	assert.ErrorIs(t, err, page.ErrPageNotFound, "linking")
+	_, err = s.Post(ctx, ada, "acme", c.ID, channel.PostInput{Body: "see", Artifacts: []string{unnameable}})
+	assert.ErrorIs(t, err, artifact.ErrArtifactNotFound, "embedded artifact")
+	for _, ch := range p.checked {
+		assert.NotEqual(t, platform.KindPage, ch.Kind, "no decision for a page no GRN can name")
+		assert.NotEqual(t, platform.KindArtifact, ch.Kind, "no decision for an artifact no GRN can name")
+	}
+	p.checked = nil
+
+	post(t, s, ada, c.ID, channel.PostInput{Body: "see", Pages: []string{"open"}, Artifacts: []string{"chart"}})
+	_, err = s.Linking(ctx, ada, "acme", "open")
+	require.NoError(t, err)
+	var kinds []string
+	for _, ch := range p.checked {
+		kinds = append(kinds, ch.Kind)
+	}
+	assert.Contains(t, kinds, platform.KindPage, "control: a page a GRN can name is asked about")
+	assert.Contains(t, kinds, platform.KindArtifact, "control: an artifact a GRN can name is asked about")
 }

@@ -255,3 +255,31 @@ func TestList_StatesItsPerTaskQuestionsAsProbes(t *testing.T) {
 	require.Len(t, p.checked, 1)
 	assert.False(t, p.checked[0].Probe, "a read of one task is an attempt")
 }
+
+// unnameable is an id no GRN can name: uppercase, and too long.
+const unnameable = "01JAAAAAAAAAAAAAAAAAAAAAAA"
+
+// TestTask_AnIDNoGRNCanNameIsNotFoundAndNoDecisionIsAsked holds that a
+// task id no GRN can name answers not found for every operation on one
+// before the platform is asked, and that an id a GRN can name is still
+// asked about.
+func TestTask_AnIDNoGRNCanNameIsNotFoundAndNoDecisionIsAsked(t *testing.T) {
+	p := &policy{}
+	r := readers{}
+	s := task.NewService(memory.New(), p, r, r)
+
+	_, err := s.Get(ctx, ada, "acme", unnameable)
+	assert.ErrorIs(t, err, task.ErrTaskNotFound, "get")
+	title := "t"
+	_, err = s.Update(ctx, ada, "acme", unnameable, task.UpdateInput{Title: &title})
+	assert.ErrorIs(t, err, task.ErrTaskNotFound, "update")
+	_, err = s.Comment(ctx, ada, "acme", unnameable, "hi")
+	assert.ErrorIs(t, err, task.ErrTaskNotFound, "comment")
+	_, err = s.Comments(ctx, ada, "acme", unnameable)
+	assert.ErrorIs(t, err, task.ErrTaskNotFound, "comments")
+	assert.Empty(t, p.checked)
+
+	_, err = s.Get(ctx, ada, "acme", "abcdefghijkl")
+	assert.ErrorIs(t, err, task.ErrTaskNotFound, "control: a task a GRN can name but nobody made")
+	assert.NotEmpty(t, p.checked, "control: an id a GRN can name is asked about")
+}

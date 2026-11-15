@@ -394,9 +394,10 @@ orgs use <org>` or tell the AI which one `list_workspaces` answers.
 | `COWORK_USERCONTENT_ORIGIN` | the user-content origin as browsers reach it; unset views no HTML artifact |
 | `COWORK_USERCONTENT_ADDR` | where that origin listens, default `:8092` |
 | `COWORK_USERCONTENT_SECRET` | the key its addresses are signed with, at least 32 bytes; the same on every instance |
-| `COWORK_POLICY_ADDR` | the policy service's gRPC address (required: cowork refuses to start unless all four settings are set, and names the missing ones) |
+| `COWORK_POLICY_ADDR` | the policy service's gRPC address (required: cowork refuses to start unless all five policy settings are set, and names the missing ones) |
 | `COWORK_POLICY_CA_FILE` | the PEM file of the CA that signs the service's certificate and the token endpoint's, beside the system roots (required) |
 | `COWORK_MACHINE_TOKEN_URL` | the platform's machine token endpoint, where cowork's caller token is fetched for each organization (required) |
+| `COWORK_IDENTITY_ISSUER` | the identifier of the issuer behind that endpoint, the platform's `GARAM_IDENTITY_ISSUER`; the only `aud` of cowork's assertion, signed with `typ` `client-authentication+jwt` (RFC 10070 §4) (required) |
 | `COWORK_DEPLOYMENT_KEY_FILE` | cowork's deployment key, an owner-only PEM file read at each token exchange (required) |
 
 The policy service also holds cowork's channels, pages, tasks and

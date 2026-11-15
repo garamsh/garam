@@ -21,7 +21,7 @@ func (c *clock) Now() time.Time { return c.now }
 
 func tokens(t *testing.T, endpoint *policytest.Endpoint, keyFile string, c *clock) *policy.Tokens {
 	t.Helper()
-	tk, err := policy.NewTokens(policy.Config{TokenURL: endpoint.URL, KeyFile: keyFile}, c.Now)
+	tk, err := policy.NewTokens(policy.Config{TokenURL: endpoint.URL, Issuer: endpoint.Issuer, KeyFile: keyFile}, c.Now)
 	require.NoError(t, err)
 	return tk
 }
@@ -84,10 +84,11 @@ func TestTokens_AssertionCarriesTheClaimsTheEndpointRequires(t *testing.T) {
 		"client_assertion":      first.Form["client_assertion"],
 		"audience":              "policy",
 	}, first.Form)
-	assert.Equal(t, map[string]any{"alg": "RS256", "kid": policytest.Thumbprint(pub), "typ": "JWT"}, first.Header)
+	assert.Equal(t, map[string]any{"alg": "RS256", "kid": policytest.Thumbprint(pub), "typ": "client-authentication+jwt"}, first.Header)
 	assert.Equal(t, "grn:acme/iam/service/cowork", first.Claims["iss"])
 	assert.Equal(t, "grn:acme/iam/service/cowork", first.Claims["sub"])
-	assert.Equal(t, endpoint.URL, first.Claims["aud"])
+	assert.Equal(t, endpoint.Issuer, first.Claims["aud"], "the issuer identifier, as a string and alone")
+	assert.NotEqual(t, endpoint.URL, first.Claims["aud"], "control: the token URL is not the audience")
 	assert.EqualValues(t, 1_800_000_000, first.Claims["iat"])
 	assert.EqualValues(t, 1_800_000_060, first.Claims["exp"])
 	assert.NotEqual(t, first.Claims["jti"], ex[1].Claims["jti"], "each assertion has a fresh jti")
@@ -110,11 +111,23 @@ func TestTokens_ReadsTheKeyPerExchangeAndRefusesOneOthersCanReach(t *testing.T) 
 	assert.Len(t, endpoint.Exchanges(), 1, "nothing is asked with a key others can read")
 }
 
+func TestNewTokens_RefusesAConfigNamingNoIssuer(t *testing.T) {
+	keyFile, pub := policytest.Key(t)
+	endpoint := policytest.NewEndpoint(t, pub)
+
+	_, err := policy.NewTokens(policy.Config{TokenURL: endpoint.URL, Issuer: endpoint.Issuer, KeyFile: keyFile}, nil)
+	require.NoError(t, err, "control: the same config naming its issuer is accepted")
+
+	_, err = policy.NewTokens(policy.Config{TokenURL: endpoint.URL, KeyFile: keyFile}, nil)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+}
+
 func TestTokens_AnUnreachableEndpointIsUnavailable(t *testing.T) {
 	keyFile, pub := policytest.Key(t)
 	endpoint := policytest.NewEndpoint(t, pub)
 	c := &clock{now: time.Unix(1_800_000_000, 0)}
-	tk, err := policy.NewTokens(policy.Config{TokenURL: "http://127.0.0.1:1/oauth/token", KeyFile: keyFile}, c.Now)
+	tk, err := policy.NewTokens(policy.Config{TokenURL: "http://127.0.0.1:1/oauth/token", Issuer: endpoint.Issuer, KeyFile: keyFile}, c.Now)
 	require.NoError(t, err)
 
 	_, err = tk.Token(context.Background(), "acme")

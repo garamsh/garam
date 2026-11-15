@@ -66,22 +66,25 @@ func thumbprint(pub *rsa.PublicKey) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-// assertion signs the RFC 7523 client assertion cowork presents as
-// clientID to the endpoint at tokenURL: RS256, `kid` the key's
-// thumbprint, a fresh `jti`.
-func assertion(key *rsa.PrivateKey, clientID, tokenURL string, now time.Time) (string, error) {
+// assertionJWTType is the `typ` RFC 10070 §4 gives a client assertion.
+const assertionJWTType = "client-authentication+jwt"
+
+// assertion signs the client assertion cowork presents as clientID to
+// the issuer identified by issuer (RFC 10070 §4): RS256, `kid` the
+// key's thumbprint, `aud` the issuer identifier alone, a fresh `jti`.
+func assertion(key *rsa.PrivateKey, clientID, issuer string, now time.Time) (string, error) {
 	jti := make([]byte, 16)
 	if _, err := rand.Read(jti); err != nil {
 		return "", errorx.Wrap(err, "policy: jti", errorx.KindInternal)
 	}
-	header, err := json.Marshal(map[string]string{"alg": "RS256", "kid": thumbprint(&key.PublicKey), "typ": "JWT"})
+	header, err := json.Marshal(map[string]string{"alg": "RS256", "kid": thumbprint(&key.PublicKey), "typ": assertionJWTType})
 	if err != nil {
 		return "", errorx.Wrap(err, "policy: assertion header", errorx.KindInternal)
 	}
 	claims, err := json.Marshal(map[string]any{
 		"iss": clientID,
 		"sub": clientID,
-		"aud": tokenURL,
+		"aud": issuer,
 		"iat": now.Unix(),
 		"exp": now.Add(assertionLifetime).Unix(),
 		"jti": base64.RawURLEncoding.EncodeToString(jti),

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs cowork's server image and checks it: `migrate` applies the
 # migrations the image ships, `serve` starts as the image's own
-# account with the four policy settings a deployment gives it, and
+# account with the five policy settings a deployment gives it, and
 # `probe` finds /healthz and /readyz answering, the second once the
 # database does. The subject is the image
 # release publishes to garam/cowork, which cowork's suites never open:
@@ -111,6 +111,7 @@ docker run -d --name "$server" --network "$net" \
 	-e COWORK_POLICY_ADDR=policy.image-e2e.invalid:8443 \
 	-e COWORK_POLICY_CA_FILE=/keys/ca.crt \
 	-e COWORK_MACHINE_TOKEN_URL=https://machine.image-e2e.invalid:8443/oauth/token \
+	-e COWORK_IDENTITY_ISSUER=https://garam.image-e2e.invalid/api \
 	-e COWORK_DEPLOYMENT_KEY_FILE=/keys/deployment.pem \
 	-v "$keys:/keys:ro" \
 	"$image" serve >/dev/null

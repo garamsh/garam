@@ -140,7 +140,7 @@ Dockerfile under `deploy/local/`.
   migrated (`deploy/local/docker-compose.yml`, the `policy-keys` and
   `policy-feed` services). It also runs the machine listener, turns the
   identity issuer on for the api and the listener, and gives cowork its
-  four policy settings (the `machine-material`, `cowork-keys` and
+  five policy settings (the `machine-material`, `cowork-keys` and
   `machine` services), then runs `cowork policy-feed start` once
   cowork's database is migrated (the `cowork-policy-feed` service).
   What it orders by `depends_on` is its own choice and is stated
@@ -426,7 +426,7 @@ the MCP tools (`cowork/internal/cli/serve.go:189-270`). Image
 | `COWORK_USERCONTENT_ORIGIN` | no | no user-content listener and no HTML artifact view (`serve.go:179-187`) |
 | `COWORK_USERCONTENT_ADDR` | no | `:8092`, only when the origin is set (`serve.go:245`) |
 | `COWORK_USERCONTENT_SECRET` | with the origin | refused unless at least 32 bytes (`usercontent/usercontent.go:32,52-54`) |
-| `COWORK_POLICY_ADDR`, `COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL`, `COWORK_DEPLOYMENT_KEY_FILE` | all four | invalid argument, exit 2, naming each one unset: cowork asks the policy service alone and has no other way to decide (`cli/policy_feed.go:26-49`) |
+| `COWORK_POLICY_ADDR`, `COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL`, `COWORK_IDENTITY_ISSUER`, `COWORK_DEPLOYMENT_KEY_FILE` | all five | invalid argument, exit 2, naming each one unset: cowork asks the policy service alone and has no other way to decide (`cli/policy_feed.go:26-49`) |
 
 - `COWORK_MIGRATIONS_DIR` is `migrate`'s and not `serve`'s.
 - `COWORK_USERCONTENT_ORIGIN` must be an `http` or `https` origin with

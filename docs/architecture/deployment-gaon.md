@@ -431,12 +431,14 @@ Agent writes no search line, so no setting carries it.
   [deployment-needs.md](./deployment-needs.md) §garam/policy does not
   establish which names the certificate carries is why this is stated
   here.
-- **cowork's four policy settings are required.** A cowork deployed by
+- **cowork's five policy settings are required.** A cowork deployed by
   `garam-gaon` with `cowork.policy.enabled` off will refuse to start,
   as `cowork serve` refuses without `COWORK_POLICY_ADDR`,
-  `COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL` and
-  `COWORK_DEPLOYMENT_KEY_FILE` (ADR-0146 §8, #1907); the chart's own
-  change is not made.
+  `COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL`,
+  `COWORK_IDENTITY_ISSUER` (#1820) and `COWORK_DEPLOYMENT_KEY_FILE`
+  (ADR-0146 §8, #1907), and with it on still refuses, since the chart
+  does not set `COWORK_IDENTITY_ISSUER`; the chart's own change is not
+  made.
 - **A setting names a `Service`, not a MicroVM.** A `Service` is served
   at the commit above, so a setting no longer takes the MicroVM's
   `status.addresses`. That a MicroVM's resolver reaches the DNS unit is

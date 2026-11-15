@@ -36,7 +36,7 @@ func TestPolicyServiceRecord_DecisionAndRefusalAreLogged(t *testing.T) {
 	server.Decide = func(org string, e *policyv1.Evaluation) bool {
 		return org == "acme" && e.GetAction().GetName() == "cowork:page.read"
 	}
-	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, KeyFile: keyFile}
+	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, Issuer: endpoint.Issuer, KeyFile: keyFile}
 	tokens, err := policy.NewTokens(cfg, time.Now)
 	require.NoError(t, err)
 	client, err := policy.Dial(cfg, tokens)

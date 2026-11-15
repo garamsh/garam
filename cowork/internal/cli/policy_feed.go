@@ -31,6 +31,7 @@ func policyConfig() (policy.Config, error) {
 		{envPolicyAddr, envOr(envPolicyAddr, "")},
 		{envPolicyCAFile, envOr(envPolicyCAFile, "")},
 		{envMachineTokenURL, envOr(envMachineTokenURL, "")},
+		{envIdentityIssuer, envOr(envIdentityIssuer, "")},
 		{envDeploymentKeyFile, envOr(envDeploymentKeyFile, "")},
 	}
 	var missing []string
@@ -44,7 +45,8 @@ func policyConfig() (policy.Config, error) {
 			"cowork asks the policy service alone; set "+strings.Join(missing, ", "))
 	}
 	return policy.Config{
-		Addr: settings[0].value, CAFile: settings[1].value, TokenURL: settings[2].value, KeyFile: settings[3].value,
+		Addr: settings[0].value, CAFile: settings[1].value, TokenURL: settings[2].value,
+		Issuer: settings[3].value, KeyFile: settings[4].value,
 	}, nil
 }
 

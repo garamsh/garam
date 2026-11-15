@@ -161,6 +161,7 @@ one of them and is rendered on another is not caught.
 
 | Variable | Why not |
 |---|---|
+| `COWORK_IDENTITY_ISSUER` | The chart does not render it, so a cowork with `cowork.policy.enabled` refuses to start (#1820). |
 | `GARAM_ADAPTER_AGENT` | The adapter is not one of garam's workloads: it runs beside one agent, deployed by whoever runs the agent (`docs/architecture/adapter.md`). |
 | `GARAM_ADAPTER_MACHINE_URL` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_GATEWAY_URL` | Same: the adapter's own deployment. |

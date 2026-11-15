@@ -260,14 +260,16 @@ again while its volume holds the set, so from day 31 cowork and the
 callers that verify it refuse it as expired; `down -v` makes a new one,
 as it does for the policy service's pair.
 
-cowork is given its four policy settings: `COWORK_POLICY_ADDR`,
-`COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL` and
-`COWORK_DEPLOYMENT_KEY_FILE`. It exchanges a `private_key_jwt`
-assertion signed with its deployment key at
-`https://machine:8443/oauth/token` and presents the issuer's token to
-the policy service. Its CA file holds the policy service's certificate
-and the machine listener's: the first is what the gRPC trusts, the
-second what the token request verifies. cowork waits for a healthy
+cowork is given its five policy settings: `COWORK_POLICY_ADDR`,
+`COWORK_POLICY_CA_FILE`, `COWORK_MACHINE_TOKEN_URL`,
+`COWORK_IDENTITY_ISSUER` and `COWORK_DEPLOYMENT_KEY_FILE`. The issuer
+is the `https://garam.localhost/api` the api and the machine listener
+are given as `GARAM_IDENTITY_ISSUER`, and the assertion's only `aud`.
+It exchanges a `private_key_jwt` assertion signed with its deployment
+key at `https://machine:8443/oauth/token` and presents the issuer's
+token to the policy service. Its CA file holds the policy service's
+certificate and the machine listener's: the first is what the gRPC
+trusts, the second what the token request verifies. cowork waits for a healthy
 `machine` and `policy`. So every decision it asks for is answered by the
 policy service and not by the platform's `checkPermissions`, and a
 cowork that the service refuses fails the call.

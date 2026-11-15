@@ -1491,3 +1491,11 @@ ADRs:
   an agent; the machine listener
   waits through a gate that observes the outbox with no loop, with no
   new setting; accepted, built (#1909); extends 0159 and 0162
+- [0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md)
+  — a cowork create, and a page's delete, wait on the mark of each
+  entity they wrote (a deleted page's subtree too), after its commit, by a wrapper under the HTTP
+  routes and the MCP tools, and answer 503 `change_not_applied` naming
+  the stored entity at the bound; an update, a read and a write
+  through a page's sync connection do not wait, since the service
+  holds nothing they change; accepted, built (#1919); applies 0165 to
+  cowork, narrowed to creates and a page's delete

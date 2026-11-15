@@ -2,10 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
 	apigen "github.com/garamsh/garam/cowork/api"
+	"github.com/garamsh/garam/cowork/internal/policyfeed"
 	"github.com/garamsh/garam/lib/errorx"
 )
 
@@ -37,11 +39,26 @@ func statusOf(k errorx.Kind) int {
 }
 
 // writeError answers err by its kind. A 5xx names no cause: the cause
-// is logged here, once, and the caller reads the status.
+// is logged here, once, and the caller reads the status. The one 5xx
+// that is answered whole is a create whose entity is stored and not
+// yet held by the policy service (ADR-0166): its reason and the stored
+// entity's GRN are what let the caller read the entity and not create
+// it again, and nothing in it is a cause of cowork's own.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	kind := errorx.KindOf(err)
 	status := statusOf(kind)
 	message := err.Error()
+	if reason, ok := errorx.ReasonOf(err); ok && kind == errorx.KindUnavailable &&
+		reason.Code == policyfeed.ReasonChangeNotApplied {
+		body := apigen.Error{Kind: kind.String(), Message: message, Reason: &reason.Code}
+		var stored interface{ Resource() string }
+		if errors.As(err, &stored) {
+			resource := stored.Resource()
+			body.Resource = &resource
+		}
+		writeJSON(w, status, body)
+		return
+	}
 	if status >= http.StatusInternalServerError {
 		slog.ErrorContext(r.Context(), "cowork: request failed",
 			slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.String("error", message))

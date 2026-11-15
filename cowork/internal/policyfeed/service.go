@@ -12,6 +12,10 @@ type Service interface {
 	// that fails is retried after a delay that doubles to a cap, and
 	// no failure ends Run.
 	Run(ctx context.Context) error
+	// Wake ends the wait between passes, so a pass starts now. It
+	// never blocks, and a wake while a pass runs makes the next start
+	// at once.
+	Wake()
 }
 
 // Config sets the loop's pace.
@@ -28,11 +32,19 @@ type service struct {
 	sender Sender
 	logger *slog.Logger
 	config Config
+	wake   chan struct{}
 }
 
 // NewService constructs the delivery loop.
 func NewService(store Store, sender Sender, logger *slog.Logger, config Config) Service {
-	return &service{store: store, sender: sender, logger: logger, config: config}
+	return &service{store: store, sender: sender, logger: logger, config: config, wake: make(chan struct{}, 1)}
+}
+
+func (s *service) Wake() {
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
 }
 
 func (s *service) Run(ctx context.Context) error {
@@ -81,7 +93,7 @@ func (s *service) Run(ctx context.Context) error {
 				orgFailures = 0
 			}
 		}
-		if !sleep(ctx, wait) {
+		if !sleep(ctx, wait, s.wake) {
 			return nil
 		}
 	}
@@ -116,8 +128,9 @@ func (s *service) backoff(failures int) time.Duration {
 	return min(wait, s.config.MaxBackoff)
 }
 
-// sleep waits d and reports whether ctx is still live.
-func sleep(ctx context.Context, d time.Duration) bool {
+// sleep waits d, or until wake is signalled, and reports whether ctx
+// is still live.
+func sleep(ctx context.Context, d time.Duration, wake <-chan struct{}) bool {
 	if d <= 0 {
 		return ctx.Err() == nil
 	}
@@ -126,6 +139,8 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	select {
 	case <-ctx.Done():
 		return false
+	case <-wake:
+		return true
 	case <-timer.C:
 		return true
 	}

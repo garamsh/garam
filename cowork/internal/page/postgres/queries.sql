@@ -40,5 +40,14 @@ WITH RECURSIVE up (id, parent_id) AS (
 )
 SELECT up.id FROM up;
 
+-- name: SubtreeIDs :many
+-- The page and every page beneath it.
+WITH RECURSIVE down (id) AS (
+    SELECT p.id FROM pages p WHERE p.org = @org AND p.id = @id
+    UNION ALL
+    SELECT p.id FROM pages p JOIN down ON p.org = @org AND p.parent_id = down.id
+)
+SELECT down.id FROM down;
+
 -- name: DeletePage :execrows
 DELETE FROM pages WHERE org = $1 AND id = $2;

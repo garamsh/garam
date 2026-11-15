@@ -18,7 +18,7 @@ type Service interface {
 	Get(ctx context.Context, caller platform.Caller, org, id string) (Page, error)
 	Create(ctx context.Context, caller platform.Caller, org string, in CreateInput) (Page, error)
 	Update(ctx context.Context, caller platform.Caller, org, id string, in UpdateInput) (Page, error)
-	Delete(ctx context.Context, caller platform.Caller, org, id string) error
+	Delete(ctx context.Context, caller platform.Caller, org, id string) ([]string, error)
 }
 
 type service struct {

@@ -47,17 +47,20 @@ func policyClient(cfg policy.Config) (*policy.Client, error) {
 	return policy.Dial(cfg, tokens)
 }
 
-// runFeed delivers the feed until ctx ends. It idles while the feed is
-// off, and says so once at start where the feed is on and nothing
-// delivers it.
-func runFeed(ctx context.Context, pool *pgxpool.Pool, client *policy.Client) {
+// runFeed delivers the feed until ctx ends, and returns the gate that
+// holds a request until its entity is delivered. It idles while the
+// feed is off, and says so once at start where the feed is on and
+// nothing delivers it, which has no gate to return.
+func runFeed(ctx context.Context, pool *pgxpool.Pool, client *policy.Client) policyfeed.Gate {
 	if client == nil {
 		warnIfFeedUndelivered(ctx, feedpg.NewSwitch(pool))
-		return
+		return nil
 	}
-	svc := policyfeed.NewService(feedpg.NewStore(pool), feedgrpc.NewSender(client), slog.Default(),
+	store := feedpg.NewStore(pool)
+	svc := policyfeed.NewService(store, feedgrpc.NewSender(client), slog.Default(),
 		policyfeed.Config{Poll: feedPoll, MaxBackoff: feedMaxBackoff})
 	go func() { _ = svc.Run(ctx) }()
+	return policyfeed.NewGate(store, svc, policyfeed.Bound)
 }
 
 // warnIfFeedUndelivered logs that the outbox is filling with nothing to

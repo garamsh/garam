@@ -18,6 +18,7 @@ type Repository interface {
 	// a parent that is the page or one of its descendants with
 	// ErrPageCycle.
 	Update(ctx context.Context, org, id string, in UpdateInput) (Page, error)
-	// Delete removes the page and every page beneath it.
-	Delete(ctx context.Context, org, id string) error
+	// Delete removes the page and every page beneath it, and returns
+	// the identifier of each, the page first.
+	Delete(ctx context.Context, org, id string) ([]string, error)
 }

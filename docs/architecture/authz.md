@@ -195,7 +195,10 @@ true of the platform.
   and deleting a group or a project, which wait on its scoped link's
   mark (§Role links). A request that changes any other entity does not
   wait, except those §Consents names, and the policy write is not the
-  platform's yet.
+  platform's yet. cowork's creates of a channel, a page, a task and an
+  artifact, and its delete of a page, wait on the written entity's mark
+  ([ADR-0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md)),
+  where its policy client is configured.
 - **Every present capability has a place.** The ADR's inventory gives
   each origin of a statement and each surface that reads a decision
   its form. A hosted operator's delegation, handed to the evaluator
@@ -1196,6 +1199,18 @@ organization asked about, and feeds its channels, pages, tasks and
 artifacts through an outbox, one organization at a time under that
 organization's token; where none is set it asks the platform as
 before. The platform's path goes with #1784.
+
+Where the route is built, a create, and a page's delete, answer after
+the policy service holds the change
+([ADR-0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md),
+#1919): without it, the read that follows is denied as a `fault` of
+`tenant-isolation` until the loop has run. The request wakes the loop
+and waits up to 5 seconds on the entity's own mark, and answers 503
+`change_not_applied` naming the stored entity's GRN at the bound. A page's
+delete waits on the mark of each page it removed, those beneath it
+too. Updates, reads and writes through a page's sync
+connection do not wait: the service holds an entity's type,
+identifier and organization, and none of them changes there.
 
 - **Decided as a machine sender.** Its `postMessage` asks
   `iam:message.send` with its GRN as subject and the recipient as

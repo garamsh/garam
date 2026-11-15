@@ -104,6 +104,15 @@ type Organization struct {
 	Name string
 }
 
+// Nameable reports whether id could identify a resource of GRN type
+// typ ("page", "channel", "task" or "artifact") in org. An id no GRN
+// can name cannot identify one, so a caller answers not found for it
+// before it asks for a decision. An organization that is no GRN is
+// reported nameable, and left to the decision's own refusal.
+func Nameable(org, typ, id string) bool {
+	return grn.Org(org).Validate() != nil || grn.NewIn(org, "cowork", typ, id).Validate() == nil
+}
+
 // ErrNotAllowed is a check that was denied.
 var ErrNotAllowed = errorx.New(errorx.KindPermissionDenied, "not allowed")
 

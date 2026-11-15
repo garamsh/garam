@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/garamsh/garam/cowork/internal/artifact"
+	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
 	"github.com/garamsh/garam/lib/errorx"
 )
@@ -36,6 +38,11 @@ func (s *service) Post(ctx context.Context, caller platform.Caller, org, id stri
 		return Message{}, err
 	}
 	pages := slices.Compact(slices.Sorted(slices.Values(in.Pages)))
+	for _, p := range pages {
+		if !platform.Nameable(org, page.ServiceType, p) {
+			return Message{}, page.ErrPageNotFound
+		}
+	}
 	if len(pages) > 0 {
 		checks := make([]platform.Check, len(pages))
 		for i, p := range pages {
@@ -49,6 +56,11 @@ func (s *service) Post(ctx context.Context, caller platform.Caller, org, id stri
 		}
 	}
 	artifacts := slices.Compact(slices.Sorted(slices.Values(in.Artifacts)))
+	for _, a := range artifacts {
+		if !platform.Nameable(org, artifact.ServiceType, a) {
+			return Message{}, artifact.ErrArtifactNotFound
+		}
+	}
 	if len(artifacts) > 0 {
 		checks := make([]platform.Check, len(artifacts))
 		for i, a := range artifacts {
@@ -118,15 +130,18 @@ func (s *service) Search(ctx context.Context, caller platform.Caller, org, query
 
 // Linking answers the messages linking a page the caller may read, in
 // the channels the caller may read.
-func (s *service) Linking(ctx context.Context, caller platform.Caller, org, page string) ([]Message, error) {
-	if err := platform.Require(ctx, s.platform, caller, org, platform.OnPage(platform.ActionPageRead, page)); err != nil {
+func (s *service) Linking(ctx context.Context, caller platform.Caller, org, pageID string) ([]Message, error) {
+	if !platform.Nameable(org, page.ServiceType, pageID) {
+		return nil, page.ErrPageNotFound
+	}
+	if err := platform.Require(ctx, s.platform, caller, org, platform.OnPage(platform.ActionPageRead, pageID)); err != nil {
 		return nil, err
 	}
 	channels, err := s.readable(ctx, caller, org)
 	if err != nil || len(channels) == 0 {
 		return nil, err
 	}
-	return s.repo.Linking(ctx, org, ids(channels), page, maxListed)
+	return s.repo.Linking(ctx, org, ids(channels), pageID, maxListed)
 }
 
 // unique is xs without repeats, in first-seen order.

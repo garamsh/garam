@@ -147,6 +147,9 @@ func (s *service) List(ctx context.Context, caller platform.Caller, org string, 
 
 // Get answers one task the caller may read.
 func (s *service) Get(ctx context.Context, caller platform.Caller, org, id string) (Task, error) {
+	if !platform.Nameable(org, ServiceType, id) {
+		return Task{}, ErrTaskNotFound
+	}
 	if err := platform.Require(ctx, s.platform, caller, org, platform.OnTask(ActionRead, id)); err != nil {
 		return Task{}, err
 	}
@@ -156,6 +159,9 @@ func (s *service) Get(ctx context.Context, caller platform.Caller, org, id strin
 // Update changes a task the caller may write. A link it adds must be
 // one the caller may read; a link it keeps is not asked again.
 func (s *service) Update(ctx context.Context, caller platform.Caller, org, id string, in UpdateInput) (Task, error) {
+	if !platform.Nameable(org, ServiceType, id) {
+		return Task{}, ErrTaskNotFound
+	}
 	if err := platform.Require(ctx, s.platform, caller, org, platform.OnTask(ActionWrite, id)); err != nil {
 		return Task{}, err
 	}

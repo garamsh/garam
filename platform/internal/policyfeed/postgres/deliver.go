@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -37,10 +38,11 @@ const holdFeed = `SELECT enabled FROM policy_feed FOR UPDATE SKIP LOCKED`
 
 const readMarks = `
 SELECT entity_type, entity_id, generation FROM policy_outbox
+WHERE set_aside_at IS NULL
 ORDER BY entity_type, entity_id LIMIT $1`
 
-const readState = `SELECT org, members, parent_types, parent_ids
-	FROM policy_entity_state($1, $2)`
+const readState = `SELECT org, members, parent_types, parent_ids, consent_ids,
+	operations FROM policy_entity_state($1, $2)`
 
 const nextSequence = `SELECT nextval('policy_feed_sequence')`
 
@@ -48,6 +50,16 @@ const nextSequence = `SELECT nextval('policy_feed_sequence')`
 const dropMarks = `
 DELETE FROM policy_outbox o
 USING unnest($1::text[], $2::text[], $3::bigint[]) AS d(t, i, g)
+WHERE o.entity_type = d.t AND o.entity_id = d.i AND o.generation = d.g`
+
+// setAsideMarks records the refusal of each link's mark still at the
+// generation the pass read. A mark that was written again meanwhile is
+// pending again, and the pass that reads it sends the link anew.
+const setAsideMarks = `
+UPDATE policy_outbox o
+SET set_aside_code = d.c, set_aside_reason = d.r, set_aside_at = now()
+FROM unnest($1::text[], $2::text[], $3::bigint[], $4::text[], $5::text[])
+	AS d(t, i, g, c, r)
 WHERE o.entity_type = d.t AND o.entity_id = d.i AND o.generation = d.g`
 
 // Deliver runs one delivery pass.
@@ -92,7 +104,8 @@ func deliver(
 	}
 	result.Marks = len(marks)
 
-	entries, err := readEntries(ctx, tx, marks)
+	entityMarks, linkMarks, scopedMarks := splitMarks(marks)
+	entries, err := readEntries(ctx, tx, entityMarks)
 	if err != nil {
 		return result, err
 	}
@@ -102,16 +115,82 @@ func deliver(
 	}
 	result.Refused = refused
 
-	types := make([]string, len(marks))
-	ids := make([]string, len(marks))
-	generations := make([]int64, len(marks))
-	for i, m := range marks {
-		types[i], ids[i], generations[i] = m.entity.Type, m.entity.ID, m.generation
+	// Links go after the entities of the pass, and no sequence orders
+	// them: a link is written by name, and written again by it.
+	links, err := readLinks(ctx, tx, linkMarks)
+	if err != nil {
+		return result, err
 	}
-	if _, err := tx.Exec(ctx, dropMarks, types, ids, generations); err != nil {
-		return result, pgxerr.Classify(err, "delete marks", nil, nil)
+	if len(links) > 0 {
+		if result.SetAside, err = sender.SendLinks(ctx, links); err != nil {
+			return result, err
+		}
 	}
-	return result, nil
+	scoped, err := readScopedLinks(ctx, tx, scopedMarks)
+	if err != nil {
+		return result, err
+	}
+	if len(scoped) > 0 {
+		if result.ScopedSetAside, err = sender.SendScopedLinks(ctx, scoped); err != nil {
+			return result, err
+		}
+	}
+	return result, settleMarks(ctx, tx, marks, result)
+}
+
+// refusal is why the service refused a link, which a mark is kept for.
+type refusal struct{ code, reason string }
+
+// settleMarks deletes the marks the pass delivered, and records the
+// refusal on the mark of each link it set aside, a member's or a
+// group's or a project's.
+func settleMarks(
+	ctx context.Context, tx pgx.Tx, marks []mark, result policyfeed.Result,
+) error {
+	refusals := make(map[policyfeed.Entity]refusal,
+		len(result.SetAside)+len(result.ScopedSetAside))
+	for _, r := range result.SetAside {
+		key := policyfeed.Entity{Type: policyfeed.RoleLinkType, ID: r.Link.Org + " " + r.Link.User}
+		refusals[key] = refusal{r.Code, r.Reason}
+	}
+	for _, r := range result.ScopedSetAside {
+		key := policyfeed.Entity{Type: policyfeed.ScopedRoleLinkType, ID: r.Link.Owner}
+		refusals[key] = refusal{r.Code, r.Reason}
+	}
+	var drop, keep markColumns
+	for _, m := range marks {
+		r, refused := refusals[m.entity]
+		if refused {
+			keep.add(m, r.code, r.reason)
+		} else {
+			drop.add(m, "", "")
+		}
+	}
+	if len(keep.ids) > 0 {
+		_, err := tx.Exec(ctx, setAsideMarks,
+			keep.types, keep.ids, keep.generations, keep.codes, keep.reasons)
+		if err != nil {
+			return pgxerr.Classify(err, "set aside marks", nil, nil)
+		}
+	}
+	if _, err := tx.Exec(ctx, dropMarks, drop.types, drop.ids, drop.generations); err != nil {
+		return pgxerr.Classify(err, "delete marks", nil, nil)
+	}
+	return nil
+}
+
+// markColumns is marks as the columns a statement unnests.
+type markColumns struct {
+	types, ids, codes, reasons []string
+	generations                []int64
+}
+
+func (c *markColumns) add(m mark, code, reason string) {
+	c.types = append(c.types, m.entity.Type)
+	c.ids = append(c.ids, m.entity.ID)
+	c.generations = append(c.generations, m.generation)
+	c.codes = append(c.codes, code)
+	c.reasons = append(c.reasons, reason)
 }
 
 func readMarkRows(ctx context.Context, tx pgx.Tx, limit int) ([]mark, error) {
@@ -125,6 +204,74 @@ func readMarkRows(ctx context.Context, tx pgx.Tx, limit int) ([]mark, error) {
 		return m, err
 	})
 	return marks, pgxerr.Classify(err, "read marks", nil, nil)
+}
+
+// splitMarks separates the marks of the two kinds of role link from
+// the entities'.
+func splitMarks(marks []mark) (entities, links, scoped []mark) {
+	for _, m := range marks {
+		switch m.entity.Type {
+		case policyfeed.RoleLinkType:
+			links = append(links, m)
+		case policyfeed.ScopedRoleLinkType:
+			scoped = append(scoped, m)
+		default:
+			entities = append(entities, m)
+		}
+	}
+	return entities, links, scoped
+}
+
+const readScopedLinkState = `SELECT roles FROM policy_scoped_link_state($1)`
+
+// readScopedLinks reads the roles each marked group or project holds,
+// in the marks' order. No row is an owner the table no longer holds,
+// and a link with no role.
+func readScopedLinks(ctx context.Context, tx pgx.Tx, marks []mark) ([]policyfeed.ScopedLink, error) {
+	batch := &pgx.Batch{}
+	links := make([]policyfeed.ScopedLink, len(marks))
+	for i, m := range marks {
+		links[i] = policyfeed.ScopedLink{Owner: m.entity.ID}
+		batch.Queue(readScopedLinkState, m.entity.ID)
+	}
+	results := tx.SendBatch(ctx, batch)
+	for i := range marks {
+		switch err := results.QueryRow().Scan(&links[i].Roles); {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			_ = results.Close()
+			return nil, pgxerr.Classify(err, "read scoped link state", nil, nil)
+		}
+	}
+	return links, pgxerr.Classify(results.Close(), "read scoped link state", nil, nil)
+}
+
+const readLinkState = `SELECT role FROM policy_role_link_state($1)`
+
+// readLinks reads the role each marked membership holds, in the marks'
+// order. No row is a membership the table no longer holds, and a link
+// with no role.
+func readLinks(ctx context.Context, tx pgx.Tx, marks []mark) ([]policyfeed.Link, error) {
+	batch := &pgx.Batch{}
+	links := make([]policyfeed.Link, len(marks))
+	for i, m := range marks {
+		org, user, ok := strings.Cut(m.entity.ID, " ")
+		if !ok {
+			return nil, errorx.New(errorx.KindInternal, "role link mark names no member")
+		}
+		links[i] = policyfeed.Link{Org: org, User: user}
+		batch.Queue(readLinkState, m.entity.ID)
+	}
+	results := tx.SendBatch(ctx, batch)
+	for i := range marks {
+		switch err := results.QueryRow().Scan(&links[i].Role); {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			_ = results.Close()
+			return nil, pgxerr.Classify(err, "read role link state", nil, nil)
+		}
+	}
+	return links, pgxerr.Classify(results.Close(), "read role link state", nil, nil)
 }
 
 // readEntries reads each marked entity's state, in the marks' order.
@@ -152,14 +299,19 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 	var (
 		org, members *string
 		types, ids   []string
+		consents     []string
+		operations   []string
 	)
-	switch err := row.Scan(&org, &members, &types, &ids); {
+	switch err := row.Scan(&org, &members, &types, &ids, &consents, &operations); {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, nil
 	case err != nil:
 		return nil, err
 	}
-	state := &policyfeed.State{Parents: make([]policyfeed.Entity, len(types))}
+	state := &policyfeed.State{
+		Parents:    make([]policyfeed.Entity, len(types)),
+		Operations: operations,
+	}
 	if org != nil {
 		state.Org = &policyfeed.Entity{Type: "Iam::Org", ID: *org}
 	}
@@ -168,6 +320,9 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 	}
 	for i := range types {
 		state.Parents[i] = policyfeed.Entity{Type: types[i], ID: ids[i]}
+	}
+	for _, id := range consents {
+		state.Consents = append(state.Consents, policyfeed.Entity{Type: "Iam::Org", ID: id})
 	}
 	return state, nil
 }
@@ -178,6 +333,9 @@ func scanState(row pgx.Row) (*policyfeed.State, error) {
 func send(
 	ctx context.Context, tx pgx.Tx, sender policyfeed.Sender, entries []policyfeed.Entry,
 ) ([]policyfeed.Refusal, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
 	sequence, err := takeSequence(ctx, tx)
 	if err != nil {
 		return nil, err
@@ -207,6 +365,83 @@ func takeSequence(ctx context.Context, tx pgx.Tx) (int64, error) {
 	var sequence int64
 	err := tx.QueryRow(ctx, nextSequence).Scan(&sequence)
 	return sequence, pgxerr.Classify(err, "take sequence", nil, nil)
+}
+
+const linkState = `
+SELECT count(*) FILTER (WHERE set_aside_at IS NULL),
+       count(*) FILTER (WHERE set_aside_at IS NOT NULL)
+FROM policy_outbox
+WHERE entity_type = 'Iam::RoleLink'
+  AND starts_with(entity_id, $1::text || ' ')
+  AND ($2::text = '' OR entity_id = $1::text || ' ' || $2::text)`
+
+// LinkState reports where the marks of a role link of org, or of the
+// one of user where it is named, stand in the outbox.
+func (s *Store) LinkState(ctx context.Context, org, user string) (policyfeed.LinkState, error) {
+	var pending, setAside int64
+	err := s.pool.QueryRow(ctx, linkState, org, user).Scan(&pending, &setAside)
+	if err != nil {
+		return policyfeed.LinkApplied,
+			errorx.Wrap(pgxerr.Classify(err, "read link marks", nil, nil), "await role link")
+	}
+	switch {
+	case setAside > 0:
+		return policyfeed.LinkSetAside, nil
+	case pending > 0:
+		return policyfeed.LinkPending, nil
+	}
+	return policyfeed.LinkApplied, nil
+}
+
+const scopedLinkState = `
+SELECT count(*) FILTER (WHERE set_aside_at IS NULL),
+       count(*) FILTER (WHERE set_aside_at IS NOT NULL)
+FROM policy_outbox
+WHERE entity_type = 'Iam::ScopedRoleLink' AND entity_id = $1`
+
+// ScopedLinkState reports where the mark of the scoped links of the
+// group or the project owner stands in the outbox.
+func (s *Store) ScopedLinkState(ctx context.Context, owner string) (policyfeed.LinkState, error) {
+	var pending, setAside int64
+	err := s.pool.QueryRow(ctx, scopedLinkState, owner).Scan(&pending, &setAside)
+	if err != nil {
+		return policyfeed.LinkApplied,
+			errorx.Wrap(pgxerr.Classify(err, "read scoped link mark", nil, nil), "await scoped role link")
+	}
+	switch {
+	case setAside > 0:
+		return policyfeed.LinkSetAside, nil
+	case pending > 0:
+		return policyfeed.LinkPending, nil
+	}
+	return policyfeed.LinkApplied, nil
+}
+
+const entityPending = `
+SELECT EXISTS (SELECT 1 FROM policy_outbox
+	WHERE entity_type = $1 AND entity_id = $2)`
+
+// EntityPending reports whether the outbox holds a mark of the entity.
+func (s *Store) EntityPending(ctx context.Context, entity policyfeed.Entity) (bool, error) {
+	var pending bool
+	err := s.pool.QueryRow(ctx, entityPending, entity.Type, entity.ID).Scan(&pending)
+	if err != nil {
+		return false,
+			errorx.Wrap(pgxerr.Classify(err, "read entity mark", nil, nil), "await entity")
+	}
+	return pending, nil
+}
+
+const readStanding = `
+SELECT count(*) FILTER (WHERE set_aside_at IS NULL),
+       count(*) FILTER (WHERE set_aside_at IS NOT NULL)
+FROM policy_outbox`
+
+// Standing counts the outbox's marks by whether a pass reads them.
+func (s *Store) Standing(ctx context.Context) (policyfeed.Standing, error) {
+	var standing policyfeed.Standing
+	err := s.pool.QueryRow(ctx, readStanding).Scan(&standing.Pending, &standing.SetAside)
+	return standing, errorx.Wrap(pgxerr.Classify(err, "read outbox", nil, nil), "read policy feed standing")
 }
 
 // Enabled reports whether the feed is on.

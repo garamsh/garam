@@ -52,9 +52,14 @@ func seedOutboxOrg(t *testing.T, p *pgxpool.Pool) {
 // outboxEntities is every entity the seeded organization holds.
 var outboxEntities = []string{
 	"Iam::Agent " + outboxAgent, "Iam::Operator " + outboxOperator, "Iam::Org " + outboxOrg,
-	"Iam::OrgMembers " + outboxOrg, "Iam::Project " + outboxProject, "Iam::Team " + outboxTeam,
-	"Iam::Team " + outboxTeam2, "Iam::User " + outboxUser,
+	"Iam::OrgMembers " + outboxOrg, "Iam::Project " + outboxProject, outboxLinkMark,
+	"Iam::ScopedRoleLink " + outboxTeam, "Iam::ScopedRoleLink " + outboxTeam2,
+	"Iam::ScopedRoleLink " + outboxProject,
+	"Iam::Team " + outboxTeam, "Iam::Team " + outboxTeam2, "Iam::User " + outboxUser,
 }
+
+// outboxLinkMark is the mark of the seeded user's role link.
+const outboxLinkMark = "Iam::RoleLink " + outboxOrg + " " + outboxUser
 
 func execSQL(t *testing.T, p *pgxpool.Pool, q string, args ...any) {
 	t.Helper()
@@ -128,9 +133,9 @@ func TestPolicyOutbox_EachChangeMarksTheEntitiesItReaches(t *testing.T) {
 		{"an organization is added", `INSERT INTO orgs (grn, name, created_at, updated_at) VALUES ('` + org2 + `', 'globex', now(), now())`,
 			[]string{"Iam::Org " + org2, "Iam::OrgMembers " + org2}},
 		{"a team is added", `INSERT INTO groups (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme/iam/group/new', '` + outboxOrg + `', 'new', now(), now())`,
-			[]string{"Iam::Team grn:acme/iam/group/new"}},
+			[]string{"Iam::ScopedRoleLink grn:acme/iam/group/new", "Iam::Team grn:acme/iam/group/new"}},
 		{"a project is added", `INSERT INTO projects (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme/iam/project/new', '` + outboxOrg + `', 'new', now(), now())`,
-			[]string{"Iam::Project grn:acme/iam/project/new"}},
+			[]string{"Iam::Project grn:acme/iam/project/new", "Iam::ScopedRoleLink grn:acme/iam/project/new"}},
 		{"a user is added", `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme/iam/user/new', 'new', now(), now())`,
 			[]string{"Iam::User grn:acme/iam/user/new"}},
 		{"an agent is added", `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at) VALUES ('grn:acme/iam/agent/new', '` + outboxOrg + `', 'ready', 'unknown', now(), now())`,
@@ -146,24 +151,30 @@ func TestPolicyOutbox_EachChangeMarksTheEntitiesItReaches(t *testing.T) {
 		{"an agent leaves a project", `DELETE FROM project_members WHERE member_grn = '` + outboxAgent + `'`,
 			[]string{"Iam::Agent " + outboxAgent}},
 		{"a user leaves an organization", `DELETE FROM org_members WHERE user_grn = '` + outboxUser + `'`,
-			[]string{"Iam::User " + outboxUser}},
+			[]string{"Iam::User " + outboxUser, outboxLinkMark}},
 		{"a team is removed", `DELETE FROM groups WHERE grn = '` + outboxTeam + `'`,
-			[]string{"Iam::Team " + outboxTeam, "Iam::User " + outboxUser, "Iam::Agent " + outboxAgent}},
+			[]string{"Iam::Team " + outboxTeam, "Iam::ScopedRoleLink " + outboxTeam, "Iam::User " + outboxUser, "Iam::Agent " + outboxAgent}},
 		{"a project is removed", `DELETE FROM projects WHERE grn = '` + outboxProject + `'`,
-			[]string{"Iam::Project " + outboxProject, "Iam::User " + outboxUser, "Iam::Agent " + outboxAgent}},
+			[]string{"Iam::Project " + outboxProject, "Iam::ScopedRoleLink " + outboxProject, "Iam::User " + outboxUser, "Iam::Agent " + outboxAgent}},
 		{"a user is removed", `DELETE FROM users WHERE grn = '` + outboxUser + `'`,
-			[]string{"Iam::User " + outboxUser}},
+			[]string{"Iam::User " + outboxUser, outboxLinkMark}},
 		{"an agent is removed", `DELETE FROM agents WHERE grn = '` + outboxAgent + `'`,
 			[]string{"Iam::Agent " + outboxAgent}},
 		{"an operator is removed", `DELETE FROM operators WHERE grn = '` + outboxOperator + `'`,
 			[]string{"Iam::Operator " + outboxOperator}},
 		{"an organization is removed and its foreign keys take the rest", `DELETE FROM orgs WHERE grn = '` + outboxOrg + `'`,
 			outboxEntities},
-		{"a member's role changes", `UPDATE org_members SET role = 'admin'`, nil},
-		{"a user is renamed", `UPDATE users SET nickname = 'renamed', roles = ARRAY['admin'], updated_at = now()`, nil},
+		{"a member's role changes", `UPDATE org_members SET role = 'admin'`,
+			[]string{outboxLinkMark}},
+		{"a user is renamed", `UPDATE users SET nickname = 'renamed', updated_at = now()`, nil},
 		{"an organization is renamed", `UPDATE orgs SET name = 'renamed', updated_at = now()`, nil},
-		{"a team is renamed and given a role", `UPDATE groups SET name = 'renamed', roles = ARRAY['admin'], updated_at = now()`, nil},
+		{"a team is renamed", `UPDATE groups SET name = 'renamed', updated_at = now()`, nil},
+		{"a team is given a role", `UPDATE groups SET roles = ARRAY['admin'] WHERE grn = '` + outboxTeam + `'`,
+			[]string{"Iam::ScopedRoleLink " + outboxTeam}},
+		{"a team's role is written again unchanged", `UPDATE groups SET roles = '{}', updated_at = now()`, nil},
 		{"a project is renamed", `UPDATE projects SET name = 'renamed', updated_at = now()`, nil},
+		{"a project is given a role", `UPDATE projects SET roles = ARRAY['member']`,
+			[]string{"Iam::ScopedRoleLink " + outboxProject}},
 		{"an agent reports a state", `UPDATE agents SET runtime_state = 'connected', name = 'renamed', updated_at = now()`, nil},
 		{"an operator is renamed", `UPDATE operators SET name = 'renamed', description = 'd'`, nil},
 	}
@@ -182,7 +193,7 @@ func TestPolicyOutbox_EachChangeMarksTheEntitiesItReaches(t *testing.T) {
 	}
 }
 
-func TestPolicyOutbox_AUserJoiningAnOrganizationMarksTheUser(t *testing.T) {
+func TestPolicyOutbox_AUserJoiningAnOrganizationMarksTheUserAndItsRoleLink(t *testing.T) {
 	p := pool(t)
 	seedWithFeedOn(t, p)
 	execSQL(t, p, `DELETE FROM org_members`)
@@ -191,7 +202,7 @@ func TestPolicyOutbox_AUserJoiningAnOrganizationMarksTheUser(t *testing.T) {
 	execSQL(t, p, `INSERT INTO org_members (org_grn, user_grn, role, created_at)
 		VALUES ($1, $2, 'member', now())`, outboxOrg, outboxUser)
 
-	assert.Equal(t, []string{"Iam::User " + outboxUser}, markKeys(outboxMarks(t, p)))
+	assert.Equal(t, []string{outboxLinkMark, "Iam::User " + outboxUser}, markKeys(outboxMarks(t, p)))
 }
 
 func TestPolicyOutbox_AFeedThatIsOffWritesNothing(t *testing.T) {
@@ -369,7 +380,8 @@ func TestPolicyEntityState_ReturnsWhatTheOwnersTablesSay(t *testing.T) {
 		{"an OrgMembers names nothing", "Iam::OrgMembers", outboxOrg, entityState{}},
 		{"a team sits in its org", "Iam::Team", outboxTeam, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
 		{"a project sits in its org", "Iam::Project", outboxProject, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
-		{"an operator sits in its org", "Iam::Operator", outboxOperator, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
+		{"an operator sits in its org and among its members", "Iam::Operator", outboxOperator, entityState{org: ptr(outboxOrg), parents: []string{
+			"Iam::Org " + outboxOrg, "Iam::OrgMembers " + outboxOrg}}},
 		{"a user sits in each membership it holds", "Iam::User", outboxUser, entityState{parents: []string{
 			"Iam::OrgMembers " + outboxOrg, "Iam::Project " + outboxProject, "Iam::Team " + outboxTeam}}},
 		{"an agent is a member and a contained resource", "Iam::Agent", outboxAgent, entityState{org: ptr(outboxOrg), parents: []string{

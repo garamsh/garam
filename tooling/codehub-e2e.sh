@@ -16,10 +16,12 @@
 # project's volumes at every exit.
 #
 # The platform's feed gives the policy service organizations, their
-# members and their users, and no role link (ADR-0146 item 4 is
-# unbuilt). The run writes the owner's and the member's role links
-# itself, through CreatePolicy as the platform, and says so where it
-# does. An allow below rests on those links.
+# members and their users, and each member's role link (ADR-0146
+# item 4). The run writes none: the owner's link comes of creating the
+# organization, the member's of registering by an invitation, and an
+# allow below rests on them. The one thing written by SQL is the
+# member's removal, which no route does yet, and the answer after it is
+# a deny.
 #
 # CODEHUB_E2E_PROJECT names the compose project.
 set -eu
@@ -287,6 +289,22 @@ compose exec -T postgres psql -U garam -d garam -v ON_ERROR_STOP=1 -q -c \
 	 INSERT INTO sessions (token_hash, user_grn, created_at, expires_at) VALUES ('$owner_hash', '$owner_grn', now(), now() + interval '1 hour')"
 say "wrote: user $owner_grn and its session"
 
+wait_outbox_empty() {
+	i=0
+	until [ "$(compose exec -T postgres psql -U garam -d garam -tAc 'SELECT count(*) FROM policy_outbox')" = 0 ]; do
+		i=$((i + 1))
+		[ "$i" -lt 60 ] || fail "the outbox still held entities after 60s"
+		sleep 1
+	done
+}
+# The names of the policies in force in the policy service. Every
+# policy of this stack is a role link the platform wrote: nothing else
+# writes one.
+active_policies() {
+	compose exec -T postgres psql -U garam -d policy -tAc \
+		"SELECT coalesce(string_agg(name, ',' ORDER BY name), '') FROM policies WHERE status = 'active'"
+}
+
 cookie=$owner_token
 call POST "$api/orgs" json "{\"name\":\"Codehub e2e $suffix\"}"
 expect "organization created" "$status" 201
@@ -308,20 +326,22 @@ members=$(compose exec -T postgres psql -U garam -d garam -tAc "SELECT user_grn 
 say "$members" | sed 's/^/  /'
 expect "memberships" "$(printf '%s' "$members" | tr '\n' ',')" "$member_grn member,$owner_grn owner"
 
-# The feed delivers on a loop of its own: wait for the outbox to empty.
-i=0
-until [ "$(compose exec -T postgres psql -U garam -d garam -tAc 'SELECT count(*) FROM policy_outbox')" = 0 ]; do
-	i=$((i + 1))
-	[ "$i" -lt 60 ] || fail "the outbox still held entities after 60s"
-	sleep 1
-done
+# Two requests above answered on a membership, and each answers once the
+# policy service holds the link its change marked (ADR-0146): the links
+# are in force now, with no wait of this script's.
+say "what the policy service holds, read the moment the registration answered:"
+expect "the role links were in force when the requests answered" "$(active_policies)" "role link member,role link owner"
+
+# The rest of the feed, the entities, goes on the loop's own pass: wait
+# for the outbox to empty.
+wait_outbox_empty
 say "the platform's delivery loop emptied its outbox into the policy service"
 
 say "what the platform's feed wrote into the policy service:"
 policy_state=$(compose exec -T postgres psql -U garam -d policy -tAc \
 	"SELECT 'entities ' || count(*) FROM entities UNION ALL SELECT 'policies ' || count(*) FROM policies")
 say "$policy_state" | sed 's/^/  /'
-expect "no policy came from the feed" "$(printf '%s' "$policy_state" | sed -n 's/^policies //p')" 0
+expect "the two role links came from the platform" "$(printf '%s' "$policy_state" | sed -n 's/^policies //p')" 2
 
 # ---------------------------------------------------------------------
 step 3 "discovery and JWKS from the issuer"
@@ -401,58 +421,11 @@ decide() {
 	expect "$2 for ${1##*/} on ${3##*/}" "$(jget .decision)" "$4"
 }
 
-say "control: with no role link the member is denied what a member reads"
-decide "$member_grn" codehub:repo.read "$repo" false
+say "control: a user the platform holds no membership of is denied what a"
+say "member reads, so the allows below rest on the links and not on the"
+say "repository"
+decide "grn:root/iam/user/codehub-e2e-stranger-$suffix" codehub:repo.read "$repo" false
 
-# The links are not the feed's, so the run writes them as the platform.
-platform_token() {
-	now=$(date +%s)
-	jwt "$tmp/signing.pem" "{\"alg\":\"RS256\",\"kid\":\"$issuer_kid\",\"typ\":\"JWT\"}" \
-		"{\"iss\":\"$issuer\",\"aud\":\"policy\",\"sub\":\"platform\",\"iat\":$now,\"exp\":$((now + 120)),\"jti\":\"$(jti)\"}"
-}
-hex_varint() {
-	n=$1
-	out=
-	while [ "$n" -ge 128 ]; do
-		out=$out$(printf '%02X' $((n % 128 + 128)))
-		n=$((n / 128))
-	done
-	printf '%s%02X' "$out" "$n"
-}
-hex_msg() { printf '%02X%s%s' $(($1 * 8 + 2)) "$(hex_varint $((${#2} / 2)))" "$2"; }
-hex_str() { hex_msg "$1" "$(printf '%s' "$2" | basenc --base16 | tr -d '\n')"; }
-hex_int() { printf '%02X%s' $(($1 * 8)) "$(hex_varint "$2")"; }
-
-# One gRPC call, hand-framed: METHOD HEX-MESSAGE. Left in $grpc_status.
-grpc() {
-	body=$2
-	printf '00%08X%s' $((${#body} / 2)) "$body" | basenc --base16 -d >"$tmp/frame"
-	# shellcheck disable=SC2086
-	curl -sS --http2 $policy_curl -H 'content-type: application/grpc' -H 'te: trailers' \
-		-H "authorization: Bearer $(platform_token)" --data-binary "@$tmp/frame" \
-		-D "$tmp/trailers" -o /dev/null "$policy/garam.policy.v1.PolicyService/$1" ||
-		fail "the policy service refused the $1 call"
-	grpc_status=$(tr -d '\r' <"$tmp/trailers" | awk 'tolower($1) == "grpc-status:" { print $2 }')
-	grpc_message=$(tr -d '\r' <"$tmp/trailers" | awk 'tolower($1) == "grpc-message:" { $1 = ""; print }')
-}
-
-link() {
-	policy_id=grn:$org/iam/policy/codehub-e2e-$1
-	principal_ref=$(hex_str 1 Iam::User)$(hex_str 2 "$3")
-	resource_ref=$(hex_str 1 Iam::Org)$(hex_str 2 "$org_grn")
-	role_link=$(hex_int 1 "$2")$(hex_int 2 1)$(hex_msg 3 "$principal_ref")$(hex_msg 4 "$resource_ref")
-	say "> gRPC PolicyService/CreatePolicy as the platform: role_link $1 for ${3##*/} on the organization (no writer)"
-	grpc CreatePolicy "$(hex_str 2 "$org_grn")$(hex_str 3 "$policy_id")$(hex_str 4 "codehub-e2e-$1")$(hex_msg 5 "$(hex_msg 1 "$role_link")")"
-	expect "CreatePolicy grpc-status" "$grpc_status" 0
-	say "> gRPC PolicyService/ActivatePolicy as the platform: $policy_id"
-	grpc ActivatePolicy "$(hex_str 2 "$org_grn")$(hex_str 3 "$policy_id")"
-	expect "ActivatePolicy grpc-status" "$grpc_status" 0
-}
-say "the run writes these two role links itself; the platform does not:"
-link owner 1 "$owner_grn"
-link member 3 "$member_grn"
-
-bearer=$codehub_token
 decide "$member_grn" codehub:org.use "$org_grn" true
 decide "$member_grn" codehub:repo.read "$repo" true
 decide "$member_grn" codehub:repo.write "$repo" false
@@ -475,6 +448,15 @@ expect "write then read" "$(jget '[.evaluations[].decision] | map(tostring) | jo
 say "a repository of another organization:"
 call POST "$policy/access/v1/evaluation" json "$(ask "$member_grn" codehub:repo.read "$other_repo")"
 expect "status" "$status" 403
+
+say "the member leaves: the membership row goes, as the platform's own"
+say "removal of it would take it (no route removes one yet), and the"
+say "platform's feed removes the link"
+compose exec -T postgres psql -U garam -d garam -v ON_ERROR_STOP=1 -q -c \
+	"DELETE FROM org_members WHERE org_grn = '$org_grn' AND user_grn = '$member_grn'"
+wait_outbox_empty
+expect "the link of the member who left is gone" "$(active_policies)" "role link owner"
+decide "$member_grn" codehub:repo.read "$repo" false
 curl_extra=
 bearer=
 
@@ -520,4 +502,4 @@ expect "active" "$(jget .active)" false
 
 echo
 echo "codehub-e2e: $checked checks passed at $commit$dirty"
-echo "codehub-e2e: the run wrote itself what the platform's feed does not: the owner's and the member's role links (policies, through CreatePolicy as the platform); the sessions and the user of the owner, by SQL"
+echo "codehub-e2e: the run wrote itself the sessions and the user of the owner, by SQL, and the member's removal, by SQL; the role links are the platform's, written from the memberships"

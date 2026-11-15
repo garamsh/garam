@@ -33,6 +33,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/watch"
 )
 
@@ -62,6 +63,9 @@ type Server struct {
 	// keys signs each message handed out and publishes the keys it
 	// signs with (ADR-0101).
 	keys message.Keyring
+	// feed holds the answer of a route that creates an agent until the
+	// policy service holds its entity (ADR-0165); nil waits for nothing.
+	feed policyfeed.Gate
 	// credentialAudit records every credential issued, renewed or
 	// refused (ADR-0114); nil records nothing.
 	credentialAudit CredentialAudit

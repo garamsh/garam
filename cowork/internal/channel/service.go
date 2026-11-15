@@ -96,7 +96,7 @@ func (s *service) readable(ctx context.Context, caller platform.Caller, org stri
 		batch := listed[start:min(start+50, len(listed))]
 		checks := make([]platform.Check, len(batch))
 		for i, c := range batch {
-			checks[i] = platform.OnChannel(ActionRead, c.ID)
+			checks[i] = platform.OnChannel(ActionRead, c.ID).AsProbe()
 		}
 		allowed, err := s.platform.Allowed(ctx, caller, org, checks)
 		if err != nil {

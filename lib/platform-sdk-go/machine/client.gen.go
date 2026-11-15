@@ -1301,6 +1301,8 @@ type ClientInterface interface {
 	//
 	// The third stage, credential delivery, is `mintAgentToken`: `assignee` mints the agent's garam token, and one whose `audience` names the hosted control service, in the epoch and lineage admission answered. The fourth, activation, is `activateAgent` under `execution-fence.v2`, whose first activation carries this reference as `operationRef`; after a replacement, an agent that was active names the activation the replacement ended in `replaces` instead. Neither delivery nor admission activates anything by itself.
 	//
+	// An admission of a new agent waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /agent-enrollment-approvals/{approval}/admission (the `AdmitAgentEnrollment` operationId).
@@ -1315,6 +1317,8 @@ type ClientInterface interface {
 	// A replacement writes no agent. Under the agent's execution lock it moves the assignment from exactly `replaces.expectedAssignee` at `replaces.expectedEpoch` to `assignee`, raises the epoch, ends the current activation and moves the agent into a new lineage, which spends the approval; `grn` is `replaces.agent`. Every token of the earlier lineage is refused from the next request. An agent that has left the expected assignment before the approval is spent is 409 with reason `superseded`, and a retry is answered as a new agent's is.
 	//
 	// The third stage, credential delivery, is `mintAgentToken`: `assignee` mints the agent's garam token, and one whose `audience` names the hosted control service, in the epoch and lineage admission answered. The fourth, activation, is `activateAgent` under `execution-fence.v2`, whose first activation carries this reference as `operationRef`; after a replacement, an agent that was active names the activation the replacement ended in `replaces` instead. Neither delivery nor admission activates anything by itself.
+	//
+	// An admission of a new agent waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1333,6 +1337,8 @@ type ClientInterface interface {
 	//
 	// The answer names the `placement` the administrator approved. `standalone` is a host whose supervisor starts the runtime, its workspace and the adapter as three containers (ADR-0085). `direct` is a host whose supervisor attaches to a runtime already running there and starts nothing (ADR-0111). garam places, registers and fences both alike.
 	//
+	// An answer that creates an agent, or replays its creation, waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /agent-enrollments (the `EnrollStandaloneAgent` operationId).
@@ -1349,6 +1355,8 @@ type ClientInterface interface {
 	// The first answer is 201. The same secret and the same exact body answer the stored public result with 200 while the approval is unexpired and its registration still holds the agent at the recorded epoch; once a later replacement or a revocation has ended it, the replay is 409 and discloses nothing. Any other body once the approval is spent is 409.
 	//
 	// The answer names the `placement` the administrator approved. `standalone` is a host whose supervisor starts the runtime, its workspace and the adapter as three containers (ADR-0085). `direct` is a host whose supervisor attaches to a runtime already running there and starts nothing (ADR-0111). garam places, registers and fences both alike.
+	//
+	// An answer that creates an agent, or replays its creation, waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1702,6 +1710,8 @@ type ClientInterface interface {
 	//
 	// The first answer is 201. The same `operationRef` and `requestId` for the same `controller` answer the same `grn` and `epoch` with 200, however many times and from however many concurrent requests, while the agent is still assigned where its creation put it; once it has moved, the retry is 409. A reference bound to another controller or request identifier, or a `requestId` an earlier creation holds under another reference, is 409. A controller of another organization or one that is not an operator is 404, as is an unknown reference or another audience's; a reference of another kind is 403, and so is one current state no longer authorizes. Authority garam cannot read as current is 503.
 	//
+	// The answer, either status, waits until the policy service holds the agent (ADR-0165). A 503 on that wait means the agent is stored and not yet applied: repeat the request under the same `requestId`, which answers the same agent.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /operators/{controller}/managed-agents (the `CreateManagedAgent` operationId).
@@ -1714,6 +1724,8 @@ type ClientInterface interface {
 	// garam mints the GRN and writes the agent, its first assignment to `controller` and its execution in one transaction, so a failure leaves no agent behind. The execution is fenced from birth with no active generation, and creation opens the agent's credential lineage, in which the controller then mints the agent's tokens with `mintAgentToken` (ADR-0100, ADR-0118).
 	//
 	// The first answer is 201. The same `operationRef` and `requestId` for the same `controller` answer the same `grn` and `epoch` with 200, however many times and from however many concurrent requests, while the agent is still assigned where its creation put it; once it has moved, the retry is 409. A reference bound to another controller or request identifier, or a `requestId` an earlier creation holds under another reference, is 409. A controller of another organization or one that is not an operator is 404, as is an unknown reference or another audience's; a reference of another kind is 403, and so is one current state no longer authorizes. Authority garam cannot read as current is 503.
+	//
+	// The answer, either status, waits until the policy service holds the agent (ADR-0165). A 503 on that wait means the agent is stored and not yet applied: repeat the request under the same `requestId`, which answers the same agent.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1827,6 +1839,8 @@ func (c *Client) PrepareAgentEnrollment(ctx context.Context, params *PrepareAgen
 //
 // The third stage, credential delivery, is `mintAgentToken`: `assignee` mints the agent's garam token, and one whose `audience` names the hosted control service, in the epoch and lineage admission answered. The fourth, activation, is `activateAgent` under `execution-fence.v2`, whose first activation carries this reference as `operationRef`; after a replacement, an agent that was active names the activation the replacement ended in `replaces` instead. Neither delivery nor admission activates anything by itself.
 //
+// An admission of a new agent waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /agent-enrollment-approvals/{approval}/admission (the `AdmitAgentEnrollment` operationId).
@@ -1851,6 +1865,8 @@ func (c *Client) AdmitAgentEnrollmentWithBody(ctx context.Context, approvalId Ap
 // A replacement writes no agent. Under the agent's execution lock it moves the assignment from exactly `replaces.expectedAssignee` at `replaces.expectedEpoch` to `assignee`, raises the epoch, ends the current activation and moves the agent into a new lineage, which spends the approval; `grn` is `replaces.agent`. Every token of the earlier lineage is refused from the next request. An agent that has left the expected assignment before the approval is spent is 409 with reason `superseded`, and a retry is answered as a new agent's is.
 //
 // The third stage, credential delivery, is `mintAgentToken`: `assignee` mints the agent's garam token, and one whose `audience` names the hosted control service, in the epoch and lineage admission answered. The fourth, activation, is `activateAgent` under `execution-fence.v2`, whose first activation carries this reference as `operationRef`; after a replacement, an agent that was active names the activation the replacement ended in `replaces` instead. Neither delivery nor admission activates anything by itself.
+//
+// An admission of a new agent waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -1879,6 +1895,8 @@ func (c *Client) AdmitAgentEnrollment(ctx context.Context, approvalId ApprovalId
 //
 // The answer names the `placement` the administrator approved. `standalone` is a host whose supervisor starts the runtime, its workspace and the adapter as three containers (ADR-0085). `direct` is a host whose supervisor attaches to a runtime already running there and starts nothing (ADR-0111). garam places, registers and fences both alike.
 //
+// An answer that creates an agent, or replays its creation, waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /agent-enrollments (the `EnrollStandaloneAgent` operationId).
@@ -1905,6 +1923,8 @@ func (c *Client) EnrollStandaloneAgentWithBody(ctx context.Context, params *Enro
 // The first answer is 201. The same secret and the same exact body answer the stored public result with 200 while the approval is unexpired and its registration still holds the agent at the recorded epoch; once a later replacement or a revocation has ended it, the replay is 409 and discloses nothing. Any other body once the approval is spent is 409.
 //
 // The answer names the `placement` the administrator approved. `standalone` is a host whose supervisor starts the runtime, its workspace and the adapter as three containers (ADR-0085). `direct` is a host whose supervisor attaches to a runtime already running there and starts nothing (ADR-0111). garam places, registers and fences both alike.
+//
+// An answer that creates an agent, or replays its creation, waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2588,6 +2608,8 @@ func (c *Client) IntrospectController(ctx context.Context, controllerGrn Control
 //
 // The first answer is 201. The same `operationRef` and `requestId` for the same `controller` answer the same `grn` and `epoch` with 200, however many times and from however many concurrent requests, while the agent is still assigned where its creation put it; once it has moved, the retry is 409. A reference bound to another controller or request identifier, or a `requestId` an earlier creation holds under another reference, is 409. A controller of another organization or one that is not an operator is 404, as is an unknown reference or another audience's; a reference of another kind is 403, and so is one current state no longer authorizes. Authority garam cannot read as current is 503.
 //
+// The answer, either status, waits until the policy service holds the agent (ADR-0165). A 503 on that wait means the agent is stored and not yet applied: repeat the request under the same `requestId`, which answers the same agent.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /operators/{controller}/managed-agents (the `CreateManagedAgent` operationId).
@@ -2610,6 +2632,8 @@ func (c *Client) CreateManagedAgentWithBody(ctx context.Context, controllerGrn C
 // garam mints the GRN and writes the agent, its first assignment to `controller` and its execution in one transaction, so a failure leaves no agent behind. The execution is fenced from birth with no active generation, and creation opens the agent's credential lineage, in which the controller then mints the agent's tokens with `mintAgentToken` (ADR-0100, ADR-0118).
 //
 // The first answer is 201. The same `operationRef` and `requestId` for the same `controller` answer the same `grn` and `epoch` with 200, however many times and from however many concurrent requests, while the agent is still assigned where its creation put it; once it has moved, the retry is 409. A reference bound to another controller or request identifier, or a `requestId` an earlier creation holds under another reference, is 409. A controller of another organization or one that is not an operator is 404, as is an unknown reference or another audience's; a reference of another kind is 403, and so is one current state no longer authorizes. Authority garam cannot read as current is 503.
+//
+// The answer, either status, waits until the policy service holds the agent (ADR-0165). A 503 on that wait means the agent is stored and not yet applied: repeat the request under the same `requestId`, which answers the same agent.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4047,6 +4071,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// The third stage, credential delivery, is `mintAgentToken`: `assignee` mints the agent's garam token, and one whose `audience` names the hosted control service, in the epoch and lineage admission answered. The fourth, activation, is `activateAgent` under `execution-fence.v2`, whose first activation carries this reference as `operationRef`; after a replacement, an agent that was active names the activation the replacement ended in `replaces` instead. Neither delivery nor admission activates anything by itself.
 	//
+	// An admission of a new agent waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agent-enrollment-approvals/{approval}/admission (the `AdmitAgentEnrollment` operationId).
@@ -4061,6 +4087,8 @@ type ClientWithResponsesInterface interface {
 	// A replacement writes no agent. Under the agent's execution lock it moves the assignment from exactly `replaces.expectedAssignee` at `replaces.expectedEpoch` to `assignee`, raises the epoch, ends the current activation and moves the agent into a new lineage, which spends the approval; `grn` is `replaces.agent`. Every token of the earlier lineage is refused from the next request. An agent that has left the expected assignment before the approval is spent is 409 with reason `superseded`, and a retry is answered as a new agent's is.
 	//
 	// The third stage, credential delivery, is `mintAgentToken`: `assignee` mints the agent's garam token, and one whose `audience` names the hosted control service, in the epoch and lineage admission answered. The fourth, activation, is `activateAgent` under `execution-fence.v2`, whose first activation carries this reference as `operationRef`; after a replacement, an agent that was active names the activation the replacement ended in `replaces` instead. Neither delivery nor admission activates anything by itself.
+	//
+	// An admission of a new agent waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -4079,6 +4107,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// The answer names the `placement` the administrator approved. `standalone` is a host whose supervisor starts the runtime, its workspace and the adapter as three containers (ADR-0085). `direct` is a host whose supervisor attaches to a runtime already running there and starts nothing (ADR-0111). garam places, registers and fences both alike.
 	//
+	// An answer that creates an agent, or replays its creation, waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agent-enrollments (the `EnrollStandaloneAgent` operationId).
@@ -4095,6 +4125,8 @@ type ClientWithResponsesInterface interface {
 	// The first answer is 201. The same secret and the same exact body answer the stored public result with 200 while the approval is unexpired and its registration still holds the agent at the recorded epoch; once a later replacement or a revocation has ended it, the replay is 409 and discloses nothing. Any other body once the approval is spent is 409.
 	//
 	// The answer names the `placement` the administrator approved. `standalone` is a host whose supervisor starts the runtime, its workspace and the adapter as three containers (ADR-0085). `direct` is a host whose supervisor attaches to a runtime already running there and starts nothing (ADR-0111). garam places, registers and fences both alike.
+	//
+	// An answer that creates an agent, or replays its creation, waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -4464,6 +4496,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// The first answer is 201. The same `operationRef` and `requestId` for the same `controller` answer the same `grn` and `epoch` with 200, however many times and from however many concurrent requests, while the agent is still assigned where its creation put it; once it has moved, the retry is 409. A reference bound to another controller or request identifier, or a `requestId` an earlier creation holds under another reference, is 409. A controller of another organization or one that is not an operator is 404, as is an unknown reference or another audience's; a reference of another kind is 403, and so is one current state no longer authorizes. Authority garam cannot read as current is 503.
 	//
+	// The answer, either status, waits until the policy service holds the agent (ADR-0165). A 503 on that wait means the agent is stored and not yet applied: repeat the request under the same `requestId`, which answers the same agent.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /operators/{controller}/managed-agents (the `CreateManagedAgent` operationId).
@@ -4476,6 +4510,8 @@ type ClientWithResponsesInterface interface {
 	// garam mints the GRN and writes the agent, its first assignment to `controller` and its execution in one transaction, so a failure leaves no agent behind. The execution is fenced from birth with no active generation, and creation opens the agent's credential lineage, in which the controller then mints the agent's tokens with `mintAgentToken` (ADR-0100, ADR-0118).
 	//
 	// The first answer is 201. The same `operationRef` and `requestId` for the same `controller` answer the same `grn` and `epoch` with 200, however many times and from however many concurrent requests, while the agent is still assigned where its creation put it; once it has moved, the retry is 409. A reference bound to another controller or request identifier, or a `requestId` an earlier creation holds under another reference, is 409. A controller of another organization or one that is not an operator is 404, as is an unknown reference or another audience's; a reference of another kind is 403, and so is one current state no longer authorizes. Authority garam cannot read as current is 503.
+	//
+	// The answer, either status, waits until the policy service holds the agent (ADR-0165). A 503 on that wait means the agent is stored and not yet applied: repeat the request under the same `requestId`, which answers the same agent.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -4696,6 +4732,11 @@ type AdmitAgentEnrollmentResponse409Headers struct {
 	GaramContractVersion *string
 }
 
+// AdmitAgentEnrollmentResponse503Headers the declared response headers of an HTTP 503 response for AdmitAgentEnrollment
+type AdmitAgentEnrollmentResponse503Headers struct {
+	GaramContractVersion *string
+}
+
 type AdmitAgentEnrollmentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4713,6 +4754,8 @@ type AdmitAgentEnrollmentResponse struct {
 	JSON404 *AgentEnrollmentContractError
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *AgentEnrollmentContractError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *AgentEnrollmentContractError
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *AdmitAgentEnrollmentResponse200Headers
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -4727,6 +4770,8 @@ type AdmitAgentEnrollmentResponse struct {
 	Headers404 *AdmitAgentEnrollmentResponse404Headers
 	// Headers409 the parsed response headers for an HTTP 409 response
 	Headers409 *AdmitAgentEnrollmentResponse409Headers
+	// Headers503 the parsed response headers for an HTTP 503 response
+	Headers503 *AdmitAgentEnrollmentResponse503Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -4762,6 +4807,11 @@ func (r AdmitAgentEnrollmentResponse) GetJSON404() *AgentEnrollmentContractError
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r AdmitAgentEnrollmentResponse) GetJSON409() *AgentEnrollmentContractError {
 	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r AdmitAgentEnrollmentResponse) GetJSON503() *AgentEnrollmentContractError {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -4828,6 +4878,11 @@ type EnrollStandaloneAgentResponse422Headers struct {
 	GaramContractVersion *string
 }
 
+// EnrollStandaloneAgentResponse503Headers the declared response headers of an HTTP 503 response for EnrollStandaloneAgent
+type EnrollStandaloneAgentResponse503Headers struct {
+	GaramContractVersion *string
+}
+
 type EnrollStandaloneAgentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4845,6 +4900,8 @@ type EnrollStandaloneAgentResponse struct {
 	JSON409 *StandaloneContractError
 	// JSON422 the response for an HTTP 422 `application/json` response
 	JSON422 *StandaloneContractError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *StandaloneContractError
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *EnrollStandaloneAgentResponse200Headers
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -4859,6 +4916,8 @@ type EnrollStandaloneAgentResponse struct {
 	Headers409 *EnrollStandaloneAgentResponse409Headers
 	// Headers422 the parsed response headers for an HTTP 422 response
 	Headers422 *EnrollStandaloneAgentResponse422Headers
+	// Headers503 the parsed response headers for an HTTP 503 response
+	Headers503 *EnrollStandaloneAgentResponse503Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -4894,6 +4953,11 @@ func (r EnrollStandaloneAgentResponse) GetJSON409() *StandaloneContractError {
 // GetJSON422 returns the response for an HTTP 422 `application/json` response
 func (r EnrollStandaloneAgentResponse) GetJSON422() *StandaloneContractError {
 	return r.JSON422
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r EnrollStandaloneAgentResponse) GetJSON503() *StandaloneContractError {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -6659,6 +6723,11 @@ type CreateManagedAgentResponse409Headers struct {
 	GaramContractVersion *string
 }
 
+// CreateManagedAgentResponse503Headers the declared response headers of an HTTP 503 response for CreateManagedAgent
+type CreateManagedAgentResponse503Headers struct {
+	GaramContractVersion *string
+}
+
 type CreateManagedAgentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6676,6 +6745,8 @@ type CreateManagedAgentResponse struct {
 	JSON404 *EnrollmentContractError
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *EnrollmentContractError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *EnrollmentContractError
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *CreateManagedAgentResponse200Headers
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -6690,6 +6761,8 @@ type CreateManagedAgentResponse struct {
 	Headers404 *CreateManagedAgentResponse404Headers
 	// Headers409 the parsed response headers for an HTTP 409 response
 	Headers409 *CreateManagedAgentResponse409Headers
+	// Headers503 the parsed response headers for an HTTP 503 response
+	Headers503 *CreateManagedAgentResponse503Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -6725,6 +6798,11 @@ func (r CreateManagedAgentResponse) GetJSON404() *EnrollmentContractError {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r CreateManagedAgentResponse) GetJSON409() *EnrollmentContractError {
 	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateManagedAgentResponse) GetJSON503() *EnrollmentContractError {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -7017,6 +7095,8 @@ func (c *ClientWithResponses) PrepareAgentEnrollmentWithResponse(ctx context.Con
 //
 // The third stage, credential delivery, is `mintAgentToken`: `assignee` mints the agent's garam token, and one whose `audience` names the hosted control service, in the epoch and lineage admission answered. The fourth, activation, is `activateAgent` under `execution-fence.v2`, whose first activation carries this reference as `operationRef`; after a replacement, an agent that was active names the activation the replacement ended in `replaces` instead. Neither delivery nor admission activates anything by itself.
 //
+// An admission of a new agent waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /agent-enrollment-approvals/{approval}/admission (the `AdmitAgentEnrollment` operationId).
@@ -7037,6 +7117,8 @@ func (c *ClientWithResponses) AdmitAgentEnrollmentWithBodyWithResponse(ctx conte
 // A replacement writes no agent. Under the agent's execution lock it moves the assignment from exactly `replaces.expectedAssignee` at `replaces.expectedEpoch` to `assignee`, raises the epoch, ends the current activation and moves the agent into a new lineage, which spends the approval; `grn` is `replaces.agent`. Every token of the earlier lineage is refused from the next request. An agent that has left the expected assignment before the approval is spent is 409 with reason `superseded`, and a retry is answered as a new agent's is.
 //
 // The third stage, credential delivery, is `mintAgentToken`: `assignee` mints the agent's garam token, and one whose `audience` names the hosted control service, in the epoch and lineage admission answered. The fourth, activation, is `activateAgent` under `execution-fence.v2`, whose first activation carries this reference as `operationRef`; after a replacement, an agent that was active names the activation the replacement ended in `replaces` instead. Neither delivery nor admission activates anything by itself.
+//
+// An admission of a new agent waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -7061,6 +7143,8 @@ func (c *ClientWithResponses) AdmitAgentEnrollmentWithResponse(ctx context.Conte
 //
 // The answer names the `placement` the administrator approved. `standalone` is a host whose supervisor starts the runtime, its workspace and the adapter as three containers (ADR-0085). `direct` is a host whose supervisor attaches to a runtime already running there and starts nothing (ADR-0111). garam places, registers and fences both alike.
 //
+// An answer that creates an agent, or replays its creation, waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /agent-enrollments (the `EnrollStandaloneAgent` operationId).
@@ -7083,6 +7167,8 @@ func (c *ClientWithResponses) EnrollStandaloneAgentWithBodyWithResponse(ctx cont
 // The first answer is 201. The same secret and the same exact body answer the stored public result with 200 while the approval is unexpired and its registration still holds the agent at the recorded epoch; once a later replacement or a revocation has ended it, the replay is 409 and discloses nothing. Any other body once the approval is spent is 409.
 //
 // The answer names the `placement` the administrator approved. `standalone` is a host whose supervisor starts the runtime, its workspace and the adapter as three containers (ADR-0085). `direct` is a host whose supervisor attaches to a runtime already running there and starts nothing (ADR-0111). garam places, registers and fences both alike.
+//
+// An answer that creates an agent, or replays its creation, waits until the policy service holds the agent (ADR-0165); a 503 on that wait means the agent is stored and not yet applied, and an identical retry answers it. A replacement raises nothing and is answered at once.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -7650,6 +7736,8 @@ func (c *ClientWithResponses) IntrospectControllerWithResponse(ctx context.Conte
 //
 // The first answer is 201. The same `operationRef` and `requestId` for the same `controller` answer the same `grn` and `epoch` with 200, however many times and from however many concurrent requests, while the agent is still assigned where its creation put it; once it has moved, the retry is 409. A reference bound to another controller or request identifier, or a `requestId` an earlier creation holds under another reference, is 409. A controller of another organization or one that is not an operator is 404, as is an unknown reference or another audience's; a reference of another kind is 403, and so is one current state no longer authorizes. Authority garam cannot read as current is 503.
 //
+// The answer, either status, waits until the policy service holds the agent (ADR-0165). A 503 on that wait means the agent is stored and not yet applied: repeat the request under the same `requestId`, which answers the same agent.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /operators/{controller}/managed-agents (the `CreateManagedAgent` operationId).
@@ -7668,6 +7756,8 @@ func (c *ClientWithResponses) CreateManagedAgentWithBodyWithResponse(ctx context
 // garam mints the GRN and writes the agent, its first assignment to `controller` and its execution in one transaction, so a failure leaves no agent behind. The execution is fenced from birth with no active generation, and creation opens the agent's credential lineage, in which the controller then mints the agent's tokens with `mintAgentToken` (ADR-0100, ADR-0118).
 //
 // The first answer is 201. The same `operationRef` and `requestId` for the same `controller` answer the same `grn` and `epoch` with 200, however many times and from however many concurrent requests, while the agent is still assigned where its creation put it; once it has moved, the retry is 409. A reference bound to another controller or request identifier, or a `requestId` an earlier creation holds under another reference, is 409. A controller of another organization or one that is not an operator is 404, as is an unknown reference or another audience's; a reference of another kind is 403, and so is one current state no longer authorizes. Authority garam cannot read as current is 503.
+//
+// The answer, either status, waits until the policy service holds the agent (ADR-0165). A 503 on that wait means the agent is stored and not yet applied: repeat the request under the same `requestId`, which answers the same agent.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -7954,6 +8044,13 @@ func ParseAdmitAgentEnrollmentResponse(rsp *http.Response) (*AdmitAgentEnrollmen
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest AgentEnrollmentContractError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	switch {
@@ -8027,6 +8124,16 @@ func ParseAdmitAgentEnrollmentResponse(rsp *http.Response) (*AdmitAgentEnrollmen
 			headers.GaramContractVersion = &value
 		}
 		response.Headers409 = &headers
+	case rsp.StatusCode == 503:
+		var headers AdmitAgentEnrollmentResponse503Headers
+		if values := rsp.Header.Values("Garam-Contract-Version"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.GaramContractVersion = &value
+		}
+		response.Headers503 = &headers
 	}
 
 	return response, nil
@@ -8094,6 +8201,13 @@ func ParseEnrollStandaloneAgentResponse(rsp *http.Response) (*EnrollStandaloneAg
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest StandaloneContractError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -8168,6 +8282,16 @@ func ParseEnrollStandaloneAgentResponse(rsp *http.Response) (*EnrollStandaloneAg
 			headers.GaramContractVersion = &value
 		}
 		response.Headers422 = &headers
+	case rsp.StatusCode == 503:
+		var headers EnrollStandaloneAgentResponse503Headers
+		if values := rsp.Header.Values("Garam-Contract-Version"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.GaramContractVersion = &value
+		}
+		response.Headers503 = &headers
 	}
 
 	return response, nil
@@ -9869,6 +9993,13 @@ func ParseCreateManagedAgentResponse(rsp *http.Response) (*CreateManagedAgentRes
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest EnrollmentContractError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	switch {
@@ -9942,6 +10073,16 @@ func ParseCreateManagedAgentResponse(rsp *http.Response) (*CreateManagedAgentRes
 			headers.GaramContractVersion = &value
 		}
 		response.Headers409 = &headers
+	case rsp.StatusCode == 503:
+		var headers CreateManagedAgentResponse503Headers
+		if values := rsp.Header.Values("Garam-Contract-Version"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.GaramContractVersion = &value
+		}
+		response.Headers503 = &headers
 	}
 
 	return response, nil

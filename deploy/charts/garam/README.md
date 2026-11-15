@@ -555,15 +555,15 @@ changes and names no garam version.
 
 The images are pinned separately, through `image.server.tag`,
 `image.web.tag`, `image.site.tag` and `image.policy.tag`. A release is a
-`vX.Y.Z` git tag
-and the image tag is that tag with the `v` dropped; one commit publishes
-every image under one version, so a deployment pins one version across
-them (ADR-0039). A release tag is immutable, so the tag answers what is
-deployed on its own. Each image has one repository, `garam/server`,
-`garam/console`, `garam/site` or `garam/policy`, and a development build
-is in the same
-one, tagged by a commit prefix or `X.Y.Z-<prerelease>` rather than a
-bare version (ADR-0071,
+git tag, `v0.1.0-dev.N`, `v0.1.0-rc.N` or `v0.1.0` until launch
+(ADR-0157), and the image tag is that tag with the `v` dropped; one
+commit publishes every image under one version, so a deployment pins
+one version across them (ADR-0039). A release tag is immutable, so
+the tag answers what is deployed on its own. Each image has one
+repository, `garam/server`, `garam/console`, `garam/site` or
+`garam/policy`, and a development build is in the same one, tagged by
+a commit prefix or `X.Y.Z-<prerelease>` rather than a release tag
+(ADR-0071,
 [ADR-0134](../../../docs/architecture/adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)),
 so running one sets the tag alone, and pins a build nobody released.
 A release publishes `garam/policy` with the other images.
@@ -583,15 +583,15 @@ credential it issues expires. `image.pullSecrets` is one way to supply
 one and the chart does not require it; a node credential minted per pull
 is another.
 
-**`0.1.0` is the first released version.** `v0.1.0` ran
-`.github/workflows/release.yml` on 2026-09-01, and both repositories
-hold `0.1.0` under the digests the release that tag created records
-(ADR-0039). The two tags stay required all the same: the version a
-deployment runs is its own to name, and a default here would go on
-naming `0.1.0` once the next release lands, with nothing in the chart
-changed to say so. `Chart.yaml` still carries no `appVersion` — ADR-0042
-records that the change publishing the first release sets it, and no
-change since has.
+**`0.1.0-dev.1` is the first released version.** `v0.1.0-dev.1`
+(then `v0.1.0`) ran `.github/workflows/release.yml` on 2026-09-01, and
+both repositories hold `0.1.0-dev.1` (then `0.1.0`) under the digests
+the release that tag created records (ADR-0039). The two tags stay
+required all the same: the version a deployment runs is its own to
+name, and a default here would go on naming `0.1.0-dev.1` once the next
+release lands, with nothing in the chart changed to say so. `Chart.yaml`
+still carries no `appVersion` — ADR-0042 records that the change
+publishing the first release sets it, and no change since has.
 
 ## What keeps it true
 

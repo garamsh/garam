@@ -196,56 +196,6 @@ func TestScopedPermissions_GroupWithoutRolesGrantsNothing(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
-// TestScopedPermissions_DirectUserRoles proves roles stored on the
-// user are collected as direct grants: they carry the org role's
-// scope, unknown names grant nothing, and org membership stays the
-// precondition.
-func TestScopedPermissions_DirectUserRoles(t *testing.T) {
-	f := newFixture(t)
-	f.enforce()
-
-	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
-	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
-	bob := f.sessionCookieFor(t, "bob-sub", "Bob")
-	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
-
-	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.Org(slug)
-	aliceGRN := grn.New("root", user.ServiceType, "alice-sub")
-	bobGRN := grn.New("root", user.ServiceType, "bob-sub")
-	strangerGRN := grn.New("root", user.ServiceType, "stranger-sub")
-	for _, g := range []grn.GRN{aliceGRN, bobGRN} {
-		require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, g, org.RoleMember)))
-	}
-	f.users.grantRoles(aliceGRN, string(org.RoleAdmin))
-	f.users.grantRoles(bobGRN, "wizard")
-	f.users.grantRoles(strangerGRN, string(org.RoleOwner))
-
-	require.NoError(t, f.orgs.CreateGroup(testCtx(t),
-		org.NewGroup(grn.New(slug, org.ServiceTypeGroup, "eng"), "eng", orgGRN)))
-
-	rename := `{"name":"renamed"}`
-	cases := []struct {
-		name         string
-		method, path string
-		body         string
-		cookie       *http.Cookie
-		want         int
-	}{
-		{"direct role administers the org's groups", "PATCH", "/orgs/" + slug + "/groups/eng", rename, alice, http.StatusOK},
-		{"direct role updates the org", "PATCH", "/orgs/" + slug, rename, alice, http.StatusOK},
-		{"direct role stops at deleting the org", "DELETE", "/orgs/" + slug, "", alice, http.StatusForbidden},
-		{"unknown direct role grants nothing", "PATCH", "/orgs/" + slug + "/groups/eng", rename, bob, http.StatusForbidden},
-		{"direct role does not admit a non-member", "GET", "/orgs/" + slug + "/groups/eng", "", stranger, http.StatusForbidden},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			rec := f.do(t, c.method, c.path, c.body, c.cookie)
-			assert.Equal(t, c.want, rec.Code)
-		})
-	}
-}
-
 // TestScopedPermissions_RolesAssignedOverHTTP proves the scoped grant
 // is reachable through the API alone: a group created over HTTP with
 // roles grants them to its members.

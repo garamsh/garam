@@ -301,7 +301,7 @@ on hosted runners.
   `release.yml` declares none, and the absence is what enforces it: a
   group cancels a pending run of that group when a newer one queues
   behind it, whichever way `cancel-in-progress` is set, so a group there
-  could leave a `vX.Y.Z` tag publishing nothing at all, and a run
+  could leave a release tag publishing nothing at all, and a run
   cancelled mid-publish leaves the version half-published with the next
   version as the only repair (ADR-0039 §Consequences). What reads the
   guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
@@ -312,9 +312,10 @@ on hosted runners.
   cowork's, cowork-web's and the policy service's. The web one is the
   image a release used to be able to fail on irreversibly: the server
   image was pushed before the web image was built, and immutability
-  makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds all six and
-  pushes none until all are built (#945), so what a build failure there
-  now costs is the run. Until #850 no image was built by any check.
+  makes the repair the next version (ADR-0039 §Consequences).
+  `release.yml` builds all six and pushes none until all are built
+  (#945), so what a build failure there now costs is the run. Until
+  #850 no image was built by any check.
 - **A pull request's image builds take their layers from the GitHub
   Actions cache and their bases from `mirror.gcr.io`.**
   The `suites` jobs' `make -C <module> stack-up` and `images`'
@@ -338,12 +339,14 @@ on hosted runners.
   anonymous pulls past a per-address limit (#1337), and ECR Public caps
   anonymous callers at 500GB of data a month across the addresses
   hosted runners share. Its `429 toomanyrequests: Data limit exceeded`
-  failed both attempts of v0.4.0's release run 39120748198 (#1532).
+  failed both attempts of the release run 39120748198 of
+  `v0.1.0-dev.4` (then `v0.4.0`) (#1532).
 - **No run here reaches a deployment, so `main` is not what a caller
-  meets.** `release.yml` publishes six images on a `vX.Y.Z` tag and no
-  other workflow pushes one, so a merge to `main` publishes nothing;
-  an operator pushes the test image, from a checkout, to an ECR
-  repository no deployment pulls (ADR-0092, ADR-0093);
+  meets.** `release.yml` publishes six images on a release tag
+  (ADR-0157) and no other workflow pushes one, so a merge to
+  `main` publishes nothing; an operator pushes the test image, from a
+  checkout, to an ECR repository no deployment pulls (ADR-0092,
+  ADR-0093);
   the only cluster a recipe here reaches is the local minikube, and
   what it runs there it built from the working tree (`Makefile`,
   `minikube-images`). What a running garam serves is fixed by the image
@@ -353,10 +356,11 @@ on hosted runners.
   a surface is the half this repository holds, and #1020 moved it from
   the tag onto the artifact: `release.yml` passes the commit
   `git rev-parse HEAD` names in the run that built the image, and the
-  version of its `vX.Y.Z` tag (ADR-0039), to each Dockerfile, which
-  record the pair as `org.opencontainers.image.revision` and
-  `…version` — so `docker image inspect -f '{{json .Config.Labels}}'`
-  names the commit whose `platform/api/openapi.yaml` and
+  version of its release tag (ADR-0039, ADR-0157), to each
+  Dockerfile, which record the pair as
+  `org.opencontainers.image.revision` and `…version` — so
+  `docker image inspect -f '{{json .Config.Labels}}'` names the
+  commit whose `platform/api/openapi.yaml` and
   `platform/api/machine.yaml` a caller of that deployment meets. **A
   label is what the build claimed and not a property of the bytes.**
   Nothing derives it from the layers, so this replaces an unenforced
@@ -364,9 +368,10 @@ on hosted runners.
   immutable, which makes its digest a fact the registry
   enforces, and the single link left resting on trust is the git tag
   still naming the commit it named. What the registry held when #1033
-  merged, 2026-09-04T16:44Z, was published before the change — `0.1.0`
-  carried no labels at all and `0.2.0` a pair a person passed by hand —
-  so the first image carrying them because these files say so is a
+  merged, 2026-09-04T16:44Z, was published before the change —
+  `0.1.0-dev.1` (then `0.1.0`) carried no labels at all and
+  `0.1.0-dev.2` (then `0.2.0`) a pair a person passed by hand — so the
+  first image carrying them because these files say so is a
   release after that reading. A development build, which
   `make image-build` produces when given `IMAGE_REGISTRY`, carries the
   same two labels, the version being its tag (ADR-0071), and reaches
@@ -483,6 +488,12 @@ Responsibility documents:
   give each of the six images: settings, files, listeners, probes,
   stop, order of start, what each calls, the public names, what
   codehub must reach, the three databases, and what is not established
+- [deployment-gaon.md](./deployment-gaon.md) — how each of those
+  processes is declared on a gaon cluster: the kind, what the object
+  states, the order, the names, and what gaon does not yet serve; the
+  chart in
+  [deploy/charts/garam-gaon/](../../deploy/charts/garam-gaon/README.md)
+  renders them
 - [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
   gateway, the keys it holds, how it routes and what it records; not
   yet built
@@ -600,8 +611,9 @@ ADRs:
   superseded in part by 0071, which lets a person push a development
   build, by 0092 for non-release artifacts, whose test-image registry
   and publishing 0093 supersedes in turn, and by 0134 on the repository
-  names and on two images being all a release publishes, and by 0150 on
-  a published web image being bound to one API URL
+  names and on two images being all a release publishes, by 0150 on
+  a published web image being bound to one API URL, and by 0157 on a
+  release being a `vX.Y.Z` tag until launch
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart; its client certificates, the
@@ -726,7 +738,8 @@ ADRs:
   build `make image-build` produces locally and pushes nowhere.
   Supersedes ADR-0039's "the only trigger that publishes" in part; its
   one repository per image was superseded by 0095 and is restored by
-  0134
+  0134, and its bare `X.Y.Z` for a release is superseded in part by
+  0157
 - [0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)
   — the console presents a group as a team with a page of its own:
   Teams and People replace Groups and Members in the console, a team
@@ -1171,7 +1184,8 @@ ADRs:
   `garam/server`, `garam/console`, `garam/site`, `garam/cowork` and
   `garam/cowork-web`, and the test image moves to `garam/test` once
   garamsh/aurora#711 creates it; supersedes 0097, 0093's repository URI
-  and 0039's names and image count; superseded in part by 0150
+  and 0039's names and image count; superseded in part by 0150 and,
+  for the release tag's form, by 0157
   (§Decision 5, on the site baking the address)
 - [0135](./adr/0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
   — the site hands a sign-in to a fixed list of apps, the console and
@@ -1285,15 +1299,18 @@ ADRs:
   attribute of its entity that a system policy per operation reads, and
   a `permit` written by an owner alone; not yet built, except that the
   policy service holds an operator's operations and the system policy
-  per operation (#1805) and serves the write (#1822); supersedes 0140
+  per operation (#1805) and serves the write (#1822), and the platform
+  feeds an operator's operations and its place among its organization's
+  members (#1891); supersedes 0140
   in part, on the feed's "off by default" and its entities alone
 - [0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
   — a message between two agents of two organizations is tenant
   isolation's one exception, where each organization's `consents`
   attribute on its `Org` holds the other, both organizations'
   guardrails are read for it and a withdrawal denies the next send;
-  built in the policy service (#1805), not yet in the platform, which
-  feeds no `consents` and still refuses before the engine; supersedes
+  built in the policy service (#1805), the platform feeding `consents`
+  since #1887 and its send still refusing before the engine;
+  supersedes
   0035 in part, on the send-path precondition, and 0024 in part, on
   the refusal before the engine
 - [0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
@@ -1306,7 +1323,9 @@ ADRs:
   an hour collapse into one record with a count and an organization
   holds at most 10,000 live denial records, with a per-day overflow
   record beyond; an organization's owners and administrators read them
-  on `iam:audit.read`; not built; supersedes nothing
+  on `iam:audit.read`; built in the policy service (#1785), not in the
+  platform's relay of the read or the console's view of it; supersedes
+  nothing
 - [0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
   — codehub is a service of the policy service: a `Codehub` manifest
   with the entity `Codehub::Repo`, named `grn:<org>/codehub/repo/<id>`
@@ -1326,14 +1345,17 @@ ADRs:
   rewrite is made in each app's `proxy.ts` from `GARAM_API_URL`, no
   image holds an address and none is bound to a release name, an unset
   address answers every request with 500, probes included, and
-  `chart-rewrite` is removed; a release publishes six images; supersedes
+  `chart-rewrite` is removed; a release publishes six images (eight
+  from 0156 to 0158, six again since 0158); supersedes
   0056 in full, 0039's bound-to-one-API-URL consequence and 0134's
   site-bakes-the-address sentence
 - [0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)
   — the gaon operator is a service here that runs each managed agent as
   one MicroVM: a `gaon-operator/` folder with its own module and image,
   no custom gaon kind, one composed guest image, one no-ingress network
-  policy, a pair registered in garam; accepted, and unbuilt
+  policy, a pair registered in garam; accepted, and unbuilt; superseded
+  in part by ADR-0153 (item 3, the guest's user) and by ADR-0158 (item
+  1, where its image is published: no release publishes it)
 - [0152](./adr/0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)
   — garam may hold the Transit token by logging in to OpenBao's JWT auth
   method with a workload identity file beside the token file:
@@ -1345,3 +1367,127 @@ ADRs:
   403; gaon serves the token request only and has decided, not built,
   the file's writer, discovery and key set; accepted, built in
   `platform/internal/message/transit`; supersedes nothing
+- [0153](./adr/0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)
+  — the gaon guest's MicroVM runs as `0:0` and its supervisor drops the
+  runtime and the adapter to 65532 with no capability and keeps the
+  workspace root with the runner's five capabilities and executor 10001;
+  store and outbox 0700 and 65532's, the model credential to the runtime
+  alone; the token minted with the control service as audience is the
+  control token; records that the workspace stays root in the guest,
+  the open question of the guest kernel and the placement token's
+  source, and the drain in start order; supersedes 0151's item 3 in
+  part (the guest's user), accepted, built in `gaon-operator/`
+- [0154](./adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)
+  — the gaon operator registers each agent's first placement with the
+  control service (the MicroVM's and the memory Volume's uids, the
+  placement token's digest, a superseded body never presented again)
+  and renders the feed's configuration as two inline files and the
+  model key as an `env` `valueFrom` of the Secret `apiKeyRef` names;
+  `MODEL_KEY_*` is removed, `previous` is not built; closes ADR-0153's
+  open dependency, accepted, built in `gaon-operator/`
+- [0155](./adr/0155-garam-ships-a-second-helm-chart-that-renders-the-gaon-kinds.md)
+  — garam ships a second Helm chart, `garam-gaon`, that renders the gaon
+  kinds of deployment-gaon.md and nothing else, with migrations held
+  before services by a required `stage` value that gives two renders,
+  and checked in `make -C deploy/charts ci` against the settings the
+  source reads and a list of the fields gaon's files name; accepted,
+  built in `deploy/charts/garam-gaon/`; supersedes nothing
+- [0156](./adr/0156-a-release-publishes-eight-images-and-a-pull-request-builds-the-guest-only-to-its-build-stage.md)
+  — a release publishes eight images, the six and `garam/gaon-operator`
+  and `garam/gaon-guest`, all or none; the guest reads three private
+  images by digest, the adapter being `garam/server` of an earlier
+  release, and a pull request builds it only to its `build` stage under
+  `garam/gaon-guest-build`, which leaves its final stage unproven until
+  a release; accepted, built in `release.yml`; supersedes 0150's six
+  images and 0134's §Decision 6 for the guest, in part; superseded by
+  ADR-0158
+- [0157](./adr/0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md)
+  — until launch a release is `v0.1.0-dev.N`, `v0.1.0-rc.N` or
+  `v0.1.0`, N a positive integer without a leading zero, and
+  `tooling/release-version.sh` refuses every other tag; the
+  `0.1.0-dev.*` and `0.1.0-rc.*` image tags are reserved to releases,
+  so `tooling/image-build.sh` refuses them for a development build;
+  from `v0.1.0` the form is `vX.Y.Z` again; accepted, built in
+  `release.yml`; supersedes in part 0039's `vX.Y.Z`, 0071's bare
+  `X.Y.Z` and 0134's §Decision 3
+- [0158](./adr/0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)
+  — garam carries no gaon operator and publishes none: a release
+  publishes six images, all or none, and `images.yml` builds the six;
+  `gaon-operator/` and the documents describing it leave in a later
+  pull request, after
+  garamsh/garam-agent-operator holds it at a commit passing its own
+  checks, and CI builds and tests the module until then;
+  `deploy/charts/garam-gaon` stays; accepted, built in `release.yml`
+  and `tooling/image-build.sh`, and the directory's removal unbuilt;
+  supersedes 0156 in full and 0151 in part now, in whole when the
+  directory leaves; 0153 and 0154 follow 0151 out then
+- [0159](./adr/0159-role-links-follow-the-entities-in-one-pass-the-platforms-tables-win-a-failed-write-and-a-request-finishes-its-work-before-it-waits.md)
+  — a role link is delivered in the same pass and transaction as the
+  entities, after them, ordered by its policy's name and not under a
+  sequence; when a link write fails the platform's tables win and the
+  policy service keeps what it last had; at the bound a request
+  answers unavailable with the reason `change_not_applied` and the
+  stored resource, having finished its own work first; the outbox
+  holds a second kind of mark, the role link, read through its own
+  state function; accepted, built (#1878); supersedes 0146 in part,
+  on item 4's "same sequence" and the answer at the bound, and 0140 in
+  part, on §5's set of dirty entities
+- [0160](./adr/0160-a-role-link-the-policy-service-refuses-for-good-is-set-aside-and-the-members-links-are-removed.md)
+  — a role link the policy service refuses with `PERMISSION_DENIED` or
+  `INVALID_ARGUMENT` is set aside on its outbox mark and the pass goes
+  on; the member's links are then removed, so the service holds no
+  role for the member (fail closed, and a platform-side fault making
+  every link write malformed removes every member's role); a waiting
+  request is answered at once, 503 with the reason `change_refused`
+  and the stored resource; accepted, built (#1882, first half);
+  extends 0140 item 11 to a role link and supersedes 0159 in part, on
+  item 2 for a link refused for good
+- [0161](./adr/0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)
+  — the identifiers opening `link-owner-`, `link-admin-` or
+  `link-member-` are reserved to the platform's link of one member:
+  only the caller `platform` with no writer creates there, and only
+  that member's link as body; a write naming a writer is refused
+  whatever it holds; the platform's activation and removal there are
+  accepted only for a policy whose every version is that link; every
+  refusal is `PERMISSION_DENIED`, which ADR-0160 sets aside, and a
+  writer's is recorded as a denial; no migration; accepted, built
+  (#1882, second half); supersedes 0146 in part; extended by 0163
+- [0162](./adr/0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)
+  — a group's and a project's roles are written as scoped role links
+  under ADR-0163's identifier, from a third kind of mark,
+  `Iam::ScopedRoleLink`, whose id is the owner's GRN; the outbox's
+  kinds are a family, each link kind with its own state function; the
+  pass writes the roles held and deletes the policy of each of the
+  three not held, so a role removed, a role changed and a deleted
+  group or project are one operation; creating, updating and deleting
+  a group or a project wait on the mark; a user's direct roles are
+  removed with migration 000079; accepted, built (#1896); supersedes
+  0146 in part, on inventory row 2, and extends 0159 item 4
+- [0163](./adr/0163-the-platform-alone-writes-under-the-identifier-of-the-scoped-link-it-derives-from-a-groups-or-a-projects-roles.md)
+  — the identifiers opening `link-scoped-` are reserved to the scoped
+  link the platform derives from a group's or a project's roles,
+  `link-scoped-<role>-<hex>` with `<hex>` the first 16 bytes of the
+  SHA-256 of the role, the principal's type and id and the resource's
+  type and id, each field length-prefixed with 8 bytes, so no two
+  principals or resources share one; only the caller `platform` with
+  no writer creates there, and only a team's or a project's link on
+  itself; every other rule of 0161 holds for it; no migration;
+  accepted, built (#1898); extends 0161
+- [0164](./adr/0164-the-policy-service-decides-a-supervisors-activation-of-the-agent-it-holds.md)
+  — the policy service decides a supervisor's activation of the agent
+  it holds: `Iam::Supervisor in [OrgMembers, Org]` carries an optional
+  `agent`, written by the caller `platform` alone, is a principal of
+  `iam:agent.activate` alone, and the system policy
+  `supervisor-agent-activate` permits it where the resource is that
+  agent; no `permit` of an organization reaches it; accepted, built in
+  the policy service (#1905); corrects row 6 of 0146's inventory
+- [0165](./adr/0165-every-request-that-changes-a-fed-entity-answers-after-its-delivery-by-the-marks-its-own-write-raised.md)
+  — every request whose write raises an outbox mark waits on those
+  marks, read by their kind's state function under one bound and
+  answering at once for none, with ADR-0159's bound and ADR-0160's
+  two answers and no new reason; a delete that cascades records the
+  marks of its own transaction; a first sign-in waits and redirects at
+  the bound, and a repeat one does not wait, nor does a replacement of
+  an agent; the machine listener
+  waits through a gate that observes the outbox with no loop, with no
+  new setting; accepted, built (#1909); extends 0159 and 0162

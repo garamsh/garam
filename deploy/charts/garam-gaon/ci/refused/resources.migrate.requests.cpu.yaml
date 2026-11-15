@@ -1,0 +1,6 @@
+# A Job is a MicroVM like the rest and is sized the same way.
+stage: migrate
+resources:
+  migrate:
+    requests:
+      cpu: ""

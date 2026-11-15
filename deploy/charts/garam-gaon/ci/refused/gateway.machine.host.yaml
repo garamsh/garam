@@ -1,0 +1,14 @@
+gateway:
+  enabled: true
+  site:
+    host: garam.example
+    certificate: site-tls
+  console:
+    host: console.garam.example
+    certificate: console-tls
+  cowork:
+    host: cowork.garam.example
+    certificate: cowork-tls
+  userContent:
+    host: content.garam.example
+    certificate: content-tls

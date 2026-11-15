@@ -6,7 +6,12 @@
 > and by [ADR-0143](./0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
 > (§2, where the ownership of a type is written) and by
 > [ADR-0146](./0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)
-> (the feed's "off by default", and a feed of entities alone)
+> (the feed's "off by default", and a feed of entities alone) and by
+> [ADR-0159](./0159-role-links-follow-the-entities-in-one-pass-the-platforms-tables-win-a-failed-write-and-a-request-finishes-its-work-before-it-waits.md)
+> (§5, the outbox as a set of dirty entities, which also holds a role
+> link) and extended by
+> [ADR-0160](./0160-a-role-link-the-policy-service-refuses-for-good-is-set-aside-and-the-members-links-are-removed.md)
+> (item 11, to a role link the service refuses for good)
 > Date: 2026-10-31
 
 Drafted for #1689, which reserves this number and holds the rulings

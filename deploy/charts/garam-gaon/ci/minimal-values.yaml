@@ -1,0 +1,107 @@
+# Every value the chart requires and no optional one. Each name below is
+# a reference to an object the deployment creates; no value of a Secret
+# is here, and the digests are not those of any published image. The
+# quantities are figures for these fixtures alone: the chart has no
+# default and the repository holds no figure for any process.
+stage: serve
+migrate:
+  run: r1
+resources:
+  api: &resources
+    requests:
+      cpu: "1"
+      memory: 1Gi
+  authz: *resources
+  machine: *resources
+  policy: *resources
+  cowork: *resources
+  console: *resources
+  site: *resources
+  coworkWeb: *resources
+  migrate: *resources
+  coworkMigrate: *resources
+  policyMigrate: *resources
+image:
+  server: &image
+    repository: registry.example/garam/server
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+    user: "1000:1000"
+  cowork:
+    <<: *image
+    repository: registry.example/garam/cowork
+  policy:
+    <<: *image
+    repository: registry.example/garam/policy
+  console:
+    <<: *image
+    repository: registry.example/garam/console
+  site:
+    <<: *image
+    repository: registry.example/garam/site
+  coworkWeb:
+    <<: *image
+    repository: registry.example/garam/cowork-web
+database:
+  garam:
+    secret: garam-database
+    key: url
+  cowork:
+    secret: cowork-database
+    key: url
+  policy:
+    secret: policy-database
+    key: url
+public:
+  siteUrl: https://garam.example
+  consoleUrl: https://console.garam.example
+  coworkUrl: https://cowork.garam.example
+  coworkSyncUrl: wss://cowork.garam.example/api
+policy:
+  tokenIssuer: https://garam.example
+  jwks:
+    configMap: policy-jwks
+    key: jwks.json
+  tls:
+    cert:
+      configMap: policy-tls
+      key: tls.crt
+    key:
+      secret: policy-tls
+      key: tls.key
+api:
+  policy:
+    ca:
+      configMap: policy-ca
+      key: ca.crt
+    signingKey:
+      secret: api-policy-signing
+      key: signing.key
+machine:
+  issuer: https://machine.garam.example
+  tlsCert:
+    configMap: machine-tls
+    key: tls.crt
+  tlsKey:
+    secret: machine-tls
+    key: tls.key
+  serverRoot:
+    configMap: machine-server-root
+    key: server-root.crt
+  caKey:
+    secret: machine-ca
+    key: ca.key
+cowork:
+  webOrigins: "*.garam.example"
+  s3:
+    bucket: cowork
+    accessKey:
+      secret: cowork-s3
+      key: access-key
+    secretKey:
+      secret: cowork-s3
+      key: secret-key
+  userContent:
+    origin: https://content.garam.example
+    secret:
+      secret: cowork-usercontent
+      key: secret

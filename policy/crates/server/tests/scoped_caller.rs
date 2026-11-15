@@ -282,6 +282,37 @@ async fn a_scoped_caller_writes_neither_a_consent_nor_an_operators_operations() 
     refused_whole(delegated).await;
 }
 
+/// A supervisor is the platform's to feed (ADR-0164): the platform's
+/// write of one reaches the store, and a scoped caller's refuses its
+/// whole request with the same body.
+#[tokio::test]
+async fn a_scoped_caller_does_not_write_a_supervisor_the_platform_does() {
+    let (mut client, reached) = served().await;
+    let supervisor = || EntityChange {
+        entity: Some(named("Iam::Supervisor", "grn:acme/iam/supervisor/host")),
+        sequence: 1,
+        operation: Some(Operation::Upsert(EntityUpsert {
+            org: Some(named("Iam::Org", ACME)),
+            parents: vec![named("Iam::OrgMembers", ACME), named("Iam::Org", ACME)],
+            agent: Some(named("Iam::Agent", "grn:acme/iam/agent/bot")),
+            ..EntityUpsert::default()
+        })),
+    };
+
+    let refused = apply(&mut client, COWORK, vec![channel(), supervisor()])
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code(), Code::PermissionDenied);
+    assert_eq!(reached.load(Ordering::SeqCst), 0);
+
+    let written = apply(&mut client, "platform", vec![supervisor()])
+        .await
+        .unwrap();
+    assert_eq!(written.written, 1);
+    assert!(written.refusals.is_empty());
+    assert_eq!(reached.load(Ordering::SeqCst), 1);
+}
+
 #[tokio::test]
 async fn another_fault_of_a_scoped_caller_is_still_its_entry_s_alone() {
     let (mut client, reached) = served().await;
@@ -343,6 +374,7 @@ fn question(action: &str, resource_type: &str, resource: &str) -> EvaluateReques
         }),
         context: None,
         read: 0,
+        probe: false,
     }
 }
 
@@ -402,6 +434,7 @@ async fn one_question_out_of_scope_in_a_batch_refuses_the_batch() {
             id: id.into(),
             properties: None,
         }),
+        probe: None,
         context: None,
     };
     let batch = |evaluations| EvaluationsRequest {
@@ -414,6 +447,7 @@ async fn one_question_out_of_scope_in_a_batch_refuses_the_batch() {
         context: None,
         evaluations,
         read: 0,
+        probe: false,
     };
 
     let own = entry("cowork:channel.post", "Cowork::Channel", CHANNEL);

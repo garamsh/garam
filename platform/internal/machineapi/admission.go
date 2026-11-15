@@ -84,6 +84,14 @@ func (s *Server) AdmitAgentEnrollment(w http.ResponseWriter, r *http.Request, ap
 		return
 	}
 	c := approval.Admitted
+	// A replacement moves an agent that exists and raises no mark, so
+	// it is answered at once whatever an older mark of the agent says.
+	if approval.Binding.Replaces == nil {
+		if err := s.awaitAgent(r.Context(), c.Agent); err != nil {
+			writeError(w, withinBudget(r, err))
+			return
+		}
+	}
 	writeJSON(w, createdOrReplayed(created), machinegen.AgentAdmission{
 		Grn: c.Agent.String(), Placement: machinegen.AgentAdmissionPlacement(approval.Binding.Placement),
 		Assignee: c.Controller.String(), Epoch: strconv.Itoa(c.Epoch), Lineage: openapi_types.UUID(c.Lineage),

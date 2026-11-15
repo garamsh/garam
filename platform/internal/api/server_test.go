@@ -33,6 +33,7 @@ import (
 // fixture wires a Server to in-memory doubles.
 type fixture struct {
 	handler     http.Handler
+	server      *api.Server
 	users       *fakeUserStore
 	orgs        *fakeOrgStore
 	agents      *fakeAgentStore
@@ -98,6 +99,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		WithDeviceGrant(f.devices)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.
+	f.server = srv
 	f.handler = apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
 		ErrorHandlerFunc: api.BindingError,
 	})

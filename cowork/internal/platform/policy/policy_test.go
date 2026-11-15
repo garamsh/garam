@@ -240,3 +240,27 @@ func TestAllowed_IdentifyAndOrganizationsStayWithThePlatform(t *testing.T) {
 	assert.Equal(t, []platform.Organization{{ID: "acme", Name: "Acme"}}, orgs)
 	assert.Empty(t, f.server.Asked())
 }
+
+// TestAllowed_StatesAProbeOnItsOwnEntryAndAnAttemptStatesNothing asks
+// one batch holding a probe and an attempt: the probe's entry carries
+// the statement, the attempt's entry is unset, and the request states
+// none for the batch.
+func TestAllowed_StatesAProbeOnItsOwnEntryAndAnAttemptStatesNothing(t *testing.T) {
+	f := newFixture(t, map[string]bool{"cowork:page.read@" + pageID: true})
+	checks := []platform.Check{
+		platform.OnPage("cowork:page.read", "abcdefghijkl").AsProbe(),
+		platform.OnPage("cowork:page.write", "abcdefghijkl"),
+	}
+
+	_, err := f.adapter.Allowed(context.Background(), f.ada, "acme", checks)
+
+	require.NoError(t, err)
+	asked := f.server.Asked()
+	require.Len(t, asked, 1)
+	req := asked[0].Request
+	require.Len(t, req.GetEvaluations(), 2)
+	require.NotNil(t, req.GetEvaluations()[0].Probe, "the filter states probe")
+	assert.True(t, *req.GetEvaluations()[0].Probe)
+	assert.Nil(t, req.GetEvaluations()[1].Probe, "the attempt states nothing")
+	assert.False(t, req.GetProbe(), "no default for the batch")
+}

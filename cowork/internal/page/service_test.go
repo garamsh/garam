@@ -18,8 +18,9 @@ import (
 // names, as action or action@page, and refuses a caller outside acme
 // as the platform does.
 type policy struct {
-	deny  map[string]bool
-	asked int
+	deny    map[string]bool
+	asked   int
+	checked []platform.Check
 }
 
 func (p *policy) Identify(context.Context, platform.Credential) (platform.Caller, error) {
@@ -35,6 +36,7 @@ func (p *policy) Allowed(_ context.Context, _ platform.Caller, org string, check
 		return nil, errorx.New(errorx.KindPermissionDenied, "not a member")
 	}
 	p.asked += len(checks)
+	p.checked = append(p.checked, checks...)
 	out := make([]bool, len(checks))
 	for i, c := range checks {
 		k := c.Action
@@ -261,4 +263,26 @@ func TestCreate_RefusesATitleTooLong(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.Create(context.Background(), ada, "acme", page.CreateInput{Title: string(long)})
 	assert.ErrorIs(t, err, page.ErrTitleTooLong)
+}
+
+// TestList_StatesItsPerPageQuestionsAsProbes lists a tree and reads
+// one page of it. Each page the list asks about is a probe; the gate
+// on the list and the read of one page, which a person asked for, are
+// not.
+func TestList_StatesItsPerPageQuestionsAsProbes(t *testing.T) {
+	s, p := newService(t)
+	a := create(t, s, "a", "")
+	p.checked = nil
+
+	_, err := s.List(context.Background(), ada, "acme")
+	require.NoError(t, err)
+	require.Len(t, p.checked, 2, "the gate, then the one page")
+	assert.False(t, p.checked[0].Probe, "the gate is the caller's request")
+	assert.True(t, p.checked[1].Probe, "the filter is a probe")
+
+	p.checked = nil
+	_, err = s.Get(context.Background(), ada, "acme", a.ID)
+	require.NoError(t, err)
+	require.Len(t, p.checked, 1)
+	assert.False(t, p.checked[0].Probe, "a read of one page is an attempt")
 }

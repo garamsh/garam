@@ -1,0 +1,78 @@
+{{- if eq (include "garam-gaon.stage" .) "serve" }}
+{{- $api := printf "http://%s:8080" (include "garam-gaon.host" (dict "root" $ "word" "api")) }}
+{{- $site := required "public.siteUrl is required: the origin people sign in at" .Values.public.siteUrl }}
+{{- /*
+The three web images. Each is Next.js `output: "standalone"`, started by
+node with the server's absolute path, because the image's working
+directory is not passed (README §What gaon does not yet serve).
+*/}}
+{{- range $web := list
+  (dict "word" "console" "image" "console" "app" "platform-web")
+  (dict "word" "site" "image" "site" "app" "site-web")
+  (dict "word" "cowork-web" "image" "coworkWeb" "app" "cowork-web") }}
+{{- $ctx := dict "root" $ "word" $web.word }}
+---
+apiVersion: workloads.gaon.garam.sh/v1alpha1
+kind: Deployment
+metadata:
+  name: {{ include "garam-gaon.name" $ctx }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "garam-gaon.selector" $ctx | nindent 6 }}
+  template:
+    image: {{ include "garam-gaon.image" (dict "root" $ "image" $web.image) }}
+    user: {{ include "garam-gaon.user" (dict "root" $ "image" $web.image) | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" $web.image) | nindent 4 }}
+    command:
+      - node
+    args:
+      - /app/{{ $web.app }}/server.js
+    env:
+      {{- if eq $web.word "console" }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_API_URL" "value" $api) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_SITE_URL" "value" $site) | nindent 6 }}
+      {{- with $.Values.public.coworkWebUrl }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_WEB_URL" "value" .) | nindent 6 }}
+      {{- end }}
+      {{- else if eq $web.word "site" }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_API_URL" "value" $api) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_CONSOLE_URL" "value" (required "public.consoleUrl is required: the origin the console is served at" $.Values.public.consoleUrl)) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_COWORK_URL" "value" (required "public.coworkUrl is required: the origin cowork is served at" $.Values.public.coworkUrl)) | nindent 6 }}
+      {{- else }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_API_URL" "value" (printf "http://%s:8090" (include "garam-gaon.host" (dict "root" $ "word" "cowork")))) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_API_URL" "value" $api) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "GARAM_SITE_URL" "value" $site) | nindent 6 }}
+      {{- include "garam-gaon.env" (dict "name" "COWORK_SYNC_URL" "value" (required "public.coworkSyncUrl is required: a ws or wss URL, cowork's server as the browser reaches it for a page's sync socket, on cowork-web's own host and under /api (deployment-needs.md §garam/cowork-web)" $.Values.public.coworkSyncUrl)) | nindent 6 }}
+      {{- end }}
+    ports:
+      - name: http
+        port: 3000
+        protocol: TCP
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: http
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: http
+---
+apiVersion: compute.gaon.garam.sh/v1alpha1
+kind: Service
+metadata:
+  name: {{ include "garam-gaon.name" $ctx }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "garam-gaon.selector" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: 3000
+      targetPort: http
+{{- end }}
+{{- end }}

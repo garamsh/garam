@@ -1,0 +1,2 @@
+machine:
+  tokenUrl: http://machine.garam.example/token

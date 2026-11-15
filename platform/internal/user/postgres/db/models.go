@@ -11,7 +11,6 @@ import (
 type User struct {
 	Grn       string
 	Nickname  string
-	Roles     []string
 	Policies  []string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz

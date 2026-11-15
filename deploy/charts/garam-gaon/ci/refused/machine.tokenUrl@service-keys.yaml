@@ -1,0 +1,9 @@
+# Where the service keys are set, the machine's own introspection is
+# the token URL, and it is not left out.
+identity:
+  issuer: https://garam.example/api
+  serviceKeys:
+    configMap: identity-service-keys
+    key: service-keys.json
+policy:
+  tokenIssuer: https://garam.example/api

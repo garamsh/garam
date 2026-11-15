@@ -32,6 +32,9 @@ type Desired struct {
 	// MemoryStorage and WorkspaceStorage size the agent's two Volumes.
 	MemoryStorage    api.Quantity
 	WorkspaceStorage api.Quantity
+	// Configuration is what the runtime is configured with. It is read
+	// as the wire gave it and checked where it is rendered, per agent.
+	Configuration Configuration
 }
 
 // State is a provisioning state the operator reports. `pending` is
@@ -61,12 +64,36 @@ const (
 	annotationEpoch   = "garam.sh/epoch"
 	annotationRev     = "garam.sh/revision"
 	roleAgent         = "agent"
+	// roleModelKey labels a Secret that holds a model or embedding key
+	// (ADR-0154). The deployment creates it; the operator never does.
+	roleModelKey = "model-key"
 )
 
 // Selector selects the objects this operator owns, for a client's
 // api.WithLabelSelector.
 func Selector() api.Selector {
 	return api.Selector{{Key: labelRole, Operator: api.SelectorIn, Values: []string{roleAgent}}}
+}
+
+// ModelKeySelector selects the Secrets that may hold a model key, for a
+// client's api.WithLabelSelector. It is not Selector: the role the
+// operator's gaon identity needs is read on Secrets labelled
+// `garam.sh/role=model-key` as well as on its own.
+func ModelKeySelector() api.Selector {
+	return api.Selector{{Key: labelRole, Operator: api.SelectorIn, Values: []string{roleModelKey}}}
+}
+
+// ModelKeyLabels are the labels a model-key Secret of g's organization
+// carries, which is how the deployment creates it.
+func ModelKeyLabels(g grn.GRN) map[string]string {
+	return map[string]string{labelRole: roleModelKey, labelOrganization: organizationLabel(g)}
+}
+
+// organizationLabel is the value of the organization label of g's
+// objects: the first 32 hex digits of the SHA-256 of the organization's
+// GRN, because a label value is at most 63 characters.
+func organizationLabel(g grn.GRN) string {
+	return digest(grn.Org(g.Organization).String())[:32]
 }
 
 // names are the names of the objects of one agent.
@@ -95,7 +122,7 @@ func metaFor(name string, d Desired) api.ObjectMeta {
 		Name: name,
 		Labels: map[string]string{
 			labelRole:         roleAgent,
-			labelOrganization: digest(grn.Org(d.GRN.Organization).String())[:32],
+			labelOrganization: organizationLabel(d.GRN),
 			labelAgent:        digest(d.GRN.String())[:32],
 		},
 		Annotations: map[string]string{

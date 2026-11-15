@@ -4,6 +4,9 @@ For each of the six images, what any deployment must provide and what
 the process does with it, read off the source, so that a deployment that
 is not the Helm chart is written from this document.
 
+How a gaon cluster declares these processes is
+[deployment-gaon.md](./deployment-gaon.md).
+
 Every claim holds at commit
 `210b58da3bcdf9b4e3fd5346dca01a74f9d80e4e`, read from the files cited,
 and is not checked against any later one. The exception is the
@@ -131,8 +134,14 @@ Dockerfile under `deploy/local/`.
   healthchecks); the Go and Rust images carry neither.
 - The local stack (`deploy/local/docker-compose.yml`) is the one place
   all six images run together, and it does not cover everything here:
-  it runs no machine listener, sets no `GARAM_POLICY_*` on the api, and
-  leaves cowork's four policy settings empty. What it orders by
+  it sets `GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
+  `GARAM_POLICY_SIGNING_KEY_FILE` and `GARAM_POLICY_TOKEN_ISSUER` on the
+  api and runs `garam policy-feed start` once the api's database is
+  migrated (`deploy/local/docker-compose.yml`, the `policy-keys` and
+  `policy-feed` services). It also runs the machine listener, turns the
+  identity issuer on for the api and the listener, and gives cowork its
+  four policy settings (the `machine-material`, `cowork-keys` and
+  `machine` services). What it orders by
   `depends_on` is its own choice and is stated under each entry's
   Before start.
 - The Go processes' only probe command is their own:
@@ -159,7 +168,7 @@ plaintext HTTP port (`serve.go:51-159`).
 | `GARAM_COOKIE_SECURE` | no | `true`; an unparsable value is refused (`serve.go:85`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URL` | no | no Google sign-in; the first two are set together or neither (`serve.go:215-234`) |
 | `GARAM_MACHINE_TOKEN_URL` | no | no assertion exchange; an absolute https URL when set (`platform/internal/operator/assertion.go:118-137`) |
-| `GARAM_POLICY_ADDR` | no | no policy delivery; when set, the three below are required (`policy_delivery.go:127-151`) |
+| `GARAM_POLICY_ADDR` | no | no policy delivery, and no request that changes a membership waits for one; when set, the three below are required (`policy_delivery.go:127-151`) |
 | `GARAM_POLICY_CA_FILE`, `GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER` | with the address | see above; the key is loaded at start (`policy_delivery.go:175`) |
 | `GARAM_IDENTITY_ISSUER` | no | issuer off (`identity.go:26-56`); the chart does not render it (`deploy/charts/garam/README.md:348`) |
 | `GARAM_MACHINE_ISSUER` | no | read here only to refuse an identity issuer equal to it (`identity.go:26-56`) |
@@ -367,7 +376,7 @@ job.
   visitor without a session to the site (`proxy.ts:44-62`).
 - **Before start.** Nothing is read: the probes read nothing of the api
   ([ADR-0023](./adr/0023-web-probes.md)). The local stack starts it
-  after the api is healthy (`deploy/local/docker-compose.yml:183-185`),
+  after the api is healthy (`deploy/local/docker-compose.yml:208-210`),
   which is that stack's choice.
 - **Stop.** Not established; see §Not established.
 
@@ -389,7 +398,7 @@ image shape on port 3000.
   (`proxy.ts:21-26`); it redirects `/console/*` and `/device` to
   `GARAM_CONSOLE_URL` (`proxy.ts:27-29,34`).
 - **Before start.** Nothing is read; the local stack starts it after the
-  api is healthy (`deploy/local/docker-compose.yml:209-211`), which is
+  api is healthy (`deploy/local/docker-compose.yml:234-236`), which is
   that stack's choice. **Stop.** Not established.
 
 ## garam/cowork: serve and migrate
@@ -498,7 +507,7 @@ the MCP tools (`cowork/internal/cli/serve.go:178-261`). Image
   without a session is sent to the site (`proxy.ts:18-28`).
 - **Before start.** Nothing is read: the probes read nothing of cowork.
   The local stack starts it after cowork is healthy
-  (`deploy/local/docker-compose.yml:409-411`), which is that stack's
+  (`deploy/local/docker-compose.yml:568-570`), which is that stack's
   choice. **Stop.** Not established.
 
 ## garam/policy: serve and migrate
@@ -537,8 +546,9 @@ Two are named by a setting: garam's `serve api`
 (`GARAM_POLICY_ADDR`) and cowork (`COWORK_POLICY_ADDR`); codehub is
 named by none and is §codehub as a caller.
 `POLICY_HEALTH_ADDR`: HTTP, plaintext,
-`/healthz` and `/readyz`, a credential riding neither
-(`probes.rs:13-34`).
+`/healthz`, `/readyz` and `/metrics` (the denials lost, omitted and
+queued, in the Prometheus text format), a credential riding none of
+them (`probes.rs`).
 
 **Probes.** `/healthz` answers 200 and reads nothing; `/readyz` answers
 200 while `SELECT 1` succeeds within 2s and 503 otherwise
@@ -673,7 +683,7 @@ its objects:
 | the policy service's | `POLICY_DATABASE_URL` | `policy serve`, `policy migrate` | `policy migrate` |
 
 - Version: PostgreSQL 17, and 17.11 in the local stack
-  (`deploy/local/docker-compose.yml:19`). No migration of any of the
+  (`deploy/local/docker-compose.yml:24`). No migration of any of the
   three creates an extension: a search of `platform/migrations`,
   `cowork/migrations` and `policy/migrations` for `CREATE EXTENSION`
   found nothing.

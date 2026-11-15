@@ -96,8 +96,8 @@ func (s *Store) UpdateGroup(ctx context.Context, g grn.GRN, p org.GroupPatch) (*
 
 // DeleteGroup removes the Group with the given GRN.
 func (s *Store) DeleteGroup(ctx context.Context, g grn.GRN) error {
-	n, err := s.q.DeleteGroup(ctx, g.String())
-	return classifyRows(n, err, "delete group", org.ErrGroupNotFound)
+	return s.deleteRecording(ctx, "delete group", org.ErrGroupNotFound,
+		func(q *db.Queries) (int64, error) { return q.DeleteGroup(ctx, g.String()) })
 }
 
 // AddGroupMember adds a member to the Group, or returns

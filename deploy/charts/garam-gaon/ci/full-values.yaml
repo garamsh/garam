@@ -1,0 +1,161 @@
+# minimal-values.yaml with every optional value set, so the two files'
+# union reaches every branch of the templates. Names only: no value of a
+# Secret is here.
+stage: serve
+migrate:
+  run: r1
+# The quantities are figures for these fixtures alone.
+resources:
+  api: &resources
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1.5Gi
+  authz: *resources
+  machine: *resources
+  policy: *resources
+  cowork: *resources
+  console: *resources
+  site: *resources
+  coworkWeb: *resources
+  migrate: *resources
+  coworkMigrate: *resources
+  policyMigrate: *resources
+namePrefix: prod-garam
+dnsZone: gaon.example
+image:
+  server: &image
+    repository: registry.example/garam/server
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
+    user: "1000:1000"
+  cowork:
+    <<: *image
+    repository: registry.example/garam/cowork
+  policy:
+    <<: *image
+    repository: registry.example/garam/policy
+  console:
+    <<: *image
+    repository: registry.example/garam/console
+  site:
+    <<: *image
+    repository: registry.example/garam/site
+  coworkWeb:
+    <<: *image
+    repository: registry.example/garam/cowork-web
+database:
+  garam:
+    secret: garam-database
+    key: url
+  cowork:
+    secret: cowork-database
+    key: url
+  policy:
+    secret: policy-database
+    key: url
+public:
+  siteUrl: https://garam.example
+  consoleUrl: https://console.garam.example
+  coworkUrl: https://cowork.garam.example
+  coworkSyncUrl: wss://cowork.garam.example/api
+  coworkWebUrl: https://cowork.garam.example
+policy:
+  tokenIssuer: https://garam.example/api
+  jwks:
+    configMap: policy-jwks
+    key: jwks.json
+  tls:
+    cert:
+      configMap: policy-tls
+      key: tls.crt
+    key:
+      secret: policy-tls
+      key: tls.key
+identity:
+  issuer: https://garam.example/api
+  serviceKeys:
+    configMap: identity-service-keys
+    key: service-keys.json
+api:
+  sessionTtl: 24h
+  cookieSecure: false
+  google:
+    clientId: client-id.example
+    redirectUrl: https://garam.example/api/auth/google/callback
+    clientSecret:
+      secret: google-oauth
+      key: client-secret
+  policy:
+    ca:
+      configMap: policy-ca
+      key: ca.crt
+    signingKey:
+      secret: api-policy-signing
+      key: signing.key
+machine:
+  issuer: https://machine.garam.example
+  tokenUrl: https://machine.garam.example/oauth/token
+  agentTokenLifetime: 15m
+  tlsCert:
+    configMap: machine-tls
+    key: tls.crt
+  tlsKey:
+    secret: machine-tls
+    key: tls.key
+  serverRoot:
+    configMap: machine-server-root
+    key: server-root.crt
+  caKey:
+    secret: machine-ca
+    key: ca.key
+  service:
+    type: LoadBalancer
+    loadBalancerIP: 192.0.2.10
+cowork:
+  webOrigins: "*.garam.example"
+  s3:
+    endpoint: https://s3.example
+    region: eu-west-1
+    bucket: cowork
+    accessKey:
+      secret: cowork-s3
+      key: access-key
+    secretKey:
+      secret: cowork-s3
+      key: secret-key
+    pathStyle: true
+    createBucket: true
+  userContent:
+    origin: https://content.garam.example
+    secret:
+      secret: cowork-usercontent
+      key: secret
+  policy:
+    enabled: true
+    ca:
+      configMap: cowork-policy-ca
+      key: ca.crt
+    deploymentKey:
+      secret: cowork-deployment
+      key: deployment.key
+gateway:
+  enabled: true
+  address: 192.0.2.20
+  httpsPort: 443
+  site:
+    host: garam.example
+    certificate: site-tls
+  console:
+    host: console.garam.example
+    certificate: console-tls
+  cowork:
+    host: cowork.garam.example
+    certificate: cowork-tls
+  userContent:
+    host: content.garam.example
+    certificate: content-tls
+  machine:
+    host: machine.garam.example
+    port: 8443

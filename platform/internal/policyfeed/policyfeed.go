@@ -34,6 +34,62 @@ type State struct {
 	// Members is the OrgMembers an Org names as its own.
 	Members *Entity
 	Parents []Entity
+	// Consents are the organizations toward which an Org holds a
+	// consent half that stands (ADR-0147 item 2).
+	Consents []Entity
+	// Operations are the action names, in their wire form, that an
+	// Operator's current delegation holds (ADR-0146 §A).
+	Operations []string
+}
+
+// The mark kinds of the entities themselves, as policy_outbox_track
+// writes them. The marks of the links follow.
+const (
+	OrgType        = "Iam::Org"
+	OrgMembersType = "Iam::OrgMembers"
+	TeamType       = "Iam::Team"
+	ProjectType    = "Iam::Project"
+	UserType       = "Iam::User"
+	AgentType      = "Iam::Agent"
+	OperatorType   = "Iam::Operator"
+)
+
+// RoleLinkType is the mark kind of a member's role link (ADR-0146
+// item 4). Its id is the organization's GRN and the member's, with a
+// space between them, so a link's mark is told from an entity's by its
+// type alone.
+const RoleLinkType = "Iam::RoleLink"
+
+// Link is the role link the platform writes for one membership. It is
+// written with no writer, as the caller `platform` (ADR-0146
+// §Security), and is named by the pair, so a role that changes is the
+// replacement of the link that held the old one.
+type Link struct {
+	// Org and User are the GRNs of the organization and the member.
+	Org, User string
+	// Role is the role the membership holds, and empty where it holds
+	// none, which is the link's removal.
+	Role string
+}
+
+// ScopedRoleLinkType is the mark kind of the scoped role links of a
+// group or a project (ADR-0162). Its id is the GRN of the group or the
+// project, which is both principal and resource of each link. With
+// RoleLinkType, and the entities' own types, it makes the outbox a
+// family of mark kinds (ADR-0159 item 4).
+const ScopedRoleLinkType = "Iam::ScopedRoleLink"
+
+// ScopedLink is the scoped role links the platform writes for one
+// group or project, one for each role it holds. Like a member's link
+// it is written with no writer, and is named by what it says, so a
+// role added is the write of its link and a role removed is the removal
+// of its link.
+type ScopedLink struct {
+	// Owner is the GRN of the group or the project.
+	Owner string
+	// Roles are the roles it holds, each once, and none where the
+	// owner holds none or no longer exists.
+	Roles []string
 }
 
 // Entry is one entity a pass delivers.
@@ -47,5 +103,28 @@ type Entry struct {
 // Refusal is an entry the policy service refused for its own fault.
 type Refusal struct {
 	Entity Entity
+	Reason string
+}
+
+// LinkRefusal is a link the policy service refused with a code that
+// retrying cannot clear. The link is set aside: its mark stays in the
+// outbox, recorded with the code and the reason, and no pass reads it
+// again until a write of the membership marks it anew.
+type LinkRefusal struct {
+	Link Link
+	// Code is the gRPC code the service answered, as its name.
+	Code string
+	// Reason is the call that was refused and the service's message.
+	Reason string
+}
+
+// ScopedLinkRefusal is a scoped link the policy service refused with a
+// code that retrying cannot clear. It is set aside as a LinkRefusal is,
+// on the mark of the group or the project.
+type ScopedLinkRefusal struct {
+	Link ScopedLink
+	// Code is the gRPC code the service answered, as its name.
+	Code string
+	// Reason is the call that was refused and the service's message.
 	Reason string
 }

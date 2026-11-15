@@ -1,0 +1,7 @@
+# The key of a ConfigMap, and no ConfigMap.
+identity:
+  issuer: https://garam.example/api
+  serviceKeys:
+    key: service-keys.json
+policy:
+  tokenIssuer: https://garam.example/api

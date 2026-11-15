@@ -15,6 +15,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 	"github.com/garamsh/garam/platform/internal/watch"
 )
@@ -64,6 +65,9 @@ type Server struct {
 	// issuer is garam as an OIDC issuer (ADR-0141); nil registers none
 	// of its three operations, which then answer as an unknown path.
 	issuer *identity.Issuer
+	// feed holds a membership change's answer until the policy service
+	// has applied its role links (ADR-0146); nil waits for nothing.
+	feed policyfeed.Gate
 }
 
 // Compile-time check that Server satisfies the generated interface.

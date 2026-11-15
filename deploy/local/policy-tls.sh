@@ -10,6 +10,10 @@ set -eu
 name=${1:?the DNS name the certificate holds}
 owner=${2:?the user that owns the key}
 
+# Compose runs this again whenever a service that waits on it is brought
+# up, and a server holds the pair it started with: what is there stays.
+[ ! -e /tls/tls.crt ] || exit 0
+
 apk add --no-cache --quiet openssl
 
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \

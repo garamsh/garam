@@ -20,7 +20,10 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 )
 
-type policy struct{ deny map[string]bool }
+type policy struct {
+	deny    map[string]bool
+	checked []platform.Check
+}
 
 func (p *policy) Identify(context.Context, platform.Credential) (platform.Caller, error) {
 	return platform.Caller{}, nil
@@ -31,6 +34,7 @@ func (p *policy) Organizations(context.Context, platform.Caller) ([]platform.Org
 }
 
 func (p *policy) Allowed(_ context.Context, c platform.Caller, _ string, checks []platform.Check) ([]bool, error) {
+	p.checked = append(p.checked, checks...)
 	out := make([]bool, len(checks))
 	for i, ch := range checks {
 		k := ch.Action
@@ -303,4 +307,27 @@ func TestRecordFailure_RemovesTheBlobUnlessTheRecordMayStand(t *testing.T) {
 			})
 		}
 	}
+}
+
+// TestList_StatesItsPerArtifactQuestionsAsProbes lists the artifacts
+// and reads one. Each artifact the list asks about is a probe; the gate
+// on the list and the read of one artifact are not.
+func TestList_StatesItsPerArtifactQuestionsAsProbes(t *testing.T) {
+	p := &policy{}
+	s := artifact.NewService(memory.New(), blobmemory.New(), p, &pages{}, &pages{}, viewer{})
+	a, err := s.Create(ctx, ada, "acme", artifact.CreateInput{Kind: artifact.KindHTML, Title: "Chart", Content: artifact.Content{HTML: "<p>1</p>"}})
+	require.NoError(t, err)
+	p.checked = nil
+
+	_, err = s.List(ctx, ada, "acme")
+	require.NoError(t, err)
+	require.Len(t, p.checked, 2, "the gate, then the one artifact")
+	assert.False(t, p.checked[0].Probe, "the gate is the caller's request")
+	assert.True(t, p.checked[1].Probe, "the filter is a probe")
+
+	p.checked = nil
+	_, err = s.Get(ctx, ada, "acme", a.ID)
+	require.NoError(t, err)
+	require.Len(t, p.checked, 1)
+	assert.False(t, p.checked[0].Probe, "a read of one artifact is an attempt")
 }

@@ -1,0 +1,39 @@
+{{- if eq (include "garam-gaon.stage" .) "migrate" }}
+{{- /*
+The three migrations, each a Job that runs one MicroVM to completion.
+`garam migrate` leaves a database dirty when it fails and every later run
+refuses, so a retry cannot succeed and its backoffLimit is 0; the two
+others' is not established and takes gaon's default. The migrations of
+garam and cowork ship in their images at /app/migrations, named in full
+because the image's working directory is not passed; the policy
+service's are compiled into its binary.
+*/}}
+{{- range $job := list
+  (dict "word" "migrate" "resources" "migrate" "image" "server" "command" "garam" "database" "garam" "env" "GARAM_DATABASE_URL" "dir" "GARAM_MIGRATIONS_DIR" "backoff" true)
+  (dict "word" "cowork-migrate" "resources" "coworkMigrate" "image" "cowork" "command" "cowork" "database" "cowork" "env" "COWORK_DATABASE_URL" "dir" "COWORK_MIGRATIONS_DIR")
+  (dict "word" "policy-migrate" "resources" "policyMigrate" "image" "policy" "command" "policy" "database" "policy" "env" "POLICY_DATABASE_URL") }}
+---
+apiVersion: workloads.gaon.garam.sh/v1alpha1
+kind: Job
+metadata:
+  name: {{ include "garam-gaon.jobName" (dict "root" $ "word" $job.word) }}
+spec:
+  completions: 1
+  {{- if $job.backoff }}
+  backoffLimit: 0
+  {{- end }}
+  template:
+    image: {{ include "garam-gaon.image" (dict "root" $ "image" $job.image) }}
+    user: {{ include "garam-gaon.user" (dict "root" $ "image" $job.image) | quote }}
+    {{- include "garam-gaon.resources" (dict "root" $ "key" $job.resources) | nindent 4 }}
+    command:
+      - {{ $job.command }}
+    args:
+      - migrate
+    env:
+      {{- include "garam-gaon.envSecret" (dict "name" $job.env "path" (printf "database.%s" $job.database) "ref" (index $.Values.database $job.database)) | nindent 6 }}
+      {{- with $job.dir }}
+      {{- include "garam-gaon.env" (dict "name" . "value" "/app/migrations") | nindent 6 }}
+      {{- end }}
+{{- end }}
+{{- end }}

@@ -14,7 +14,9 @@ mod status;
 mod tls;
 
 use std::future::Future;
+use std::time::Duration;
 
+use audit::Recorder;
 use decision::{Engine, EntitySource, PolicySource};
 use entity::EntityStore;
 use grant::PolicyStore;
@@ -33,7 +35,14 @@ pub use policy_service::Service;
 pub use probes::{ProbeError, probe};
 pub use tls::{Identity, TlsError, load_identity};
 
-/// The generated contract.
+/// The generated contract. The size of its `Operation` is the
+/// generator's, and one write is one message either way.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the generated `EntityChange` operation holds an upsert \
+              beside a delete; boxing it would change every \
+              construction of the variant"
+)]
 pub mod proto {
     tonic::include_proto!("garam.policy.v1");
 }
@@ -68,7 +77,7 @@ pub enum Error {
 pub struct Listeners {
     /// The contract, over TLS.
     pub contract: TcpListener,
-    /// `/healthz` and `/readyz`.
+    /// `/healthz`, `/readyz` and `/metrics`.
     pub probes: TcpListener,
 }
 
@@ -114,13 +123,28 @@ pub async fn serve(
     listeners: Listeners,
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), Error> {
+    let recorder = Recorder::new(pool.clone());
+    serve_recording(pool, verifier, identity, listeners, recorder, shutdown).await
+}
+
+/// [`serve`] recording denials through `recorder`, so a caller sets
+/// the bound of a record.
+pub async fn serve_recording(
+    pool: PgPool,
+    verifier: Verifier,
+    identity: Identity,
+    listeners: Listeners,
+    recorder: Recorder,
+    shutdown: impl Future<Output = ()>,
+) -> Result<(), Error> {
     let engine = Engine::load().map_err(Error::Engine)?;
     let service = Service::new(
         engine.clone(),
         PolicyStore::new(pool.clone()),
         EntityStore::new(pool.clone(), engine),
     )
-    .writing_to(PolicyStore::new(pool.clone()));
+    .writing_to(PolicyStore::new(pool.clone()))
+    .recording_to(recorder.clone());
     let incoming = Incoming::new(listeners.contract, identity.acceptor().map_err(Error::Tls)?);
     // The binding's routes join the contract's beside it: one listener,
     // one TLS, and the same service and verifier behind both.
@@ -131,8 +155,36 @@ pub async fn serve(
     let contract = server
         .add_routes(Routes::from(routes))
         .serve_with_incoming_shutdown(incoming, shutdown);
-    tokio::select! {
+    let stopped = tokio::select! {
         served = contract => served.map_err(Error::Transport),
-        answered = probes::answer(listeners.probes, pool) => answered.map_err(Error::Probes),
+        answered = probes::answer(listeners.probes, pool, recorder.clone()) => answered.map_err(Error::Probes),
+        () = sweeping(recorder.clone()) => Ok(()),
+    };
+    // What is still queued is given this long to be recorded; the rest
+    // is counted as lost and logged.
+    recorder.finish(QUEUE_DRAINS_WITHIN).await;
+    stopped
+}
+
+/// How long `serve` waits at shutdown for the denials still queued to
+/// be recorded, so a stop is not held by a database that does not
+/// answer.
+const QUEUE_DRAINS_WITHIN: Duration = Duration::from_secs(5);
+
+/// How often the denials past their retention are removed. The read
+/// answers none of them in between (ADR-0148 item 2).
+const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
+
+/// Removes the denials past their retention at start and then every
+/// [`SWEEP_EVERY`], and never returns. A failed sweep is logged and
+/// tried again at the next one: the read does not depend on it.
+async fn sweeping(recorder: Recorder) {
+    let mut tick = tokio::time::interval(SWEEP_EVERY);
+    loop {
+        tick.tick().await;
+        match recorder.sweep().await {
+            Ok(removed) => tracing::info!(removed, "swept the denials past their retention"),
+            Err(error) => tracing::error!(error = ?error, "the denial sweep failed"),
+        }
     }
 }

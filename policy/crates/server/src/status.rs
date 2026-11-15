@@ -39,6 +39,12 @@ pub(crate) enum ServiceError {
     /// The service was given no store to write policies to.
     #[error("this service writes no policies")]
     WritesUnavailable,
+    /// The service was given no recorder to read audit records from.
+    #[error("this service keeps no audit records")]
+    AuditUnavailable,
+    /// The audit records could not be read.
+    #[error(transparent)]
+    Audit(#[from] audit::Error),
     /// A write or read that names no writer, past a role link's write
     /// from a membership.
     #[error("a writer is required: only a role link's write from a membership has none")]
@@ -59,6 +65,11 @@ pub(crate) enum ServiceError {
         /// The role the link names.
         role: decision::Role,
     },
+    /// An identifier reserved to a role link the platform derives,
+    /// written by anyone else or holding another body (ADR-0161,
+    /// ADR-0163).
+    #[error("{0} is reserved for a role link the platform derives, which it alone writes")]
+    Reserved(String),
     /// The policy store refused or failed.
     #[error(transparent)]
     Policy(#[from] grant::Error),
@@ -96,10 +107,15 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
             tracing::error!(error = ?error, "a write reached a service with no store");
             Status::unavailable("this service writes no policies")
         }
+        ServiceError::AuditUnavailable | ServiceError::Audit(_) => {
+            tracing::error!(error = ?error, "the audit records could not be read");
+            Status::unavailable("the policy service could not read its audit records")
+        }
         ServiceError::Policy(inner) => policy_status(error, inner),
         ServiceError::NoWriter
         | ServiceError::WriterDenied { .. }
-        | ServiceError::RoleNotHeld { .. } => {
+        | ServiceError::RoleNotHeld { .. }
+        | ServiceError::Reserved(_) => {
             tracing::info!(error = ?error, "refused a writer");
             Status::permission_denied(error.to_string())
         }
@@ -179,7 +195,7 @@ fn policy_status(error: &ServiceError, inner: &grant::Error) -> Status {
             tracing::info!(error = ?error, "refused a policy");
             Status::invalid_argument(error.to_string())
         }
-        G::PermitEvaluation(_) | G::StoredBody { .. } | G::Store(_) => {
+        G::PermitEvaluation(_) | G::StoredBody { .. } | G::Store(_) | G::Record(_) => {
             tracing::error!(error = ?error, "a policy could not be written or read");
             Status::unavailable("the policy service could not read or write its policies")
         }

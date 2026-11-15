@@ -61,7 +61,7 @@ func (s *Sender) Send(
 	resp, err := s.client.ApplyEntityChanges(ctx,
 		&policyv1.ApplyEntityChangesRequest{Changes: changes})
 	if err != nil {
-		return nil, wrapCall(err)
+		return nil, wrapCall(err, "ApplyEntityChanges")
 	}
 	refused := make([]policyfeed.Refusal, 0, len(resp.GetRefusals()))
 	for _, r := range resp.GetRefusals() {
@@ -93,6 +93,10 @@ func change(e policyfeed.Entry, sequence int64) *policyv1.EntityChange {
 	for i, p := range e.State.Parents {
 		upsert.Parents[i] = ref(p)
 	}
+	for _, o := range e.State.Consents {
+		upsert.Consents = append(upsert.Consents, ref(o))
+	}
+	upsert.Operations = e.State.Operations
 	c.Operation = &policyv1.EntityChange_Upsert{Upsert: upsert}
 	return c
 }
@@ -146,7 +150,7 @@ func (b *bearer) RequireTransportSecurity() bool { return true }
 
 // wrapCall names a failed call by the kind its status says, so a
 // caller can tell a deadline from a refusal of the platform's token.
-func wrapCall(err error) error {
+func wrapCall(err error, method string) error {
 	kind := errorx.KindInternal
 	switch status.Code(err) {
 	case codes.DeadlineExceeded:
@@ -158,5 +162,5 @@ func wrapCall(err error) error {
 	case codes.InvalidArgument:
 		kind = errorx.KindInvalidArgument
 	}
-	return errorx.Wrap(err, "policy service ApplyEntityChanges", kind)
+	return errorx.Wrap(err, "policy service "+method, kind)
 }

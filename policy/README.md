@@ -3,8 +3,8 @@
 The policy service's Cargo workspace (ADR-0130, ADR-0137, ADR-0138,
 ADR-0140). It decides over its own stores and authenticates its callers,
 and an owner writes its entities over `ApplyEntityChanges`. The local
-stack runs its image under the `policy` profile, and nothing calls it
-yet (#1689).
+stack runs its image with no profile, and the api delivers entities to
+it through `garam policy-feed` (#1689, #1888).
 
 - `proto/garam/policy/v1/` — the gRPC contract in AuthZEN's shape.
 - `schema/<service>.cedarschema` — a service's manifest (ADR-0143):
@@ -22,8 +22,9 @@ yet (#1689).
   `policy`.
 - `system-policies/` — the system tier: tenant isolation and its one
   exception, an agent's sending, a hosted operator's ten delegated
-  operations (`operator-<type>-<verb>`), and the role templates. One
-  policy per file, and the file's
+  operations (`operator-<type>-<verb>`), a supervisor's activation of
+  the agent it holds (`supervisor-agent-activate`), and the role
+  templates. One policy per file, and the file's
   stem is the id a decision's reasons name. Their tests sit in
   `crates/decision/tests/`.
 - `migrations/` — the service's own database.
@@ -33,6 +34,14 @@ yet (#1689).
 - `crates/grant/` — role links, guardrails and `permit`s:
   schema-validated writes, append-only versions, and the reads of a
   policy and of an organization's policies.
+- `crates/audit/` — the record of every policy write and every denial
+  (ADR-0148): a write is recorded in the transaction that makes it, a
+  denial collapses with its hour's identical ones and an organization
+  keeps at most 10,000 live ones, and a denial is removed 90 days after
+  it was last made, by an hourly sweep and by the read. A denial is
+  queued and recorded off the answering path. `grant` records
+  its writes through it, and `ListAuditRecords` reads them for the
+  platform on `iam:audit.read`.
 - `crates/entity/` — the containment and membership decisions read, and
   the sequenced write owners reach it by.
 - `crates/access-report/` — the policies naming a subject or a resource.
@@ -63,12 +72,12 @@ yet (#1689).
 
 | `sub` | Writes | Asks |
 |-------|--------|------|
-| `platform` | the types whose `@caller` is `platform`: `Iam::Org`, `Iam::OrgMembers`, `Iam::Team`, `Iam::Project`, `Iam::User`, `Iam::Agent`, `Iam::Operator` | anything |
+| `platform` | the types whose `@caller` is `platform`: `Iam::Org`, `Iam::OrgMembers`, `Iam::Team`, `Iam::Project`, `Iam::User`, `Iam::Agent`, `Iam::Operator`, `Iam::Supervisor` | anything |
 | `grn:<org>/iam/service/cowork` | the types whose `@caller` is `cowork`: `Cowork::Channel`, `Cowork::Page`, `Cowork::Task`, `Cowork::Artifact`, into `<org>` alone | `cowork:` actions on resources of `<org>` |
 | `grn:<org>/iam/service/codehub` | the types whose `@caller` is `codehub`: `Codehub::Repo`, into `<org>` alone | `codehub:` actions on resources of `<org>` |
 
-- **No caller writes the rest.** `@caller("none")` holds `Iam::Policy`,
-  `Iam::Supervisor` and `Iam::Service`.
+- **No caller writes the rest.** `@caller("none")` holds `Iam::Policy`
+  and `Iam::Service`.
 - **A caller bound to an organization writes only into it.** Every
   entity of its `ApplyEntityChanges` is of a type it owns, has a GRN
   beginning `grn:<org>/`, names `<org>`'s own `Iam::Org` as its `org`,
@@ -100,10 +109,17 @@ yet (#1689).
   same way whether or not the policy exists. Activation takes the
   version the service checked and is refused if the default has moved.
   With no writer, only a role link written or removed from a
-  membership is accepted.
-- **A `permit` never reaches an operator.** A decision for an
-  `Iam::Operator` composes the organization's guardrails and none of
-  its `permit`s, whatever a `permit` says.
+  membership is accepted, and the identifiers opening `link-owner-`,
+  `link-admin-` or `link-member-` are that write's alone: a writer
+  changes nothing under one, and the platform makes effective or
+  removes only a policy every version of which is that member's link
+  (ADR-0161). The identifiers opening `link-scoped-` are the same for
+  the scoped link of a team or a project on itself, named by
+  `grant::scoped_link_policy` (ADR-0163).
+- **A `permit` never reaches an operator or a supervisor.** A decision
+  for an `Iam::Operator` or an `Iam::Supervisor` composes the
+  organization's guardrails and none of its `permit`s, whatever a
+  `permit` says (ADR-0164 for the supervisor).
 - **Removing a `permit` asks `iam:policy.delete`, not
   `iam:permit.write`.** Removal narrows, and an administrator can
   already forbid what a `permit` allows with a guardrail.
@@ -119,19 +135,31 @@ yet (#1689).
   its index in the response, and the rest are written. A request holds
   at most 1000 changes, an id holds at most 512 bytes, a type 64 and a
   change 1000 parents.
-- **Two types carry one attribute each.** An `EntityUpsert` of an
+- **Three types carry one attribute each.** An `EntityUpsert` of an
   `Iam::Org` may name `consents`, the organizations it has granted its
   half of a message toward (ADR-0147), and one of an `Iam::Operator`
   may name `operations`, the actions its current delegation holds as
   wire-form names, `iam:agent.activate` (ADR-0146). An entity of another
   type carrying either, and an operation no manifest declares with
   `Iam::Operator` as a principal, refuse that entry, and each holds at
-  most 1000. `Iam::Org` and `Iam::Operator` are the platform's, so a
-  scoped caller writing either refuses its whole request, and neither
-  attribute can be written by a service that is not the platform. An
+  most 1000. An `Iam::Supervisor` may name `agent`, the `Iam::Agent`
+  it holds; no other type may, and an `agent` of another type refuses
+  the entry (ADR-0164). `Iam::Org`, `Iam::Operator` and
+  `Iam::Supervisor` are the platform's, so a scoped caller writing any
+  refuses its whole request, and no attribute can be written by a
+  service that is not the platform. An
   operator is written in its organization's `Iam::OrgMembers` and
   `Iam::Org`, as a user is, and the platform's feed does not yet write
   that parent or either attribute.
+- **A supervisor activates the agent it holds and nothing else.**
+  `Iam::Supervisor` is a principal of `iam:agent.activate` alone and
+  sits in its organization's `Iam::OrgMembers` and `Iam::Org`, as an
+  operator does. Its optional `agent` is the `Iam::Agent` it holds, and
+  `supervisor-agent-activate` permits it where the resource is that
+  agent: a supervisor fed no `agent` is denied, so is one asking for
+  another agent of its organization, and tenant isolation denies an
+  agent of another organization (ADR-0164). The platform feeds the
+  attribute and asks the question in a later round.
 - **Tenant isolation has one exception, a message both sides consent
   to.** A `message.send` from an agent to an agent lifts the
   isolation `forbid` when each of their organizations lists the other
@@ -172,7 +200,28 @@ yet (#1689).
 - **`/healthz` and `/readyz` answer on `POLICY_HEALTH_ADDR`, in
   plaintext.** It is a port of its own, as `GARAM_MACHINE_HEALTH_ADDR`
   is, and carries no credential. `/healthz` reads nothing outside the
-  process, and `/readyz` answers while the database does.
+  process, and `/readyz` answers while the database does. `/metrics`
+  answers on it too, in the Prometheus text format, holding counts and
+  no name: `garam_policy_denials_lost_total`,
+  `garam_policy_denials_omitted_total`,
+  `garam_policy_denials_overflowed_total`,
+  `garam_policy_denial_queue_full_total` and the gauge
+  `garam_policy_denial_queue_depth`. A lost denial is one whose record
+  failed, passed its 2 s bound, met a full queue, or was still queued
+  at shutdown; `queue_full` is a part of it. An omitted denial has no
+  organization the service holds, or a field past its bound. An
+  overflowed one met an organization at its cap and is counted in its
+  `denial-overflow` record.
+- **A denial is recorded off the answering path.** The answer is
+  decided and sent, and the denial waits in a queue of 4,096 for one
+  worker that records them in order, each under the 2 s bound. A write's
+  record stays in its own transaction. A full queue answers the denial
+  and counts it as lost (and in `queue_full`): the answer never waits
+  on the store. At shutdown the service gives the queue 5 s to empty,
+  then abandons what is left and counts it as lost. `ListAuditRecords`
+  waits up to 2 s for the denials queued before it, so a read sees the
+  denials answered before it; on a timeout it lists what is stored.
+  Neither bound is a setting.
 - **Postgres TLS is `rustls` on `ring`,** the provider the gRPC listener
   already uses, so the binary links one TLS stack and needs no OpenSSL
   on a scratch image. `POLICY_DATABASE_URL`'s `sslmode` decides whether
@@ -198,7 +247,8 @@ one implementation of the decision and of the entity write.
 - **Bodies are the specification's.** A request carries `subject`,
   `action`, `resource` and `context`, and the answer is
   `{"decision": bool}` with the gRPC reasons under
-  `context.reasons`, each a `policy_id` or an `error`. Fields the
+  `context.reasons`, each a `policy_id` or an `error`, which
+  `docs/architecture/authz.md` states the names of. Fields the
   binding does not know are ignored. A `subject` or an `action`
   carrying `properties` is a malformed body, since a decision reads
   those grounds for itself.

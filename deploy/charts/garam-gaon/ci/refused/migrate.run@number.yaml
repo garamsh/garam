@@ -1,0 +1,5 @@
+# An all-digit run left unquoted: YAML reads 20261113 as a float and
+# the template sees 2.0261113e+07, which is no name part.
+stage: migrate
+migrate:
+  run: 20261113

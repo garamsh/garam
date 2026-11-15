@@ -58,6 +58,10 @@ func (s *Server) GrantOrgConsent(w http.ResponseWriter, r *http.Request, orgSlug
 		writeError(w, err)
 		return
 	}
+	if err := s.awaitOrg(r.Context(), g.String()); err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, consentToAPI(g, consent))
 }
 
@@ -80,6 +84,10 @@ func (s *Server) WithdrawOrgConsent(w http.ResponseWriter, r *http.Request, orgS
 		return
 	}
 	if err := s.consents.Withdraw(r.Context(), g, other); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitOrg(r.Context(), g.String()); err != nil {
 		writeError(w, err)
 		return
 	}

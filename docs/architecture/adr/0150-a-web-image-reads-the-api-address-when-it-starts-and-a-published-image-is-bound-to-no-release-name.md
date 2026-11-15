@@ -1,6 +1,8 @@
 # ADR 0150: A web image reads the API address when it starts, and a published image is bound to no release name
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0156](./0156-a-release-publishes-eight-images-and-a-pull-request-builds-the-guest-only-to-its-build-stage.md)
+> (a release publishes six images)
 > Date: 2026-11-13
 
 Drafted for #1810, which reserves this number. It supersedes

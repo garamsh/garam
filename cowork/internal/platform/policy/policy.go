@@ -79,10 +79,10 @@ func (p *Platform) Allowed(ctx context.Context, caller platform.Caller, org stri
 			continue
 		}
 		asked[i] = len(req.Evaluations)
-		req.Evaluations = append(req.Evaluations, evaluation(ch.Action, resource))
+		req.Evaluations = append(req.Evaluations, evaluation(ch, resource))
 	}
 	if len(req.Evaluations) == 0 {
-		req.Evaluations = append(req.Evaluations, evaluation(platform.ActionPageRead, resourceOfOrg(org)))
+		req.Evaluations = append(req.Evaluations, evaluation(platform.Check{Action: platform.ActionPageRead}, resourceOfOrg(org)))
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -110,8 +110,15 @@ func (p *Platform) Allowed(ctx context.Context, caller platform.Caller, org stri
 	return allowed, nil
 }
 
-func evaluation(action string, resource *policyv1.Resource) *policyv1.Evaluation {
-	return &policyv1.Evaluation{Action: &policyv1.Action{Name: action}, Resource: resource}
+// evaluation is the question ch asks of resource. It states probe on
+// the entry, since a batch holds filters and attempts together, and
+// leaves it unset for an attempt.
+func evaluation(ch platform.Check, resource *policyv1.Resource) *policyv1.Evaluation {
+	e := &policyv1.Evaluation{Action: &policyv1.Action{Name: ch.Action}, Resource: resource}
+	if ch.Probe {
+		e.Probe = &ch.Probe
+	}
+	return e
 }
 
 // subjectOf names the caller as the entity its GRN's type is.

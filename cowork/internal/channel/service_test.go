@@ -21,8 +21,9 @@ import (
 // `action@id`, or either after a person's name and a space, and records
 // whether it was asked at all.
 type policy struct {
-	deny  map[string]bool
-	asked int
+	deny    map[string]bool
+	asked   int
+	checked []platform.Check
 }
 
 func (p *policy) Identify(context.Context, platform.Credential) (platform.Caller, error) {
@@ -38,6 +39,7 @@ func (p *policy) Allowed(_ context.Context, c platform.Caller, org string, check
 		return nil, errorx.New(errorx.KindPermissionDenied, "not a member")
 	}
 	p.asked++
+	p.checked = append(p.checked, checks...)
 	out := make([]bool, len(checks))
 	for i, ch := range checks {
 		k := ch.Action
@@ -270,4 +272,27 @@ func TestCreate_RefusesWhatItCannotKeep(t *testing.T) {
 	}
 	_, err := s.Create(ctx, bob, "acme", channel.CreateInput{Kind: channel.KindPrivate, Name: "general"})
 	assert.ErrorIs(t, err, channel.ErrNameTaken)
+}
+
+// TestList_StatesItsPerChannelQuestionsAsProbes lists the channels
+// and reads one. Each channel the list asks about is a probe; the gate
+// on the list and the read of one channel are not.
+func TestList_StatesItsPerChannelQuestionsAsProbes(t *testing.T) {
+	s, p, _ := newService(t)
+	c := create(t, s, ada, channel.CreateInput{Kind: channel.KindPublic, Name: "general"})
+	p.checked = nil
+
+	_, err := s.List(ctx, ada, "acme")
+	require.NoError(t, err)
+	require.Len(t, p.checked, 2, "the gate, then the one channel")
+	assert.False(t, p.checked[0].Probe, "the gate is the caller's request")
+	assert.True(t, p.checked[1].Probe, "the filter is a probe")
+
+	p.checked = nil
+	_, err = s.Messages(ctx, ada, "acme", c.ID, "")
+	require.NoError(t, err)
+	require.NotEmpty(t, p.checked)
+	for _, ch := range p.checked {
+		assert.False(t, ch.Probe, "reading a channel's messages is an attempt")
+	}
 }

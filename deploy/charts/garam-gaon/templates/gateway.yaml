@@ -1,0 +1,160 @@
+{{- if and (eq (include "garam-gaon.stage" .) "serve") .Values.gateway.enabled }}
+{{- /*
+The routes, as gaon's gateway.md states them. That document is a
+contract and no unit serves it yet (README §What gaon does not yet
+serve), so this file renders only where gateway.enabled is true. The
+file name sorts after every Service's, and Helm emits a kind it does not
+know after those it does, in file-name order.
+*/}}
+{{- $g := .Values.gateway }}
+{{- $gateway := include "garam-gaon.name" (dict "root" $ "word" "gateway") }}
+{{- $site := required "gateway.site.host is required once gateway.enabled is true" $g.site.host }}
+{{- $console := required "gateway.console.host is required once gateway.enabled is true" $g.console.host }}
+{{- $cowork := required "gateway.cowork.host is required once gateway.enabled is true" $g.cowork.host }}
+{{- $content := required "gateway.userContent.host is required once gateway.enabled is true" $g.userContent.host }}
+{{- $machine := required "gateway.machine.host is required once gateway.enabled is true" $g.machine.host }}
+{{- $hosts := list
+  (dict "listener" "site" "key" "site" "host" $site)
+  (dict "listener" "console" "key" "console" "host" $console)
+  (dict "listener" "cowork" "key" "cowork" "host" $cowork)
+  (dict "listener" "usercontent" "key" "userContent" "host" $content) }}
+{{- /*
+gateway.md: listeners that share a port have the same protocol and
+different hostnames, and one that breaks this is Conflicted and not
+served. The four HTTPS listeners share a port, so their hosts differ, and
+the TLS listener's port is not theirs.
+*/}}
+{{- if eq (int $g.httpsPort) (int $g.machine.port) }}
+{{- fail (printf "gateway.httpsPort is gateway.machine.port, %v: gateway.md marks listeners of one port with different protocols Conflicted and serves neither" $g.httpsPort) }}
+{{- end }}
+{{- $seen := dict }}
+{{- range $h := $hosts }}
+{{- if hasKey $seen $h.host }}
+{{- fail (printf "gateway.%s.host %q is also gateway.%s.host: gateway.md marks two listeners of one port and one hostname Conflicted and serves neither" $h.key $h.host (get $seen $h.host)) }}
+{{- end }}
+{{- $_ := set $seen $h.host $h.key }}
+{{- end }}
+apiVersion: gateway.gaon.garam.sh/v1alpha1
+kind: Gateway
+metadata:
+  name: {{ $gateway }}
+spec:
+  {{- with $g.address }}
+  addresses:
+    - type: IPAddress
+      value: {{ . | quote }}
+  {{- end }}
+  listeners:
+    {{- range $h := $hosts }}
+    - name: {{ $h.listener }}
+      port: {{ $g.httpsPort }}
+      protocol: HTTPS
+      hostname: {{ $h.host | quote }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: {{ required (printf "gateway.%s.certificate is required once gateway.enabled is true: the Secret holding tls.crt and tls.key" $h.key) (index $g $h.key).certificate }}
+    {{- end }}
+    - name: machine
+      port: {{ $g.machine.port }}
+      protocol: TLS
+      hostname: {{ $machine | quote }}
+      tls:
+        mode: Passthrough
+{{- range $r := list
+  (dict "word" "site" "listener" "site" "host" $site "backend" "site" "port" 3000)
+  (dict "word" "console" "listener" "console" "host" $console "backend" "console" "port" 3000) }}
+---
+apiVersion: gateway.gaon.garam.sh/v1alpha1
+kind: HTTPRoute
+metadata:
+  name: {{ include "garam-gaon.name" (dict "root" $ "word" (printf "route-%s" $r.word)) }}
+spec:
+  parentRefs:
+    - name: {{ $gateway }}
+      sectionName: {{ $r.listener }}
+  hostnames:
+    - {{ $r.host | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "garam-gaon.name" (dict "root" $ "word" $r.backend) }}
+          port: {{ $r.port }}
+{{- end }}
+---
+apiVersion: gateway.gaon.garam.sh/v1alpha1
+kind: HTTPRoute
+metadata:
+  name: {{ include "garam-gaon.name" (dict "root" $ "word" "route-cowork") }}
+spec:
+  parentRefs:
+    - name: {{ $gateway }}
+      sectionName: cowork
+  hostnames:
+    - {{ $cowork | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: {{ include "garam-gaon.name" (dict "root" $ "word" "cowork") }}
+          port: 8090
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /mcp
+      backendRefs:
+        - name: {{ include "garam-gaon.name" (dict "root" $ "word" "cowork") }}
+          port: 8090
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "garam-gaon.name" (dict "root" $ "word" "cowork-web") }}
+          port: 3000
+---
+apiVersion: gateway.gaon.garam.sh/v1alpha1
+kind: HTTPRoute
+metadata:
+  name: {{ include "garam-gaon.name" (dict "root" $ "word" "route-usercontent") }}
+spec:
+  parentRefs:
+    - name: {{ $gateway }}
+      sectionName: usercontent
+  hostnames:
+    - {{ $content | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "garam-gaon.name" (dict "root" $ "word" "cowork") }}
+          port: 8092
+---
+apiVersion: gateway.gaon.garam.sh/v1alpha1
+kind: TLSRoute
+metadata:
+  name: {{ include "garam-gaon.name" (dict "root" $ "word" "route-machine") }}
+spec:
+  parentRefs:
+    - name: {{ $gateway }}
+      sectionName: machine
+  hostnames:
+    - {{ $machine | quote }}
+  rules:
+    - backendRefs:
+        - name: {{ include "garam-gaon.name" (dict "root" $ "word" "machine") }}
+          port: 8443
+{{- end }}

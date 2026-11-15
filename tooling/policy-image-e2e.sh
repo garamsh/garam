@@ -21,6 +21,7 @@ image=${POLICY_IMAGE:?POLICY_IMAGE names the image to check}
 net=policy-image-e2e-$$
 db=$net-db
 server=$net-server
+keys=$net-keys
 db_tls=$net-db-tls
 server_tls=$net-server-tls
 started=
@@ -28,7 +29,7 @@ passed=0
 
 cleanup() {
 	for name in $started; do docker rm -f "$name" >/dev/null 2>&1 || true; done
-	docker volume rm "$db_tls" "$server_tls" >/dev/null 2>&1 || true
+	docker volume rm "$db_tls" "$server_tls" "$keys" >/dev/null 2>&1 || true
 	docker network rm "$net" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -40,7 +41,7 @@ fail() {
 }
 
 pinned() {
-	ref=$(awk -v service="$1:" '$1 == service { s = 1 } s && $1 == "image:" { print $2; exit }' deploy/local/docker-compose.yml)
+	ref=$(awk -v service="$1:" '$0 == "  " service { s = 1 } s && $1 == "image:" { print $2; exit }' deploy/local/docker-compose.yml)
 	case $ref in
 	"$2":*@sha256:*) echo "mirror.gcr.io/library/$ref" ;;
 	*) fail "deploy/local/docker-compose.yml names no $2 image by digest for $1; read '$ref'" ;;
@@ -60,6 +61,11 @@ pair() {
 }
 pair "$db_tls" "$db" 70
 pair "$server_tls" "$server" 10001
+
+# The JWKS the server trusts, made as the stack makes it. The signing
+# key beside it is not used here.
+docker run --rm -v "$PWD/deploy/local/policy-keys.sh:/policy-keys.sh:ro" -v "$keys:/keys" \
+	"$alpine" sh /policy-keys.sh 10001
 
 started=$db
 docker run -d --name "$db" --network "$net" -v "$db_tls:/tls:ro" \
@@ -105,8 +111,8 @@ user=$(docker image inspect -f '{{.Config.User}}' "$image")
 [ "$user" = policy ] || fail "the image runs as '$user', want policy"
 passed=$((passed + 1))
 
-serve_settings="-e POLICY_ADDR=0.0.0.0:8443 -e POLICY_HEALTH_ADDR=0.0.0.0:8091 -e POLICY_TOKEN_ISSUER=https://image-e2e.invalid -e POLICY_JWKS_FILE=/etc/policy/jwks.json"
-jwks="$PWD/deploy/local/policy-jwks.json:/etc/policy/jwks.json:ro"
+serve_settings="-e POLICY_ADDR=0.0.0.0:8443 -e POLICY_HEALTH_ADDR=0.0.0.0:8091 -e POLICY_TOKEN_ISSUER=https://image-e2e.invalid -e POLICY_JWKS_FILE=/policy-keys/jwks.json"
+jwks="$keys:/policy-keys:ro"
 
 # shellcheck disable=SC2086
 if out=$(policy_run -v "$jwks" $serve_settings -e "POLICY_DATABASE_URL=$url" "$image" serve 2>&1); then

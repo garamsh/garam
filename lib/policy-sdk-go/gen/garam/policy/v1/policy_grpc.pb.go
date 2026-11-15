@@ -30,6 +30,7 @@ const (
 	PolicyService_DeletePolicy_FullMethodName        = "/garam.policy.v1.PolicyService/DeletePolicy"
 	PolicyService_GetPolicy_FullMethodName           = "/garam.policy.v1.PolicyService/GetPolicy"
 	PolicyService_ListPolicies_FullMethodName        = "/garam.policy.v1.PolicyService/ListPolicies"
+	PolicyService_ListAuditRecords_FullMethodName    = "/garam.policy.v1.PolicyService/ListAuditRecords"
 )
 
 // PolicyServiceClient is the client API for PolicyService service.
@@ -76,6 +77,11 @@ type PolicyServiceClient interface {
 	GetPolicy(ctx context.Context, in *GetPolicyRequest, opts ...grpc.CallOption) (*GetPolicyResponse, error)
 	// ListPolicies reads the organization's policies, unpaged.
 	ListPolicies(ctx context.Context, in *ListPoliciesRequest, opts ...grpc.CallOption) (*ListPoliciesResponse, error)
+	// ListAuditRecords reads the organization's records of every policy
+	// write and every denial (ADR-0148), newest first. The platform
+	// alone calls it, for a reader that holds `iam:audit.read` on the
+	// organization, which the service evaluates itself.
+	ListAuditRecords(ctx context.Context, in *ListAuditRecordsRequest, opts ...grpc.CallOption) (*ListAuditRecordsResponse, error)
 }
 
 type policyServiceClient struct {
@@ -186,6 +192,16 @@ func (c *policyServiceClient) ListPolicies(ctx context.Context, in *ListPolicies
 	return out, nil
 }
 
+func (c *policyServiceClient) ListAuditRecords(ctx context.Context, in *ListAuditRecordsRequest, opts ...grpc.CallOption) (*ListAuditRecordsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAuditRecordsResponse)
+	err := c.cc.Invoke(ctx, PolicyService_ListAuditRecords_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PolicyServiceServer is the server API for PolicyService service.
 // All implementations must embed UnimplementedPolicyServiceServer
 // for forward compatibility.
@@ -230,6 +246,11 @@ type PolicyServiceServer interface {
 	GetPolicy(context.Context, *GetPolicyRequest) (*GetPolicyResponse, error)
 	// ListPolicies reads the organization's policies, unpaged.
 	ListPolicies(context.Context, *ListPoliciesRequest) (*ListPoliciesResponse, error)
+	// ListAuditRecords reads the organization's records of every policy
+	// write and every denial (ADR-0148), newest first. The platform
+	// alone calls it, for a reader that holds `iam:audit.read` on the
+	// organization, which the service evaluates itself.
+	ListAuditRecords(context.Context, *ListAuditRecordsRequest) (*ListAuditRecordsResponse, error)
 	mustEmbedUnimplementedPolicyServiceServer()
 }
 
@@ -269,6 +290,9 @@ func (UnimplementedPolicyServiceServer) GetPolicy(context.Context, *GetPolicyReq
 }
 func (UnimplementedPolicyServiceServer) ListPolicies(context.Context, *ListPoliciesRequest) (*ListPoliciesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPolicies not implemented")
+}
+func (UnimplementedPolicyServiceServer) ListAuditRecords(context.Context, *ListAuditRecordsRequest) (*ListAuditRecordsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAuditRecords not implemented")
 }
 func (UnimplementedPolicyServiceServer) mustEmbedUnimplementedPolicyServiceServer() {}
 func (UnimplementedPolicyServiceServer) testEmbeddedByValue()                       {}
@@ -471,6 +495,24 @@ func _PolicyService_ListPolicies_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PolicyService_ListAuditRecords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAuditRecordsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyServiceServer).ListAuditRecords(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyService_ListAuditRecords_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyServiceServer).ListAuditRecords(ctx, req.(*ListAuditRecordsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PolicyService_ServiceDesc is the grpc.ServiceDesc for PolicyService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -517,6 +559,10 @@ var PolicyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPolicies",
 			Handler:    _PolicyService_ListPolicies_Handler,
+		},
+		{
+			MethodName: "ListAuditRecords",
+			Handler:    _PolicyService_ListAuditRecords_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

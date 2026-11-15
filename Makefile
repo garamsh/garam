@@ -125,7 +125,8 @@ codehub-e2e:
 # garam, testprincipal and the migrations out of (ADR-0092), tagged
 # with HEAD's full hash under TEST_IMAGE_REPOSITORY; the script refuses
 # a working tree that differs from HEAD. test-image-e2e checks it as
-# that consumer reads it. Both need Docker, so neither is in `ci`.
+# that consumer reads it. Both need Docker, so neither is in `ci`;
+# .github/workflows/images.yml runs test-image-e2e on pull requests.
 TEST_IMAGE_REPOSITORY ?= garam-test
 
 test-image:

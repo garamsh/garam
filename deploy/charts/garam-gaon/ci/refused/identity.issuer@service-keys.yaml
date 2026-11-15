@@ -1,0 +1,7 @@
+# The service keys name the issuer that signs for them.
+identity:
+  serviceKeys:
+    configMap: identity-service-keys
+    key: service-keys.json
+machine:
+  tokenUrl: https://machine.garam.example/oauth/token

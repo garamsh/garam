@@ -71,6 +71,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionPolicyAttach, "iam:policy.attach"},
 		{org.ActionPolicyDetach, "iam:policy.detach"},
 		{org.ActionPolicyDelete, "iam:policy.delete"},
+		{org.ActionAuditRead, "iam:audit.read"},
 
 		{org.ActionConsentRead, "iam:consent.read"},
 		{org.ActionConsentGrant, "iam:consent.grant"},
@@ -128,6 +129,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 	assert.Equal(t,
 		[]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
+			org.ActionAuditRead,
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
@@ -147,6 +149,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 		[]string{
 			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
 			"iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
+			org.ActionAuditRead,
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
@@ -324,6 +327,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionCodehubRepoRead, org.ActionCodehubOrgUse,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
+			org.ActionAuditRead,
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,

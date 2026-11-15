@@ -191,7 +191,7 @@ func (s *service) List(ctx context.Context, caller platform.Caller, org string) 
 		batch := listed[start:min(start+maxChecksPerAsk, len(listed))]
 		checks := make([]platform.Check, len(batch))
 		for i, a := range batch {
-			checks[i] = onArtifact(ActionRead, a.ID)
+			checks[i] = onArtifact(ActionRead, a.ID).AsProbe()
 		}
 		allowed, err := s.platform.Allowed(ctx, caller, org, checks)
 		if err != nil {

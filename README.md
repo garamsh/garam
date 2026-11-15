@@ -201,13 +201,16 @@ A development image goes into the repository its release does
 `garam/server`, `garam/console`, `garam/site`, `garam/cowork` or
 `garam/cowork-web`. Its tag is what says it is not a release
 ([ADR-0071](./docs/architecture/adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)):
-a bare `X.Y.Z` belongs to `.github/workflows/release.yml`, which
-publishes one on a `vX.Y.Z` git tag and on nothing else. Build one
-from a clean checkout of the commit you mean to name:
+a release tag belongs to `.github/workflows/release.yml`, which
+publishes one on a release git tag and on nothing else: until launch
+`v0.1.0-dev.N`, `v0.1.0-rc.N` or `v0.1.0`, and the image tag is that
+tag without the `v`
+([ADR-0157](./docs/architecture/adr/0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md)).
+Build one from a clean checkout of the commit you mean to name:
 
 ```sh
 make image-build IMAGE_REGISTRY=<registry>                     # tag: HEAD's first 12 hex digits
-make image-build IMAGE_REGISTRY=<registry> IMAGE_TAG=0.4.0-rc.1  # a prerelease tag
+make image-build IMAGE_REGISTRY=<registry> IMAGE_TAG=0.2.0-wip.1 # a prerelease tag
 ```
 
 `<registry>` is the host in the chart's `image.*.repository`
@@ -215,8 +218,9 @@ make image-build IMAGE_REGISTRY=<registry> IMAGE_TAG=0.4.0-rc.1  # a prerelease 
 contexts, the Dockerfiles and the build arguments are the ones the
 release reads. Each image is labelled with
 HEAD and the tag.
-`tooling/image-build.sh` refuses, before building anything, a bare
-release version, a tag of any other form, a commit prefix that is not
+`tooling/image-build.sh` refuses, before building anything, a release
+tag form (`0.1.0-dev.*`, `0.1.0-rc.*` or a bare version), a tag of
+any other form, a commit prefix that is not
 HEAD's, and a working tree that differs from HEAD; its last line names
 the commit built.
 

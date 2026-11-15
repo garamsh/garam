@@ -11,7 +11,10 @@
 > its repository names and its two images are superseded by
 > [ADR-0134](./0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md),
 > and §Consequences' "A published web image is bound to one API URL"
-> by [ADR-0150](./0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
+> by [ADR-0150](./0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md),
+> and §Decision's "A release is a `vX.Y.Z` git tag" is superseded in
+> part until launch by
+> [ADR-0157](./0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md)
 > Date: 2026-08-22
 
 ## Contents

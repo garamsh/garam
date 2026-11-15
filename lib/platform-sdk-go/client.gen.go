@@ -368,7 +368,6 @@ func (e ExplainedStatementEffect) Valid() bool {
 
 // Defines values for ExplainedStatementSource.
 const (
-	SourceDirectRole       ExplainedStatementSource = "direct-role"
 	SourceGroupRole        ExplainedStatementSource = "group-role"
 	SourceOrgRole          ExplainedStatementSource = "org-role"
 	SourcePolicy           ExplainedStatementSource = "policy"
@@ -379,8 +378,6 @@ const (
 // Valid indicates whether the value is a known member of the ExplainedStatementSource enum.
 func (e ExplainedStatementSource) Valid() bool {
 	switch e {
-	case SourceDirectRole:
-		return true
 	case SourceGroupRole:
 		return true
 	case SourceOrgRole:
@@ -1231,11 +1228,14 @@ type Error struct {
 	// Path A JSON Pointer (RFC 6901) into the document the request sent, to the place `reason` is about, e.g. `/Statement/1/Effect`. A key the document's format names is spelled as the format spells it, whatever case the request used: a document accepts `statement` for `Statement`, and the pointer reads `/Statement`. A key the format does not name is spelled as it was sent. Absent where the reason is about the document as a whole or about no document.
 	Path *string `json:"path,omitempty"`
 
-	// Reason A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`.
+	// Reason A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Role links: `change_not_applied`, on the 503 that answers a request which changed what the policy service decides from (an organization, its membership, a group or project and its members, a registration, an operator) when the policy service has not applied the change within five seconds. The change is stored and stays so; the service decides by the roles it last held until it applies them, so a member added is not yet allowed and a member removed is not yet denied. The answer names the organization in `resource`; do not repeat the request. A registration has signed the person in, and its session cookie is set on this answer. The same reason answers a grant or a withdrawal of an organization's consent when the policy service has not applied it in that time: the half is stored and stays so, and until the service applies it the policy service decides by the consents it last held. Repeating the request changes nothing. The answer names the organization that granted or withdrew in `resource`. `change_refused`, on the same 503 when the policy service refused the member's role link for good: the change is stored, but delivery does not go on, and the service holds no role for the member until the membership is written again or an operator restarts the feed, so the member is denied meanwhile. There is nothing to wait for: do not repeat the request and do not poll; an operator reads the set-aside link. It names the organization in `resource` as the answer above does. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`.
 	Reason *string `json:"reason,omitempty"`
+
+	// Resource The GRN of the organization a request stored before it answered `change_not_applied` or `change_refused`: the one it created, joined, registered into, deleted, or granted or withdrew consent for, or that owns what the request changed. A client that cannot repeat the request reads from it what was stored and goes on. Present only with those reasons.
+	Resource *string `json:"resource,omitempty"`
 }
 
-// ExplainedStatement One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the four role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone.
+// ExplainedStatement One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the three role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone.
 type ExplainedStatement struct {
 	// Attachment How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
 	Attachment *ExplainedStatementAttachment `json:"attachment,omitempty"`
@@ -2438,7 +2438,7 @@ type ClientInterface interface {
 
 	// OauthCallback Complete the OAuth authorization code flow.
 	//
-	// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
+	// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`. A first sign-in waits up to five seconds for the policy service to apply the new user, and redirects as on success whether or not it did: the session is stored and a redirect cannot carry a 503 a browser would show. The first request that needs the user in the policy service waits on it again (ADR-0165).
 	//
 	// Corresponds with GET /auth/callback/{provider} (the `OauthCallback` operationId).
 	OauthCallback(ctx context.Context, provider Provider, params *OauthCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3227,7 +3227,7 @@ type ClientInterface interface {
 	//
 	// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
 	//
-	// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+	// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
 	//
 	// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
 	//
@@ -3240,7 +3240,7 @@ type ClientInterface interface {
 
 	// ListPermissionHolders List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 	//
-	// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
+	// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
 	//
 	// It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
 	//
@@ -3481,7 +3481,7 @@ func (c *Client) GetIssuerConfiguration(ctx context.Context, reqEditors ...Reque
 
 // OauthCallback Complete the OAuth authorization code flow.
 //
-// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
+// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`. A first sign-in waits up to five seconds for the policy service to apply the new user, and redirects as on success whether or not it did: the session is stored and a redirect cannot carry a 503 a browser would show. The first request that needs the user in the policy service waits on it again (ADR-0165).
 //
 // Corresponds with GET /auth/callback/{provider} (the `OauthCallback` operationId).
 func (c *Client) OauthCallback(ctx context.Context, provider Provider, params *OauthCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5190,7 +5190,7 @@ func (c *Client) CheckPermissions(ctx context.Context, org Org, body CheckPermis
 //
 // Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
 //
-// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
 //
 // A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
 //
@@ -5213,7 +5213,7 @@ func (c *Client) ExplainPermission(ctx context.Context, org Org, params *Explain
 
 // ListPermissionHolders List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 //
-// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
+// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
 //
 // It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
 //
@@ -10067,7 +10067,7 @@ type ClientWithResponsesInterface interface {
 
 	// OauthCallbackWithResponse Complete the OAuth authorization code flow.
 	//
-	// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
+	// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`. A first sign-in waits up to five seconds for the policy service to apply the new user, and redirects as on success whether or not it did: the session is stored and a redirect cannot carry a 503 a browser would show. The first request that needs the user in the policy service waits on it again (ADR-0165).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10936,7 +10936,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
 	//
-	// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+	// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
 	//
 	// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
 	//
@@ -10951,7 +10951,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListPermissionHoldersWithResponse List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 	//
-	// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
+	// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
 	//
 	// It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
 	//
@@ -17052,7 +17052,7 @@ func (c *ClientWithResponses) GetIssuerConfigurationWithResponse(ctx context.Con
 
 // OauthCallbackWithResponse Complete the OAuth authorization code flow.
 //
-// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
+// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`. A first sign-in waits up to five seconds for the policy service to apply the new user, and redirects as on success whether or not it did: the session is stored and a redirect cannot carry a 503 a browser would show. The first request that needs the user in the policy service waits on it again (ADR-0165).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -18473,7 +18473,7 @@ func (c *ClientWithResponses) CheckPermissionsWithResponse(ctx context.Context, 
 //
 // Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
 //
-// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
 //
 // A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
 //
@@ -18494,7 +18494,7 @@ func (c *ClientWithResponses) ExplainPermissionWithResponse(ctx context.Context,
 
 // ListPermissionHoldersWithResponse List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 //
-// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
+// Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
 //
 // It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
 //

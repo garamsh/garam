@@ -50,11 +50,21 @@ const (
 )
 
 // Check is one action to decide: on the organization where Kind is
-// empty, and on the resource of that kind named ID otherwise.
+// empty, and on the resource of that kind named ID otherwise. A check
+// says nothing of Probe unless it is a question cowork asks to decide
+// what to show, which is an attempt otherwise (ADR-0148 item 2).
 type Check struct {
 	Action string
 	Kind   string
 	ID     string
+	Probe  bool
+}
+
+// AsProbe is the check stated as a probe: a question that filters a
+// list or decides a control, not a request a person or an agent made.
+func (c Check) AsProbe() Check {
+	c.Probe = true
+	return c
 }
 
 // OnPage is a check of action on one page.

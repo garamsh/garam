@@ -86,12 +86,12 @@ as two paths and re-reads per handshake, the private key under the
 owner-only rule `platform/internal/keyfile` holds, and the root that
 signed that pair beside them. It terminates TLS itself, so the
 certificate a caller pins that root against is the one garam presents
-(ADR-0040). It is not part of the local Docker stack: its key material
-is per host, and compose has no step that generates it and hands a
-container a file that container owns. The Kubernetes stacks under
-`deploy/` have that step — an init container copies the key material as
-the UID the listener runs as — so what compose lacks is the step, not
-something a container cannot do.
+(ADR-0040). It is part of the local Docker stack: the one-shot
+`machine-material` service writes its TLS pair and key-encryption key
+as the account the image runs as, and the `machine` service serves it
+(`deploy/local/docker-compose.yml`, `deploy/local/machine-material.sh`).
+The Kubernetes stacks under `deploy/` have the same step — an init
+container copies the key material as the UID the listener runs as.
 
 ## Asymmetric Operator exchange
 
@@ -588,10 +588,12 @@ answer whether that caller is still the one allowed to act.
 
 ## codehub's principal
 
-**Built on the platform's side (#1811); the policy service's side is
-unbuilt.** codehub, a service garam does not deploy, acts in an
-organization as `grn:<org>/iam/service/codehub`, the form cowork's
-principal takes under the grammar
+**Built on the platform's side (#1811) and on the policy service's,
+which serves codehub as a caller with a `Codehub` manifest
+(58f914d105a4c9db22eea5586152ec8bb50bcbce).** codehub, a service garam
+does not deploy, acts in an organization as
+`grn:<org>/iam/service/codehub`, the form cowork's principal takes
+under the grammar
 [ADR-0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md).
 The repositories it stores are `grn:<org>/codehub/repo/<id>`. It
 reaches the policy service as a direct caller owning a `Codehub`
@@ -616,11 +618,14 @@ Built, as cowork's principal is (§cowork's principal):
 - **Introspection** answers a codehub principal for the tokens issued
   for the `codehub` audience, and reads one issued for `policy` as
   inactive.
+- **The policy service accepts the principal as a caller.** `Codehub`
+  is a `Caller` (`policy/crates/server/src/caller.rs`), bound to the
+  organization its `sub` names and writing the types whose `@caller` is
+  `codehub`, `Codehub::Repo` among them
+  (`policy/schema/codehub.cedarschema`); `policy/README.md` §Callers
+  is authoritative for the caller list and what each may write and ask.
 
 Unbuilt:
 
-- **The policy service accepting the principal** as a caller, its
-  `Codehub` manifest included, which is a change of its own. Until it
-  lands the policy service refuses the token the exchange issues.
 - **An authorization-code flow** for codehub.
 - **The chart rendering the issuer's settings.**

@@ -64,7 +64,8 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
+ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package \
+	gaon-lint gaon-render gaon-order gaon-fields gaon-guards gaon-names gaon-secrets
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
 	@test -n '$(CHART_TEMPLATES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/templates holds no template'; exit 1; }
@@ -243,4 +244,7 @@ chart-package:
 		found="$$(grep -rnE "\b($$re):" . || true)"; \
 		test -z "$$found" || { echo "chart-package: the artifact sets a resource name, and no figure is published for any garam process (docs/architecture/deployment-contract.md §Not established):"; echo "$$found"; exit 1; }; \
 		echo "chart-package: $$(basename "$$tgz") — $$files files, $$named lines setting a resources key, 0 setting one of the names"
+
+# The garam-gaon chart's checks (ADR-0155), named gaon-* and run by ci.
+include garam-gaon/gaon.mk
 

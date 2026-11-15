@@ -1,0 +1,7 @@
+# A quantity gaon's decoder does not read: it takes Ki, Mi, Gi and Ti,
+# not GB.
+resources:
+  api:
+    requests:
+      cpu: "1"
+      memory: 4GB

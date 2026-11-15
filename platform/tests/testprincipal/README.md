@@ -12,13 +12,13 @@ unattended. This command makes that first user and nothing else.
 Organizations, operators, further users, delegations and operation
 authorities are made through the public routes the test exercises.
 
-It is not part of Garam: `cmd/garam` does not import it, so no Garam
-binary carries it, and no release image does: those carry only what
-`deploy/local/Dockerfile` builds from `./cmd/garam`. The test image
-below carries it as a file (ADR-0092).
-`tests/e2e/principal_fixture_test.go` checks that the built `garam`
-has no such command and that `go list -deps ./cmd/garam` names no
-package under `tests/`.
+It is not part of Garam: `platform/cmd/garam` does not import it, so no
+Garam binary carries it, and no release image does: those carry only
+what `deploy/local/Dockerfile` builds from `./platform/cmd/garam`. The
+test image below carries it as a file (ADR-0092).
+`platform/tests/e2e/principal_fixture_test.go` checks that the built
+`garam` has no such command and that `go list -deps ./cmd/garam`, run
+in `platform/`, names no package under `tests/`.
 
 ## Invocation
 
@@ -27,8 +27,8 @@ or copy it out of the test image (§The test image), and run it
 against a Postgres server on the same machine:
 
 ```sh
-go build -o testprincipal ./tests/testprincipal
-./testprincipal prepare -contract 1 -migrations ./migrations \
+go -C platform build -o "$PWD/testprincipal" ./tests/testprincipal
+./testprincipal prepare -contract 1 -migrations ./platform/migrations \
   -server-url 'postgres://garam:garam@localhost:25432/postgres?sslmode=disable'
 ```
 
@@ -42,9 +42,9 @@ process using the database has stopped:
 ./testprincipal drop -contract 1 -server-url "$SERVER_URL" -database "$DATABASE"
 ```
 
-`go run github.com/garamsh/garam/tests/testprincipal@<revision>` is not
-a supported invocation: `-migrations` names a checkout's directory, and
-nothing verifies that a module cache copy serves.
+`go run github.com/garamsh/garam/platform/tests/testprincipal@<revision>`
+is not a supported invocation: `-migrations` names a checkout's
+directory, and nothing verifies that a module cache copy serves.
 
 ## Contract 1
 
@@ -96,13 +96,14 @@ It is a file source: copy the paths out and never run the image.
 
 | Path | What it is |
 |---|---|
-| `/garam` | `go build ./cmd/garam`, static, linux/amd64 |
-| `/testprincipal` | `go build ./tests/testprincipal`, static, linux/amd64 |
-| `/migrations/` | the repository's `migrations/`, verbatim |
+| `/garam` | `go build ./platform/cmd/garam`, static, linux/amd64 |
+| `/testprincipal` | `go build ./platform/tests/testprincipal`, static, linux/amd64 |
+| `/migrations/` | the repository's `platform/migrations/`, verbatim |
 
 Its label `org.opencontainers.image.revision` names the full commit.
-`make test-image` builds it from `tests/testprincipal/Dockerfile`, and
-`make test-image-e2e` checks those paths, the linking and the label.
+`make test-image` builds it from
+`platform/tests/testprincipal/Dockerfile`, and `make test-image-e2e`
+checks those paths, the linking and the label.
 
 **Pin the digest, not the tag.** An image is tagged with its commit's
 first twelve hex digits, `<tag>` below. The repository holds that tag

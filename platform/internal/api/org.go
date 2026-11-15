@@ -9,6 +9,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
@@ -41,6 +42,17 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.orgs.AddMember(r.Context(), org.NewMembership(g, u.GRN, org.RoleOwner)); err != nil {
+		writeError(w, err)
+		return
+	}
+	// The organization's entities, the owner's role link and the
+	// owner's own entity, whose parent the organization now is, are
+	// marked by the same two writes, and one wait covers them.
+	if err := s.awaitMarks(r.Context(), g.String(),
+		policyfeed.Entity{Type: policyfeed.OrgType, ID: g.String()},
+		policyfeed.Entity{Type: policyfeed.OrgMembersType, ID: g.String()},
+		roleLinkMark(g.String(), u.GRN.String()),
+		policyfeed.Entity{Type: policyfeed.UserType, ID: u.GRN.String()}); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -132,7 +144,12 @@ func (s *Server) DeleteOrg(w http.ResponseWriter, r *http.Request, orgSlug apige
 		writeError(w, err)
 		return
 	}
-	if err := s.orgs.DeleteOrg(r.Context(), g); err != nil {
+	ctx, raised := s.recording(r.Context())
+	if err := s.orgs.DeleteOrg(ctx, g); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.awaitRaised(r.Context(), raised, g.String()); err != nil {
 		writeError(w, err)
 		return
 	}

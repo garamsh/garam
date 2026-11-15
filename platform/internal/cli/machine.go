@@ -36,6 +36,8 @@ import (
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
+	policyfeedpg "github.com/garamsh/garam/platform/internal/policyfeed/postgres"
 	"github.com/garamsh/garam/platform/internal/watch"
 	watchpg "github.com/garamsh/garam/platform/internal/watch/postgres"
 )
@@ -133,6 +135,7 @@ func serveMachine(cmd *cobra.Command) error {
 		Identity:           idIssuer,
 		ServiceKeys:        idKeys,
 		Engine:             conn,
+		Feed:               policyfeed.NewObservingGate(policyfeedpg.NewStore(pool), policyfeed.Bound),
 		Logger:             obs.logger,
 		Metrics:            obs.registry,
 	})
@@ -205,6 +208,11 @@ type MachineConfig struct {
 	// principal. ServiceKeys is asked on every authentication.
 	Identity    *identity.Issuer
 	ServiceKeys identity.KeySource
+	// Feed holds the answer of a route that creates an agent until the
+	// policy service holds its entity (ADR-0165). This process runs no
+	// delivery loop, so the gate only reads the outbox that the loop of
+	// `serve api` empties. Nil waits for nothing.
+	Feed policyfeed.Gate
 	// Metrics is where the count of requests by how they authenticated
 	// is registered (ADR-0100). Nil registers it nowhere.
 	Metrics prometheus.Registerer
@@ -321,6 +329,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			newSupervisorService(pool, cfg.Engine, cfg.ServerRoot, cfg.Now),
 			newAdmissionService(pool, authority, cfg.Now), keyring).
 			WithCredentialAudit(auditpg.NewCredentialStore(pool)).
+			WithFeed(cfg.Feed).
 			WithIdentity(cfg.Identity, principals),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.RecoverPanics,

@@ -5,7 +5,9 @@
 > paths it gives a development build, are superseded by
 > [ADR-0095](./0095-development-images-live-under-dev-and-garam-holds-releases-only.md),
 > and [ADR-0134](./0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
-> restores the first under the repository names it gives
+> restores the first under the repository names it gives;
+> §Decision's "A bare `X.Y.Z` is a release" is superseded in part by
+> [ADR-0157](./0157-until-launch-a-release-is-v0-1-0-dev-n-or-v0-1-0-rc-n-and-no-development-build-takes-those-tags.md)
 > Date: 2026-09-27
 
 ## Contents

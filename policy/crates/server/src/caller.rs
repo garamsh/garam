@@ -94,6 +94,15 @@ impl Principal {
         self.caller
     }
 
+    /// The `sub` the token carried: the bare name of an unscoped
+    /// caller, or a scoped caller's service principal GRN.
+    pub fn sub(&self) -> String {
+        match &self.org {
+            None => self.caller.subject().to_owned(),
+            Some(org) => format!("grn:{}/iam/service/{}", org.slug(), self.caller.subject()),
+        }
+    }
+
     /// The organization a scoped caller is bound to.
     pub const fn org(&self) -> Option<&OrgGrn> {
         self.org.as_ref()

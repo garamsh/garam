@@ -1,0 +1,197 @@
+# Values for the garam-gaon chart (ADR-0155). The chart renders the gaon
+# objects docs/architecture/deployment-gaon.md states, to be applied
+# with `helm template ... | gaon apply -f -`. It creates no Secret and
+# no ConfigMap: every `secret` and `configMap` below names one the
+# deployment creates, and no value of either is in this file.
+
+# Which half of the deployment this render holds. `migrate` renders the
+# three migration Jobs and nothing else; `serve` renders the eight
+# Deployments, their Services and, where `gateway.enabled`, the routes.
+# Required: gaon applies a stream in the order Helm emits it, and Helm
+# emits Deployments before Jobs, so a render holding both would start
+# the services before the migrations ran (README §Order).
+stage: ""
+
+# Every object is named `<namePrefix>-<word>`. Gaon has no namespaces,
+# so this prefix is what keeps two deployments' objects apart.
+namePrefix: garam
+
+# The zone of a Service's name: `<service>.default.svc.<dnsZone>`. A
+# short name is not resolved, so every address a process dials is this
+# full form.
+dnsZone: cluster.local
+
+migrate:
+  # Suffixes the Job names. A finished Job and its MicroVM are kept, so
+  # a release that runs a migration again needs a Job of a new name.
+  run: ""
+
+# Each object's `resources`. The requests are required and have no
+# default: gaon's node agent fails a MicroVM that names no cpu or no
+# memory, and no figure for any process is written in this repository.
+# A deployment sets a figure for each of the eleven objects. The limits
+# are optional; the node agent sizes a MicroVM from them, else from the
+# requests. A quantity is a number with an optional m, k, M, G, T, Ki,
+# Mi, Gi or Ti. The migrate stage reads the last three; the serve stage
+# reads the other eight.
+resources:
+  api: &resources
+    requests:
+      cpu: ""
+      memory: ""
+    limits:
+      cpu: ""
+      memory: ""
+  authz: *resources
+  machine: *resources
+  policy: *resources
+  cowork: *resources
+  console: *resources
+  site: *resources
+  coworkWeb: *resources
+  migrate: *resources
+  coworkMigrate: *resources
+  policyMigrate: *resources
+
+# Each image is `<repository>@<digest>`; gaon refuses a tag. `user` is
+# `uid:gid`, both numbers: a file with no owner takes the MicroVM's
+# user only in that form.
+image:
+  server: &image
+    repository: ""
+    digest: ""
+    user: ""
+  cowork: *image
+  policy: *image
+  console: *image
+  site: *image
+  coworkWeb: *image
+
+# The Secrets holding the three databases' connection strings.
+database:
+  garam: &ref
+    secret: ""
+    key: ""
+  cowork: *ref
+  policy: *ref
+
+# The origins a browser or another process opens, as
+# docs/architecture/deployment-needs.md §Public names states them.
+public:
+  siteUrl: ""
+  consoleUrl: ""
+  coworkUrl: ""
+  # Not an origin: cowork's server as the browser reaches it, on
+  # cowork-web's own host and under /api, a ws or wss URL
+  # (deployment-needs.md §garam/cowork-web).
+  coworkSyncUrl: ""
+  # Optional: where the console links to cowork-web.
+  coworkWebUrl: ""
+
+# The issuer the policy service trusts and the api signs under: one
+# value for both.
+policy:
+  tokenIssuer: ""
+  jwks:
+    configMap: ""
+    key: ""
+  tls:
+    cert:
+      configMap: ""
+      key: ""
+    key: *ref
+
+# garam's own OIDC issuer, off until named
+# (deployment-contract.md §The identity issuer is off until it is
+# named). `issuer` is https://<lowercase host>/api with no trailing
+# slash, never
+# machine.issuer, and the same as policy.tokenIssuer: serve refuses to
+# start otherwise. Set, `api` and `machine` both serve it, and `machine`
+# is given the signing key api.policy.signingKey names. `serviceKeys` is
+# the public keys of each first-party service by name, a ConfigMap
+# `serve machine` reads; it needs `issuer` and a machine.tokenUrl that
+# ends in /oauth/token, and cowork.policy.enabled needs both.
+identity:
+  issuer: ""
+  serviceKeys:
+    configMap: ""
+    key: ""
+
+api:
+  # Optional: unset leaves garam's own default.
+  sessionTtl: ""
+  cookieSecure: true
+  # Set all of these or none of them.
+  google:
+    clientId: ""
+    redirectUrl: ""
+    clientSecret: *ref
+  policy:
+    # The root the policy service's certificate is verified against.
+    ca:
+      configMap: ""
+      key: ""
+    signingKey: *ref
+
+machine:
+  issuer: ""
+  # Optional: an absolute https URL. Unset, garam issues no key and
+  # answers the exchange 503.
+  tokenUrl: ""
+  # Optional: unset leaves garam's own default.
+  agentTokenLifetime: ""
+  tlsCert:
+    configMap: ""
+    key: ""
+  tlsKey: *ref
+  serverRoot:
+    configMap: ""
+    key: ""
+  caKey: *ref
+  service:
+    # ClusterIP, or LoadBalancer where the machine listener is reached
+    # without the gateway.
+    type: ClusterIP
+    loadBalancerIP: ""
+
+cowork:
+  # Not URLs: a comma list of host patterns a browser may open a sync
+  # WebSocket from and frame an artifact in, besides cowork's own host
+  # (deployment-needs.md §garam/cowork: serve and migrate).
+  webOrigins: ""
+  s3:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    accessKey: *ref
+    secretKey: *ref
+    pathStyle: false
+    createBucket: false
+  userContent:
+    origin: ""
+    secret: *ref
+  # Set all of these or none of them; `enabled` makes the rest required.
+  policy:
+    enabled: false
+    ca:
+      configMap: ""
+      key: ""
+    deploymentKey: *ref
+
+# The routes, behind a value that is off: gaon documents the gateway
+# kinds and the unit that serves them does not exist yet
+# (docs/architecture/deployment-gaon.md §Names).
+gateway:
+  enabled: false
+  # Optional: the LAN address the Gateway asks for.
+  address: ""
+  httpsPort: 443
+  site: &listener
+    host: ""
+    certificate: ""
+  console: *listener
+  cowork: *listener
+  userContent: *listener
+  machine:
+    host: ""
+    port: 8443

@@ -204,6 +204,12 @@ type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
+
+	// Reason A stable code a client may branch on where the kind alone does not say which refusal it was. `change_not_applied` answers a create with 503: the entity is stored and the policy service does not yet hold it, so a read of it may be denied for a moment. Read it by `resource`; do not create it again.
+	Reason *string `json:"reason,omitempty"`
+
+	// Resource With `change_not_applied`, the GRN of the entity the request stored.
+	Resource *string `json:"resource,omitempty"`
 }
 
 // MemberAdd defines model for MemberAdd.
@@ -3750,6 +3756,8 @@ type CreateChannelResponse struct {
 	JSON403 *Error
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -3775,6 +3783,11 @@ func (r CreateChannelResponse) GetJSON403() *Error {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r CreateChannelResponse) GetJSON409() *Error {
 	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateChannelResponse) GetJSON503() *Error {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -4315,6 +4328,8 @@ type CreatePageResponse struct {
 	JSON403 *Error
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -4340,6 +4355,11 @@ func (r CreatePageResponse) GetJSON403() *Error {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r CreatePageResponse) GetJSON404() *Error {
 	return r.JSON404
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreatePageResponse) GetJSON503() *Error {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -4694,6 +4714,8 @@ type CreateTaskResponse struct {
 	JSON403 *Error
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -4719,6 +4741,11 @@ func (r CreateTaskResponse) GetJSON403() *Error {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r CreateTaskResponse) GetJSON404() *Error {
 	return r.JSON404
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateTaskResponse) GetJSON503() *Error {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -6014,6 +6041,13 @@ func ParseCreateChannelResponse(rsp *http.Response) (*CreateChannelResponse, err
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -6450,6 +6484,13 @@ func ParseCreatePageResponse(rsp *http.Response) (*CreatePageResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -6741,6 +6782,13 @@ func ParseCreateTaskResponse(rsp *http.Response) (*CreateTaskResponse, error) {
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

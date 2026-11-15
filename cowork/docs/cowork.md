@@ -85,7 +85,8 @@ nothing publishes or deploys either.
 | `blob.Store` | `internal/blob` | `s3/` (RustFS, AWS S3, MinIO), `memory/` |
 | `fanout.Hub` | `internal/fanout` | `memory/` (one instance) |
 | `collab.DocEngine` | `internal/collab` | `goja/` |
-| `platform.Platform` | `internal/platform` | `http/` |
+| `platform.Identity` | `internal/platform` | `http/` |
+| `platform.Platform` | `internal/platform` | `policy/` over `http/` |
 
 `internal/cli` (`NewHandler`, `NewUserContentHandler`) is the one
 place they are wired. The `AgentDelivery` port comes with delivery to
@@ -96,24 +97,27 @@ agents.
 - `me`: who presented a credential. cowork passes the platform's
   session cookie or a CLI session's bearer as presented, and reads a
   bearer alone where there is one.
-- `checkPermissions`, as that same caller: `cowork:page.read` and
-  `cowork:page.write`, on the organization for its page tree and on a
-  `cowork-page` for one page. Every role grants both (#1663).
+- The organization list, as that same caller.
 - cowork answers 503 whenever the platform cannot be reached, and
   decides nothing alone.
-- **Where the policy service is configured**, `checkPermissions` is
-  asked of it instead, as that same caller, in one `Evaluations` call
-  under cowork's own caller token for the organization
+- **What a caller may do is the policy service's to say, and cowork
+  asks it alone**: one `Evaluations` call per question, as that same
+  caller, under cowork's own caller token for the organization
   ([ADR-0141](../../docs/architecture/adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
-  §12). `me` and the organization list stay with the platform. The
-  policy service has no membership question for cowork, so cowork
-  reads it off the decisions: a caller is no member when a decision's
-  reasons name the `tenant-isolation` policy, and a denial for any
-  other reason, a guardrail's among them, is that check's own `false`.
-  A batch that would otherwise be empty carries one
-  `cowork:page.read` on the organization to be judged the same way.
-  With none of the four settings below set, cowork asks the platform
-  as above.
+  §12, [ADR-0146](../../docs/architecture/adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)
+  §8). It asks the platform no `checkPermissions`, and it refuses to
+  start without the four settings below. The policy service has no
+  membership question for cowork, so cowork reads it off the
+  decisions: a caller is no member when a decision's reasons name the
+  `tenant-isolation` policy, and a denial for any other reason, a
+  guardrail's among them, is that check's own `false`. A batch that
+  would otherwise be empty carries one `cowork:page.read` on the
+  organization to be judged the same way. The actions asked are
+  `cowork:page.read` and `cowork:page.write` (every role grants both,
+  #1663), `cowork:channel.read` and `cowork:channel.post` (ADR-0128),
+  `cowork:task.read` and `cowork:task.write`, and
+  `cowork:artifact.read` and `cowork:artifact.write`, each on the
+  organization and on the one resource it names.
 - **The session.** A person signs in on the site and cowork-web is
   handed a session of its own on its host, by ADR-0131's one-time code
   ([sign-in.md](../../docs/architecture/sign-in.md)). The cookie is
@@ -124,27 +128,25 @@ agents.
   again every 30 seconds
   ([ADR-0139](../../docs/architecture/adr/0139-an-open-cowork-websocket-is-asked-again-within-a-stated-bound.md)).
   - **The bound.** A sync or live socket closes within 40 seconds of
-    the platform refusing its caller: the interval and one request's
-    timeout. The re-check is one `checkPermissions` per socket, the
-    same caller and the same credential.
-  - **What it costs the platform.** Four Postgres reads per re-check,
-    with two engine checks on a page and one on a channel, so 10,000
-    open sockets ask 333 requests a second.
+    the platform or the policy service refusing its caller: the
+    interval and one request's timeout. Each re-check is a `me` to the
+    platform, which says whether the credential still stands and which
+    the policy service cannot, then one `Evaluations` to the policy
+    service, the same caller and the same credential.
+  - **What it costs.** One `me` and one `Evaluations` per socket per
+    interval, so 10,000 open sockets ask each 333 requests a second.
+    ADR-0139's count of Postgres reads and engine checks was the
+    platform's per-request cost and no longer holds for cowork's
+    questions.
   - **The close.** `4401` for a session the platform refuses, `4403`
     for a member removed or a read denied, each the status its upgrade
     would now answer. y-websocket does not reconnect after either.
     cowork-web sends `4401` to sign in, and reloads the page on `4403`.
-  - **A platform that cannot be reached** closes nothing: as for a 503,
+  - **A platform or policy service that cannot be reached** closes
+    nothing: as for a 503,
     cowork decides nothing alone, so the connection stands as last
     decided, the failure is logged and the next re-check asks again.
     The bound runs again once the platform answers.
-- `checkPermissions` for messaging: `cowork:channel.read` and
-  `cowork:channel.post` on the organization and on a
-  `cowork-channel` (ADR-0128).
-- `checkPermissions` for tasks: `cowork:task.read` and
-  `cowork:task.write` on the organization and on a `cowork-task`; for
-  artifacts, `cowork:artifact.read` and `cowork:artifact.write` on the
-  organization and on a `cowork-artifact`.
 - Not yet: `postMessage` to an agent's queue, under the
   organization's cowork principal (§Delivery to agents), and an agent
   on the browser API (ADR-0123). Until then a message's agent mentions
@@ -182,7 +184,7 @@ agents.
 
 ## Messaging
 
-- **Who reads what** (ADR-0128). The platform's allow first, then,
+- **Who reads what** (ADR-0128). The policy service's allow first, then,
   for a private channel or a direct message, the participant list,
   which only narrows. A private channel's participants add others; a
   direct message's are fixed when it starts; leaving takes the caller
@@ -387,10 +389,10 @@ orgs use <org>` or tell the AI which one `list_workspaces` answers.
 | `COWORK_USERCONTENT_ORIGIN` | the user-content origin as browsers reach it; unset views no HTML artifact |
 | `COWORK_USERCONTENT_ADDR` | where that origin listens, default `:8092` |
 | `COWORK_USERCONTENT_SECRET` | the key its addresses are signed with, at least 32 bytes; the same on every instance |
-| `COWORK_POLICY_ADDR` | the policy service's gRPC address; with the next three it moves `checkPermissions` to that service, and set alone it refuses to start |
-| `COWORK_POLICY_CA_FILE` | the PEM file of the CA that signs the service's certificate and the token endpoint's, beside the system roots |
-| `COWORK_MACHINE_TOKEN_URL` | the platform's machine token endpoint, where cowork's caller token is fetched for each organization |
-| `COWORK_DEPLOYMENT_KEY_FILE` | cowork's deployment key, an owner-only PEM file read at each token exchange |
+| `COWORK_POLICY_ADDR` | the policy service's gRPC address (required: cowork refuses to start unless all four settings are set, and names the missing ones) |
+| `COWORK_POLICY_CA_FILE` | the PEM file of the CA that signs the service's certificate and the token endpoint's, beside the system roots (required) |
+| `COWORK_MACHINE_TOKEN_URL` | the platform's machine token endpoint, where cowork's caller token is fetched for each organization (required) |
+| `COWORK_DEPLOYMENT_KEY_FILE` | cowork's deployment key, an owner-only PEM file read at each token exchange (required) |
 
 The policy service also holds cowork's channels, pages, tasks and
 artifacts as entities, fed from an outbox in cowork's database

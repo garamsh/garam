@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // asked is the platform: it allows every check and sends each batch it
@@ -66,7 +68,14 @@ func (idleRoom) Serve(ctx context.Context, _ collab.Room, conn collab.Conn) erro
 func openSync(t *testing.T) asked {
 	t.Helper()
 	platformAsked := make(asked, 16)
-	s := api.NewServer(readablePages{}, idleRoom{}, nil, nil, nil, platformAsked, nil, 5*time.Millisecond)
+	openSyncOn(t, platformAsked)
+	return platformAsked
+}
+
+// openSyncOn opens a page's sync connection against p and answers it.
+func openSyncOn(t *testing.T, p platform.Platform) *websocket.Conn {
+	t.Helper()
+	s := api.NewServer(readablePages{}, idleRoom{}, nil, nil, nil, p, nil, 5*time.Millisecond)
 	mux := http.NewServeMux()
 	mux.HandleFunc(api.SyncPath, s.SyncPage)
 	srv := httptest.NewServer(mux)
@@ -77,7 +86,7 @@ func openSync(t *testing.T) asked {
 	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/orgs/acme/pages/p1/sync", nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "") })
-	return platformAsked
+	return conn
 }
 
 func next(t *testing.T, a asked) []platform.Check {
@@ -110,4 +119,47 @@ func TestSyncPage_RecheckStatesNothingOfItsReadAndAProbeOfItsWrite(t *testing.T)
 	require.Equal(t, platform.ActionPageWrite, checks[1].Action)
 	assert.False(t, checks[0].Probe, "the read is a request the person made")
 	assert.True(t, checks[1].Probe, "the write decides whether the connection is writable")
+}
+
+// signedOut is the platform for a session that ends: it refuses the
+// credential once out is set, and allows every check throughout.
+type signedOut struct {
+	asked
+	out atomic.Bool
+}
+
+func (p *signedOut) Identify(ctx context.Context, cred platform.Credential) (platform.Caller, error) {
+	if p.out.Load() {
+		return platform.Caller{}, errorx.New(errorx.KindUnauthenticated, "signed out")
+	}
+	return p.asked.Identify(ctx, cred)
+}
+
+// closeSignedOut is the close code a client reads as signed out.
+const closeSignedOut = websocket.StatusCode(4401)
+
+func TestSyncPage_RecheckClosesASessionThePlatformNoLongerAccepts(t *testing.T) {
+	p := &signedOut{asked: make(asked, 16)}
+	conn := openSyncOn(t, p)
+	closed := make(chan websocket.StatusCode, 1)
+	go func() {
+		_, _, err := conn.Read(context.Background())
+		closed <- websocket.CloseStatus(err)
+	}()
+	next(t, p.asked) // the upgrade's own question
+	next(t, p.asked) // a re-check that passed
+	select {
+	case code := <-closed:
+		require.FailNow(t, "the control: while the session stands the connection is open", "closed with %d", code)
+	default:
+	}
+
+	p.out.Store(true)
+
+	select {
+	case code := <-closed:
+		assert.Equal(t, closeSignedOut, code)
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "the connection stayed open for a session the platform refuses")
+	}
 }

@@ -139,8 +139,9 @@ func TestPages_AnswersAsThePlatformDecides(t *testing.T) {
 // the platform up is the control.
 func TestPages_RefusesWhenThePlatformCannotBeReached(t *testing.T) {
 	p := pool(t)
-	platformSrv := httptest.NewServer(&fakePlatform{deny: map[string]bool{}})
-	h, err := cli.NewHandler(cli.Config{PlatformURL: platformSrv.URL}, p)
+	fake := newFakePlatform()
+	platformSrv := httptest.NewServer(fake)
+	h, err := cli.NewHandler(cli.Config{PlatformURL: platformSrv.URL, PolicyClient: fake.policyClient(t)}, p)
 	require.NoError(t, err)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)

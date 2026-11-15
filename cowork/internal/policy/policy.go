@@ -1,16 +1,11 @@
 // Package policy is cowork's side of the policy service (ADR-0141
 // §12): its settings, the caller token it presents under (ADR-0129),
 // and a client that asks and feeds the service as one organization's
-// cowork. Nothing here is configured unless the address is set.
+// cowork.
 package policy
 
-import (
-	"github.com/garamsh/garam/lib/errorx"
-)
-
 // Config is where the policy service is and how cowork proves who it
-// is to the machine token endpoint. The zero Config is no policy
-// service: cowork asks the platform.
+// is to the machine token endpoint.
 type Config struct {
 	// Addr is the policy service's gRPC address.
 	Addr string
@@ -23,21 +18,4 @@ type Config struct {
 	// KeyFile is the deployment key, an owner-only PEM file read at
 	// each exchange.
 	KeyFile string
-}
-
-// Configured reports whether any setting is set.
-func (c Config) Configured() bool {
-	return c.Addr != "" || c.CAFile != "" || c.TokenURL != "" || c.KeyFile != ""
-}
-
-// Validate refuses a Config that sets some of the four and not all.
-func (c Config) Validate() error {
-	if !c.Configured() {
-		return nil
-	}
-	if c.Addr == "" || c.CAFile == "" || c.TokenURL == "" || c.KeyFile == "" {
-		return errorx.New(errorx.KindInvalidArgument,
-			"policy: the address, CA file, token URL and deployment key file are set together or not at all")
-	}
-	return nil
 }

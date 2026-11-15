@@ -1,6 +1,7 @@
 // Package policy implements platform.Platform's Allowed against the
 // policy service: cowork asks it directly, under its own caller token
-// for the organization, as ADR-0141 §12 has a service do. Who a
+// for the organization, as ADR-0141 §12 has a service do, and asks the
+// platform nothing of what a caller may do (ADR-0146 §8). Who a
 // credential belongs to, and which organizations it has, are still the
 // platform's to answer.
 package policy
@@ -25,19 +26,18 @@ type Evaluator interface {
 	Evaluations(ctx context.Context, org string, req *policyv1.EvaluationsRequest) (*policyv1.EvaluationsResponse, error)
 }
 
-// Platform is a platform.Platform that asks the policy service where
-// the platform would be asked for a decision, and the platform for
-// everything else.
+// Platform is a platform.Platform that asks the policy service for a
+// decision, and the platform for who a caller is.
 type Platform struct {
-	platform.Platform
+	platform.Identity
 	policy Evaluator
 }
 
 var _ platform.Platform = (*Platform)(nil)
 
-// New answers base with Allowed replaced by a question to policy.
-func New(base platform.Platform, policy Evaluator) *Platform {
-	return &Platform{Platform: base, policy: policy}
+// New answers identity with Allowed, a question to policy.
+func New(identity platform.Identity, policy Evaluator) *Platform {
+	return &Platform{Identity: identity, policy: policy}
 }
 
 // tenantIsolation is the id of the system policy that denies a caller

@@ -59,9 +59,8 @@ type Config struct {
 	// SocketRecheck is how often an open WebSocket's caller is asked
 	// again; zero is api.SocketRecheck.
 	SocketRecheck time.Duration
-	// PolicyClient, where set, is asked what a caller may do in place
-	// of the platform; Identify and Organizations stay with the
-	// platform (ADR-0141 §12). Nil asks the platform.
+	// PolicyClient is asked what a caller may do; Identify and
+	// Organizations are the platform's (ADR-0141 §12). It is required.
 	PolicyClient *policy.Client
 }
 
@@ -77,14 +76,14 @@ type services struct {
 }
 
 func wire(cfg Config, pool *pgxpool.Pool) (services, error) {
-	base, err := platformhttp.New(cfg.PlatformURL)
+	if cfg.PolicyClient == nil {
+		return services{}, errorx.New(errorx.KindInvalidArgument, "cowork asks the policy service alone: a policy client is required")
+	}
+	identity, err := platformhttp.New(cfg.PlatformURL)
 	if err != nil {
 		return services{}, err
 	}
-	var p platform.Platform = base
-	if cfg.PolicyClient != nil {
-		p = platformpolicy.New(base, cfg.PolicyClient)
-	}
+	p := platformpolicy.New(identity, cfg.PolicyClient)
 	engine, err := collabgoja.New()
 	if err != nil {
 		return services{}, err
@@ -207,9 +206,7 @@ func newServeCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if policyAPI != nil {
-				defer func() { _ = policyAPI.Close() }()
-			}
+			defer func() { _ = policyAPI.Close() }()
 			cfg := Config{
 				PlatformURL: platformURL, WebOrigins: listOf(envOr(envWebOrigins, "")),
 				Blobs: blobs, UserContent: signer, PolicyClient: policyAPI,

@@ -307,3 +307,23 @@ func TestPage_AnIDNoGRNCanNameIsNotFoundAndNoDecisionIsAsked(t *testing.T) {
 	assert.ErrorIs(t, err, page.ErrPageNotFound, "delete")
 	assert.Zero(t, p.asked)
 }
+
+func TestPage_AParentNoGRNCanNameIsNotFoundAndNoDecisionIsAsked(t *testing.T) {
+	s, p := newService(t)
+	ctx := context.Background()
+	const bad = "01JAAAAAAAAAAAAAAAAAAAAAAA"
+	own := create(t, s, "own", "")
+	p.asked = 0
+
+	_, err := s.Create(ctx, ada, "acme", page.CreateInput{Title: "t", Parent: bad})
+	assert.ErrorIs(t, err, page.ErrPageNotFound, "create")
+	assert.Zero(t, p.asked, "create")
+	parent := bad
+	_, err = s.Update(ctx, ada, "acme", own.ID, page.UpdateInput{Parent: &parent})
+	assert.ErrorIs(t, err, page.ErrPageNotFound, "update")
+	assert.Zero(t, p.asked, "update")
+
+	_, err = s.Create(ctx, ada, "acme", page.CreateInput{Title: "t", Parent: own.ID})
+	assert.NoError(t, err, "control: a parent a GRN can name is asked about")
+	assert.Positive(t, p.asked)
+}

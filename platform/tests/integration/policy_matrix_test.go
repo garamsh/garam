@@ -72,6 +72,9 @@ const (
 	// matrixDifferences lists, one key per line, the questions the two
 	// engines are known to answer differently.
 	matrixDifferences = "testdata/policy_matrix_differences.txt"
+	// matrixRefused lists, one key per line, the questions the service
+	// refuses instead of deciding.
+	matrixRefused = "testdata/policy_matrix_refused.txt"
 	// pageSize is the most pairs one permission check takes.
 	pageSize = 50
 )
@@ -107,9 +110,11 @@ type row struct {
 	service  policydecision.Decision
 }
 
-// agrees reads the platform's unknown as its check's allow.
+// agrees reports that both engines decided and gave one answer. It
+// reads the platform's unknown as its check's allow. A refused
+// question has no service decision, so it neither agrees nor differs.
 func (r row) agrees() bool {
-	return (r.platform != answerDeny) == r.service.Allowed
+	return !r.refused() && (r.platform != answerDeny) == r.service.Allowed
 }
 
 // refused reports that the service refused the question itself: the
@@ -173,8 +178,8 @@ type matrix struct {
 // TestPolicyMatrix asks every subject every action the platform
 // enforces on every kind of resource the action admits, in the
 // subject's organization and across it, of the platform and of the
-// policy service. It fails on a difference the list does not hold and
-// on a listed difference that is gone.
+// policy service. It fails on a difference or a refusal its list does
+// not hold, and on a listed one that is gone.
 func TestPolicyMatrix(t *testing.T) {
 	ctx := context.Background()
 	addr, caFile, keyFile, issuer := matrixEnv(t)
@@ -195,31 +200,38 @@ func TestPolicyMatrix(t *testing.T) {
 	rows := m.askPlatform(t)
 	m.askService(t, service, rows)
 
-	found := map[string]row{}
-	agreeing, refused := 0, 0
+	found, refused := map[string]row{}, map[string]row{}
+	agreeing := 0
 	for _, r := range rows {
-		if r.refused() {
-			refused++
-		}
-		if r.agrees() {
+		switch {
+		case r.refused():
+			refused[r.key] = r
+		case r.agrees():
 			agreeing++
-		} else {
+		default:
 			found[r.key] = r
 		}
 	}
-	t.Logf("asked %d, agreeing %d, differing %d, refused by the service %d", len(rows), agreeing, len(found), refused)
+	t.Logf("asked %d, agreeing %d, differing %d, refused by the service %d", len(rows), agreeing, len(found), len(refused))
 	writeMatrixReport(t, rows)
 
 	probeAgrees(t, ctx, service, rows)
 	m.assertNoNonAgentSender(t)
 
-	fresh, gone := compareDifferences(differenceKeys(found), listedDifferences(t))
+	fresh, gone := compareDifferences(differenceKeys(found), listedKeys(t, matrixDifferences))
 	for _, k := range fresh {
 		r := found[k]
 		t.Errorf("new difference: %s platform=%s service=%s reasons=%v", k, r.platform, r.serviceAnswer(), r.reasons())
 	}
 	for _, k := range gone {
 		t.Errorf("listed difference is gone: %s", k)
+	}
+	fresh, gone = compareDifferences(differenceKeys(refused), listedKeys(t, matrixRefused))
+	for _, k := range fresh {
+		t.Errorf("new refusal: %s reasons=%v", k, refused[k].reasons())
+	}
+	for _, k := range gone {
+		t.Errorf("listed refusal is gone: %s", k)
 	}
 }
 
@@ -263,9 +275,9 @@ func differenceKeys(rows map[string]row) []string {
 	return out
 }
 
-func listedDifferences(t *testing.T) []string {
+func listedKeys(t *testing.T, path string) []string {
 	t.Helper()
-	raw, err := os.ReadFile(matrixDifferences)
+	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var out []string
 	sc := bufio.NewScanner(bytes.NewReader(raw))

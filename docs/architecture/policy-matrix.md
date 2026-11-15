@@ -7,6 +7,7 @@ authorization question differently, as measured by the suite in
 ## Contents
 - Result
 - Differences
+- Refused
 - What the matrix asks
 - How both engines reach one state
 - Non-agent senders on the machine listener
@@ -18,21 +19,16 @@ authorization question differently, as measured by the suite in
 | | Count |
 |---|---|
 | Questions asked | 1723 |
-| Questions agreeing | 1713 |
-| Questions differing | 10 |
-| Of the agreeing, refused by the service | 129 |
+| Agreeing: both decided, the same answer | 1584 |
+| Differing: both decided, different answers | 10 |
+| Refused by the service: no decision | 129 |
 
-A question agrees when both engines answer allow or both answer deny.
-The platform's `unknown` answer (24 questions) is read as the allow
-the check returns for it; the service allowed each of them.
-
-The 129 refusals are all of one subject, the operator, asked an action
-the service's schema does not apply to an operator. The service
-answers `INVALID_ARGUMENT` ("the evaluation does not fit the schema")
-to the batch entry and to the same question asked alone. The platform
-denies each, because no route admits an operator to the action, so
-the answers agree as denials. They are counted here because a refusal
-is not a decision.
+The three classes sum to the total. A question agrees when both
+engines answer allow or both answer deny. The platform's `unknown`
+answer (24 questions) is read as the allow the check returns for it;
+the service allowed each of them. A refused question is in neither of
+the other classes, whatever the platform answered: a refusal is not a
+decision.
 
 The 195 questions asked again one at a time with `Evaluate`, as
 `probe` true and as `probe` false, answered as they did in the batch:
@@ -78,6 +74,29 @@ The platform's answer for a resource that exists only in the platform
 is the finding: asked about a policy, the service denies for lack of a
 feed, not for lack of a right. Nothing here is fixed, and nothing is
 narrowed out of the matrix.
+
+## Refused
+
+All 129 are of one subject, the operator, asked an action the
+service's schema does not apply to an operator. The service answers
+`INVALID_ARGUMENT`, "the evaluation does not fit the schema", to the
+batch entry and to the same question asked alone.
+
+- **Subject.** The hosted operator of the first organization.
+- **Actions.** Every `iam` action the matrix asks except
+  `iam:agent.create` and `iam:agent.configure`: the agent, audit,
+  consent, group, operator, org, policy and project actions, on every
+  resource kind each admits, in all three organizations.
+- **Rule of the service.** `policy/schema/iam.cedarschema` declares
+  `Operator` a principal of a few actions only (ADR-0146), so Cedar
+  cannot evaluate the others for it.
+- **Rule of the platform.** No route admits an operator to them, and
+  the matrix records deny.
+
+The questions are listed in
+`platform/tests/integration/testdata/policy_matrix_refused.txt`. The
+suite fails when a question is refused that the list does not hold,
+and when a listed one is decided or no longer asked.
 
 ## What the matrix asks
 
@@ -150,6 +169,10 @@ does not list, and when a listed one is gone.
 
 ## Open questions
 
+- What an operator's decision is on the refused class is open. The
+  platform denies it and the service refuses it, which no caller of
+  the client can read as a denial without a rule saying so. That is
+  needed before any operator decision moves to the service.
 - Whether the service should hold an `Iam::Policy` entity, or the
   platform should ask it nothing about a policy, is not decided here.
   The matrix reports the difference and decides nothing.

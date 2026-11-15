@@ -13,6 +13,9 @@ func (s *service) Comment(ctx context.Context, caller platform.Caller, org, id, 
 	if strings.TrimSpace(body) == "" || len(body) > maxBody {
 		return Comment{}, ErrInvalidComment
 	}
+	if !platform.Nameable(org, ServiceType, id) {
+		return Comment{}, ErrTaskNotFound
+	}
 	if err := platform.Require(ctx, s.platform, caller, org, platform.OnTask(ActionWrite, id)); err != nil {
 		return Comment{}, err
 	}
@@ -25,6 +28,9 @@ func (s *service) Comment(ctx context.Context, caller platform.Caller, org, id, 
 
 // Comments answers the comments on a task the caller may read.
 func (s *service) Comments(ctx context.Context, caller platform.Caller, org, id string) ([]Comment, error) {
+	if !platform.Nameable(org, ServiceType, id) {
+		return nil, ErrTaskNotFound
+	}
 	if err := platform.Require(ctx, s.platform, caller, org, platform.OnTask(ActionRead, id)); err != nil {
 		return nil, err
 	}

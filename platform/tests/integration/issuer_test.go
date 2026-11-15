@@ -116,11 +116,9 @@ func (s *issuerStack) machineListener(t *testing.T, issuer *identity.Issuer) str
 	listener := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	t.Cleanup(listener.Close)
 	principals := identity.NewPrincipals(identity.PrincipalsConfig{
-		Keys:               identity.FixedKeys(s.keys),
-		ExchangeEndpoint:   listener.URL + "/oauth/token",
-		IntrospectEndpoint: listener.URL + "/oauth/introspect",
-		Issuer:             issuerURL,
-		Admitter:           identitypg.New(s.pool),
+		Keys:     identity.FixedKeys(s.keys),
+		Issuer:   issuerURL,
+		Admitter: identitypg.New(s.pool),
 	})
 	handler = machinegen.HandlerWithOptions(
 		machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).WithIdentity(issuer, principals),
@@ -168,11 +166,12 @@ func bodyOf(dump string) string {
 	return body
 }
 
-// principalAssertion signs a client assertion as principal, addressed to the
-// URL named by to, with the jti given or a fresh one.
-func principalAssertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, to, jti string) string {
+// principalAssertion signs the client assertion RFC 10070 §4 gives a
+// service principal, `aud` the issuer identifier under typ
+// `client-authentication+jwt`, with the jti given or a fresh one.
+func principalAssertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, jti string) string {
 	t.Helper()
-	return principalAssertionAs(t, private, principal, "JWT", to, jti)
+	return principalAssertionAs(t, private, principal, operator.TypeClientAuth, issuerURL, jti)
 }
 
 // principalAssertionAs signs the assertion under header typ, naming aud
@@ -221,7 +220,7 @@ func (s *issuerStack) introspectAs(t *testing.T, listener string, private *rsa.P
 	t.Helper()
 	return post(t, listener+"/oauth/introspect", url.Values{
 		"token": {token}, "client_id": {principal.String()},
-		"client_assertion":      {principalAssertion(t, private, principal, listener+"/oauth/introspect", jti)},
+		"client_assertion":      {principalAssertion(t, private, principal, jti)},
 		"client_assertion_type": {operator.ClientAssertionTypeJWT},
 	})
 }
@@ -239,7 +238,7 @@ func (s *issuerStack) exchangeAs(t *testing.T, listener string, private *rsa.Pri
 	t.Helper()
 	form := url.Values{
 		"grant_type": {operator.GrantTypeClientCredentials}, "client_id": {principal.String()},
-		"client_assertion":      {principalAssertion(t, private, principal, listener+"/oauth/token", jti)},
+		"client_assertion":      {principalAssertion(t, private, principal, jti)},
 		"client_assertion_type": {operator.ClientAssertionTypeJWT},
 	}
 	if audience != "" {

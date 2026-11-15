@@ -7,6 +7,7 @@ package page
 import (
 	"time"
 
+	"github.com/garamsh/garam/cowork/internal/platform"
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 )
@@ -71,8 +72,8 @@ var (
 // asked before the platform is, and an organization that is no GRN is
 // left to the decision's own refusal.
 func nameable(org, id string) error {
-	if grn.Org(org).Validate() != nil || grn.NewIn(org, "cowork", "page", id).Validate() == nil {
-		return nil
+	if !platform.Nameable(org, ServiceType, id) {
+		return ErrPageNotFound
 	}
-	return ErrPageNotFound
+	return nil
 }

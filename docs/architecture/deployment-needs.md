@@ -314,16 +314,15 @@ owner's states the rule on what may stand in front of it.
   `GARAM_MACHINE_HEALTH_ADDR`: HTTP, plaintext, `/healthz`, `/readyz`
   (database and authz channel) and `/metrics` (`machine.go:146-155`).
 - **Assertion audience.** A service principal's assertion names as `aud`
-  the endpoint's own URL, with `typ` `JWT`, or `GARAM_IDENTITY_ISSUER`
-  as the only value, with `typ` `client-authentication+jwt` or `JWT`;
-  the URL form is to be withdrawn. An `aud` naming both, a list,
-  another string, or the URL form under the new `typ` is refused as a
-  bad client, and the operator exchange takes the URL form only
-  (`platform/internal/operator/assertion.go:28,169-170,233-256`,
+  `GARAM_IDENTITY_ISSUER` as the only value, with `typ`
+  `client-authentication+jwt` or `JWT`. An `aud` naming the endpoint's
+  URL, a list or another string is refused as a bad client, and the
+  operator exchange takes the URL form only
+  (`platform/internal/operator/assertion.go`,
   [machine-identity.md](./machine-identity.md) §cowork's principal).
-  cowork sends the URL form (`cowork/internal/policy/assertion.go:84`).
-  The introspection URL is derived from the token URL, so the two share
-  one origin (`identity.go:88-99`). An unknown organization answers 400
+  cowork sends the issuer form (`cowork/internal/policy/assertion.go`).
+  The token URL must still end in `/oauth/token` where the service keys
+  are set (`identity.go:92-99`). An unknown organization answers 400
   `unauthorized_client`; every other failure is `invalid_client`.
 - **Stop.** The TLS listener through `serveHTTP`, 10s as `serve api`;
   the health listener has no graceful stop (`machine.go:150,157`).

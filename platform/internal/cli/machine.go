@@ -290,24 +290,23 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	evidence := machine.NewEvidence(machinepg.New(pool), evidenceWindow, cfg.Now)
 
 	// A service principal proves itself at the token endpoint and at
-	// introspection, each by an assertion naming that endpoint's URL.
+	// introspection, each by an assertion naming the issuer identifier.
 	var principals *identity.Principals
 	if cfg.ServiceKeys != nil {
 		issuerID := ""
 		if cfg.Identity != nil {
 			issuerID = cfg.Identity.Identifier()
 		}
-		introspect, err := introspectionURL(cfg.TokenURL)
-		if err != nil {
+		// No assertion names the token URL any more; it is still held
+		// to end in the token path where service keys are set.
+		if _, err := introspectionURL(cfg.TokenURL); err != nil {
 			return nil, err
 		}
 		principals = identity.NewPrincipals(identity.PrincipalsConfig{
-			Keys:               cfg.ServiceKeys,
-			ExchangeEndpoint:   cfg.TokenURL,
-			IntrospectEndpoint: introspect,
-			Issuer:             issuerID,
-			Admitter:           identitypg.New(pool),
-			Now:                cfg.Now,
+			Keys:     cfg.ServiceKeys,
+			Issuer:   issuerID,
+			Admitter: identitypg.New(pool),
+			Now:      cfg.Now,
 		})
 	}
 

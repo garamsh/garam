@@ -25,8 +25,7 @@ func serviceAssertion(t *testing.T, typ string, aud any) string {
 }
 
 // verifyService parses and verifies compact as a service principal's
-// assertion, with the token endpoint and the issuer identifier both
-// accepted as audiences.
+// assertion against the issuer identifier.
 func verifyService(t *testing.T, compact string) error {
 	t.Helper()
 	private, _ := keys(t)
@@ -34,16 +33,16 @@ func verifyService(t *testing.T, compact string) error {
 	if err != nil {
 		return err
 	}
-	_, err = parsed.VerifyService(recorded(t, client, private), client, endpoint, issuerIdentifier)
+	_, err = parsed.VerifyService(recorded(t, client, private), client, issuerIdentifier)
 	return err
 }
 
 // TestServiceAssertion_TakesTheIssuerIdentifierAsItsOnlyAudience holds
-// RFC 10070 §4's form beside the token-URL form kept for now. The first
-// three are accepted, each a control for the refusals: the issuer
-// identifier under either typ, and the token URL under JWT. Refused are
-// both audiences together, the issuer as one of a list, another
-// audience, and the token URL under the new typ.
+// RFC 10070 §4's form as the only one. The first two are accepted, each
+// a control for the refusals: the issuer identifier under either typ.
+// Refused are the token URL under JWT, the form an operator's exchange
+// keeps, and under the new typ, both audiences together, the issuer as
+// one of a list, and another audience.
 func TestServiceAssertion_TakesTheIssuerIdentifierAsItsOnlyAudience(t *testing.T) {
 	for name, c := range map[string]struct {
 		typ      string
@@ -52,7 +51,7 @@ func TestServiceAssertion_TakesTheIssuerIdentifierAsItsOnlyAudience(t *testing.T
 	}{
 		"the issuer under client-authentication+jwt": {operator.TypeClientAuth, issuerIdentifier, true},
 		"the issuer under JWT":                       {operator.TypeJWT, issuerIdentifier, true},
-		"the token URL under JWT":                    {operator.TypeJWT, endpoint, true},
+		"the token URL under JWT":                    {operator.TypeJWT, endpoint, false},
 		"both audiences together":                    {operator.TypeClientAuth, []string{issuerIdentifier, endpoint}, false},
 		"both audiences together under JWT":          {operator.TypeJWT, []string{endpoint, issuerIdentifier}, false},
 		"the issuer as one of a list":                {operator.TypeClientAuth, []string{issuerIdentifier}, false},
@@ -70,24 +69,45 @@ func TestServiceAssertion_TakesTheIssuerIdentifierAsItsOnlyAudience(t *testing.T
 	}
 }
 
-// TestServiceAssertion_AcceptsNoFormWhoseAudienceIsUnset holds that a
-// deployment with no issuer identifier accepts the issuer form for
-// nothing, rather than matching an empty audience, and the endpoint
-// form likewise.
-func TestServiceAssertion_AcceptsNoFormWhoseAudienceIsUnset(t *testing.T) {
+// TestServiceAssertion_RefusesTheTokenURLFormAnOperatorKeeps holds that
+// the assertion naming the token URL under JWT verifies as an
+// operator's and is refused as a service principal's. Two controls sit
+// beside the refusal: the operator's verification of the same bytes,
+// and the issuer form accepted as a service principal's.
+func TestServiceAssertion_RefusesTheTokenURLFormAnOperatorKeeps(t *testing.T) {
 	private, _ := keys(t)
 	key := recorded(t, client, private)
-	for name, c := range map[string]struct {
-		aud, endpoint, issuer string
-	}{
-		"an empty audience, no issuer":   {"", endpoint, ""},
-		"the issuer, none configured":    {issuerIdentifier, endpoint, ""},
-		"the endpoint, none configured":  {endpoint, "", issuerIdentifier},
-		"an empty audience, no endpoint": {"", "", issuerIdentifier},
+
+	urlForm := serviceAssertion(t, operator.TypeJWT, endpoint)
+	asOperator, err := operator.ParseClientAssertion(urlForm)
+	require.NoError(t, err)
+	_, err = asOperator.Verify(key, client, endpoint)
+	require.NoError(t, err, "the control: the operator's exchange keeps the URL form")
+	asService, err := operator.ParseServiceAssertion(urlForm)
+	require.NoError(t, err)
+	_, err = asService.VerifyService(key, client, issuerIdentifier)
+	assert.ErrorIs(t, err, operator.ErrClientInvalid, "the URL form, as a service principal's")
+
+	issuerForm, err := operator.ParseServiceAssertion(serviceAssertion(t, operator.TypeClientAuth, issuerIdentifier))
+	require.NoError(t, err)
+	_, err = issuerForm.VerifyService(key, client, issuerIdentifier)
+	assert.NoError(t, err, "the control: the issuer form, as a service principal's")
+}
+
+// TestServiceAssertion_AcceptsNothingWhereTheIssuerIsUnset holds that a
+// deployment with no issuer identifier accepts no service assertion,
+// rather than matching an empty audience.
+func TestServiceAssertion_AcceptsNothingWhereTheIssuerIsUnset(t *testing.T) {
+	private, _ := keys(t)
+	key := recorded(t, client, private)
+	for name, aud := range map[string]string{
+		"an empty audience": "",
+		"the issuer":        issuerIdentifier,
+		"the token URL":     endpoint,
 	} {
-		parsed, err := operator.ParseServiceAssertion(serviceAssertion(t, operator.TypeClientAuth, c.aud))
+		parsed, err := operator.ParseServiceAssertion(serviceAssertion(t, operator.TypeClientAuth, aud))
 		require.NoError(t, err, name)
-		_, err = parsed.VerifyService(key, client, c.endpoint, c.issuer)
+		_, err = parsed.VerifyService(key, client, "")
 		assert.ErrorIs(t, err, operator.ErrClientInvalid, name)
 	}
 }

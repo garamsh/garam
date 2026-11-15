@@ -26,8 +26,7 @@ import (
 )
 
 const (
-	principalTokenURL = "https://machine.garam.test/oauth/token"
-	principalIssuer   = "https://garam.test/api"
+	principalIssuer = "https://garam.test/api"
 )
 
 var coworkPrincipal = identity.PrincipalGRN("acme", identity.ServiceCowork)
@@ -68,9 +67,8 @@ func principalListener(t *testing.T, private *rsa.PrivateKey, issuerOn bool) (st
 		Keys: identity.FixedKeys{identity.ServiceCowork: {
 			{KID: kid, Algorithm: operator.KeyAlgorithm, Public: &private.PublicKey},
 		}},
-		ExchangeEndpoint:   principalTokenURL,
-		IntrospectEndpoint: "https://machine.garam.test/oauth/introspect",
-		Admitter:           store,
+		Issuer:   principalIssuer,
+		Admitter: store,
 	})
 	var issuer *identity.Issuer
 	if issuerOn {
@@ -87,14 +85,14 @@ func principalForm(t *testing.T, private *rsa.PrivateKey, audience string) url.V
 	kid, err := operator.Thumbprint(&private.PublicKey)
 	require.NoError(t, err)
 	signing, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: private},
-		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", kid))
+		(&jose.SignerOptions{}).WithType(operator.TypeClientAuth).WithHeader("kid", kid))
 	require.NoError(t, err)
 	raw := make([]byte, 32)
 	_, err = rand.Read(raw)
 	require.NoError(t, err)
 	client := coworkPrincipal.String()
 	payload, err := json.Marshal(map[string]any{
-		"iss": client, "sub": client, "aud": principalTokenURL,
+		"iss": client, "sub": client, "aud": principalIssuer,
 		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(),
 		"jti": base64.RawURLEncoding.EncodeToString(raw),
 	})

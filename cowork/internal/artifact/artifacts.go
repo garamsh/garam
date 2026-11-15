@@ -147,6 +147,9 @@ func (s *service) Save(ctx context.Context, caller platform.Caller, org, id stri
 	if s.blobs == nil {
 		return Artifact{}, ErrNoBlobStore
 	}
+	if !platform.Nameable(org, ServiceType, id) {
+		return Artifact{}, ErrArtifactNotFound
+	}
 	if err := platform.Require(ctx, s.platform, caller, org, onArtifact(ActionWrite, id)); err != nil {
 		return Artifact{}, err
 	}
@@ -171,6 +174,9 @@ func (s *service) Save(ctx context.Context, caller platform.Caller, org, id stri
 
 // Get answers an artifact the caller may read.
 func (s *service) Get(ctx context.Context, caller platform.Caller, org, id string) (Artifact, error) {
+	if !platform.Nameable(org, ServiceType, id) {
+		return Artifact{}, ErrArtifactNotFound
+	}
 	if err := platform.Require(ctx, s.platform, caller, org, onArtifact(ActionRead, id)); err != nil {
 		return Artifact{}, err
 	}

@@ -36,6 +36,42 @@ func (s *scripted) Deliver(context.Context, int, policyfeed.Sender) (policyfeed.
 	return r, nil
 }
 
+// passes signals each pass it runs, and gives up with the loop.
+type passes struct{ ran chan struct{} }
+
+func (p passes) Deliver(ctx context.Context, _ int, _ policyfeed.Sender) (policyfeed.Result, error) {
+	select {
+	case p.ran <- struct{}{}:
+	case <-ctx.Done():
+	}
+	return policyfeed.Result{}, nil
+}
+
+func TestWake_StartsAPassWithoutWaitingOutThePoll(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := passes{ran: make(chan struct{})}
+	svc := policyfeed.NewService(store, nil, slog.Default(), policyfeed.Config{Poll: time.Hour, MaxBackoff: time.Hour})
+	done := make(chan error, 1)
+	go func() { done <- svc.Run(ctx) }()
+
+	// A pass that never comes is the failure, so the wait ends rather
+	// than holds the run.
+	pass := func(what string) {
+		select {
+		case <-store.ran:
+		case <-time.After(10 * time.Second):
+			require.FailNow(t, "no pass ran", what)
+		}
+	}
+	pass("the first, after which the loop sleeps an hour")
+	svc.Wake()
+	pass("the second, which only a wake starts")
+
+	cancel()
+	assert.NoError(t, <-done)
+}
+
 func TestRun_LogsAFailingOrganizationOnceGoingInAndOnceComingOut(t *testing.T) {
 	zetaFails := policyfeed.Result{
 		Marks:     2,

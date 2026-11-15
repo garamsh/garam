@@ -103,6 +103,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '503':
+          description: >-
+            The page is stored and the policy service does not yet
+            hold it (`reason` `change_not_applied`, `resource` its
+            GRN), or a service cowork needs cannot be reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /orgs/{org}/pages/{page}:
     parameters:
       - $ref: '#/components/parameters/orgPath'
@@ -172,6 +181,15 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '503':
+          description: >-
+            The page is deleted and the policy service does not yet
+            hold that (`reason` `change_not_applied`, `resource` its
+            GRN).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /orgs/{org}/channels:
     parameters:
       - $ref: '#/components/parameters/orgPath'
@@ -225,6 +243,15 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+        '503':
+          description: >-
+            The channel is stored and the policy service does not yet
+            hold it (`reason` `change_not_applied`, `resource` its
+            GRN), or a service cowork needs cannot be reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /orgs/{org}/channels/{channel}:
     parameters:
       - $ref: '#/components/parameters/orgPath'
@@ -498,6 +525,15 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '503':
+          description: >-
+            The task is stored and the policy service does not yet
+            hold it (`reason` `change_not_applied`, `resource` its
+            GRN), or a service cowork needs cannot be reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /orgs/{org}/tasks/{task}:
     parameters:
       - $ref: '#/components/parameters/orgPath'
@@ -643,7 +679,14 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
         '503':
-          $ref: '#/components/responses/Error'
+          description: >-
+            The artifact is stored and the policy service does not yet
+            hold it (`reason` `change_not_applied`, `resource` its
+            GRN), or the blob store cannot be reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /orgs/{org}/artifacts/{artifact}:
     parameters:
       - $ref: '#/components/parameters/orgPath'
@@ -1018,6 +1061,22 @@ components:
           description: errorx kind, e.g. `not_found`, `permission_denied`.
         message:
           type: string
+        reason:
+          type: string
+          description: >-
+            A stable code a client may branch on where the kind alone
+            does not say which refusal it was. `change_not_applied`
+            answers a create or a delete with 503: the change is
+            stored and the policy service does not yet hold it. After
+            a create a read of the entity may be denied for a moment:
+            read it by `resource`, do not create it again. After a
+            delete the entity is gone and the call is not repeated.
+        resource:
+          type: string
+          description: >-
+            With `change_not_applied`, the GRN of the entity the
+            request created or deleted.
+          example: grn:acme/cowork/page/k3v7q2m9x4ab
     TaskStatus:
       type: string
       enum: [todo, doing, done]

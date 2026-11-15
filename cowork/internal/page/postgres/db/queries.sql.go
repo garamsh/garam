@@ -235,6 +235,41 @@ func (q *Queries) SetPosition(ctx context.Context, arg SetPositionParams) error 
 	return err
 }
 
+const subtreeIDs = `-- name: SubtreeIDs :many
+WITH RECURSIVE down (id) AS (
+    SELECT p.id FROM pages p WHERE p.org = $1 AND p.id = $2
+    UNION ALL
+    SELECT p.id FROM pages p JOIN down ON p.org = $1 AND p.parent_id = down.id
+)
+SELECT down.id FROM down
+`
+
+type SubtreeIDsParams struct {
+	Org string
+	ID  string
+}
+
+// The page and every page beneath it.
+func (q *Queries) SubtreeIDs(ctx context.Context, arg SubtreeIDsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, subtreeIDs, arg.Org, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updatePage = `-- name: UpdatePage :one
 UPDATE pages SET title = $3, parent_id = $4, position = $5, updated_at = $6
 WHERE org = $1 AND id = $2

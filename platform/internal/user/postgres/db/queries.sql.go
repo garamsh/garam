@@ -12,14 +12,13 @@ import (
 )
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (grn, nickname, roles, policies, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO users (grn, nickname, policies, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type CreateUserParams struct {
 	Grn       string
 	Nickname  string
-	Roles     []string
 	Policies  []string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
@@ -29,7 +28,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	_, err := q.db.Exec(ctx, createUser,
 		arg.Grn,
 		arg.Nickname,
-		arg.Roles,
 		arg.Policies,
 		arg.CreatedAt,
 		arg.UpdatedAt,
@@ -50,7 +48,7 @@ func (q *Queries) DeleteUser(ctx context.Context, grn string) (int64, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT grn, nickname, roles, policies, created_at, updated_at FROM users WHERE grn = $1
+SELECT grn, nickname, policies, created_at, updated_at FROM users WHERE grn = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, grn string) (User, error) {
@@ -59,7 +57,6 @@ func (q *Queries) GetUser(ctx context.Context, grn string) (User, error) {
 	err := row.Scan(
 		&i.Grn,
 		&i.Nickname,
-		&i.Roles,
 		&i.Policies,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -68,7 +65,7 @@ func (q *Queries) GetUser(ctx context.Context, grn string) (User, error) {
 }
 
 const listUsersByGRNs = `-- name: ListUsersByGRNs :many
-SELECT grn, nickname, roles, policies, created_at, updated_at FROM users
+SELECT grn, nickname, policies, created_at, updated_at FROM users
 WHERE grn = ANY($1::text[])
 ORDER BY grn
 `
@@ -85,7 +82,6 @@ func (q *Queries) ListUsersByGRNs(ctx context.Context, grns []string) ([]User, e
 		if err := rows.Scan(
 			&i.Grn,
 			&i.Nickname,
-			&i.Roles,
 			&i.Policies,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -101,7 +97,7 @@ func (q *Queries) ListUsersByGRNs(ctx context.Context, grns []string) ([]User, e
 }
 
 const searchUsersByGRNs = `-- name: SearchUsersByGRNs :many
-SELECT grn, nickname, roles, policies, created_at, updated_at FROM users
+SELECT grn, nickname, policies, created_at, updated_at FROM users
 WHERE grn = ANY($1::text[])
   AND (nickname ILIKE $2 OR grn ILIKE $3)
 ORDER BY grn
@@ -129,7 +125,6 @@ func (q *Queries) SearchUsersByGRNs(ctx context.Context, arg SearchUsersByGRNsPa
 		if err := rows.Scan(
 			&i.Grn,
 			&i.Nickname,
-			&i.Roles,
 			&i.Policies,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -147,16 +142,14 @@ func (q *Queries) SearchUsersByGRNs(ctx context.Context, arg SearchUsersByGRNsPa
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
     nickname   = coalesce($1, nickname),
-    roles      = coalesce($2::text[], roles),
-    policies   = coalesce($3::text[], policies),
-    updated_at = $4
-WHERE grn = $5
-RETURNING grn, nickname, roles, policies, created_at, updated_at
+    policies   = coalesce($2::text[], policies),
+    updated_at = $3
+WHERE grn = $4
+RETURNING grn, nickname, policies, created_at, updated_at
 `
 
 type UpdateUserParams struct {
 	Nickname  pgtype.Text
-	Roles     []string
 	Policies  []string
 	UpdatedAt pgtype.Timestamptz
 	Grn       string
@@ -165,7 +158,6 @@ type UpdateUserParams struct {
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, updateUser,
 		arg.Nickname,
-		arg.Roles,
 		arg.Policies,
 		arg.UpdatedAt,
 		arg.Grn,
@@ -174,7 +166,6 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 	err := row.Scan(
 		&i.Grn,
 		&i.Nickname,
-		&i.Roles,
 		&i.Policies,
 		&i.CreatedAt,
 		&i.UpdatedAt,

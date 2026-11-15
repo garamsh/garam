@@ -16,6 +16,9 @@ type Result struct {
 	// SetAside holds the links the service refused for good, whose
 	// marks the pass kept and recorded as set aside.
 	SetAside []LinkRefusal
+	// ScopedSetAside holds the scoped links the service refused for
+	// good, whose marks the pass kept as it kept SetAside's.
+	ScopedSetAside []ScopedLinkRefusal
 }
 
 // LinkState is where the marks of a role link stand in the outbox.
@@ -57,6 +60,10 @@ type Store interface {
 	// is a link applied (ADR-0146 §Reading one's own write); one set
 	// aside outranks one pending, because it will not clear.
 	LinkState(ctx context.Context, org, user string) (LinkState, error)
+	// ScopedLinkState reports where the outbox's mark of the scoped
+	// links of the group or the project owner stands, as LinkState
+	// does for a member's.
+	ScopedLinkState(ctx context.Context, owner string) (LinkState, error)
 	// EntityPending reports whether the outbox holds a mark of the
 	// entity. A mark is deleted only after the service applied the
 	// entity or refused it for good (ADR-0140 item 11), so none is a

@@ -1452,6 +1452,17 @@ ADRs:
   refusal is `PERMISSION_DENIED`, which ADR-0160 sets aside, and a
   writer's is recorded as a denial; no migration; accepted, built
   (#1882, second half); supersedes 0146 in part; extended by 0163
+- [0162](./adr/0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)
+  — a group's and a project's roles are written as scoped role links
+  under ADR-0163's identifier, from a third kind of mark,
+  `Iam::ScopedRoleLink`, whose id is the owner's GRN; the outbox's
+  kinds are a family, each link kind with its own state function; the
+  pass writes the roles held and deletes the policy of each of the
+  three not held, so a role removed, a role changed and a deleted
+  group or project are one operation; creating, updating and deleting
+  a group or a project wait on the mark; a user's direct roles are
+  removed with migration 000079; accepted, built (#1896); supersedes
+  0146 in part, on inventory row 2, and extends 0159 item 4
 - [0163](./adr/0163-the-platform-alone-writes-under-the-identifier-of-the-scoped-link-it-derives-from-a-groups-or-a-projects-roles.md)
   — the identifiers opening `link-scoped-` are reserved to the scoped
   link the platform derives from a group's or a project's roles,
@@ -1462,3 +1473,29 @@ ADRs:
   no writer creates there, and only a team's or a project's link on
   itself; every other rule of 0161 holds for it; no migration;
   accepted, built (#1898); extends 0161
+- [0164](./adr/0164-the-policy-service-decides-a-supervisors-activation-of-the-agent-it-holds.md)
+  — the policy service decides a supervisor's activation of the agent
+  it holds: `Iam::Supervisor in [OrgMembers, Org]` carries an optional
+  `agent`, written by the caller `platform` alone, is a principal of
+  `iam:agent.activate` alone, and the system policy
+  `supervisor-agent-activate` permits it where the resource is that
+  agent; no `permit` of an organization reaches it; accepted, built in
+  the policy service (#1905); corrects row 6 of 0146's inventory
+- [0165](./adr/0165-every-request-that-changes-a-fed-entity-answers-after-its-delivery-by-the-marks-its-own-write-raised.md)
+  — every request whose write raises an outbox mark waits on those
+  marks, read by their kind's state function under one bound and
+  answering at once for none, with ADR-0159's bound and ADR-0160's
+  two answers and no new reason; a delete that cascades records the
+  marks of its own transaction; a first sign-in waits and redirects at
+  the bound, and a repeat one does not wait, nor does a replacement of
+  an agent; the machine listener
+  waits through a gate that observes the outbox with no loop, with no
+  new setting; accepted, built (#1909); extends 0159 and 0162
+- [0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md)
+  — a cowork create, and a page's delete, wait on the mark of each
+  entity they wrote (a deleted page's subtree too), after its commit, by a wrapper under the HTTP
+  routes and the MCP tools, and answer 503 `change_not_applied` naming
+  the stored entity at the bound; an update, a read and a write
+  through a page's sync connection do not wait, since the service
+  holds nothing they change; accepted, built (#1919); applies 0165 to
+  cowork, narrowed to creates and a page's delete

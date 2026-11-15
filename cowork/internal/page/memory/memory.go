@@ -139,15 +139,17 @@ func (r *Repository) Update(_ context.Context, org, id string, in page.UpdateInp
 }
 
 // Delete implements page.Repository.
-func (r *Repository) Delete(_ context.Context, org, id string) error {
+func (r *Repository) Delete(_ context.Context, org, id string) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	p, ok := r.pages[key(org, id)]
 	if !ok {
-		return page.ErrPageNotFound
+		return nil, page.ErrPageNotFound
 	}
+	var removed []string
 	var remove func(string)
 	remove = func(at string) {
+		removed = append(removed, at)
 		delete(r.pages, key(org, at))
 		for _, child := range r.siblings(org, at) {
 			remove(child.ID)
@@ -155,5 +157,5 @@ func (r *Repository) Delete(_ context.Context, org, id string) error {
 	}
 	remove(id)
 	r.renumber(r.siblings(org, p.Parent))
-	return nil
+	return removed, nil
 }

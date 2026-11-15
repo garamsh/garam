@@ -36,7 +36,6 @@ func (s *Store) Create(ctx context.Context, u *user.User) error {
 	err := s.q.CreateUser(ctx, db.CreateUserParams{
 		Grn:       u.GRN.String(),
 		Nickname:  u.Nickname,
-		Roles:     strs(u.Roles),
 		Policies:  strs(u.Policies),
 		CreatedAt: pgxtype.Timestamptz(u.CreatedAt),
 		UpdatedAt: pgxtype.Timestamptz(u.UpdatedAt),
@@ -112,7 +111,6 @@ func (s *Store) Update(ctx context.Context, g grn.GRN, p user.Patch) (*user.User
 	row, err := s.q.UpdateUser(ctx, db.UpdateUserParams{
 		Grn:       g.String(),
 		Nickname:  text(p.Nickname),
-		Roles:     p.Roles,
 		Policies:  p.Policies,
 		UpdatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
@@ -152,7 +150,6 @@ func rowToUser(row db.User) (*user.User, error) {
 	return &user.User{
 		GRN:       g,
 		Nickname:  row.Nickname,
-		Roles:     row.Roles,
 		Policies:  row.Policies,
 		CreatedAt: row.CreatedAt.Time,
 		UpdatedAt: row.UpdatedAt.Time,

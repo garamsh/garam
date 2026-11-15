@@ -12,10 +12,10 @@ import (
 )
 
 // scopedStatements collects the statements applying to the subject
-// when acting on target: the membership role, the subject's direct
-// roles, and the roles the target group or project grants its members.
+// when acting on target: the membership role, and the roles the target
+// group or project grants its members.
 func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Membership, target grn.GRN, u *user.User) ([]Statement, error) {
-	statements := memberStatements(orgGRN, m, u)
+	statements := memberStatements(orgGRN, m)
 	var derived []Statement
 	var err error
 	switch target.ServiceType {
@@ -31,32 +31,14 @@ func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Member
 }
 
 // memberStatements returns what applies to the member whatever it acts
-// on: its membership role and its direct roles, both scoped to the org.
-func memberStatements(orgGRN grn.GRN, m *org.Membership, u *user.User) []Statement {
-	statements := []Statement{{
+// on: its membership role, scoped to the org.
+func memberStatements(orgGRN grn.GRN, m *org.Membership) []Statement {
+	return []Statement{{
 		Sid:      "org-role-" + string(m.Role),
 		Effect:   wire.EffectAllow,
 		Action:   m.Role.Actions(),
 		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
 		Origin:   Origin{Kind: OriginOrgRole, Roles: []string{string(m.Role)}},
-	}}
-	return append(statements, userStatements(orgGRN, u)...)
-}
-
-// userStatements returns what the roles stored on the subject grant,
-// scoped like the membership role. Unknown names grant nothing;
-// attached policies belong to the engine (ADR-0008).
-func userStatements(orgGRN grn.GRN, u *user.User) []Statement {
-	actions := org.ActionsFor(u.Roles)
-	if len(actions) == 0 {
-		return nil
-	}
-	return []Statement{{
-		Sid:      "user-role-" + u.GRN.Identifier,
-		Effect:   wire.EffectAllow,
-		Action:   actions,
-		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
-		Origin:   Origin{Kind: OriginDirectRole, Roles: u.Roles},
 	}}
 }
 

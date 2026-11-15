@@ -10,7 +10,6 @@ import (
 // Patch holds partial-update fields. Nil entries are unchanged.
 type Patch struct {
 	Nickname *string
-	Roles    []string
 	Policies []string
 }
 

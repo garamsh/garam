@@ -158,6 +158,9 @@ the server; `cowork-web`, its web app; and `cowork-gateway`, which
 serves both on one host. cowork keeps artifacts in the `rustfs`
 service's `cowork` bucket. It asks the policy service what a caller
 may do, through the machine listener's token endpoint; see below.
+A sixth, `cowork-policy-feed`, is a one-shot that runs `cowork
+policy-feed start` once the database is migrated, so that the policy
+service holds the entities cowork wrote before the feed was on.
 
 Open cowork at `http://cowork.garam.localhost:3100`. It has no sign-in
 of its own: a visitor is sent to sign in on the site, which needs the
@@ -182,6 +185,16 @@ from. `COWORK_LOCAL_WEB_PORT` and `COWORK_LOCAL_USERCONTENT_PORT` move
 them, and a moved gateway port moves `GARAM_COWORK_URL` with it. `make
 cowork-image-e2e cowork-web-image-e2e` checks both images outside the
 stack, as `images.yml` does.
+
+`make -C cowork-web stack-up suites` runs cowork-web's browser suite
+against this stack: `stack-up` starts the backend and then
+`make -C deploy/local cowork-up`, which starts only the `cowork`
+server, its feed and what they wait on, and publishes cowork's API on
+`127.0.0.1:8091` (`COWORK_LOCAL_API_PORT`) and its user-content origin
+on `localhost:8093`, where the specs name them. The suite runs its own
+copy of the web app and the site. Every decision comes from the policy
+service; the seed writes the platform's rows and returns once that
+service holds them.
 
 ## policy
 

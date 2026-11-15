@@ -103,8 +103,9 @@ only in the policy service: nothing sends one yet.
   is bounded as a guardrail's is. A decision composes the
   organization's `permit` policies beside its guardrails, and
   `access-report` lists one by its id, and a `permit` never reaches an
-  operator: a decision for an `Iam::Operator` composes the
-  organization's guardrails and none of its `permit`s. An RPC writes
+  operator or a supervisor: a decision for an `Iam::Operator` or an
+  `Iam::Supervisor` composes the organization's guardrails and none of
+  its `permit`s. An RPC writes
   one (item 3 of ADR-0146). Not built: a check of an entity literal in
   a `permit`'s principal scope or condition.
 
@@ -180,8 +181,9 @@ true of the platform.
   membership, as the caller `platform` and with no writer, and the
   outbox carries it, so a rebuild rewrites it. Built for an
   organization membership (#1878), by the rules of §Role links under
-  Delivery; a role link of a group or a project, and a direct role,
-  are not built.
+  Delivery. A group's and a project's roles are written the same way
+  as scoped links (#1896, ADR-0162), and a user holds no role of its
+  own: `users.roles` is removed.
 - **A writer reads its own write.** A request that changes an entity, a
   membership or a policy waits, up to a bound of 5 seconds, until
   the outbox marks it wrote are applied, and is answered as
@@ -189,9 +191,14 @@ true of the platform.
   an organization membership: creating an organization, accepting an
   invitation, registering by one, and deleting an organization, and
   for the two requests that write and end an operator's delegation
-  (§Operator operations under Delivery). A request that changes any
-  other entity does not wait, except those §Consents names, and the
-  policy write is not the platform's yet.
+  (§Operator operations under Delivery), and for creating, updating
+  and deleting a group or a project, which wait on its scoped link's
+  mark (§Role links). A request that changes any other entity does not
+  wait, except those §Consents names, and the policy write is not the
+  platform's yet. cowork's creates of a channel, a page, a task and an
+  artifact, and its delete of a page, wait on the written entity's mark
+  ([ADR-0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md)),
+  where its policy client is configured.
 - **Every present capability has a place.** The ADR's inventory gives
   each origin of a statement and each surface that reads a decision
   its form. A hosted operator's delegation, handed to the evaluator
@@ -205,7 +212,18 @@ true of the platform.
   operator's place among its organization's members (#1891, §Operator
   operations under Delivery), and still decides an operator's authority
   itself until its own round: the policy service holds the operations
-  and no request asks it about them yet. Only an
+  and no request asks it about them yet. A standalone host's
+  supervisor is the second such identity
+  ([ADR-0164](./adr/0164-the-policy-service-decides-a-supervisors-activation-of-the-agent-it-holds.md)):
+  `Iam::Supervisor` is an entity the platform feeds, carrying the
+  optional `agent` it holds, a principal of `iam:agent.activate` alone,
+  and a system policy permits it that action where the resource is that
+  agent. The policy service holds this half (#1905), correcting row 6
+  of ADR-0146's inventory. The platform feeds the supervisor and the
+  agent it holds (#1917, §Supervisors under Delivery), and still
+  decides its activation itself in
+  `lifecycleAuthorization.supervising`: the policy service holds the
+  entity and no request asks it about it yet. Only an
   owner writes a `permit`, so an administrator keeps assigning the
   roles it holds and writing guardrails and no longer writes an
   `Allow`.
@@ -251,6 +269,50 @@ round removes it. The sender's
 guardrails are read as `forbid`s alone and under ids prefixed by its
 organization, and the exception is read by no other action, since
 an `unless` branch names `message.send` and two agents.
+
+**What a decision's reasons name.** The platform explains a permission
+by recomputing the identifiers of the caller's membership links
+([ADR-0161](./adr/0161-the-platform-alone-writes-under-the-identifiers-of-a-members-role-links-and-only-that-members-link.md)
+`grant::link_policy`), and of its teams' and projects' scoped links
+([ADR-0163](./adr/0163-the-platform-alone-writes-under-the-identifier-of-the-scoped-link-it-derives-from-a-groups-or-a-projects-roles.md)
+`grant::scoped_link_policy`), and matching them against the
+`policy_id` of each `Reason` an `Evaluate`, or an entry of
+`Evaluations`, returns; no explanation call is asked of the service
+(#1796). The reasons are those of the policies that decided, and a
+test through the server (`reason_cases`) holds each row:
+
+| decision | the reasons name |
+| --- | --- |
+| allow by a member's link | that link's reserved identifier |
+| allow by a scoped link | that link's reserved identifier |
+| allow by several policies | every one that permits, and no forbid |
+| deny by a guardrail | the guardrails that forbid, not the link |
+| deny by isolation | `tenant-isolation` alone |
+| deny, nothing permits | no reason |
+| deny, a policy failed | the policies that failed, each with its error |
+| deny, the question refused | one reason, no `policy_id`, an error |
+
+- A policy is named by its own identifier: a link, a `permit` or a
+  guardrail by its GRN, not by its template, and a system policy by its
+  file's name. The row for a link names the stored policy, which is why
+  a reserved identifier tells it from a writer's `permit`.
+- A deny names its forbids alone, so a link that would have allowed
+  is not named.
+- The order of the reasons is not stated. Cedar returns the
+  determining policies as a set and the service does not sort them,
+  so a caller compares them as a set.
+- A sender's guardrail that denies a `message.send` to another
+  organization is named `<organization GRN>/<policy GRN>`, as in
+  `grn:root/iam/org/acme/grn:acme/iam/policy/<slug>`. The
+  recipient's is named by its GRN, so two organizations naming a
+  guardrail alike are two reasons.
+- A question refused inside `Evaluations` is a deny with one reason
+  whose `policy_id` is empty. The same question to `Evaluate` is an
+  error status and carries no reason.
+- What a reason does not carry: a statement's `sid`, and the
+  attachment of a policy to a caller or a team. The platform's
+  explanation is the policy's identifier and no finer, and a finer
+  one is a decision of its own.
 
 ### Delivery
 
@@ -487,10 +549,80 @@ person writes through the console, with a user, an agent or another
 team as principal, stays a named writer's under an identifier that
 does not open `link-scoped-`.
 
-`garam policy-feed start` marks every membership with the rest of the
-backfill, and so does migration 000075 for a feed already on, both
+**A group's and a project's roles are scoped links the platform
+writes** ([ADR-0162](./adr/0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md),
+migration 000079). The outbox's third kind of mark,
+`Iam::ScopedRoleLink`, has as its id the GRN of the group or the
+project, which is the link's principal and its resource; the kinds are
+the entity types, `Iam::RoleLink` and this one, each link kind read
+through its own state function (`policy_scoped_link_state` returns the
+owner's roles, each once, those the platform knows, or no row for an
+owner the tables no longer hold). A trigger marks it when a group or a
+project is inserted or deleted and when an update changes `roles`; a
+write of the name marks nothing, and the entity's own mark is not
+raised for a change of roles alone. A write that reorders the roles or
+repeats one marks, though the state is the same; it is rewritten as
+the same policies. A pass writes, after the member
+links and by name under no sequence, the policy ADR-0163 names for each
+role held, as `CreatePolicy` (`ALREADY_EXISTS` is a link written
+already) and `ActivatePolicy` with no writer and team-or-project scope,
+then deletes the policy of each of the three roles not held
+(`NOT_FOUND` is a link removed already). A role removed, a role
+changed and a deleted group or project are that one operation, and no
+past state is read. A link refused for good is set aside as a member's
+is, its owner's links of all three roles are removed, and the waiting
+request is answered `change_refused`.
+
+Creating and deleting a group or a project wait for its mark as the
+membership routes do (`Gate.AwaitScoped`, the same bound and the same
+two reasons). An update waits only when its body wrote the roles; one
+that did not is answered at once, whatever mark of its owner is set
+aside, since it asked nothing of the policy service. A write of the
+roles is answered by what the service then says.
+
+Every other request that changes a fed entity waits as well, on the
+marks its own write raised (ADR-0165): `Gate.AwaitMarks` reads each
+by its kind's state function under one bound and answers at once for
+none. These wait: creating an organization, deleting an organization
+(on every mark its cascade raised, collected from its own transaction
+by `policyfeedpg.Record` as the group's and the project's deletions
+are), creating and deleting a group or a project, adding and removing
+a member of either, registering and deleting an operator, writing and
+ending an operator's delegation, granting and withdrawing a
+consent, registration, accepting an invitation, the first sign-in
+that created the user, revoking a standalone host's supervisor
+(`Iam::Supervisor`), and on the machine listener creating a managed
+agent, admitting an enrollment of a new agent, admitting one that
+replaces an agent a supervisor holds (on that supervisor's mark) and
+enrolling a standalone agent, new, replaced or replayed, on the new
+supervisor's mark and also on the agent's when it is new. A request
+that raised several marks names them in one list, role links and
+scoped links included, and waits under one bound. A repeat sign-in, an
+admission that replaces an operator's agent (the store says which an
+enrollment was by `EnrollmentResult.Replaced`), a rename, a withdrawal
+of an approval no host has spent, and every other write raise no mark
+and answer at once, whatever older mark is set aside. A first sign-in
+that created the user waits up to the bound and then redirects as on
+success, logging the mark still pending: its session is set and a
+redirect cannot carry a 503, and the first request that needs the user
+in the service waits on the mark again. Registration and accepting an
+invitation keep the 503. The machine process holds a gate with no loop (`NewObservingGate`) over the
+same outbox, installed whether or not the feed is on: it answers when
+the api's loop has delivered, at once with the feed off, and with the
+feed on and no deliverer every create answers `503` at the bound for
+good. The api's loop polls every second and backs off up to 30
+seconds, so after a recovery a creation can still answer `503` for up
+to that long. With the feed off no route waits, and an api with no
+policy address has no gate; the machine listener's gate is always
+there.
+
+`garam policy-feed start` marks every membership, group, project and
+supervisor registration, ended or not, with the rest of the backfill,
+and so
+do migrations 000075, 000079 and 000080 for a feed already on, each
 raising a mark's generation if it is there, so running them again
-rewrites the same policies and no second one.
+rewrites the same policies and no second one. Migration 000079's down
+leaves the scoped links already written, as 000075's leaves a member's.
 
 **What stays when the feed is turned off and on.** `stop` empties the
 outbox and the triggers mark nothing while the feed is off, and
@@ -620,6 +752,64 @@ consumers, the minting of an operation authority and the controller
 proof read the platform's grant, not the attribute. Their own round
 removes that.
 
+#### Supervisors
+
+A standalone host's supervisor is fed as ADR-0164 states (migration
+000080): one `Iam::Supervisor` per registration in
+`agent_supervisors`, with parents `Iam::OrgMembers` and `Iam::Org`,
+the `org` attribute, and `agent`, the agent it holds.
+`policy_entity_state` reads all of it back from the relations at each
+delivery, and the pass sends `agent` as `EntityUpsert.agent`.
+
+**What `agent` is.** The agent the registration names
+(`agent_supervisors.agent_grn`), while the registration is current
+(`ended_at` is null) and `agent_assignments` assigns that agent to this
+supervisor. A current registration whose agent is assigned elsewhere
+(an operator took it by a replacement) is fed with no `agent`, so the
+policy service allows it nothing. This is the test
+`lifecycleAuthorization.supervising` applies, which still decides: no
+request asks the policy service about a supervisor yet, and its tests
+are unchanged. A registration that has ended has no state, so its
+entity is deleted. The organization comes from the agent's row.
+
+No mark kind is added. A trigger on `agent_supervisors` marks the
+registration's supervisor on an insert, a delete and a change of
+`ended_at` or `agent_grn`: enrolling, revoking, replacing and the
+cascade that deletes registrations with an agent or an organization.
+A trigger on `agent_assignments` marks the supervisor that is the
+assignee, the old one and the new one, on an insert, a delete and a
+change of `assignee_grn`, so an agent moved off a supervisor, or onto
+one, is delivered. Any other column (a host's name) marks nothing, and
+neither does withdrawing an approval no host has spent, which writes
+no registration.
+
+**The routes wait on their own marks.** Revoking a supervisor waits on
+its mark, and so do enrolling a standalone agent, a replay and a
+replacement included, and an admission that replaces an agent a
+supervisor holds, as §Delivery says, with the same 503
+`change_not_applied` at 5 seconds. ADR-0165 item 5 says a replacement
+raises no mark; that held while only an agent and its memberships were
+fed, and no longer holds for a replaced supervisor, which item 1
+covers: wait on the marks the write raised. An organization delete
+records the supervisors it takes as it records the rest.
+
+**What stays when the feed is turned off and on.** `start` marks every
+registration, so a supervisor enrolled or moved while the feed was off
+is written, and one revoked while it was off is deleted: an ended
+registration has no state and is delivered as a delete, which the
+service takes as the removal of an entity it may not hold. What stays
+is only what has no row to enumerate, a registration deleted by the
+cascade from a deleted agent or organization while the feed was off
+(ADR-0140's case, as for a membership): its entity stays in the
+policy service as it was when last delivered. Delete agents and
+organizations only with the feed on, and let the outbox empty.
+
+Migration 000080 takes `agent_supervisors` and `agent_assignments`
+in share mode and marks every registration for a feed that is already
+on, raising a mark's generation if it is there. Its down
+removes the triggers and the supervisor marks and leaves the entities
+already written.
+
 ### The signer
 
 `platform/internal/signer` signs the token each call carries under
@@ -724,7 +914,6 @@ the statements that apply to that resource:
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
 | org membership role | `Role.Actions()` | the org GRN and `grn:<org>/*` |
-| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>/*` |
 | target group's roles, when the subject is a member | `org.ActionsFor(group.Roles())` | the group GRN |
 | target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
 
@@ -734,12 +923,11 @@ group and project create and patch endpoints, and are narrowed by
 resource: a group `admin`
 administers that group and nothing else, while an org `admin`
 administers everything the org owns. Unknown role names grant nothing.
-Org membership stays the precondition for every check — neither a
-group grant nor a direct role admits a non-member of the org.
-
-Roles stored on the user itself are direct grants and carry the org
-role's scope, so a direct role applies in every org the subject
-belongs to. Policies are not collected here at all — the engine owns
+Org membership stays the precondition for every check — a group grant
+does not admit a non-member of the org. A user holds no role of its
+own: the column that stored one, `users.roles`, is removed
+([ADR-0162](./adr/0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)).
+Policies are not collected here at all — the engine owns
 them and resolves them from the subject and the groups the request
 carries (§Policy attachment).
 
@@ -972,7 +1160,7 @@ decides it this way:
 | subject | the agent's GRN |
 | `subject_groups` | the groups whose members list that GRN |
 | `subject_org` | the organization the agent's GRN names |
-| collected statements | none: an agent holds no membership, direct, group or project role |
+| collected statements | none: an agent holds no membership, group or project role |
 
 - **Its authority is the policies that reach it**: attached to it,
   attached to a group holding it, and the org's unattached active
@@ -1017,6 +1205,18 @@ artifacts through an outbox, one organization at a time under that
 organization's token. It asks the platform for who a credential is
 and which organizations it has, and for no decision. The platform's
 own `checkPermissions` path for cowork's kinds goes with #1784.
+
+Where the route is built, a create, and a page's delete, answer after
+the policy service holds the change
+([ADR-0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md),
+#1919): without it, the read that follows is denied as a `fault` of
+`tenant-isolation` until the loop has run. The request wakes the loop
+and waits up to 5 seconds on the entity's own mark, and answers 503
+`change_not_applied` naming the stored entity's GRN at the bound. A page's
+delete waits on the mark of each page it removed, those beneath it
+too. Updates, reads and writes through a page's sync
+connection do not wait: the service holds an entity's type,
+identifier and organization, and none of them changes there.
 
 - **Decided as a machine sender.** Its `postMessage` asks
   `iam:message.send` with its GRN as subject and the recipient as

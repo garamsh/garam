@@ -20,7 +20,9 @@ func TestWire_WithoutAPolicyClientCoworkRefusesToStart(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }
 
-func TestWire_WithAPolicyClientCoworkAsksThePolicyService(t *testing.T) {
+// testPolicyClient is a client of an in-process policy service.
+func testPolicyClient(t *testing.T) *policy.Client {
+	t.Helper()
 	keyFile, pub := policytest.Key(t)
 	endpoint := policytest.NewEndpoint(t, pub)
 	server := policytest.Serve(t, endpoint)
@@ -30,8 +32,11 @@ func TestWire_WithAPolicyClientCoworkAsksThePolicyService(t *testing.T) {
 	client, err := policy.Dial(cfg, tokens)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
+	return client
+}
 
-	s, err := wire(Config{PlatformURL: "http://platform.invalid", PolicyClient: client}, nil)
+func TestWire_WithAPolicyClientCoworkAsksThePolicyService(t *testing.T) {
+	s, err := wire(Config{PlatformURL: "http://platform.invalid", PolicyClient: testPolicyClient(t)}, nil)
 
 	require.NoError(t, err)
 	assert.IsType(t, &platformpolicy.Platform{}, s.platform)

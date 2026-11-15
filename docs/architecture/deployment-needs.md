@@ -141,9 +141,10 @@ Dockerfile under `deploy/local/`.
   `policy-feed` services). It also runs the machine listener, turns the
   identity issuer on for the api and the listener, and gives cowork its
   four policy settings (the `machine-material`, `cowork-keys` and
-  `machine` services). What it orders by
-  `depends_on` is its own choice and is stated under each entry's
-  Before start.
+  `machine` services), then runs `cowork policy-feed start` once
+  cowork's database is migrated (the `cowork-policy-feed` service).
+  What it orders by `depends_on` is its own choice and is stated
+  under each entry's Before start.
 - The Go processes' only probe command is their own:
   `garam probe`, `cowork probe` and `policy probe <url>`, an HTTP GET
   that fails unless the answer is 200
@@ -507,7 +508,7 @@ the MCP tools (`cowork/internal/cli/serve.go:178-259`). Image
   without a session is sent to the site (`proxy.ts:18-28`).
 - **Before start.** Nothing is read: the probes read nothing of cowork.
   The local stack starts it after cowork is healthy
-  (`deploy/local/docker-compose.yml:568-570`), which is that stack's
+  (`deploy/local/docker-compose.yml:589-591`), which is that stack's
   choice. **Stop.** Not established.
 
 ## garam/policy: serve and migrate

@@ -164,7 +164,10 @@ func TestService_RefusesWhatThePlatformDenies(t *testing.T) {
 			}},
 		{"delete needs write on the page",
 			func(t, _ page.Page) string { return platform.ActionPageWrite + "@" + t.ID },
-			func(s page.Service, t, _ page.Page) error { return s.Delete(ctx, ada, "acme", t.ID) }},
+			func(s page.Service, t, _ page.Page) error {
+				_, err := s.Delete(ctx, ada, "acme", t.ID)
+				return err
+			}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -235,7 +238,8 @@ func TestUpdate_MovesAPageAndRenumbersBothSiblingLists(t *testing.T) {
 }
 
 // TestDelete_RemovesThePagesBeneath deletes a page with a child and
-// reads neither back, and the remaining sibling renumbered.
+// reads neither back, and the remaining sibling renumbered. It names
+// both as removed, the page first, and not the sibling.
 func TestDelete_RemovesThePagesBeneath(t *testing.T) {
 	s, _ := newService(t)
 	a := create(t, s, "a", "")
@@ -243,8 +247,10 @@ func TestDelete_RemovesThePagesBeneath(t *testing.T) {
 	create(t, s, "b", "")
 	ctx := context.Background()
 
-	require.NoError(t, s.Delete(ctx, ada, "acme", a.ID))
-	_, err := s.Get(ctx, ada, "acme", child.ID)
+	removed, err := s.Delete(ctx, ada, "acme", a.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{a.ID, child.ID}, removed)
+	_, err = s.Get(ctx, ada, "acme", child.ID)
 	assert.ErrorIs(t, err, page.ErrPageNotFound)
 	pages, err := s.List(ctx, ada, "acme")
 	require.NoError(t, err)

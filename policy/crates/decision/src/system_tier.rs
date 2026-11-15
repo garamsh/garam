@@ -5,7 +5,7 @@ use crate::error::Error;
 /// Each file holds one policy, and its stem is that policy's id, which
 /// is what a decision's reasons name. The ten `operator-` files are the
 /// delegable operations, one policy each (ADR-0146).
-const POLICIES: [(&str, &str); 12] = [
+const POLICIES: [(&str, &str); 13] = [
     (
         "tenant-isolation",
         include_str!("../../../system-policies/tenant-isolation.cedar"),
@@ -53,6 +53,10 @@ const POLICIES: [(&str, &str); 12] = [
     (
         "operator-agent-replace",
         include_str!("../../../system-policies/operator-agent-replace.cedar"),
+    ),
+    (
+        "supervisor-agent-activate",
+        include_str!("../../../system-policies/supervisor-agent-activate.cedar"),
     ),
 ];
 

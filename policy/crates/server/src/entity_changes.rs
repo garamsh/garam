@@ -73,6 +73,7 @@ pub(crate) fn parse(engine: &Engine, change: &proto::EntityChange) -> Result<Ent
                 parents: upsert.parents.iter().map(uid).collect::<Result<_, _>>()?,
                 consents: upsert.consents.iter().map(uid).collect::<Result<_, _>>()?,
                 operations: upsert.operations.clone(),
+                agent: upsert.agent.as_ref().map(uid).transpose()?,
             },
         )
         .map_err(Fault::Entity),

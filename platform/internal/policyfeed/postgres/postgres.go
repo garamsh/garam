@@ -32,12 +32,15 @@ func New(pool *pgxpool.Pool) *Switch {
 // before the switch, and holds off the next until the switch commits.
 const lockSources = `LOCK TABLE agents, group_members, groups, operators,
 	message_consents, operator_delegations, org_members, orgs,
-	project_members, projects, users IN SHARE MODE`
+	project_members, projects, users, agent_supervisors,
+	agent_assignments IN SHARE MODE`
 
 // backfill marks what policy_outbox_track marks for each insert into
 // the six tables that own an entity. A member's row marks its user or
-// agent, which those tables already name, and each organization
-// membership marks its role link.
+// agent, which those tables already name, each organization
+// membership marks its role link, each group and project marks its
+// scoped link, and each registration, ended or not, marks its
+// supervisor (an ended one is delivered as a delete).
 const backfill = `
 INSERT INTO policy_outbox (entity_type, entity_id)
 SELECT t, id FROM (
@@ -48,7 +51,10 @@ SELECT t, id FROM (
 	UNION ALL SELECT 'Iam::User', grn FROM users
 	UNION ALL SELECT 'Iam::Agent', grn FROM agents
 	UNION ALL SELECT 'Iam::Operator', grn FROM operators
+	UNION ALL SELECT 'Iam::Supervisor', grn FROM agent_supervisors
 	UNION ALL SELECT 'Iam::RoleLink', org_grn || ' ' || user_grn FROM org_members
+	UNION ALL SELECT 'Iam::ScopedRoleLink', grn FROM groups
+	UNION ALL SELECT 'Iam::ScopedRoleLink', grn FROM projects
 ) live
 ON CONFLICT (entity_type, entity_id)
 DO UPDATE SET generation = policy_outbox.generation + 1,

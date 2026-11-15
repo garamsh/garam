@@ -445,7 +445,9 @@ fn strangers(n: usize) -> Vec<String> {
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn a_denial_noted_to_a_full_queue_is_answered_and_counted_as_lost(pool: PgPool) {
     hold(&pool, ACME).await;
-    let recorder = Recorder::new(pool.clone()).queueing(2);
+    let recorder = Recorder::new(pool.clone())
+        .queueing(2)
+        .bounded(Duration::from_secs(300));
     let blocker = block(&pool).await;
     let none = ids(&[]);
     let who = strangers(10);

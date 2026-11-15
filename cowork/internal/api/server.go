@@ -169,7 +169,7 @@ func (s *Server) DeletePage(w http.ResponseWriter, r *http.Request, org apigen.O
 		writeError(w, r, err)
 		return
 	}
-	if err := s.pages.Delete(r.Context(), c, org, id); err != nil {
+	if _, err := s.pages.Delete(r.Context(), c, org, id); err != nil {
 		writeError(w, r, err)
 		return
 	}

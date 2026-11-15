@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/audit"
 	"github.com/garamsh/garam/platform/internal/machine"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 )
 
 // bootstrapScheme is the Authorization scheme a standalone host spends
@@ -58,6 +59,23 @@ func (s *Server) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, p
 	if err != nil {
 		// A refused enrollment names no subject garam can attribute it
 		// to: the bootstrap secret is what names one (ADR-0114).
+		writeError(w, withinBudget(r, err))
+		return
+	}
+	// Every enrollment writes a registration, so it waits for the
+	// supervisor's mark, a replacement's and a replay's included
+	// (ADR-0164). Only one that creates the agent raises the agent's
+	// mark; the store says which this was (ReplacesActivation is nil for
+	// an agent never activated as well). The registration it ended, if
+	// any, was marked in the same transaction, so the pass that
+	// delivers this one delivers that. The wait is before the audit
+	// line because a 503 sends no credential, and the line records one
+	// issued.
+	marks := []policyfeed.Entity{supervisorMark(result.Supervisor)}
+	if !result.Replaced {
+		marks = append(marks, agentMark(result.Agent))
+	}
+	if err := s.awaitMarks(r.Context(), marks...); err != nil {
 		writeError(w, withinBudget(r, err))
 		return
 	}

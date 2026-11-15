@@ -213,11 +213,17 @@ func (r *Repository) Update(ctx context.Context, org, id string, in page.UpdateI
 }
 
 // Delete implements page.Repository. The pages beneath go by the
-// foreign key's cascade, and so does every page's content.
-func (r *Repository) Delete(ctx context.Context, org, id string) error {
+// foreign key's cascade, and so does every page's content. The
+// subtree is read under the tree lock the delete holds, so it is the
+// set the delete removes.
+func (r *Repository) Delete(ctx context.Context, org, id string) ([]string, error) {
+	var removed []string
 	err := r.inTree(ctx, org, func(q *db.Queries) error {
 		row, err := q.GetPage(ctx, db.GetPageParams{Org: org, ID: id})
 		if err != nil {
+			return err
+		}
+		if removed, err = q.SubtreeIDs(ctx, db.SubtreeIDsParams{Org: org, ID: id}); err != nil {
 			return err
 		}
 		if _, err := q.DeletePage(ctx, db.DeletePageParams{Org: org, ID: id}); err != nil {
@@ -229,5 +235,5 @@ func (r *Repository) Delete(ctx context.Context, org, id string) error {
 		}
 		return renumber(ctx, q, org, left)
 	})
-	return translate(err, "delete")
+	return removed, translate(err, "delete")
 }

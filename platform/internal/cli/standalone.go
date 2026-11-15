@@ -12,7 +12,6 @@ import (
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
-	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
@@ -37,7 +36,7 @@ func newSupervisorService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, s
 // memberAuthorization is a user's authority decided from current
 // state, as delegated operation authority decides it.
 func memberAuthorization(pool *pgxpool.Pool, engine grpc.ClientConnInterface) currentAuthorization {
-	return currentAuthorization{orgs: orgpg.New(pool), users: userpg.New(pool),
+	return currentAuthorization{orgs: orgpg.New(pool),
 		engine: authzv1.NewAuthzServiceClient(engine)}
 }
 

@@ -97,8 +97,8 @@ func (s *Store) UpdateProject(ctx context.Context, g grn.GRN, p org.ProjectPatch
 
 // DeleteProject removes the Project with the given GRN.
 func (s *Store) DeleteProject(ctx context.Context, g grn.GRN) error {
-	n, err := s.q.DeleteProject(ctx, g.String())
-	return classifyRows(n, err, "delete project", org.ErrProjectNotFound)
+	return s.deleteRecording(ctx, "delete project", org.ErrProjectNotFound,
+		func(q *db.Queries) (int64, error) { return q.DeleteProject(ctx, g.String()) })
 }
 
 // AddProjectMember adds a member to the Project, or returns

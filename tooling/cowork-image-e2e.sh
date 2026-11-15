@@ -1,8 +1,9 @@
 #!/bin/sh
 # Runs cowork's server image and checks it: `migrate` applies the
 # migrations the image ships, `serve` starts as the image's own
-# account, and `probe` finds /healthz and /readyz answering, the
-# second once the database does. The subject is the image
+# account with the four policy settings a deployment gives it, and
+# `probe` finds /healthz and /readyz answering, the second once the
+# database does. The subject is the image
 # release publishes to garam/cowork, which cowork's suites never open:
 # they build the binary from this tree.
 #
@@ -10,6 +11,13 @@
 # read from that file so the two cannot name different servers, and
 # pulled from Google's mirror for the reason deploy/local/Dockerfile
 # states.
+#
+# The settings name a policy service and a token endpoint that do not
+# exist here: serve reads the CA file and dials lazily, and neither the
+# probes nor the database ask for a decision. The deployment key and the
+# CA file are made for the run, in a volume the server reads alone and
+# the end of the run removes. The key is written by the stack's own
+# key one-shot's image (deploy/local/cowork-keys.sh) and never printed.
 #
 # COWORK_IMAGE names the image, which `make cowork-image-e2e` takes from
 # `make image-build`, so the same checks run against one pulled from a
@@ -20,11 +28,13 @@ image=${COWORK_IMAGE:?COWORK_IMAGE names the image to check}
 net=cowork-image-e2e-$$
 db=
 server=
+keys=
 passed=0
 
 cleanup() {
 	if [ -n "$server" ]; then docker rm -f "$server" >/dev/null 2>&1 || true; fi
 	if [ -n "$db" ]; then docker rm -f "$db" >/dev/null 2>&1 || true; fi
+	if [ -n "$keys" ]; then docker volume rm -f "$keys" >/dev/null 2>&1 || true; fi
 	docker network rm "$net" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -41,7 +51,28 @@ postgres:*@sha256:*) postgres=mirror.gcr.io/library/$postgres ;;
 *) fail "deploy/local/docker-compose.yml names no postgres image by digest; read '$postgres'" ;;
 esac
 
+alpine=$(awk '/^  cowork-keys:$/ { s = 1 } s && $1 == "image:" { print $2; exit }' deploy/local/docker-compose.yml)
+case $alpine in
+alpine:*@sha256:*) ;;
+*) fail "deploy/local/docker-compose.yml names no cowork-keys image by digest; read '$alpine'" ;;
+esac
+
 docker network create "$net" >/dev/null
+
+# The key belongs to the image's account at mode 600, which serve
+# requires of it. The CA file holds one throwaway certificate.
+keys=$net-keys
+docker volume create "$keys" >/dev/null
+out=$(docker run --rm -v "$keys:/keys" "$alpine" sh -c '
+	set -e
+	apk add --no-cache --quiet openssl
+	openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /keys/deployment.pem 2>/dev/null
+	openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+		-keyout /dev/null -subj /CN=policy.image-e2e.invalid -days 1 -out /keys/ca.crt 2>/dev/null
+	chown 10001 /keys/deployment.pem
+	chmod 600 /keys/deployment.pem
+	chmod 644 /keys/ca.crt
+' 2>&1) || fail "making the key material failed: $out"
 
 db=$net-db
 docker run -d --name "$db" --network "$net" \
@@ -71,11 +102,17 @@ user=$(docker image inspect -f '{{.Config.User}}' "$image")
 passed=$((passed + 1))
 
 # The platform is never reached: serve dials it only for a request
-# that carries a credential, and the probes carry none.
+# that carries a credential, and the probes carry none. Nor is the
+# policy service, which is dialled for a decision.
 server=$net-server
 docker run -d --name "$server" --network "$net" \
 	-e "COWORK_DATABASE_URL=$url" \
 	-e COWORK_PLATFORM_URL=http://platform.image-e2e.invalid \
+	-e COWORK_POLICY_ADDR=policy.image-e2e.invalid:8443 \
+	-e COWORK_POLICY_CA_FILE=/keys/ca.crt \
+	-e COWORK_MACHINE_TOKEN_URL=https://machine.image-e2e.invalid:8443/oauth/token \
+	-e COWORK_DEPLOYMENT_KEY_FILE=/keys/deployment.pem \
+	-v "$keys:/keys:ro" \
 	"$image" serve >/dev/null
 
 # Wait on the condition the checks depend on, and stop early when the

@@ -46,30 +46,29 @@ check-gen: gen
 	@git diff --exit-code -- $(GEN_PATHS)
 
 # The platform the browser suite signs in through, which the console's
-# suite drives too.
+# suite drives too, and the stack's own cowork beside it, asking the
+# policy service. The specs name cowork's API on localhost:8091 and its
+# user-content origin on localhost:8093 (e2e/), so the stack publishes
+# them there.
+COWORK_API_PORT = 8091
+COWORK_USERCONTENT_PORT = 8093
+
 stack-up:
 	@$(MAKE) --no-print-directory -C ../deploy/local backend-up
+	@COWORK_LOCAL_API_PORT=$(COWORK_API_PORT) COWORK_LOCAL_USERCONTENT_PORT=$(COWORK_USERCONTENT_PORT) \
+		$(MAKE) --no-print-directory -C ../deploy/local cowork-up
 
 suites: install e2e
 
-# e2e drives the built app, the built cowork binary and the site its
-# sign-in goes through in a real browser, against the platform stack-up
-# starts. cowork keeps its own
-# database on the stack's Postgres, created here where absent; the seed
-# writes sessions into the platform's.
-E2E_DB_NAME = cowork_e2e
-E2E_DATABASE_URL = $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(E2E_DB_NAME)?sslmode=disable)
-COWORK_DIR := $(abspath ../cowork)
-
+# e2e drives the built app and the site its sign-in goes through in a
+# real browser, against the platform and the cowork stack-up starts. The
+# seed writes users, organizations and sessions into the platform's
+# database and returns once the policy service holds them.
 e2e:
 	@test -n "$(API_HOST_ADDR)" || { echo "e2e: no api published on this host — run make -C cowork-web stack-up" >&2; exit 1; }
-	@test -n '$(E2E_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make -C cowork-web stack-up" >&2; exit 1; }
-	@present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
-		"SELECT 1 FROM pg_database WHERE datname='$(E2E_DB_NAME)'")" \
-		|| { echo "e2e: could not ask postgres whether $(E2E_DB_NAME) exists" >&2; exit 1; }; \
-		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(E2E_DB_NAME)
-	cd $(COWORK_DIR) && go build -o bin/cowork ./cmd/cowork
+	@test -n '$(WEB_E2E_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make -C cowork-web stack-up" >&2; exit 1; }
+	@test "$$($(COMPOSE_LOCAL) port cowork 8090 2>/dev/null)" = 127.0.0.1:$(COWORK_API_PORT) \
+		&& test "$$($(COMPOSE_LOCAL) port cowork 8092 2>/dev/null | sed 's/.*://')" = $(COWORK_USERCONTENT_PORT) \
+		|| { echo "e2e: cowork is not published on localhost:$(COWORK_API_PORT) and :$(COWORK_USERCONTENT_PORT) — run make -C cowork-web stack-up" >&2; exit 1; }
 	pnpm exec playwright install chromium
-	COWORK_BIN='$(COWORK_DIR)/bin/cowork' COWORK_MIGRATIONS_DIR='$(COWORK_DIR)/migrations' \
-		COWORK_E2E_DATABASE_URL='$(E2E_DATABASE_URL)' GARAM_API_URL=http://$(API_HOST_ADDR) \
-		GARAM_E2E_DATABASE_URL='$(WEB_E2E_DATABASE_URL)' pnpm e2e
+	GARAM_API_URL=http://$(API_HOST_ADDR) GARAM_E2E_DATABASE_URL='$(WEB_E2E_DATABASE_URL)' pnpm e2e

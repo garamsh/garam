@@ -57,11 +57,15 @@ func policyClient(cfg policy.Config) (*policy.Client, error) {
 	return policy.Dial(cfg, tokens)
 }
 
-// runFeed delivers the feed until ctx ends.
-func runFeed(ctx context.Context, pool *pgxpool.Pool, client *policy.Client) {
-	svc := policyfeed.NewService(feedpg.NewStore(pool), feedgrpc.NewSender(client), slog.Default(),
+// runFeed delivers the feed until ctx ends, and returns the gate that
+// holds a request until its entity is delivered. It idles while the
+// feed is off.
+func runFeed(ctx context.Context, pool *pgxpool.Pool, client *policy.Client) policyfeed.Gate {
+	store := feedpg.NewStore(pool)
+	svc := policyfeed.NewService(store, feedgrpc.NewSender(client), slog.Default(),
 		policyfeed.Config{Poll: feedPoll, MaxBackoff: feedMaxBackoff})
 	go func() { _ = svc.Run(ctx) }()
+	return policyfeed.NewGate(store, svc, policyfeed.Bound)
 }
 
 // newPolicyFeedCommand constructs `cowork policy-feed start|stop`.

@@ -50,6 +50,10 @@ func (s *scriptedStore) LinkState(context.Context, string, string) (policyfeed.L
 	return policyfeed.LinkApplied, nil
 }
 
+func (s *scriptedStore) ScopedLinkState(context.Context, string) (policyfeed.LinkState, error) {
+	return policyfeed.LinkApplied, nil
+}
+
 func (s *scriptedStore) EntityPending(context.Context, policyfeed.Entity) (bool, error) {
 	return false, nil
 }
@@ -136,6 +140,22 @@ func TestRun_LogsEachSetAsideLink(t *testing.T) {
 	assert.Contains(t, logs, "grn:acme/iam/user/u1")
 	assert.Contains(t, logs, "code=PermissionDenied")
 	assert.Contains(t, logs, "no writer")
+}
+
+func TestRun_LogsEachSetAsideScopedLink(t *testing.T) {
+	_, logs := run(t, []step{{result: policyfeed.Result{
+		Marks: 1,
+		ScopedSetAside: []policyfeed.ScopedLinkRefusal{{
+			Link:   policyfeed.ScopedLink{Owner: "grn:acme/iam/group/eng", Roles: []string{"admin"}},
+			Code:   "PermissionDenied",
+			Reason: "policy service CreatePolicy: no writer",
+		}},
+	}}}, policyfeed.Config{Poll: time.Millisecond, MaxBackoff: time.Millisecond})
+
+	assert.Contains(t, logs, "level=ERROR")
+	assert.Contains(t, logs, "scoped role link")
+	assert.Contains(t, logs, "grn:acme/iam/group/eng")
+	assert.Contains(t, logs, "code=PermissionDenied")
 }
 
 // probeStore fails its first pass and reads the service's last pass at

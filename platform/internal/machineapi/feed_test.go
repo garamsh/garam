@@ -78,12 +78,15 @@ func post(t *testing.T, client *http.Client, url, body string, headers map[strin
 }
 
 // TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent
-// holds that each machine route that writes a new agent asks the gate
-// about the agent's entity and answers 503 at the bound while the
-// agent stays stored (ADR-0165), whether the request created the
-// agent or replayed the creation; and that a route that moves an agent
-// that exists asks nothing, so an older mark of the agent is not its
-// answer to give.
+// holds that each machine route that writes asks the gate about
+// exactly the marks its write raised and answers 503 at the bound
+// while the change stays stored (ADR-0165), whether the request made
+// the change or replayed it: a new agent's entity, a standalone
+// enrollment's supervisor (a replacement's and a replay's included,
+// ADR-0164), and the supervisor an admission's replacement takes the
+// agent from. A replacement of an operator's agent raises no mark and
+// asks nothing, so an older mark of the agent is not its answer to
+// give.
 //
 // The clear gate is the control: the same request answers its own
 // status, so the 503 is the wait and not the route. Without a gate the
@@ -91,7 +94,9 @@ func post(t *testing.T, client *http.Client, url, body string, headers map[strin
 func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing.T) {
 	controller := operatorGRN("acme")
 	newAgent := agentGRN("acme", "0a1b2c3d4e5f6071")
-	mark := []policyfeed.Entity{{Type: policyfeed.AgentType, ID: newAgent.String()}}
+	agentMark := policyfeed.Entity{Type: policyfeed.AgentType, ID: newAgent.String()}
+	supervisor := grn.New("acme", "supervisor", "0a1b2c3d4e5f6071")
+	supervisorMark := policyfeed.Entity{Type: policyfeed.SupervisorType, ID: supervisor.String()}
 	approval := uuid.NewString()
 	binding := `{"requestId":"r-1","placement":"managed","assignee":"` + controller.String() +
 		`","operationRef":"ref-1"}`
@@ -99,7 +104,7 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 		`","operationRef":"ref-1","replaces":{"agent":"` + newAgent.String() +
 		`","expectedAssignee":"` + controller.String() + `","expectedEpoch":"1"}}`
 	enrollment := agent.EnrollmentResult{Placement: agent.PlacementManaged, Agent: newAgent,
-		Supervisor: grn.New("acme", "supervisor", "0a1b2c3d4e5f6071"), Epoch: 1}
+		Supervisor: supervisor, Epoch: 1}
 	replaced := agent.ActivationID(uuid.New())
 
 	type route struct {
@@ -108,7 +113,7 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 		path    string
 		body    string
 		headers map[string]string
-		waits   bool
+		marks   []policyfeed.Entity
 		status  int
 	}
 	creation := agent.ManagedCreation{Agent: newAgent, Controller: controller, Epoch: 1}
@@ -119,7 +124,7 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 		}
 	}
 	table := []route{
-		{name: "createManagedAgent", waits: true, status: http.StatusCreated,
+		{name: "createManagedAgent", marks: []policyfeed.Entity{agentMark}, status: http.StatusCreated,
 			path:    "/operators/" + neturl.PathEscape(controller.String()) + "/managed-agents",
 			body:    `{"requestId":"r-1","operationRef":"ref-1"}`,
 			headers: map[string]string{"Garam-Contract-Version": agent.TokenEnrollmentContractVersion},
@@ -127,14 +132,14 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &recheck{}, nil,
 					&creating{creation: creation, created: created}, nil, nil, nil)
 			}},
-		{name: "admitAgentEnrollment new agent", waits: true, status: http.StatusCreated,
+		{name: "admitAgentEnrollment new agent", marks: []policyfeed.Entity{agentMark}, status: http.StatusCreated,
 			path: "/agent-enrollment-approvals/" + approval + "/admission", body: binding,
 			headers: map[string]string{"Garam-Contract-Version": agent.AdmissionContractVersion},
 			build: func(created bool) *machineapi.Server {
 				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &recheck{}, nil, nil, nil,
 					&admitting{approval: admitted(nil), created: created}, nil)
 			}},
-		{name: "admitAgentEnrollment replacement", waits: false, status: http.StatusCreated,
+		{name: "admitAgentEnrollment replacement of an operator", marks: nil, status: http.StatusCreated,
 			path: "/agent-enrollment-approvals/" + approval + "/admission", body: replacing,
 			headers: map[string]string{"Garam-Contract-Version": agent.AdmissionContractVersion},
 			build: func(created bool) *machineapi.Server {
@@ -142,7 +147,16 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 					&admitting{approval: admitted(&agent.Replacement{Agent: newAgent, Assignee: controller, Epoch: 1}),
 						created: created}, nil)
 			}},
-		{name: "enrollStandaloneAgent new agent", waits: true, status: http.StatusCreated,
+		{name: "admitAgentEnrollment replacement of a supervisor", marks: []policyfeed.Entity{supervisorMark},
+			status: http.StatusCreated,
+			path:   "/agent-enrollment-approvals/" + approval + "/admission", body: replacing,
+			headers: map[string]string{"Garam-Contract-Version": agent.AdmissionContractVersion},
+			build: func(created bool) *machineapi.Server {
+				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &recheck{}, nil, nil, nil,
+					&admitting{approval: admitted(&agent.Replacement{Agent: newAgent, Assignee: supervisor, Epoch: 1}),
+						created: created}, nil)
+			}},
+		{name: "enrollStandaloneAgent new agent", marks: []policyfeed.Entity{supervisorMark, agentMark}, status: http.StatusCreated,
 			path: "/agent-enrollments", body: `{"requestId":"r-1"}`,
 			headers: map[string]string{"Garam-Contract-Version": agent.CredentialStandaloneContractVersion,
 				"Authorization": "Garam-Bootstrap secret"},
@@ -150,7 +164,7 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 					&enrolling{result: enrollment, created: created}, nil, nil)
 			}},
-		{name: "enrollStandaloneAgent replacement", waits: false, status: http.StatusCreated,
+		{name: "enrollStandaloneAgent replacement", marks: []policyfeed.Entity{supervisorMark}, status: http.StatusCreated,
 			path: "/agent-enrollments", body: `{"requestId":"r-1"}`,
 			headers: map[string]string{"Garam-Contract-Version": agent.CredentialStandaloneContractVersion,
 				"Authorization": "Garam-Bootstrap secret"},
@@ -163,7 +177,8 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 		// An agent never activated has no activation to name, so the
 		// answer's ReplacesActivation is nil as a new agent's is: the
 		// store's Replaced is what tells them apart.
-		{name: "enrollStandaloneAgent replacement of an agent never activated", waits: false,
+		{name: "enrollStandaloneAgent replacement of an agent never activated",
+			marks:  []policyfeed.Entity{supervisorMark},
 			status: http.StatusCreated,
 			path:   "/agent-enrollments", body: `{"requestId":"r-1"}`,
 			headers: map[string]string{"Garam-Contract-Version": agent.CredentialStandaloneContractVersion,
@@ -181,21 +196,21 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 			url, client := serveTLS(t, r.build(true).WithFeed(gate), controller)
 			status := post(t, client, url+r.path, r.body, r.headers)
 			require.Equal(t, r.status, status, "the change is in force")
-			if r.waits {
-				assert.Equal(t, [][]policyfeed.Entity{mark}, gate.marked)
+			if len(r.marks) > 0 {
+				assert.Equal(t, [][]policyfeed.Entity{r.marks}, gate.marked)
 			} else {
-				assert.Empty(t, gate.marked, "a move of an agent that exists raises nothing")
+				assert.Empty(t, gate.marked, "a move of an operator's agent raises nothing")
 			}
 
 			gate.err = policyfeed.ErrNotApplied
 			status = post(t, client, url+r.path, r.body, r.headers)
-			if r.waits {
-				assert.Equal(t, http.StatusServiceUnavailable, status, "the agent is stored, not applied")
+			if len(r.marks) > 0 {
+				assert.Equal(t, http.StatusServiceUnavailable, status, "the change is stored, not applied")
 			} else {
 				assert.Equal(t, r.status, status, "answered at once whatever an older mark says")
 			}
 
-			if r.waits {
+			if len(r.marks) > 0 {
 				replayURL, replayClient := serveTLS(t, r.build(false).WithFeed(gate), controller)
 				assert.Equal(t, http.StatusServiceUnavailable,
 					post(t, replayClient, replayURL+r.path, r.body, r.headers),
@@ -204,6 +219,47 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 
 			noFeedURL, noFeed := serveTLS(t, r.build(true), controller)
 			assert.Equal(t, r.status, post(t, noFeed, noFeedURL+r.path, r.body, r.headers), "without a gate")
+		})
+	}
+}
+
+// TestEnrollStandaloneAgent_WaitsOnTheMarksTheEnrollmentRaised holds
+// what the route waits on in each case, whole: the supervisor's mark
+// always, and the agent's only when the enrollment created the agent,
+// the replay of a creation included (the store's Replaced says which).
+func TestEnrollStandaloneAgent_WaitsOnTheMarksTheEnrollmentRaised(t *testing.T) {
+	controller := operatorGRN("acme")
+	newAgent := agentGRN("acme", "0a1b2c3d4e5f6071")
+	supervisor := grn.New("acme", "supervisor", "0a1b2c3d4e5f6071")
+	supervisorMark := policyfeed.Entity{Type: policyfeed.SupervisorType, ID: supervisor.String()}
+	agentMark := policyfeed.Entity{Type: policyfeed.AgentType, ID: newAgent.String()}
+	enrollment := agent.EnrollmentResult{Placement: agent.PlacementStandalone, Agent: newAgent,
+		Supervisor: supervisor, Epoch: 1}
+	replacement := enrollment
+	replacement.Replaced = true
+
+	table := []struct {
+		name    string
+		result  agent.EnrollmentResult
+		created bool
+		marks   []policyfeed.Entity
+	}{
+		{name: "new", result: enrollment, created: true, marks: []policyfeed.Entity{supervisorMark, agentMark}},
+		{name: "replaced", result: replacement, created: true, marks: []policyfeed.Entity{supervisorMark}},
+		{name: "replayed new", result: enrollment, marks: []policyfeed.Entity{supervisorMark, agentMark}},
+		{name: "replayed replacement", result: replacement, marks: []policyfeed.Entity{supervisorMark}},
+	}
+	for _, c := range table {
+		t.Run(c.name, func(t *testing.T) {
+			gate := &markGate{}
+			srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+				&enrolling{result: c.result, created: c.created}, nil, nil).WithFeed(gate)
+			url, client := serveTLS(t, srv, controller)
+			status := post(t, client, url+"/agent-enrollments", `{"requestId":"r-1"}`,
+				map[string]string{"Garam-Contract-Version": agent.CredentialStandaloneContractVersion,
+					"Authorization": "Garam-Bootstrap secret"})
+			assert.Contains(t, []int{http.StatusOK, http.StatusCreated}, status)
+			assert.Equal(t, [][]policyfeed.Entity{c.marks}, gate.marked)
 		})
 	}
 }

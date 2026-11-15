@@ -347,6 +347,11 @@ async fn a_repeated_denial_is_counted_while_the_organization_s_lock_is_held(pool
         (Recorded::Stored, Recorded::Collapsed) | (Recorded::Collapsed, Recorded::Stored)
     ));
     assert_eq!(setup.deny(&denial(LEE, &none)).await, Recorded::Stored);
+    assert!(
+        pool.num_idle() >= 2,
+        "two connections are open before the lock is held, got {}",
+        pool.num_idle()
+    );
     let recorder = Recorder::new(pool.clone()).bounded(Duration::from_millis(300));
     let mut blocker = pool.begin().await.unwrap();
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")

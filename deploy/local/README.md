@@ -94,6 +94,8 @@ moves that one server rather than standing up a second.
   serves under, made once.
 - `policy-keys.sh` — the signing key the api mints policy tokens with
   and the JWKS the policy service verifies them against, made once.
+- `policy-local/` — not in git: what `make backend-up` leaves for a
+  suite on the host (`ca.pem`, `signing.pem`); see policy below.
 - `machine-material.sh` — the machine listener's certificate and
   private key and its key-encryption key, made once.
 - `cowork-keys.sh` — cowork's deployment key, the service keys file
@@ -198,14 +200,33 @@ service holds them.
 
 ## policy
 
-The default stack runs the policy service, with no profile. It adds six
-services: `policy-db`, a one-shot that creates the `policy` database on
-the one Postgres where absent; `policy-migrate`, which applies
-`policy/migrations/` to it; `policy-tls`, a one-shot that writes a
-throwaway certificate into a volume; `policy-keys`, a one-shot that
+The default stack runs the policy service, with no profile. It adds
+seven services: `policy-db`, a one-shot that creates the `policy`
+database on the one Postgres where absent; `policy-migrate`, which
+applies `policy/migrations/` to it; `policy-tls`, a one-shot that writes
+a throwaway certificate into a volume; `policy-keys`, a one-shot that
 writes the signing key and the JWKS into another; `policy`, the server;
-and `policy-feed`, a one-shot that runs `garam policy-feed start`. No
-port is published.
+`policy-feed`, a one-shot that runs `garam policy-feed start`; and
+`policy-host`, a one-shot that copies the certificate and the signing
+key to the host (below).
+
+The service's gRPC port is published on `127.0.0.1:28443`
+(`GARAM_POLICY_PORT`). The certificate names `policy`, which the stack's
+own callers dial, and `localhost` and `127.0.0.1`, which a suite on the
+host dials, so no caller overrides the name it verifies. A suite on the
+host trusts `ca.pem` and signs with `signing.pem`, both in
+`deploy/local/policy-local/` (`POLICY_LOCAL_DIR`, a make variable): `make
+backend-up` creates the directory at mode 700 and `policy-host` leaves
+the copies there, owned by the account that ran make, the key at mode
+600. The directory is ignored by git and holds only this stack's
+throwaway material; no suite reads a container for either file.
+`make -C platform stack-up policy-matrix` brings the backend up and runs
+the platform's policy matrix against that address, and `make -C platform
+stack-up suites` runs it with the other suites, as CI does.
+
+The certificate is made once, so a stack whose volume predates the two
+extra names keeps a certificate that does not name `localhost`: bring it
+up after `down -v`, which makes a new pair.
 
 The api reaches the service at `policy:8443` over TLS, trusting the
 certificate `policy-tls` made as its CA, and signs its tokens with the

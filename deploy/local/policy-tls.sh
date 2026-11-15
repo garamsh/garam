@@ -1,7 +1,10 @@
 #!/bin/sh
 # Writes a throwaway self-signed certificate and key into /tls, for the
 # DNS name its first argument gives and owned by the user its second
-# gives, the key readable by that user alone. The policy service serves
+# gives, the key readable by that user alone. Each argument after those
+# is one more subject alternative name in openssl's own form
+# (DNS:localhost, IP:127.0.0.1), for a caller that reaches the server
+# by an address the first name is not. The policy service serves
 # no plaintext, and this is the pair it serves on this machine. The
 # stack and tooling/policy-image-e2e.sh run it on the alpine image the
 # policy-tls service names, which carries no openssl of its own.
@@ -9,6 +12,12 @@ set -eu
 
 name=${1:?the DNS name the certificate holds}
 owner=${2:?the user that owns the key}
+shift 2
+
+san="DNS:$name"
+for extra in "$@"; do
+	san="$san,$extra"
+done
 
 # Compose runs this again whenever a service that waits on it is brought
 # up, and a server holds the pair it started with: what is there stays.
@@ -18,7 +27,7 @@ apk add --no-cache --quiet openssl
 
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
 	-days 30 -subj "/CN=$name" \
-	-addext "subjectAltName=DNS:$name" \
+	-addext "subjectAltName=$san" \
 	-addext "basicConstraints=critical,CA:FALSE" \
 	-keyout /tls/tls.key -out /tls/tls.crt 2>/dev/null
 

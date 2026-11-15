@@ -197,8 +197,8 @@ is the whole set over both toolchains. The rest:
   against the app.
 
 Locally the suites are `make db-up integration e2e`,
-`make backend-up web-e2e`, `make -C cowork-web stack-up suites` and
-`make web-image-e2e`. CI
+`make -C platform stack-up policy-matrix`, `make backend-up web-e2e`,
+`make -C cowork-web stack-up suites` and `make web-image-e2e`. CI
 runs `make -C <module> ci` and `make -C <module> stack-up suites` for
 each module `make affected` selects; the image check builds two images
 before it checks one, so it runs from a workflow of its own that a

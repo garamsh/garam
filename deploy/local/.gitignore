@@ -1,0 +1,3 @@
+# What `make backend-up` leaves for a suite on the host: the policy
+# service's certificate and the stack's signing key (README.md §policy)
+/policy-local/

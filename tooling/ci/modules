@@ -22,9 +22,10 @@ lib/policy-sdk-go policy
 # The gaon operator imports lib/errorx and lib/grn through go.work
 # replaces; it reads no other module's files.
 gaon-operator lib/errorx lib/grn
-# The platform's suites run against the stack, and drive the client CLI
-# they build from garam-cli.
-platform garam-cli deploy/local
+# The platform's suites run against the stack, drive the client CLI
+# they build from garam-cli, and ask the policy service it builds
+# from policy.
+platform garam-cli deploy/local policy
 # The client CLI derives its commands from the platform's and cowork's
 # OpenAPI specs, and its coverage test reads them.
 garam-cli platform cowork

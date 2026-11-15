@@ -1,10 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * The e2e suite drives the built app, the built cowork binary and the
- * site against the platform `make backend-up` starts: its API, its
- * authorization engine and its Postgres, where cowork keeps a database
- * of its own. `make cowork-web-e2e` supplies every variable below.
+ * The e2e suite drives the built app and the site against what
+ * `make -C cowork-web stack-up` starts: the platform's API, its
+ * authorization engine and its Postgres, and the stack's own cowork
+ * image, which asks the policy service what a caller may do and keeps
+ * a database of its own. It is published on localhost:8091 and, for
+ * artifacts, localhost:8093 (the Makefile's). `make -C cowork-web suites`
+ * supplies every variable.
  *
  * cowork-web and the site sit on two hosts, the shape a deployment has
  * (ADR-0131): a browser resolves every `.localhost` name to this
@@ -16,7 +19,7 @@ const required = (name: string): string => {
   const v = process.env[name];
   if (!v)
     throw new Error(
-      `${name} is unset — run the suite through \`make cowork-web-e2e\``,
+      `${name} is unset — run the suite through \`make -C cowork-web suites\``,
     );
   return v;
 };
@@ -25,7 +28,6 @@ const WEB_HOST = "cowork.garam.localhost";
 const WEB_URL = `http://${WEB_HOST}:3100`;
 const SITE_URL = "http://garam.localhost:3001";
 const COWORK_PORT = "8091";
-const USERCONTENT_URL = "http://localhost:8093";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -36,29 +38,6 @@ export default defineConfig({
   use: { baseURL: WEB_URL, trace: "on-first-retry" },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
-    {
-      // The binary as `go build` produces it, migrating its database
-      // and then serving, as a deployment's two processes would.
-      command: `${required("COWORK_BIN")} migrate && exec ${required("COWORK_BIN")} serve`,
-      env: {
-        COWORK_DATABASE_URL: required("COWORK_E2E_DATABASE_URL"),
-        COWORK_PLATFORM_URL: required("GARAM_API_URL"),
-        COWORK_MIGRATIONS_DIR: required("COWORK_MIGRATIONS_DIR"),
-        COWORK_LISTEN_ADDR: `127.0.0.1:${COWORK_PORT}`,
-        COWORK_WEB_ORIGINS: new URL(WEB_URL).host,
-        // Artifacts kept in memory, and served from an origin of their
-        // own: another port, as development runs it (ADR-0127 §8).
-        COWORK_BLOB_STORE: "memory",
-        COWORK_USERCONTENT_ORIGIN: USERCONTENT_URL,
-        COWORK_USERCONTENT_ADDR: `localhost:${new URL(USERCONTENT_URL).port}`,
-        // A key for this suite's server alone, which signs nothing a
-        // deployment trusts.
-        COWORK_USERCONTENT_SECRET: "e2e-only-usercontent-signing-key-32b",
-      },
-      url: `http://127.0.0.1:${COWORK_PORT}/readyz`,
-      reuseExistingServer: false,
-      timeout: 60_000,
-    },
     {
       // The standalone server the image would ship, not `next start`.
       command: "pnpm build && pnpm start",

@@ -201,6 +201,12 @@ type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
+
+	// Reason A stable code a client may branch on where the kind alone does not say which refusal it was. `change_not_applied` answers a create with 503: the entity is stored and the policy service does not yet hold it, so a read of it may be denied for a moment. Read it by `resource`; do not create it again.
+	Reason *string `json:"reason,omitempty"`
+
+	// Resource With `change_not_applied`, the GRN of the entity the request stored.
+	Resource *string `json:"resource,omitempty"`
 }
 
 // MemberAdd defines model for MemberAdd.

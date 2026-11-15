@@ -32,6 +32,7 @@ import (
 	platformhttp "github.com/garamsh/garam/cowork/internal/platform/http"
 	platformpolicy "github.com/garamsh/garam/cowork/internal/platform/policy"
 	"github.com/garamsh/garam/cowork/internal/policy"
+	"github.com/garamsh/garam/cowork/internal/policyfeed"
 	"github.com/garamsh/garam/cowork/internal/task"
 	taskpg "github.com/garamsh/garam/cowork/internal/task/postgres"
 	"github.com/garamsh/garam/cowork/internal/usercontent"
@@ -63,6 +64,10 @@ type Config struct {
 	// of the platform; Identify and Organizations stay with the
 	// platform (ADR-0141 §12). Nil asks the platform.
 	PolicyClient *policy.Client
+	// Feed, where set, holds each create's answer until the policy
+	// service holds the entity it created (ADR-0166). Nil answers at
+	// once, as where no policy service is configured.
+	Feed policyfeed.Gate
 }
 
 // services are cowork's services as one Config wires them, which the
@@ -99,11 +104,18 @@ func wire(cfg Config, pool *pgxpool.Pool) (services, error) {
 	if cfg.UserContent != nil {
 		viewer = cfg.UserContent
 	}
-	return services{
+	s := services{
 		platform: p, pages: pages, collab: collabs, channels: channels,
 		tasks:     task.NewService(taskpg.New(pool), p, pages, channels),
 		artifacts: artifact.NewService(artifactpg.New(pool), cfg.Blobs, p, pages, collabs, viewer),
-	}, nil
+	}
+	if cfg.Feed != nil {
+		s.pages = awaitingPages{s.pages, cfg.Feed}
+		s.channels = awaitingChannels{s.channels, cfg.Feed}
+		s.tasks = awaitingTasks{s.tasks, cfg.Feed}
+		s.artifacts = awaitingArtifacts{s.artifacts, cfg.Feed}
+	}
+	return s, nil
 }
 
 // NewHandler assembles cowork's HTTP surface over pool as serve ships
@@ -214,7 +226,7 @@ func newServeCommand() *cobra.Command {
 				PlatformURL: platformURL, WebOrigins: listOf(envOr(envWebOrigins, "")),
 				Blobs: blobs, UserContent: signer, PolicyClient: policyAPI,
 			}
-			runFeed(ctx, pool, policyAPI)
+			cfg.Feed = runFeed(ctx, pool, policyAPI)
 			handler, err := NewHandler(cfg, pool)
 			if err != nil {
 				return err

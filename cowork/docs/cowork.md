@@ -404,6 +404,17 @@ marks and the others' are delivered in the same pass; the failing
 organization is logged once as it starts failing and once as it
 recovers.
 
+Where the feed is delivered, a create of a channel, a page, a task or
+an artifact answers after the policy service holds the entity it
+created ([ADR-0166](../../docs/architecture/adr/0166-a-cowork-create-answers-after-the-policy-service-holds-the-entity-it-created.md)),
+so the read that follows is allowed. The create wakes the delivery loop
+and waits up to 5 seconds. At the bound it answers `503` with kind
+`unavailable`, reason `change_not_applied` and `resource` the stored
+entity's GRN: the entity exists, read it and do not create it again.
+An MCP tool answers the same in words. Updates, deletes, reads and
+writes through a page's sync connection do not wait. Where the four
+settings are unset, nothing waits.
+
 Swapping the store is configuration alone. RustFS, as the deployment
 runs it:
 

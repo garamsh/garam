@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
+	"github.com/garamsh/garam/cowork/internal/policyfeed"
 	"github.com/garamsh/garam/lib/errorx"
 )
 
@@ -152,6 +154,15 @@ func tool[In, Out any](t *Tools, name, title, description string, readOnly bool,
 func toolError(ctx context.Context, name string, err error) error {
 	switch kind := errorx.KindOf(err); kind {
 	case errorx.KindUnavailable:
+		// A create that is stored and not yet held by the policy
+		// service is told apart: trying again would create it twice.
+		if reason, ok := errorx.ReasonOf(err); ok && reason.Code == policyfeed.ReasonChangeNotApplied {
+			var stored interface{ Resource() string }
+			if errors.As(err, &stored) {
+				return errorx.NewWithReason(kind, reason,
+					name+": created as "+stored.Resource()+", which may not be readable for a moment; read it, do not create it again")
+			}
+		}
 		slog.WarnContext(ctx, "cowork: tool failed", slog.String("tool", name), slog.String("error", err.Error()))
 		return errorx.New(kind, name+": unavailable; try again")
 	case errorx.KindInternal, errorx.KindUnknown, errorx.KindDataLoss:

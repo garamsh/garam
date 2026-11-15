@@ -23,6 +23,7 @@ import (
 
 	blobmemory "github.com/garamsh/garam/cowork/internal/blob/memory"
 	"github.com/garamsh/garam/cowork/internal/cli"
+	"github.com/garamsh/garam/cowork/internal/policyfeed"
 	"github.com/garamsh/garam/cowork/internal/usercontent"
 	"github.com/garamsh/garam/lib/grn"
 )
@@ -207,7 +208,11 @@ type stack struct {
 	platform   *fakePlatform
 }
 
-func newStack(t *testing.T) *stack {
+func newStack(t *testing.T) *stack { return newStackWith(t, nil) }
+
+// newStackWith is newStack with feed, where set, holding each create's
+// answer until the policy service holds what it created.
+func newStackWith(t *testing.T, feed policyfeed.Gate) *stack {
 	t.Helper()
 	p := pool(t)
 	fake := newFakePlatform()
@@ -220,7 +225,7 @@ func newStack(t *testing.T) *stack {
 	t.Cleanup(content.Close)
 	signer, err := usercontent.NewSigner(content.URL, []byte(strings.Repeat("k", 32)))
 	require.NoError(t, err)
-	cfg := cli.Config{PlatformURL: platformSrv.URL, Blobs: blobmemory.New(), UserContent: signer, WebOrigins: []string{"localhost:3100"}, SocketRecheck: socketRecheck}
+	cfg := cli.Config{PlatformURL: platformSrv.URL, Blobs: blobmemory.New(), UserContent: signer, WebOrigins: []string{"localhost:3100"}, SocketRecheck: socketRecheck, Feed: feed}
 	h, err := cli.NewHandler(cfg, p)
 	require.NoError(t, err)
 	contentHandler, err := cli.NewUserContentHandler(cfg, p)

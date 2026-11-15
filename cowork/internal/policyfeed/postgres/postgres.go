@@ -30,7 +30,10 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-var _ policyfeed.Store = (*Store)(nil)
+var (
+	_ policyfeed.Store = (*Store)(nil)
+	_ policyfeed.Marks = (*Store)(nil)
+)
 
 // NewStore constructs a store over pool.
 func NewStore(pool *pgxpool.Pool) *Store {
@@ -61,6 +64,16 @@ const dropMarks = `
 DELETE FROM policy_outbox o
 USING unnest($1::text[], $2::text[], $3::text[], $4::bigint[]) AS d(o, t, i, g)
 WHERE o.org = d.o AND o.entity_type = d.t AND o.entity_id = d.i AND o.generation = d.g`
+
+const markPending = `
+SELECT EXISTS (SELECT 1 FROM policy_outbox WHERE org = $1 AND entity_type = $2 AND entity_id = $3)`
+
+// Pending reports whether the outbox holds a mark of entity.
+func (s *Store) Pending(ctx context.Context, entity policyfeed.Entity) (bool, error) {
+	var pending bool
+	err := s.pool.QueryRow(ctx, markPending, entity.Org, entity.Type, entity.ID).Scan(&pending)
+	return pending, fail(err, "read mark")
+}
 
 // Deliver runs one delivery pass.
 func (s *Store) Deliver(

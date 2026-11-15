@@ -82,8 +82,11 @@ type Exchange struct {
 // by one key, as the platform's does (ADR-0129), and issues a token
 // per organization.
 type Endpoint struct {
-	// URL is the endpoint's address, which an assertion's `aud` names.
+	// URL is the endpoint's address.
 	URL string
+	// Issuer is the identifier of the issuer the endpoint stands for,
+	// the only `aud` it accepts (RFC 10070 §4).
+	Issuer string
 	// ExpiresIn is the lifetime it answers, in seconds; 300 if zero.
 	ExpiresIn int64
 
@@ -98,7 +101,7 @@ type Endpoint struct {
 // NewEndpoint serves an endpoint that trusts pub.
 func NewEndpoint(t *testing.T, pub *rsa.PublicKey) *Endpoint {
 	t.Helper()
-	e := &Endpoint{pub: pub, issued: map[string]string{}}
+	e := &Endpoint{Issuer: "https://garam.test/api", pub: pub, issued: map[string]string{}}
 	srv := httptest.NewServer(http.HandlerFunc(e.serve))
 	t.Cleanup(srv.Close)
 	e.URL = srv.URL + "/oauth/token"
@@ -160,7 +163,7 @@ func (e *Endpoint) serve(w http.ResponseWriter, r *http.Request) {
 		refuse("client_id")
 		return
 	}
-	if claims["iss"] != form["client_id"] || claims["sub"] != form["client_id"] || claims["aud"] != e.URL {
+	if claims["iss"] != form["client_id"] || claims["sub"] != form["client_id"] || claims["aud"] != e.Issuer {
 		refuse("claims")
 		return
 	}
@@ -190,7 +193,7 @@ func (e *Endpoint) verify(jwt string) (map[string]any, map[string]any, error) {
 			return nil, nil, fmt.Errorf("not a JWT")
 		}
 	}
-	if header["alg"] != "RS256" || header["kid"] != Thumbprint(e.pub) || len(header) != 3 {
+	if header["alg"] != "RS256" || header["kid"] != Thumbprint(e.pub) || header["typ"] != "client-authentication+jwt" || len(header) != 3 {
 		return nil, nil, fmt.Errorf("header")
 	}
 	sig, err := base64.RawURLEncoding.DecodeString(parts[2])

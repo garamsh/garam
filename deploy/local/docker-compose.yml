@@ -317,6 +317,7 @@ services:
       COWORK_POLICY_ADDR: policy:8443
       COWORK_POLICY_CA_FILE: /cowork-keys/ca.crt
       COWORK_MACHINE_TOKEN_URL: https://machine:8443/oauth/token
+      COWORK_IDENTITY_ISSUER: *identity-issuer
       COWORK_DEPLOYMENT_KEY_FILE: /cowork-keys/deployment.pem
     # The API is published on loopback as well, for the browser suite
     # that reaches cowork's API from its pages (cowork-web/e2e), which

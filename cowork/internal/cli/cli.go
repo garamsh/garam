@@ -35,13 +35,15 @@ const (
 	envUserContentSecret = "COWORK_USERCONTENT_SECRET"
 
 	// The policy service, which cowork asks what a caller may do
-	// (ADR-0141 §12, ADR-0146 §8) and serve requires all four of: its
+	// (ADR-0141 §12, ADR-0146 §8) and serve requires all five of: its
 	// address, the CA file that signs its certificate, the machine
-	// token URL cowork's caller token is fetched from, and the
-	// deployment key file that signs the request.
+	// token URL cowork's caller token is fetched from, the issuer
+	// identifier its assertion is addressed to, and the deployment
+	// key file that signs the request.
 	envPolicyAddr        = "COWORK_POLICY_ADDR"
 	envPolicyCAFile      = "COWORK_POLICY_CA_FILE"
 	envMachineTokenURL   = "COWORK_MACHINE_TOKEN_URL"
+	envIdentityIssuer    = "COWORK_IDENTITY_ISSUER"
 	envDeploymentKeyFile = "COWORK_DEPLOYMENT_KEY_FILE"
 )
 

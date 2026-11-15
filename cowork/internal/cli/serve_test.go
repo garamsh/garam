@@ -26,7 +26,7 @@ func testPolicyClient(t *testing.T) *policy.Client {
 	keyFile, pub := policytest.Key(t)
 	endpoint := policytest.NewEndpoint(t, pub)
 	server := policytest.Serve(t, endpoint)
-	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, KeyFile: keyFile}
+	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, Issuer: endpoint.Issuer, KeyFile: keyFile}
 	tokens, err := policy.NewTokens(cfg, time.Now)
 	require.NoError(t, err)
 	client, err := policy.Dial(cfg, tokens)
@@ -42,9 +42,9 @@ func TestWire_WithAPolicyClientCoworkAsksThePolicyService(t *testing.T) {
 	assert.IsType(t, &platformpolicy.Platform{}, s.platform)
 }
 
-var policySettings = []string{envPolicyAddr, envPolicyCAFile, envMachineTokenURL, envDeploymentKeyFile}
+var policySettings = []string{envPolicyAddr, envPolicyCAFile, envMachineTokenURL, envIdentityIssuer, envDeploymentKeyFile}
 
-func TestPolicyConfig_AllFourSetStarts(t *testing.T) {
+func TestPolicyConfig_AllFiveSetStarts(t *testing.T) {
 	for _, key := range policySettings {
 		t.Setenv(key, key+"-value")
 	}
@@ -54,7 +54,7 @@ func TestPolicyConfig_AllFourSetStarts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, policy.Config{
 		Addr: envPolicyAddr + "-value", CAFile: envPolicyCAFile + "-value",
-		TokenURL: envMachineTokenURL + "-value", KeyFile: envDeploymentKeyFile + "-value",
+		TokenURL: envMachineTokenURL + "-value", Issuer: envIdentityIssuer + "-value", KeyFile: envDeploymentKeyFile + "-value",
 	}, cfg)
 }
 
@@ -81,7 +81,7 @@ func TestPolicyConfig_ASettingMissingRefusesToStartAndIsNamed(t *testing.T) {
 	}
 }
 
-func TestPolicyConfig_NothingSetNamesAllFour(t *testing.T) {
+func TestPolicyConfig_NothingSetNamesAllFive(t *testing.T) {
 	for _, key := range policySettings {
 		t.Setenv(key, "")
 	}

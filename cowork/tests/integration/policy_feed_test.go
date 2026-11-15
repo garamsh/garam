@@ -36,7 +36,7 @@ func newFeedRig(t *testing.T) *feedRig {
 	keyFile, pub := policytest.Key(t)
 	endpoint := policytest.NewEndpoint(t, pub)
 	server := policytest.Serve(t, endpoint)
-	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, KeyFile: keyFile}
+	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, Issuer: endpoint.Issuer, KeyFile: keyFile}
 	tokens, err := policy.NewTokens(cfg, time.Now)
 	require.NoError(t, err)
 	client, err := policy.Dial(cfg, tokens)

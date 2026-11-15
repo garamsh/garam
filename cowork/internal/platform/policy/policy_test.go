@@ -46,7 +46,7 @@ func newFixture(t *testing.T, allowed map[string]bool) *fixture {
 	server.Decide = func(org string, e *policyv1.Evaluation) bool {
 		return org == "acme" && allowed[e.GetAction().GetName()+"@"+e.GetResource().GetId()]
 	}
-	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, KeyFile: keyFile}
+	cfg := policy.Config{Addr: server.Addr, CAFile: server.CAFile, TokenURL: endpoint.URL, Issuer: endpoint.Issuer, KeyFile: keyFile}
 	tokens, err := policy.NewTokens(cfg, time.Now)
 	require.NoError(t, err)
 	client, err := policy.Dial(cfg, tokens)
@@ -162,7 +162,7 @@ func TestAllowed_AnUnreachableServiceIsUnavailable(t *testing.T) {
 	f := newFixture(t, nil)
 	keyFile, pub := policytest.Key(t)
 	endpoint := policytest.NewEndpoint(t, pub)
-	cfg := policy.Config{Addr: "127.0.0.1:1", CAFile: f.server.CAFile, TokenURL: endpoint.URL, KeyFile: keyFile}
+	cfg := policy.Config{Addr: "127.0.0.1:1", CAFile: f.server.CAFile, TokenURL: endpoint.URL, Issuer: endpoint.Issuer, KeyFile: keyFile}
 	tokens, err := policy.NewTokens(cfg, time.Now)
 	require.NoError(t, err)
 	client, err := policy.Dial(cfg, tokens)
@@ -180,7 +180,7 @@ func TestAllowed_ATokenEndpointThatRefusesIsUnavailable(t *testing.T) {
 	f := newFixture(t, nil)
 	// A deployment key the endpoint does not trust.
 	otherKey, _ := policytest.Key(t)
-	cfg := policy.Config{Addr: f.server.Addr, CAFile: f.server.CAFile, TokenURL: f.endpoint.URL, KeyFile: otherKey}
+	cfg := policy.Config{Addr: f.server.Addr, CAFile: f.server.CAFile, TokenURL: f.endpoint.URL, Issuer: f.endpoint.Issuer, KeyFile: otherKey}
 	tokens, err := policy.NewTokens(cfg, time.Now)
 	require.NoError(t, err)
 	client, err := policy.Dial(cfg, tokens)

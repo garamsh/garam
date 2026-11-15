@@ -1196,9 +1196,10 @@ supersedes in part ADR-0127 §5: cowork asks the policy service
 itself, under a caller token from `exchangeClientAssertion` with
 `audience` `policy` and `sub` its principal, and not through the
 platform. cowork builds that route (#1758) and asks nothing else
-(#1907): it refuses to start without its four settings
+(#1907): it refuses to start without its five settings
 (`COWORK_POLICY_ADDR`, `COWORK_POLICY_CA_FILE`,
-`COWORK_MACHINE_TOKEN_URL`, `COWORK_DEPLOYMENT_KEY_FILE`), naming the
+`COWORK_MACHINE_TOKEN_URL`, `COWORK_IDENTITY_ISSUER`,
+`COWORK_DEPLOYMENT_KEY_FILE`), naming the
 missing ones, asks one `Evaluations` per batch under the token of the
 organization asked about, and feeds its channels, pages, tasks and
 artifacts through an outbox, one organization at a time under that

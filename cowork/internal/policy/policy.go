@@ -15,6 +15,9 @@ type Config struct {
 	// TokenURL is the platform's machine token endpoint, where a caller
 	// token is asked for.
 	TokenURL string
+	// Issuer is the identifier of the issuer behind that endpoint, the
+	// platform's GARAM_IDENTITY_ISSUER: an assertion's `aud`.
+	Issuer string
 	// KeyFile is the deployment key, an owner-only PEM file read at
 	// each exchange.
 	KeyFile string

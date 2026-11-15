@@ -37,6 +37,7 @@ const (
 // organization.
 type Tokens struct {
 	tokenURL string
+	issuer   string
 	keyFile  string
 	client   *http.Client
 	now      func() time.Time
@@ -52,11 +53,12 @@ type entry struct {
 }
 
 // NewTokens answers a source of caller tokens from the endpoint at
-// cfg.TokenURL, signing with the key in cfg.KeyFile and trusting the
-// CA in cfg.CAFile besides the system roots. A nil now is time.Now.
+// cfg.TokenURL, addressing its assertion to the issuer cfg.Issuer
+// names, signing with the key in cfg.KeyFile and trusting the CA in
+// cfg.CAFile besides the system roots. A nil now is time.Now.
 func NewTokens(cfg Config, now func() time.Time) (*Tokens, error) {
-	if cfg.TokenURL == "" || cfg.KeyFile == "" {
-		return nil, errorx.New(errorx.KindInvalidArgument, "policy: the token URL and deployment key file are required")
+	if cfg.TokenURL == "" || cfg.Issuer == "" || cfg.KeyFile == "" {
+		return nil, errorx.New(errorx.KindInvalidArgument, "policy: the token URL, issuer and deployment key file are required")
 	}
 	pool, err := x509.SystemCertPool()
 	if err != nil {
@@ -76,6 +78,7 @@ func NewTokens(cfg Config, now func() time.Time) (*Tokens, error) {
 	}
 	return &Tokens{
 		tokenURL: cfg.TokenURL,
+		issuer:   cfg.Issuer,
 		keyFile:  cfg.KeyFile,
 		client: &http.Client{
 			Timeout:   exchangeTimeout,
@@ -128,7 +131,7 @@ func (t *Tokens) exchange(ctx context.Context, org string) (string, time.Duratio
 		return "", 0, errorx.Wrap(err, "policy: deployment key", errorx.KindUnavailable)
 	}
 	clientID := ClientID(org)
-	signed, err := assertion(key, clientID, t.tokenURL, t.now())
+	signed, err := assertion(key, clientID, t.issuer, t.now())
 	if err != nil {
 		return "", 0, err
 	}

@@ -39,7 +39,7 @@ func TestServicePrincipal_ExchangeAnswersTheIssuersTokenForPolicy(t *testing.T) 
 
 	form := url.Values{
 		"grant_type": {operator.GrantTypeClientCredentials}, "client_id": {s.coworkID.String()},
-		"client_assertion":      {principalAssertion(t, s.cowork, s.coworkID, s.machine+"/oauth/token", "")},
+		"client_assertion":      {principalAssertion(t, s.cowork, s.coworkID, "")},
 		"client_assertion_type": {operator.ClientAssertionTypeJWT},
 		"audience":              {identity.AudiencePolicy},
 	}
@@ -142,6 +142,39 @@ func TestServicePrincipal_IntrospectionAdmitsTheAudiencesOwnPrincipalOnce(t *tes
 	status, body = s.introspectAs(t, second, s.policy, s.policyID, "spent-once-0123456789ab", granted.AccessToken)
 	assert.Equal(t, http.StatusBadRequest, status, "a second listener refuses what the first admitted: "+body)
 	assert.Equal(t, machinegen.InvalidClient, machineRefusal(t, body))
+}
+
+// TestServicePrincipal_OneAssertionIsAdmittedAtOneRouteOnly holds that
+// an assertion, which names the issuer and no route, is spent by the
+// first route that admits it: the same jti is refused as invalid_client
+// at introspection after the token endpoint admitted it, and at the
+// token endpoint after introspection admitted it. A fresh jti from the
+// same key is admitted, so the refusal is the spent jti and not the key.
+func TestServicePrincipal_OneAssertionIsAdmittedAtOneRouteOnly(t *testing.T) {
+	s := newIssuerStack(t)
+	status, body := s.exchangeAs(t, s.machine, s.cowork, s.coworkID, "", identity.AudiencePolicy)
+	require.Equal(t, http.StatusOK, status, body)
+	var granted struct {
+		AccessToken string `json:"access_token"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &granted))
+
+	const exchangedFirst, introspectedFirst = "token-then-introspect-0123", "introspect-then-token-0123"
+
+	status, body = s.exchangeAs(t, s.machine, s.cowork, s.coworkID, exchangedFirst, identity.AudiencePolicy)
+	require.Equal(t, http.StatusOK, status, "the token endpoint admits it first: "+body)
+	status, body = s.introspectAs(t, s.machine, s.cowork, s.coworkID, exchangedFirst, granted.AccessToken)
+	assert.Equal(t, http.StatusBadRequest, status, "introspection refuses what the token endpoint spent: "+body)
+	assert.Equal(t, machinegen.InvalidClient, machineRefusal(t, body))
+
+	status, body = s.introspectAs(t, s.machine, s.cowork, s.coworkID, introspectedFirst, granted.AccessToken)
+	require.Equal(t, http.StatusOK, status, "introspection admits it first: "+body)
+	status, body = s.exchangeAs(t, s.machine, s.cowork, s.coworkID, introspectedFirst, identity.AudiencePolicy)
+	assert.Equal(t, http.StatusBadRequest, status, "the token endpoint refuses what introspection spent: "+body)
+	assert.Equal(t, machinegen.InvalidClient, machineRefusal(t, body))
+
+	status, body = s.introspectAs(t, s.machine, s.cowork, s.coworkID, "", granted.AccessToken)
+	assert.Equal(t, http.StatusOK, status, "the control: a fresh jti from the same key is admitted: "+body)
 }
 
 // TestServicePrincipal_CreateOrgWritesTheFirstPartyPrincipals holds

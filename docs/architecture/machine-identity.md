@@ -398,25 +398,23 @@ every machine operation it reaches, so cowork reaches no queue.
   principal as unavailable (503), not as a bad client.
 - **The signing algorithm is RS256, and only it.** A service key is an
   RSA public key, and an assertion's protected header names `alg`
-  `RS256`, a `kid` that is the key's RFC 7638 thumbprint, and `typ`
-  `JWT`; any other algorithm is refused as a bad client. A caller
-  cites this bullet for the accepted algorithm, which is the
-  operator exchange's (§Asymmetric Operator exchange), and for every
-  service's keys alike.
-- **Two assertion forms, one to be withdrawn (#1811).** For a
-  service principal, `aud` is exactly one of two strings. The
-  issuer identifier (`GARAM_IDENTITY_ISSUER`) as its only value is
+  `RS256`, a `kid` that is the key's RFC 7638 thumbprint, and the
+  `typ` the next bullet gives; any other algorithm is refused as a
+  bad client. A caller cites this bullet for the accepted algorithm,
+  which is the operator exchange's (§Asymmetric Operator exchange),
+  and for every service's keys alike.
+- **One assertion form (#1820).** For a service principal, `aud` is
+  the issuer identifier (`GARAM_IDENTITY_ISSUER`) as its only value,
   RFC 10070 §4's form, accepted with `typ`
   `client-authentication+jwt` or `JWT`, since the RFC advises
   against rejecting an untyped assertion. The URL of the route it
-  is for, the token endpoint or introspection, is the form of
-  ADR-0102, accepted with `typ` `JWT` as before and **to be
-  withdrawn** once every caller sends the issuer form. An `aud`
-  naming both, a list, any other string, or the URL form under the
-  new `typ` is refused as a bad client. The operator exchange takes
-  neither: its `typ` is `JWT` and its `aud` the token endpoint, as
-  before. Where the issuer is not configured the issuer form
-  accepts nothing.
+  is for, the form of ADR-0102 that #1811 accepted beside it, is
+  withdrawn: an `aud` naming it, naming both, a list or any other
+  string is refused as a bad client, whichever `typ`. The operator
+  exchange takes neither the issuer form nor the new `typ`: its
+  `typ` is `JWT` and its `aud` the token endpoint, as before. Where
+  the issuer is not configured a service principal's assertion
+  is accepted for nothing.
 - **The exchange is `exchangeClientAssertion`** under
   `machine-token.v2`, with the organization's principal GRN as
   `client_id`, `iss` and `sub`, and the key found by `kid` among the

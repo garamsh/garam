@@ -85,10 +85,10 @@ func identityServiceKeys() (identity.KeySource, error) {
 	return identity.KeysFile(file), nil
 }
 
-// introspectionURL derives the URL an assertion names as its audience
-// at introspection from the machine token endpoint: one listener serves
-// both, and the introspection URL is the token URL with its
-// /oauth/token replaced by /oauth/introspect.
+// introspectionURL derives the introspection URL from the machine
+// token endpoint: one listener serves both, and it is the token URL
+// with its /oauth/token replaced by /oauth/introspect. No assertion
+// names it now; the call holds the token URL to that shape.
 func introspectionURL(tokenURL string) (string, error) {
 	origin, ok := strings.CutSuffix(tokenURL, machineTokenPath)
 	if !ok {

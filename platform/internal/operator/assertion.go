@@ -244,16 +244,15 @@ func (a *ClientAssertion) Verify(key Key, client grn.GRN, endpoint string) (Veri
 }
 
 // VerifyService verifies as [ClientAssertion.Verify] does for a service
-// principal, with one more audience accepted: issuer, garam's issuer
-// identifier (GARAM_IDENTITY_ISSUER), as the only value of aud, under
-// either typ (RFC 10070 §4). The endpoint form stays, under typ JWT as
-// before, and is to be withdrawn. An aud naming both, any other
-// audience, and an aud that is not one string are refused, as is the
-// endpoint under the other typ. An empty issuer or endpoint accepts
-// nothing for its form.
-func (a *ClientAssertion) VerifyService(key Key, client grn.GRN, endpoint, issuer string) (VerifiedAssertion, error) {
-	return a.verify(key, client, func(aud, typ string) bool {
-		return (endpoint != "" && aud == endpoint && typ == TypeJWT) || (issuer != "" && aud == issuer)
+// principal, with the one audience RFC 10070 §4 gives it: issuer,
+// garam's issuer identifier (GARAM_IDENTITY_ISSUER), as the only value
+// of aud, under either typ. An endpoint's URL is an operator's audience
+// ([ClientAssertion.Verify]); a service principal's assertion naming it
+// is refused, as are an aud naming both, any other audience, and an aud
+// that is not one string. An empty issuer accepts nothing.
+func (a *ClientAssertion) VerifyService(key Key, client grn.GRN, issuer string) (VerifiedAssertion, error) {
+	return a.verify(key, client, func(aud, _ string) bool {
+		return issuer != "" && aud == issuer
 	})
 }
 

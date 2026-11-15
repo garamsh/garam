@@ -39,7 +39,7 @@ func TestServicePrincipal_ExchangeAnswersTheIssuersTokenForPolicy(t *testing.T) 
 
 	form := url.Values{
 		"grant_type": {operator.GrantTypeClientCredentials}, "client_id": {s.coworkID.String()},
-		"client_assertion":      {principalAssertion(t, s.cowork, s.coworkID, s.machine+"/oauth/token", "")},
+		"client_assertion":      {principalAssertion(t, s.cowork, s.coworkID, "")},
 		"client_assertion_type": {operator.ClientAssertionTypeJWT},
 		"audience":              {identity.AudiencePolicy},
 	}

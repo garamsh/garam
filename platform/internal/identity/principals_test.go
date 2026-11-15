@@ -25,6 +25,8 @@ const (
 	tokenURL      = "https://machine.garam.test/oauth/token"
 	jtiA          = "Zk9yLWEtdGVzdC0xMjgtYml0cw"
 	jtiB          = "Zk9yLWItdGVzdC0xMjgtYml0cw"
+	jtiC          = "Zk9yLWMtdGVzdC0xMjgtYml0cw"
+	jtiD          = "Zk9yLWQtdGVzdC0xMjgtYml0cw"
 )
 
 var (
@@ -64,17 +66,25 @@ func keysFile(t *testing.T, sets map[string][]*rsa.PrivateKey) []byte {
 	return raw
 }
 
-// assertion signs a client assertion as principal, addressed to to.
-func assertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, to, jti string) string {
+// assertion signs the client assertion RFC 10070 §4 gives a service
+// principal: typ client-authentication+jwt, aud the issuer identifier.
+func assertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, jti string) string {
+	t.Helper()
+	return assertionAs(t, private, principal, operator.TypeClientAuth, issuerName, jti)
+}
+
+// assertionAs signs a client assertion as principal under header typ,
+// naming aud as its audience.
+func assertionAs(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, typ, aud, jti string) string {
 	t.Helper()
 	kid, err := operator.Thumbprint(&private.PublicKey)
 	require.NoError(t, err)
 	signing, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: private},
-		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", kid))
+		(&jose.SignerOptions{}).WithType(jose.ContentType(typ)).WithHeader("kid", kid))
 	require.NoError(t, err)
 	client := principal.String()
 	payload, err := json.Marshal(map[string]any{
-		"iss": client, "sub": client, "aud": to,
+		"iss": client, "sub": client, "aud": aud,
 		"iat": noon.Unix(), "exp": noon.Add(time.Minute).Unix(), "jti": jti,
 	})
 	require.NoError(t, err)
@@ -102,7 +112,7 @@ func principalsOf(keys identity.ServiceKeys, a identity.Admitter) *identity.Prin
 
 func principalsFrom(keys identity.KeySource, a identity.Admitter) *identity.Principals {
 	return identity.NewPrincipals(identity.PrincipalsConfig{
-		Keys: keys, ExchangeEndpoint: tokenURL, IntrospectEndpoint: introspectURL,
+		Keys: keys, Issuer: issuerName,
 		Admitter: a, Now: func() time.Time { return noon },
 	})
 }
@@ -113,12 +123,12 @@ func TestPrincipals_AuthenticateAServicesPrincipalByItsKeyOnEachRoute(t *testing
 	principals := principalsOf(identity.ServiceKeys{identity.ServiceCowork: {publicKeyOf(t, private)}}, store)
 
 	got, err := principals.Authenticate(context.Background(), identity.RouteExchange, "10.0.0.1",
-		coworkID.String(), assertion(t, private, coworkID, tokenURL, jtiA))
+		coworkID.String(), assertion(t, private, coworkID, jtiA))
 	require.NoError(t, err)
 	assert.Equal(t, identity.Principal{GRN: coworkID, Service: identity.ServiceCowork}, got)
 
 	got, err = principals.Authenticate(context.Background(), identity.RouteIntrospect, "10.0.0.1",
-		coworkID.String(), assertion(t, private, coworkID, introspectURL, jtiB))
+		coworkID.String(), assertion(t, private, coworkID, jtiB))
 	require.NoError(t, err)
 	assert.Equal(t, identity.ServiceCowork, got.Service)
 	assert.Equal(t, []grn.GRN{coworkID, coworkID}, store.admitted, "each assertion is admitted through the store")
@@ -131,20 +141,20 @@ func TestPrincipals_AuthenticateCodehubsPrincipalByCodehubsKeyAlone(t *testing.T
 		identity.ServiceCodehub: {publicKeyOf(t, codehub)},
 		identity.ServiceCowork:  {publicKeyOf(t, cowork)},
 	}, store)
-	ask := func(route identity.Route, key *rsa.PrivateKey, to, jti string) (identity.Principal, error) {
+	ask := func(route identity.Route, key *rsa.PrivateKey, jti string) (identity.Principal, error) {
 		return principals.Authenticate(context.Background(), route, "10.0.0.1",
-			codehubID.String(), assertion(t, key, codehubID, to, jti))
+			codehubID.String(), assertion(t, key, codehubID, jti))
 	}
 
-	got, err := ask(identity.RouteExchange, codehub, tokenURL, jtiA)
+	got, err := ask(identity.RouteExchange, codehub, jtiA)
 	require.NoError(t, err)
 	assert.Equal(t, identity.Principal{GRN: codehubID, Service: identity.ServiceCodehub}, got)
-	got, err = ask(identity.RouteIntrospect, codehub, introspectURL, jtiB)
+	got, err = ask(identity.RouteIntrospect, codehub, jtiB)
 	require.NoError(t, err)
 	assert.Equal(t, identity.ServiceCodehub, got.Service)
 
 	admitted := len(store.admitted)
-	_, err = ask(identity.RouteExchange, cowork, tokenURL, "c")
+	_, err = ask(identity.RouteExchange, cowork, "c")
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "cowork's key, which is configured, signs for no other service")
 	assert.Len(t, store.admitted, admitted, "a refused assertion is not admitted")
 }
@@ -155,10 +165,10 @@ func TestPrincipals_RefuseCodehubsPrincipalWhereNoCodehubKeyIsConfigured(t *test
 	principals := principalsOf(identity.ServiceKeys{identity.ServiceCowork: {publicKeyOf(t, cowork)}}, store)
 
 	_, err := principals.Authenticate(context.Background(), identity.RouteExchange, "10.0.0.1",
-		coworkID.String(), assertion(t, cowork, coworkID, tokenURL, jtiA))
+		coworkID.String(), assertion(t, cowork, coworkID, jtiA))
 	require.NoError(t, err, "the control: cowork's own principal authenticates with the same keys")
 	_, err = principals.Authenticate(context.Background(), identity.RouteExchange, "10.0.0.1",
-		codehubID.String(), assertion(t, cowork, codehubID, tokenURL, jtiB))
+		codehubID.String(), assertion(t, cowork, codehubID, jtiB))
 	assert.ErrorIs(t, err, operator.ErrClientInvalid)
 	assert.Equal(t, []grn.GRN{coworkID}, store.admitted)
 }
@@ -175,12 +185,11 @@ func TestPrincipals_RefuseWhatIsNotTheServicesOwnAssertion(t *testing.T) {
 		route             identity.Route
 		client, assertion string
 	}{
-		"a key of another service": {identity.RouteExchange, coworkID.String(), assertion(t, other, coworkID, tokenURL, "a")},
-		"the other route's URL":    {identity.RouteIntrospect, coworkID.String(), assertion(t, private, coworkID, tokenURL, "a")},
-		"a service with no key":    {identity.RouteExchange, identity.PrincipalGRN("acme", identity.AudienceCodehub).String(), assertion(t, private, identity.PrincipalGRN("acme", identity.AudienceCodehub), tokenURL, "a")},
+		"a key of another service": {identity.RouteExchange, coworkID.String(), assertion(t, other, coworkID, "a")},
+		"a service with no key":    {identity.RouteExchange, identity.PrincipalGRN("acme", identity.AudienceCodehub).String(), assertion(t, private, identity.PrincipalGRN("acme", identity.AudienceCodehub), "a")},
 		"the root-owned form": {identity.RouteIntrospect, identity.PrincipalGRN("root", identity.AudiencePolicy).String(),
-			assertion(t, other, identity.PrincipalGRN("root", identity.AudiencePolicy), introspectURL, "a")},
-		"a client that is no GRN": {identity.RouteExchange, "cowork", assertion(t, private, coworkID, tokenURL, "a")},
+			assertion(t, other, identity.PrincipalGRN("root", identity.AudiencePolicy), "a")},
+		"a client that is no GRN": {identity.RouteExchange, "cowork", assertion(t, private, coworkID, "a")},
 		"not an assertion":        {identity.RouteExchange, coworkID.String(), "x.y.z"},
 	} {
 		_, err := principals.Authenticate(context.Background(), c.route, "10.0.0.1", c.client, c.assertion)
@@ -189,13 +198,39 @@ func TestPrincipals_RefuseWhatIsNotTheServicesOwnAssertion(t *testing.T) {
 	assert.Empty(t, store.admitted, "nothing that failed to verify reaches the store")
 }
 
+// TestPrincipals_RefuseTheRouteURLAsAudience holds that a service
+// principal's assertion naming the URL of the route it is presented
+// at, under typ JWT, is refused on each route, and is not admitted. The
+// issuer form signed by the same key is the control.
+func TestPrincipals_RefuseTheRouteURLAsAudience(t *testing.T) {
+	private := rsaKey(t)
+	store := &admitter{}
+	principals := principalsOf(identity.ServiceKeys{identity.ServiceCowork: {publicKeyOf(t, private)}}, store)
+	ask := func(route identity.Route, assertion string) error {
+		_, err := principals.Authenticate(context.Background(), route, "10.0.0.1", coworkID.String(), assertion)
+		return err
+	}
+
+	require.NoError(t, ask(identity.RouteExchange, assertion(t, private, coworkID, jtiA)),
+		"the control: the issuer form on the exchange route")
+	require.NoError(t, ask(identity.RouteIntrospect, assertion(t, private, coworkID, jtiB)),
+		"the control: the issuer form on the introspection route")
+	admitted := len(store.admitted)
+
+	assert.ErrorIs(t, ask(identity.RouteExchange, assertionAs(t, private, coworkID, operator.TypeJWT, tokenURL, jtiC)),
+		operator.ErrClientInvalid, "the token URL on the exchange route")
+	assert.ErrorIs(t, ask(identity.RouteIntrospect, assertionAs(t, private, coworkID, operator.TypeJWT, introspectURL, jtiD)),
+		operator.ErrClientInvalid, "the introspection URL on the introspection route")
+	assert.Len(t, store.admitted, admitted, "a refused assertion is not admitted")
+}
+
 func TestPrincipals_AnswerWhatTheStoreRefuses(t *testing.T) {
 	private := rsaKey(t)
 	store := &admitter{err: operator.ErrClientInvalid}
 	principals := principalsOf(identity.ServiceKeys{identity.ServiceCowork: {publicKeyOf(t, private)}}, store)
 
 	_, err := principals.Authenticate(context.Background(), identity.RouteExchange, "10.0.0.1",
-		coworkID.String(), assertion(t, private, coworkID, tokenURL, jtiA))
+		coworkID.String(), assertion(t, private, coworkID, jtiA))
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "a replay, a deleted principal or an untimely assertion")
 	assert.Equal(t, []grn.GRN{coworkID}, store.admitted)
 }
@@ -204,8 +239,7 @@ func TestPrincipals_BoundEachSourceOnEachRoute(t *testing.T) {
 	private := rsaKey(t)
 	principals := principalsOf(identity.ServiceKeys{identity.ServiceCowork: {publicKeyOf(t, private)}}, &admitter{})
 	ask := func(route identity.Route, source string) error {
-		to := map[identity.Route]string{identity.RouteExchange: tokenURL, identity.RouteIntrospect: introspectURL}[route]
-		_, err := principals.Authenticate(context.Background(), route, source, coworkID.String(), assertion(t, private, coworkID, to, jtiA))
+		_, err := principals.Authenticate(context.Background(), route, source, coworkID.String(), assertion(t, private, coworkID, jtiA))
 		return err
 	}
 
@@ -229,7 +263,7 @@ func TestPrincipals_ReadTheKeysFileOnEveryAuthentication(t *testing.T) {
 	principals := principalsFrom(identity.KeysFile(path), &admitter{})
 	ask := func(private *rsa.PrivateKey, jti string) error {
 		_, err := principals.Authenticate(context.Background(), identity.RouteExchange, "10.0.0.1",
-			coworkID.String(), assertion(t, private, coworkID, tokenURL, jti))
+			coworkID.String(), assertion(t, private, coworkID, jti))
 		return err
 	}
 

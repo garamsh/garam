@@ -13,8 +13,7 @@ import (
 var ErrPrincipalsOff = errorx.New(errorx.KindUnavailable, "identity: the issuer or the service keys are not configured")
 
 // Route is an endpoint of the machine listener that authenticates a
-// service principal. An assertion names the URL of the route it is for
-// as its audience, so one made for the other is refused.
+// service principal. Each has its own per-source bound.
 type Route int
 
 const (
@@ -30,13 +29,9 @@ type PrincipalsConfig struct {
 	// Keys is asked for each service's public keys on every
 	// authentication, so a change to them takes no restart.
 	Keys KeySource
-	// ExchangeEndpoint and IntrospectEndpoint are the URLs an
-	// assertion names as its audience on each route.
-	ExchangeEndpoint   string
-	IntrospectEndpoint string
-	// Issuer is the issuer identifier (GARAM_IDENTITY_ISSUER), the
-	// audience RFC 10070 §4 gives an assertion for any endpoint of the
-	// issuer; empty accepts none. The endpoint form is to be withdrawn.
+	// Issuer is the issuer identifier (GARAM_IDENTITY_ISSUER), the one
+	// audience RFC 10070 §4 gives an assertion on either route; empty
+	// accepts none.
 	Issuer string
 	// Admitter holds the principal's record and the jtis spent.
 	Admitter Admitter
@@ -55,7 +50,6 @@ type PrincipalsConfig struct {
 // principal that no longer exists is refused.
 type Principals struct {
 	keys      KeySource
-	endpoints map[Route]string
 	issuer    string
 	admitter  Admitter
 	perSource map[Route]*operator.Limiter
@@ -73,7 +67,6 @@ func NewPrincipals(cfg PrincipalsConfig) *Principals {
 	return &Principals{
 		keys:      cfg.Keys,
 		issuer:    cfg.Issuer,
-		endpoints: map[Route]string{RouteExchange: cfg.ExchangeEndpoint, RouteIntrospect: cfg.IntrospectEndpoint},
 		admitter:  cfg.Admitter,
 		perSource: map[Route]*operator.Limiter{RouteExchange: limiter(), RouteIntrospect: limiter()},
 	}
@@ -110,7 +103,7 @@ func (p *Principals) Authenticate(ctx context.Context, route Route, source, clie
 			continue
 		}
 		key.Operator = principal.GRN
-		verified, err := parsed.VerifyService(key, principal.GRN, p.endpoints[route], p.issuer)
+		verified, err := parsed.VerifyService(key, principal.GRN, p.issuer)
 		if err != nil {
 			return Principal{}, operator.ErrClientInvalid
 		}

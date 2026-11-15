@@ -2,14 +2,14 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import { seedWorkspace, type Person } from "./seed";
 
-/** The cowork binary the suite serves, which takes the MCP calls. */
+/** The stack's cowork, published on localhost:8091, which takes the MCP calls. */
 const COWORK_URL = "http://localhost:8091";
 
 function apiUrl(): string {
   const url = process.env.GARAM_API_URL;
   if (!url)
     throw new Error(
-      "GARAM_API_URL is unset — run the suite through `make cowork-web-e2e`",
+      "GARAM_API_URL is unset — run the suite through `make -C cowork-web suites`",
     );
   return url;
 }

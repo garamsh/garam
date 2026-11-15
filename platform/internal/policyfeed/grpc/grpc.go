@@ -109,8 +109,11 @@ func ref(e policyfeed.Entity) *policyv1.EntityRef {
 }
 
 // Dial connects to the policy service at addr, trusting the CA in
-// caFile and presenting a token signed by key on each call.
-func Dial(addr, caFile, issuer string, key *signer.Key) (*grpc.ClientConn, error) {
+// caFile and presenting a token signed by key on each call. opts are
+// added to the connection's own options.
+func Dial(
+	addr, caFile, issuer string, key *signer.Key, opts ...grpc.DialOption,
+) (*grpc.ClientConn, error) {
 	pem, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, errorx.Wrap(err, "read policy CA file", errorx.KindInvalidArgument)
@@ -119,9 +122,10 @@ func Dial(addr, caFile, issuer string, key *signer.Key) (*grpc.ClientConn, error
 	if !pool.AppendCertsFromPEM(pem) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "policy CA file holds no certificate")
 	}
-	conn, err := grpc.NewClient(addr,
+	conn, err := grpc.NewClient(addr, append([]grpc.DialOption{
 		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(pool, "")),
-		grpc.WithPerRPCCredentials(&bearer{key: key, issuer: issuer, now: time.Now}))
+		grpc.WithPerRPCCredentials(&bearer{key: key, issuer: issuer, now: time.Now}),
+	}, opts...)...)
 	if err != nil {
 		return nil, errorx.Wrap(err, "dial policy service", errorx.KindInvalidArgument)
 	}

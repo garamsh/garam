@@ -1,0 +1,14 @@
+# Differences between the platform's engine and the policy service,
+# one key per line: subject, action, resource. The platform allows each
+# and the service denies it, because it holds no Iam::Policy entity.
+# docs/architecture/policy-matrix.md explains them.
+A.admin iam:policy.attach A.policy
+A.admin iam:policy.delete A.policy
+A.admin iam:policy.detach A.policy
+A.admin iam:policy.read A.policy
+A.admin iam:policy.update A.policy
+A.owner iam:policy.attach A.policy
+A.owner iam:policy.delete A.policy
+A.owner iam:policy.detach A.policy
+A.owner iam:policy.read A.policy
+A.owner iam:policy.update A.policy

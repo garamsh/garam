@@ -144,11 +144,11 @@ delivers every outbox entry to the stack's policy service until the
 outbox is empty, with no entry refused or set aside. The service is
 the stack's own, not a fake.
 
-The platform host reaches the service by its container address,
-because the stack publishes neither its port nor its key and CA. The
-suite is given the address, the CA and the signing key by path. The
-connection names the authority `policy` because the service's
-certificate is for that name.
+The stack publishes the service on loopback under a certificate that
+names `localhost` and `127.0.0.1`, so the suite dials the published
+address and overrides no authority. The CA and the signing key come
+from `POLICY_LOCAL_DIR`, where the stack leaves them
+(`deploy/local/README.md` §policy).
 
 ## Non-agent senders on the machine listener
 
@@ -161,9 +161,9 @@ agent's control is answered 201.
 
 ## Running it
 
-`make -C platform policy-matrix COMPOSE_LOCAL="..."`, against the
-stack from `make -C deploy/local backend-up`. It is in no whole-set
-target and no workflow. The suite fails when a difference appears that
+`make -C platform stack-up policy-matrix`, which brings up the
+backend first. The forge runs it in `make -C platform suites`. The
+suite fails when a difference appears that
 `platform/tests/integration/testdata/policy_matrix_differences.txt`
 does not list, and when a listed one is gone.
 

@@ -23,6 +23,9 @@ func (s *service) Update(ctx context.Context, caller platform.Caller, org, id st
 		if *in.Parent == id {
 			return Page{}, ErrPageCycle
 		}
+		if err := nameable(org, *in.Parent); err != nil {
+			return Page{}, err
+		}
 		checks = append(checks, platform.OnPage(platform.ActionPageWrite, *in.Parent))
 	}
 	if err := platform.Require(ctx, s.platform, caller, org, checks...); err != nil {

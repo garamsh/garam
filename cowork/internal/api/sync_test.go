@@ -16,6 +16,7 @@ import (
 	"github.com/garamsh/garam/cowork/internal/api"
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/page"
+	pagememory "github.com/garamsh/garam/cowork/internal/page/memory"
 	"github.com/garamsh/garam/cowork/internal/platform"
 	"github.com/garamsh/garam/lib/errorx"
 )
@@ -87,6 +88,25 @@ func openSyncOn(t *testing.T, p platform.Platform) *websocket.Conn {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "") })
 	return conn
+}
+
+// TestSyncPage_AnIDNoGRNCanNameIsNotFoundBeforeTheUpgrade dials the
+// real page service with an id no GRN can name.
+func TestSyncPage_AnIDNoGRNCanNameIsNotFoundBeforeTheUpgrade(t *testing.T) {
+	platformAsked := make(asked, 16)
+	s := api.NewServer(page.NewService(pagememory.New(), platformAsked), idleRoom{}, nil, nil, nil, platformAsked, nil, 5*time.Millisecond)
+	mux := http.NewServeMux()
+	mux.HandleFunc(api.SyncPath, s.SyncPage)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/orgs/acme/pages/01JAAAAAAAAAAAAAAAAAAAAAAA/sync", nil)
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Empty(t, platformAsked, "no decision is asked")
 }
 
 func next(t *testing.T, a asked) []platform.Check {

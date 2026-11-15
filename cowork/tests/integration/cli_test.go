@@ -183,6 +183,8 @@ func TestCLI_ExitsWithTheCodeOfWhatFailed(t *testing.T) {
 	for _, read := range []string{"get", "read"} {
 		_, code = garam(t, "", "cowork", "pages", read, id)
 		assert.Equal(t, exitPermissionDenied, code, read)
+		_, code = garam(t, "", "cowork", "pages", read, "01JAAAAAAAAAAAAAAAAAAAAAAA")
+		assert.Equal(t, exitNotFound, code, read)
 		_, code = garam(t, "", "cowork", "pages", read, "nosuchpage00")
 		assert.Equal(t, exitNotFound, code, read)
 		_, code = garam(t, "", "cowork", "pages", read)

@@ -292,3 +292,18 @@ func TestList_StatesItsPerPageQuestionsAsProbes(t *testing.T) {
 	require.Len(t, p.checked, 1)
 	assert.False(t, p.checked[0].Probe, "a read of one page is an attempt")
 }
+
+func TestPage_AnIDNoGRNCanNameIsNotFoundAndNoDecisionIsAsked(t *testing.T) {
+	s, p := newService(t)
+	ctx := context.Background()
+	const bad = "01JAAAAAAAAAAAAAAAAAAAAAAA"
+
+	_, err := s.Get(ctx, ada, "acme", bad)
+	assert.ErrorIs(t, err, page.ErrPageNotFound, "get")
+	title := "t"
+	_, err = s.Update(ctx, ada, "acme", bad, page.UpdateInput{Title: &title})
+	assert.ErrorIs(t, err, page.ErrPageNotFound, "update")
+	_, err = s.Delete(ctx, ada, "acme", bad)
+	assert.ErrorIs(t, err, page.ErrPageNotFound, "delete")
+	assert.Zero(t, p.asked)
+}

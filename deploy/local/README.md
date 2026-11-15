@@ -215,13 +215,13 @@ The service's gRPC port is published on `127.0.0.1:28443`
 own callers dial, and `localhost` and `127.0.0.1`, which a suite on the
 host dials, so no caller overrides the name it verifies. A suite on the
 host trusts `ca.pem` and signs with `signing.pem`, both in
-`deploy/local/policy-local/` (`POLICY_LOCAL_DIR`, a make variable): `make
-backend-up` creates the directory at mode 700 and `policy-host` leaves
-the copies there, owned by the account that ran make, the key at mode
-600. The directory is ignored by git and holds only this stack's
+`deploy/local/policy-local/` (the make variable `POLICY_LOCAL_DIR`).
+`make backend-up` creates that directory at mode 700 and `policy-host`
+leaves the copies there, owned by the account that ran make, the key at
+mode 600. The directory is ignored by git and holds only this stack's
 throwaway material; no suite reads a container for either file.
 `make -C platform stack-up policy-matrix` brings the backend up and runs
-the platform's policy matrix against that address, and `make -C platform
+the platform's policy matrix against that address. `make -C platform
 stack-up suites` runs it with the other suites, as CI does.
 
 The certificate is made once, so a stack whose volume predates the two

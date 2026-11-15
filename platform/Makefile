@@ -6,7 +6,7 @@
 include ../tooling/make/go.mk
 include ../tooling/make/stack.mk
 
-.PHONY: ci format lint test build gen check-gen stack-up suites integration e2e workload-integration standalone-e2e mutation
+.PHONY: ci format lint test build gen check-gen stack-up suites integration policy-matrix e2e workload-integration standalone-e2e mutation
 
 # A third tool directive on the terms go.mk states, and the only one no
 # whole-set name reaches: `mutation` is invoked by hand and by nothing
@@ -85,6 +85,26 @@ integration:
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' GARAM_TEST_OPENBAO_ADDR='https://$(OPENBAO_HOST_ADDR)' \
 		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' \
 		go test -count=1 $(INTEGRATION_PKGS)
+
+# policy-matrix asks the platform's engine and the stack's policy
+# service the same questions and compares the answers (#1915). It is in
+# no whole-set name and in no workflow: it needs the whole stack
+# (make -C deploy/local backend-up). The stack publishes neither the
+# service's port nor its key and CA, so the target reads the service's
+# address off its container and copies the CA and the platform's
+# signing key out by container into a private directory, removed at the
+# end. The tag keeps the suite out of `integration`.
+policy-matrix:
+	@test -n '$(TEST_DATABASE_URL)' || { echo "policy-matrix: no postgres published on this host — run make -C deploy/local backend-up" >&2; exit 1; }
+	@d=$$(mktemp -d) && trap 'rm -rf "$$d"' EXIT && chmod 700 "$$d" && umask 077 \
+		&& ip=$$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $$($(COMPOSE_LOCAL) ps -q policy)) \
+		&& test -n "$$ip" || { echo "policy-matrix: the policy service is not running" >&2; exit 1; }; \
+	$(COMPOSE_LOCAL) run --rm --no-deps -T --entrypoint cat policy-tls /tls/tls.crt > "$$d/ca.pem" \
+		&& $(COMPOSE_LOCAL) run --rm --no-deps -T --entrypoint cat policy-keys /keys/signing.pem > "$$d/key.pem" \
+		&& GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' POLICY_MATRIX_ADDR="$$ip:8443" \
+			POLICY_MATRIX_CA="$$d/ca.pem" POLICY_MATRIX_KEY="$$d/key.pem" \
+			POLICY_MATRIX_ISSUER=https://garam.localhost/api \
+			go test -count=1 -tags policymatrix -run 'TestPolicyMatrix$$|TestCompareDifferences' ./tests/integration/
 
 # e2e runs the built binary as the processes a deployment runs, against
 # the same Postgres.

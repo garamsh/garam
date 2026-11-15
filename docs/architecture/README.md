@@ -472,6 +472,9 @@ Responsibility documents:
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization policy domain: the rules
   that decide what a subject may do, and the engine that decides
+- [policy-matrix.md](./policy-matrix.md) — where the platform's engine
+  and the policy service answer one question differently, measured by
+  the matrix suite
 - [api-surface.md](./api-surface.md) — the listeners garam serves on,
   what admits a caller to each, and what each one's specification is
   authoritative for

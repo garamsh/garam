@@ -48,6 +48,15 @@ ADR-0141 supersedes in part its §2: the platform no longer asks for
 cowork's checks, since cowork asks the policy service itself, and the
 list stays closed and static.
 
+The platform has a client that asks the policy service for a decision
+(`platform/internal/policydecision`, #1915): `Evaluate` and
+`Evaluations` as the caller `platform`, `probe` where its caller says
+so, the reasons returned as a set, and a service that cannot be
+reached answered with an error a caller reads as a denial. It decides
+nothing yet: neither `serve api` nor `serve machine` calls it.
+[policy-matrix.md](./policy-matrix.md) reports where the two engines
+differ.
+
 **Two further decisions are taken, both partly built.** The policy
 service loads `policy/schema/iam.cedarschema` and
 `policy/schema/cowork.cedarschema` as one schema, and the platform's

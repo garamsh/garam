@@ -174,3 +174,24 @@ What the outbox raises is read from the triggers of migration 000079
 - The machine listener's creating routes timing out in a deployment
   whose api runs a loop: the observing gate and the loop are reading
   different outboxes.
+
+## Errata
+
+- 2026-11-14 — Decision item 5 says the machine routes that replace an
+  agent that exists (`admitAgentEnrollment` with `replaces`,
+  `enrollStandaloneAgent` with a replacement approval) "raise no mark
+  and answer at once". That held while only an agent and its
+  memberships were fed. #1917 feeds a supervisor
+  ([ADR-0164](./0164-the-policy-service-decides-a-supervisors-activation-of-the-agent-it-holds.md)),
+  and a replacement moves the agent's assignment, which marks the
+  supervisor it leaves; an enrollment also writes the new supervisor's
+  registration, which marks it. Item 1 stands and the routes wait on
+  those marks: `enrollStandaloneAgent` waits on the new supervisor's
+  mark in every case, a replacement and a replay included, and
+  `admitAgentEnrollment` waits on the replaced supervisor's mark when
+  the assignee it replaces is a supervisor. What a replacement still
+  does not wait on is the agent's own mark, which it does not raise,
+  and an admission replacing an operator's agent raises no mark and
+  answers at once. A creation, including a replayed one, still waits
+  on the agent's mark. [authz.md](../authz.md) §Supervisors states the
+  present routes.

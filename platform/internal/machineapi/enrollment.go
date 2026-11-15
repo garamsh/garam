@@ -55,7 +55,7 @@ func (s *Server) CreateManagedAgent(w http.ResponseWriter, r *http.Request, cont
 		writeError(w, withinBudget(r, err))
 		return
 	}
-	if err := s.awaitAgent(r.Context(), creation.Agent); err != nil {
+	if err := s.awaitMarks(r.Context(), agentMark(creation.Agent)); err != nil {
 		writeError(w, withinBudget(r, err))
 		return
 	}

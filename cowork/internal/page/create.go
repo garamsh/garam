@@ -30,6 +30,9 @@ func (s *service) Create(ctx context.Context, caller platform.Caller, org string
 	}
 	checks := []platform.Check{{Action: platform.ActionPageWrite}}
 	if in.Parent != "" {
+		if err := nameable(org, in.Parent); err != nil {
+			return Page{}, err
+		}
 		checks = append(checks, platform.OnPage(platform.ActionPageWrite, in.Parent))
 	}
 	if err := platform.Require(ctx, s.platform, caller, org, checks...); err != nil {

@@ -67,6 +67,12 @@ const (
 	// `iam:policy.*`.
 	ActionAuditRead = "iam:audit.read"
 
+	// ActionPermitWrite is writing a permit of the organization's
+	// delegated authority (ADR-0145 item 4). The owner alone holds it,
+	// here as in the policy service's schema, and checkPermissions asks
+	// the service (ADR-0172).
+	ActionPermitWrite = "iam:permit.write"
+
 	// Cross-organization consent management (ADR-0035). The org owns
 	// the constants for the reason it owns the policy ones: the
 	// relation is org-managed data the api server enforces over,
@@ -219,7 +225,7 @@ var actions = []string{
 	ActionProjectCreate, ActionProjectRead, ActionProjectUpdate, ActionProjectDelete,
 	ActionProjectMemberList, ActionProjectMemberAdd, ActionProjectMemberRemove,
 	ActionPolicyCreate, ActionPolicyRead, ActionPolicyUpdate, ActionPolicyAttach, ActionPolicyDetach, ActionPolicyDelete,
-	ActionAuditRead,
+	ActionAuditRead, ActionPermitWrite,
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
@@ -347,7 +353,7 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
-			ActionAuditRead,
+			ActionAuditRead, ActionPermitWrite,
 		}, machineActionsHeld(false), coworkActions, codehubActionsHeld(false))
 	case RoleAdmin:
 		return slices.Concat([]string{

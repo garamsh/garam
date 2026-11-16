@@ -367,10 +367,15 @@ and not in the same place on every surface.
   question per pair and per candidate over delivered state, and the
   request is answered 503 `unavailable` where it cannot be asked
   ([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)).
-  The explanation and the list filter are still the platform engine's
+  The lists and the search filter are the service's too, each object
+  of a page one probe in one `Evaluations` call
+  ([ADR-0172](./adr/0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md)),
+  and `checkPermissions` answers `iam:permit.write` from it. The
+  explanation is still the platform engine's
   ([ADR-0002](./adr/0002-iam-style-policy-model.md)). The probes are
-  each `checkPermissions` pair, each holder candidate and each search
-  kind. How it decides is [authz.md](./authz.md).
+  each `checkPermissions` pair, each holder candidate, each search
+  kind and each object a list filters. How it decides is
+  [authz.md](./authz.md).
 - **Machine**: by construction more often than by policy. A read is
   scoped by the caller's own identity, so there is nothing to authorize
   past the token there. A state report is decided the same way and by a
@@ -471,8 +476,10 @@ and not in the same place on every surface.
   `getGroup`, `getProject`, `getAgent` and `listPolicyVersions` each
   make on the object. A Deny on one object therefore hides it from the
   list as it refuses its read. Every object of a page is asked in one
-  `CheckBatch` call to the engine
-  ([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md),
+  `Evaluations` call to the policy service, as a probe, and an error of
+  the service is a 503 `unavailable`, never an empty page; a policy is
+  asked on its organization, so it is hidden only with the whole list
+  ([ADR-0172](./adr/0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md),
   [authz.md](./authz.md)). **A short page does not mean the end.** The
   page is filtered as read, so `limit` and `offset` count the stored
   rows, and a page can hold fewer objects than its limit with more
@@ -494,8 +501,9 @@ and not in the same place on every surface.
   is authorized on its list's own check on the organization, and a
   kind the caller fails is left out of the answer. Agents, teams,
   policies and projects then drop each object whose own read is
-  denied, in one `CheckBatch` per kind, as the filtered lists above do
-  (ADR-0115). A person is found by nickname or identifier, and an agent
+  denied, in one `Evaluations` call per kind, as the filtered lists
+  above do (ADR-0172). A person is found by nickname or identifier, and
+  an agent
   by its name or identifier, answered with its name where it has one
   ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)). Each kind answers its
   first `limit` objects (1 to 20, 5 by default) in its list's order,

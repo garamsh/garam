@@ -38,8 +38,24 @@ import (
 // platform put to it.
 type askedOf struct {
 	policydecision.Service
-	mu    sync.Mutex
-	asked []policydecision.Question
+	mu      sync.Mutex
+	asked   []policydecision.Question
+	batches [][]policydecision.Question
+}
+
+func (a *askedOf) Evaluations(ctx context.Context, qs []policydecision.Question) ([]policydecision.Decision, error) {
+	a.mu.Lock()
+	a.batches = append(a.batches, append([]policydecision.Question(nil), qs...))
+	a.mu.Unlock()
+	return a.Service.Evaluations(ctx, qs)
+}
+
+// batchesAsked are the Evaluations calls the platform made, each as
+// the questions it carried.
+func (a *askedOf) batchesAsked() [][]policydecision.Question {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([][]policydecision.Question(nil), a.batches...)
 }
 
 func (a *askedOf) Evaluate(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {

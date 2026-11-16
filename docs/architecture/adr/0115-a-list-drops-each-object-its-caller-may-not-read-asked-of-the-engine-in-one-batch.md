@@ -1,6 +1,8 @@
 # ADR 0115: A list drops each object its caller may not read, asked of the engine in one batch
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0172](./0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md)
+> (the engine's `CheckBatch` as the list filter's call)
 > Date: 2026-10-19
 
 Drafted for #1569, for which the Garam PM reserved this number on

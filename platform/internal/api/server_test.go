@@ -117,27 +117,18 @@ type permission struct {
 }
 
 // permit stubs the policy service: only the listed subject × action
-// pairs are allowed; every other question is denied. The list
-// visibility the platform's own engine still decides is answered the
-// same way, a batch per object; a test that lists nothing never asks
-// one.
+// pairs are allowed; every other question is denied, whether it comes
+// alone or in a batch.
 func (f *fixture) permit(perms ...permission) {
 	f.answers(func(q policydecision.Question) (bool, error) {
 		return slices.Contains(perms, permission{q.Subject, q.Action}), nil
 	})
-	f.evaluator.EXPECT().EvaluateBatch(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.BatchInput) ([]bool, error) {
-			allowed := make([]bool, len(in.Objects))
-			for i := range in.Objects {
-				allowed[i] = slices.Contains(perms, permission{in.Subject, in.Action})
-			}
-			return allowed, nil
-		}).Maybe()
 }
 
 // answers stubs the policy service to answer each question as decide
-// says. An error comes with the denying zero Decision, as the service's
-// client answers one.
+// says, alone or in a batch. An error comes with the denying zero
+// Decision, as the service's client answers one; in a batch it is the
+// batch's.
 func (f *fixture) answers(decide func(policydecision.Question) (bool, error)) {
 	f.decisions.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, q policydecision.Question) (policydecision.Decision, error) {
@@ -147,6 +138,18 @@ func (f *fixture) answers(decide func(policydecision.Question) (bool, error)) {
 			}
 			return policydecision.Decision{Allowed: allowed}, nil
 		})
+	f.decisions.EXPECT().Evaluations(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, qs []policydecision.Question) ([]policydecision.Decision, error) {
+			out := make([]policydecision.Decision, len(qs))
+			for i, q := range qs {
+				allowed, err := decide(q)
+				if err != nil {
+					return nil, err
+				}
+				out[i] = policydecision.Decision{Allowed: allowed}
+			}
+			return out, nil
+		}).Maybe()
 }
 
 // do issues a request and returns the recorder.

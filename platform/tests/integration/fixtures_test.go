@@ -571,12 +571,26 @@ func (c *currentDecisions) currentQuestions() []policydecision.Question {
 
 // questions are every question it decided rather than answered as a
 // send: the read-current ones, and those the browser listener's
-// enforcement, its permission checks and its holders list ask of a
-// user.
+// enforcement, its permission checks, its holders list and the probes
+// of a list or the search ask of a user.
 func (c *currentDecisions) questions() []policydecision.Question {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]policydecision.Question(nil), c.enforced...)
+}
+
+// Evaluations answers each question as Evaluate does, and fails whole
+// on the first that errs, as the service's client does.
+func (c *currentDecisions) Evaluations(ctx context.Context, qs []policydecision.Question) ([]policydecision.Decision, error) {
+	out := make([]policydecision.Decision, len(qs))
+	for i, q := range qs {
+		d, err := c.Evaluate(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = d
+	}
+	return out, nil
 }
 
 func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {

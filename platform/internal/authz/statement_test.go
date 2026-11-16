@@ -123,8 +123,9 @@ func TestStatementMatches_ATypeGroupNamesItsTypeAndNoPrefixOfIt(t *testing.T) {
 
 	admin := org.RoleAdmin.Actions()
 	assert.True(t, matches(admin, "iam:policy.create"), "control: an administrator's own group")
-	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
-		assert.False(t, matches(r.Actions(), "iam:permit.write"), "%s: only the policy service's owner role holds it", r)
+	assert.True(t, matches(org.RoleOwner.Actions(), "iam:permit.write"), "control: the owner holds it")
+	for _, r := range []org.Role{org.RoleAdmin, org.RoleMember} {
+		assert.False(t, matches(r.Actions(), "iam:permit.write"), "%s: only the owner holds it", r)
 	}
 
 	agent := []string{"iam:agent.*"}

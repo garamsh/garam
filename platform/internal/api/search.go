@@ -10,6 +10,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
 // Bounds of searchOrg's limit: how many objects of each kind it
@@ -63,6 +64,9 @@ func (s *Server) SearchOrg(w http.ResponseWriter, r *http.Request, orgSlug apige
 		writeError(w, err)
 		return
 	}
+	// Which kinds to search is a question nobody acts on beyond what
+	// the page shows, so each is asked as a probe.
+	r = r.WithContext(policydecision.AsProbe(r.Context()))
 	found := make([]apigen.FoundKind, 0, len(searchKinds))
 	for _, k := range searchKinds {
 		allowed, err := s.allows(r, c, c.org, k.action)

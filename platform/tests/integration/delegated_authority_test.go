@@ -88,7 +88,7 @@ func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool
 
 	srv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
+		api.NewGRPCEvaluator(engine), decisions, nil, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 
@@ -344,21 +344,24 @@ func TestDelegatedAuthority_RechecksRoles(t *testing.T) {
 // TestDelegatedAuthority_AServiceFailureRefuses holds that a policy
 // service that cannot answer makes every privileged call unavailable
 // and never an allow, and that the failure's own kind does not turn it
-// into a denial or into the caller's fault (ADR-0146 item 2). Reading
-// the grant, an ordinary cached read, is the control: the engine
-// answers it.
+// into a denial or into the caller's fault (ADR-0146 item 2). The
+// browser listener's own enforcement asks the same service (ADR-0171),
+// so reading the grant is unavailable too once it fails; the read
+// before the failure is the control, answered by the store.
 func TestDelegatedAuthority_AServiceFailureRefuses(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
+	status, got := call(t, http.DefaultClient, http.MethodGet, s.delegationPath(), s.member, "")
+	require.Equal(t, http.StatusNotFound, status, "control: with the service answering, the read reaches the store: %s", got)
 	s.decisions.failWith(errorx.New(errorx.KindPermissionDenied, "the service refused this caller"))
 
 	body := `{"requestId":"g-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent.create"],"expiresAt":"` +
 		time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`
-	status, got := call(t, http.DefaultClient, http.MethodPut, s.delegationPath(), s.owner, body)
+	status, got = call(t, http.DefaultClient, http.MethodPut, s.delegationPath(), s.owner, body)
 	assert.Equal(t, http.StatusServiceUnavailable, status, got)
 	assert.Contains(t, got, `"message":"internal error"`)
 
 	status, got = call(t, http.DefaultClient, http.MethodGet, s.delegationPath(), s.member, "")
-	assert.Equal(t, http.StatusNotFound, status, "the ordinary read reached the engine and the store: %s", got)
+	assert.Equal(t, http.StatusServiceUnavailable, status, "the read's enforcement asks the service: %s", got)
 }

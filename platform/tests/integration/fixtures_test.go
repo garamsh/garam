@@ -467,8 +467,15 @@ func (s *sendsRefusing) Evaluate(ctx context.Context, q policydecision.Question)
 // currentDecisions is the policydecision.Service the default suite's
 // listeners and browser-facing authority ask about what a user or an
 // operator may do now (ADR-0146 items 14 and 15), in the place of the
-// policy service this suite does not run. A question that does not ask
-// read-current is a send, answered as sameOrganizationSends answers it.
+// policy service this suite does not run. A question of an agent that
+// does not ask read-current is a send, answered as
+// sameOrganizationSends answers it.
+//
+// The browser listener's enforcement asks it too (#1974): a question
+// of a user, current or not, is a decision over the state the service
+// has been delivered, since each test here writes its state through the
+// platform and a writer waits for its marks to be delivered (ADR-0146
+// item 5), and it is answered from the role the membership holds.
 //
 // It answers as the service does for the state the platform feeds it
 // and nothing more: a user is allowed what the role the membership
@@ -483,9 +490,12 @@ type currentDecisions struct {
 
 	mu        sync.Mutex
 	forbidden map[[2]string]bool
+	forbidOns map[[3]string]bool
+	permitted map[[2]string]bool
 	failure   error
 	held      chan struct{}
 	asked     []policydecision.Question
+	enforced  []policydecision.Question
 }
 
 func newCurrentDecisions(p *pgxpool.Pool) *currentDecisions {
@@ -502,15 +512,40 @@ func (c *currentDecisions) forbid(subject grn.GRN, action string) {
 	c.forbidden[[2]string{subject.String(), action}] = true
 }
 
-// failWith makes every read-current question fail with err.
+// permit makes every question of subject about action allowed that no
+// forbid refuses: what a permit the owner wrote adds to the role.
+func (c *currentDecisions) permit(subject grn.GRN, action string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.permitted == nil {
+		c.permitted = map[[2]string]bool{}
+	}
+	c.permitted[[2]string{subject.String(), action}] = true
+}
+
+// forbidOn makes every question of subject about action on resource a
+// denial: the one pair a guardrail would forbid, where forbid forbids
+// the action everywhere.
+func (c *currentDecisions) forbidOn(subject grn.GRN, action string, resource grn.GRN) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.forbidOns == nil {
+		c.forbidOns = map[[3]string]bool{}
+	}
+	c.forbidOns[[3]string{subject.String(), action, resource.String()}] = true
+}
+
+// failWith makes every question of a user, and every read-current one,
+// fail with err.
 func (c *currentDecisions) failWith(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.failure = err
 }
 
-// stall makes every read-current question wait, answering nothing,
-// until the function it returns is called or the caller gives up.
+// stall makes every question of a user, and every read-current one,
+// wait, answering nothing, until the function it returns is called or
+// the caller gives up.
 func (c *currentDecisions) stall() func() {
 	held := make(chan struct{})
 	c.mu.Lock()
@@ -534,13 +569,32 @@ func (c *currentDecisions) currentQuestions() []policydecision.Question {
 	return append([]policydecision.Question(nil), c.asked...)
 }
 
+// questions are every question it decided rather than answered as a
+// send: the read-current ones, and those the browser listener's
+// enforcement, its permission checks and its holders list ask of a
+// user.
+func (c *currentDecisions) questions() []policydecision.Question {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]policydecision.Question(nil), c.enforced...)
+}
+
 func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {
-	if !q.Current {
+	c.mu.Lock()
+	written := c.permitted[[2]string{q.Subject.String(), q.Action}]
+	c.mu.Unlock()
+	if !q.Current && q.Subject.ServiceType != user.ServiceType && !written {
 		return c.Service.Evaluate(ctx, q)
 	}
 	c.mu.Lock()
-	c.asked = append(c.asked, q)
-	failure, forbidden := c.failure, c.forbidden[[2]string{q.Subject.String(), q.Action}]
+	if q.Current {
+		c.asked = append(c.asked, q)
+	}
+	c.enforced = append(c.enforced, q)
+	failure := c.failure
+	permitted := c.permitted[[2]string{q.Subject.String(), q.Action}]
+	forbidden := c.forbidden[[2]string{q.Subject.String(), q.Action}] ||
+		c.forbidOns[[3]string{q.Subject.String(), q.Action, q.Resource.String()}]
 	held := c.held
 	c.mu.Unlock()
 	if held != nil {
@@ -556,6 +610,8 @@ func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Questi
 	case forbidden:
 		return policydecision.Decision{}, nil
 	case q.Subject.ServiceType != user.ServiceType:
+		return policydecision.Decision{Allowed: true}, nil
+	case permitted:
 		return policydecision.Decision{Allowed: true}, nil
 	}
 	owning := q.Resource.Organization

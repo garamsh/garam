@@ -98,7 +98,7 @@ func TestGetInvitation_AnswersAnUnknownTokenAsAnyNotFound(t *testing.T) {
 // cookies and the invitation.
 func acmeInvitations(t *testing.T, f *fixture) (string, *http.Cookie, *http.Cookie, *org.Invitation) {
 	t.Helper()
-	f.enforce()
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionOrgInvite})
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "Acme Robotics")
 	member := f.sessionCookieFor(t, "member-sub", "Member")
@@ -135,10 +135,10 @@ func TestListInvitations_NamesEachPendingOneAndNeverItsToken(t *testing.T) {
 	assert.NotContains(t, rec.Body.String(), "-tok", "no token, of any invitation, is listed")
 }
 
-// TestInvitationManagement_RefusesAMemberWhomTheRoleGrantsNoInvite asks
-// both operations as a member, who holds no iam:org.invite, and as the
-// owner, who does, so the refusal is the action's.
-func TestInvitationManagement_RefusesAMemberWhomTheRoleGrantsNoInvite(t *testing.T) {
+// TestInvitationManagement_RefusesAMemberTheServiceDeniesTheInvite asks
+// both operations as a member, whom the service refuses iam:org.invite,
+// and as the owner, whom it allows, so the refusal is the action's.
+func TestInvitationManagement_RefusesAMemberTheServiceDeniesTheInvite(t *testing.T) {
 	f := newFixture(t)
 	slug, owner, member, inv := acmeInvitations(t, f)
 	path := "/orgs/" + slug + "/invitations"

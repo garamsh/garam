@@ -9,6 +9,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 )
@@ -352,20 +353,32 @@ func (s *Server) callerIn(r *http.Request, orgGRN grn.GRN, u *user.User) (*calle
 	return &caller{org: orgGRN, user: u, member: m, groups: groups}, nil
 }
 
-// allows asks the engine whether c may take action on target, a
-// validated resource of c's org.
+// allows asks the policy service whether c may take action on target,
+// a validated resource of c's org. The question is a probe where the
+// request's context was marked by policydecision.AsProbe: a denial
+// nobody acts on is not recorded as an attempt (ADR-0148 item 2). An
+// error of the service is unavailable, never an allow (ADR-0168
+// item 7).
 func (s *Server) allows(r *http.Request, c *caller, target grn.GRN, action string) (bool, error) {
-	in, err := s.question(r, c, target, action)
-	if err != nil {
-		return false, err
-	}
-	return s.evaluator.Evaluate(r.Context(), in)
+	return s.decides(r, policydecision.Question{
+		Subject: c.user.GRN, Action: action, Resource: target, Probe: policydecision.IsProbe(r.Context()),
+	})
 }
 
-// question is what enforcement asks the engine about c taking action
-// on target: the statements c's roles grant there, c's groups and c's
-// org. allows and explainPermission both ask it, so an explanation is
-// of the decision enforcement reaches.
+// decides asks the policy service one question and answers whether it
+// allows it.
+func (s *Server) decides(r *http.Request, q policydecision.Question) (bool, error) {
+	d, err := s.decisions.Evaluate(r.Context(), q)
+	if err != nil {
+		return false, errorx.Wrap(err, "policy decision", errorx.KindUnavailable)
+	}
+	return d.Allowed, nil
+}
+
+// question is what the platform's engine is asked about c taking
+// action on target: the statements c's roles grant there, c's groups
+// and c's org. explainPermission asks it, until the policy service
+// explains (round 11 of #1796).
 func (s *Server) question(r *http.Request, c *caller, target grn.GRN, action string) (EvalInput, error) {
 	statements, err := s.scopedStatements(r, c.org, c.member, target, c.user)
 	if err != nil {

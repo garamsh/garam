@@ -23,7 +23,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // namedCreationBody is a managed-enrollment.v2 creation asking for
@@ -159,9 +158,10 @@ func TestAgentName_AReplacementCarriesNoName(t *testing.T) {
 }
 
 // TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN: an owner renames
-// an agent and clears the name again. A Deny of iam:agent.rename on one
-// agent refuses ada that agent alone; her rename of its sibling and
-// dan's rename of the denied one are the controls.
+// an agent and clears the name again. The policy service forbidding
+// iam:agent.rename on one agent to ada refuses her that agent alone;
+// her rename of its sibling and dan's rename of the denied one are the
+// controls.
 func TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN(t *testing.T) {
 	s := newListStack(t)
 	denied, sibling := seedAgent(t, s.agents, s.acme), seedAgent(t, s.agents, s.acme)
@@ -176,16 +176,14 @@ func TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status, "a name over 100 characters is refused: %s", body)
 	assert.Equal(t, "sherlock", agentName(t, s.url, s.ada, denied), "and changes nothing")
 
-	deny := activePolicy(t, s.policies, s.acme, "deny-rename",
-		statementDoc("deny-rename", wire.EffectDeny, org.ActionAgentRename, denied.String()))
-	attachPolicy(t, s.policies, deny, s.adaGRN)
+	s.decisions.forbidOn(s.adaGRN, org.ActionAgentRename, denied)
 	status, body = rename(s.ada, denied, `{"name":"watson"}`)
-	assert.Equal(t, http.StatusForbidden, status, "the Deny on the agent refuses its rename: %s", body)
+	assert.Equal(t, http.StatusForbidden, status, "the service forbidding the pair refuses the rename: %s", body)
 	assert.Equal(t, "sherlock", agentName(t, s.url, s.dan, denied))
 	status, body = rename(s.ada, sibling, `{"name":"watson"}`)
 	assert.Equal(t, http.StatusOK, status, "control: the sibling renames: %s", body)
 	status, body = rename(s.dan, denied, `{"name":null}`)
-	require.Equal(t, http.StatusOK, status, "control: the Deny does not reach dan: %s", body)
+	require.Equal(t, http.StatusOK, status, "control: the forbid does not reach dan: %s", body)
 	assert.Empty(t, agentName(t, s.url, s.dan, denied), "null clears the name")
 }
 

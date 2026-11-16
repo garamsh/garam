@@ -264,6 +264,9 @@ func TestSearch_LeavesOutAKindTheCallerMayNotList(t *testing.T) {
 			deny := activePolicy(t, s.policies, s.acme, "deny-list",
 				statementDoc("deny-list", wire.EffectDeny, k.action, s.acme.String()))
 			attachPolicy(t, s.policies, deny, s.adaGRN)
+			// The kind's gate is the policy service's probe (ADR-0171);
+			// the Deny narrows what the platform engine still filters.
+			s.decisions.forbidOn(s.adaGRN, k.action, s.acme)
 
 			require.Contains(t, s.search(t, "ops", nil, s.dan), k.kind, "control: dan may list it")
 			found := s.search(t, "ops", nil, s.ada)

@@ -79,7 +79,7 @@ func newRelayStack(t *testing.T, relay func(*realPolicy) policyrelay.Service) *r
 	rp.deliver(t)
 
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil, authnpg.NewSessionStore(p),
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithPolicyRelay(relay(rp))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

@@ -362,9 +362,15 @@ would otherwise reach a caller that proved nothing.
 Admission says who is calling. What they may do is decided after it,
 and not in the same place on every surface.
 
-- **Browser-facing**: the policy engine decides every org-scoped
-  request ([ADR-0002](./adr/0002-iam-style-policy-model.md)). How it
-  decides is [authz.md](./authz.md).
+- **Browser-facing**: the policy service decides an org-scoped
+  request's enforcement, `checkPermissions` and the holders list, one
+  question per pair and per candidate over delivered state, and the
+  request is answered 503 `unavailable` where it cannot be asked
+  ([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)).
+  The explanation and the list filter are still the platform engine's
+  ([ADR-0002](./adr/0002-iam-style-policy-model.md)). The probes are
+  each `checkPermissions` pair, each holder candidate and each search
+  kind. How it decides is [authz.md](./authz.md).
 - **Machine**: by construction more often than by policy. A read is
   scoped by the caller's own identity, so there is nothing to authorize
   past the token there. A state report is decided the same way and by a
@@ -948,6 +954,9 @@ document owes an update.
   — a cross-organization message needs both organizations' consent
 - [ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)
   — no surface serves a secret's value
+- [ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)
+  — the browser listener's enforcement asks the policy service, and a
+  failure of it is a 503
 - [ADR-0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)
   — a pending invitation is listed by an id that admits no one, and
   revoking deletes it

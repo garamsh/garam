@@ -48,6 +48,7 @@ type listStack struct {
 	agents         *agentpg.Store
 	ada, dan       *http.Cookie
 	adaGRN, danGRN grn.GRN
+	decisions      *currentDecisions
 }
 
 func newListStack(t *testing.T) *listStack {
@@ -68,13 +69,14 @@ func newListStack(t *testing.T) *listStack {
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
-	s := &listStack{pool: p, acme: acme, policies: policies, orgs: orgs, agents: agentpg.New(p)}
+	decisions := newCurrentDecisions(p)
+	s := &listStack{pool: p, acme: acme, policies: policies, orgs: orgs, agents: agentpg.New(p), decisions: decisions}
 	s.ada, s.adaGRN = session("ada")
 	s.dan, s.danGRN = session("dan")
 
 	srv := api.NewServer(users, orgs, s.agents, nil, messagepg.New(p), nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, newCurrentDecisions(p)), nil,
+		api.NewGRPCEvaluator(engine), decisions, api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, decisions), nil,
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
@@ -204,6 +206,11 @@ func TestLists_ADenyOnOneObjectHidesThatObjectAlone(t *testing.T) {
 			deny := activePolicy(t, s.policies, s.acme, "deny-one",
 				statementDoc("deny-one", wire.EffectDeny, k.action, hidden.String()))
 			attachPolicy(t, s.policies, deny, s.adaGRN)
+			// The list is the platform engine's until round 10,
+			// which the attached Deny narrows; the read is the
+			// policy service's (ADR-0171), which a guardrail on
+			// the pair would refuse.
+			s.decisions.forbidOn(s.adaGRN, k.action, hidden)
 
 			control := s.listed(t, k.path, k.query, s.dan)
 			require.Contains(t, control, hidden.String(), "the Deny does not reach dan")

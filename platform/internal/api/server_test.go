@@ -26,6 +26,8 @@ import (
 	"github.com/garamsh/garam/platform/internal/authn"
 	operatormocks "github.com/garamsh/garam/platform/internal/operator/mocks"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
+	policydecisionmocks "github.com/garamsh/garam/platform/internal/policydecision/mocks"
 	"github.com/garamsh/garam/platform/internal/user"
 	"github.com/garamsh/garam/platform/internal/watch"
 )
@@ -47,6 +49,7 @@ type fixture struct {
 	attempts    *fakePasswordAttemptStore
 	provider    *fakeProvider
 	evaluator   *mocks.MockEvaluator
+	decisions   *policydecisionmocks.MockService
 	policies    *mocks.MockPolicyManager
 	authorities *fakeAuthorityReader
 	authority   *operatormocks.MockAuthorityService
@@ -80,6 +83,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		attempts:    newFakePasswordAttemptStore(),
 		provider:    &fakeProvider{name: "google"},
 		evaluator:   mocks.NewMockEvaluator(t),
+		decisions:   policydecisionmocks.NewMockService(t),
 		policies:    mocks.NewMockPolicyManager(t),
 		authorities: newFakeAuthorityReader(),
 		authority:   operatormocks.NewMockAuthorityService(t),
@@ -95,7 +99,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
-	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, f.authorities, f.authority, f.standalone, cfg).
+	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.decisions, f.policies, f.authorities, f.authority, f.standalone, cfg).
 		WithDeviceGrant(f.devices)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.
@@ -106,21 +110,21 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	return f
 }
 
-// permission pairs a subject with an action the evaluator permits.
+// permission pairs a subject with an action the policy service permits.
 type permission struct {
 	subject grn.GRN
 	action  string
 }
 
-// permit stubs the Evaluator seam: only the listed subject × action
-// pairs are allowed; every other question is denied.
-// A batch is answered per object the same way; a test that lists
-// nothing never asks one.
+// permit stubs the policy service: only the listed subject × action
+// pairs are allowed; every other question is denied. The list
+// visibility the platform's own engine still decides is answered the
+// same way, a batch per object; a test that lists nothing never asks
+// one.
 func (f *fixture) permit(perms ...permission) {
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			return slices.Contains(perms, permission{in.Subject, in.Action}), nil
-		})
+	f.answers(func(q policydecision.Question) (bool, error) {
+		return slices.Contains(perms, permission{q.Subject, q.Action}), nil
+	})
 	f.evaluator.EXPECT().EvaluateBatch(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.BatchInput) ([]bool, error) {
 			allowed := make([]bool, len(in.Objects))
@@ -129,6 +133,20 @@ func (f *fixture) permit(perms ...permission) {
 			}
 			return allowed, nil
 		}).Maybe()
+}
+
+// answers stubs the policy service to answer each question as decide
+// says. An error comes with the denying zero Decision, as the service's
+// client answers one.
+func (f *fixture) answers(decide func(policydecision.Question) (bool, error)) {
+	f.decisions.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, q policydecision.Question) (policydecision.Decision, error) {
+			allowed, err := decide(q)
+			if err != nil {
+				return policydecision.Decision{}, err
+			}
+			return policydecision.Decision{Allowed: allowed}, nil
+		})
 }
 
 // do issues a request and returns the recorder.

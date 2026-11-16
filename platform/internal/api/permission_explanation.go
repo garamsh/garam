@@ -7,6 +7,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 
@@ -37,6 +38,9 @@ func (s *Server) ExplainPermission(w http.ResponseWriter, r *http.Request, orgSl
 		writeError(w, err)
 		return
 	}
+	// Nothing an explanation asks is acted on, so each question is a
+	// probe (ADR-0171).
+	r = r.WithContext(policydecision.AsProbe(r.Context()))
 	answer, err := s.explain(r, c, target, check.Action)
 	if err != nil {
 		writeError(w, err)

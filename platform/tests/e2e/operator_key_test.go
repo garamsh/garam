@@ -88,6 +88,9 @@ func signAssertion(t *testing.T, key issuedKey) string {
 func TestOperatorKey_TheBuiltBinariesIssueAKeyAndExchangeItsAssertion(t *testing.T) {
 	garam := buildGaram(t)
 	p := prepareDatabase(t, buildPrincipalFixture(t))
+	// The api's enforcement is the policy service's decision
+	// (ADR-0171), so what it writes reaches the service by the feed.
+	startPolicyFeed(t, garam, p.DatabaseURL)
 	grpcAddr, metricsAddr := freeAddr(t), freeAddr(t)
 	apiAddr, unconfiguredAddr := freeAddr(t), freeAddr(t)
 	machineAddr, machineHealthAddr := freeAddr(t), freeAddr(t)

@@ -426,7 +426,7 @@ func seedMatrix(t *testing.T, p *pgxpool.Pool, service policydecision.Service) *
 	_ = agents
 
 	srv := api.NewServer(users, orgs, agents, nil, messagepg.New(p), nil, sessions,
-		nil, nil, nil, nil, api.NewGRPCEvaluator(engine), nil, nil,
+		nil, nil, nil, nil, api.NewGRPCEvaluator(engine), service, nil, nil,
 		cli.NewAuthorityService(p, service), cli.NewStandaloneService(p, service),
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv,

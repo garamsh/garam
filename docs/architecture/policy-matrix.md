@@ -19,8 +19,8 @@ authorization question differently, as measured by the suite in
 | | Count |
 |---|---|
 | Questions asked | 1716 |
-| Agreeing: both decided, the same answer | 1706 |
-| Differing: both decided, different answers | 10 |
+| Agreeing: both decided, the same answer | 1716 |
+| Differing: both decided, different answers | 0 |
 | Refused by the service: no decision | 0 |
 
 The three classes sum to the total. A question agrees when both
@@ -37,7 +37,16 @@ the differing ones and a sample of the rest.
 
 ## Differences
 
-All ten are one case: an organization's owner or admin against a
+**None since [ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md).**
+The matrix's platform answer is the browser route's, and the route
+asks the service, so the ten below are no longer two answers: the
+route denies as the service does. That is not the finding resolved.
+The owner and admin are now refused `iam:policy.*` on a policy of the
+organization, because the service still holds no `Iam::Policy` entity
+(§Open questions). What follows is the measurement as it stood before
+ADR-0171.
+
+All ten were one case: an organization's owner or admin against a
 policy of the organization, on the five `iam:policy` actions.
 
 | Question | Platform | Service |

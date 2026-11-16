@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,9 +15,9 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
-	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
@@ -84,10 +83,9 @@ func TestCheckPermissions_AsksAboutTheNamedResource(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	allowedGroup := grn.New(slug, org.ServiceTypeGroup, "eng")
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			return in.Object == allowedGroup, nil
-		})
+	f.answers(func(q policydecision.Question) (bool, error) {
+		return q.Resource == allowedGroup, nil
+	})
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
 		apigen.PermissionCheck{Action: org.ActionGroupUpdate,
@@ -114,10 +112,9 @@ func TestCheckPermissions_AsksACoworkPageAsItsGRN(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	allowedPage := grn.New(slug, org.ServiceTypeCoworkPage, "p-1")
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			return in.Object == allowedPage || in.Object == grn.Org(slug), nil
-		})
+	f.answers(func(q policydecision.Question) (bool, error) {
+		return q.Resource == allowedPage || q.Resource == grn.Org(slug), nil
+	})
 	page := func(id string) *apigen.PermissionResource {
 		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkPage, Id: id}
 	}
@@ -144,10 +141,9 @@ func TestCheckPermissions_AsksACoworkChannelAsItsGRN(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	allowed := grn.New(slug, org.ServiceTypeCoworkChannel, "c-1")
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			return in.Object == allowed, nil
-		})
+	f.answers(func(q policydecision.Question) (bool, error) {
+		return q.Resource == allowed, nil
+	})
 	channel := func(id string) *apigen.PermissionResource {
 		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkChannel, Id: id}
 	}
@@ -171,10 +167,9 @@ func TestCheckPermissions_AsksACoworkTaskAsItsGRN(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	allowed := grn.New(slug, org.ServiceTypeCoworkTask, "t-1")
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			return in.Object == allowed, nil
-		})
+	f.answers(func(q policydecision.Question) (bool, error) {
+		return q.Resource == allowed, nil
+	})
 	task := func(id string) *apigen.PermissionResource {
 		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkTask, Id: id}
 	}
@@ -198,10 +193,9 @@ func TestCheckPermissions_AsksACoworkArtifactAsItsGRN(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	allowed := grn.New(slug, org.ServiceTypeCoworkArtifact, "a-1")
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			return in.Object == allowed, nil
-		})
+	f.answers(func(q policydecision.Question) (bool, error) {
+		return q.Resource == allowed, nil
+	})
 	artifact := func(id string) *apigen.PermissionResource {
 		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkArtifact, Id: id}
 	}
@@ -294,7 +288,8 @@ func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T)
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).Return(true, nil).Maybe()
+	f.decisions.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		Return(policydecision.Decision{Allowed: true}, nil).Maybe()
 	f.authority.EXPECT().AuthorizeOperation(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil).Once()
 
@@ -518,13 +513,12 @@ func TestCheckPermissions_FailsWholeWhenTheEngineCannotDecide(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	failing := true
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			if failing && in.Action == org.ActionOrgUpdate {
-				return false, errorx.New(errorx.KindUnavailable, "engine unreachable")
-			}
-			return true, nil
-		})
+	f.answers(func(q policydecision.Question) (bool, error) {
+		if failing && q.Action == org.ActionOrgUpdate {
+			return false, errorx.New(errorx.KindUnavailable, "engine unreachable")
+		}
+		return true, nil
+	})
 	body := checksBody(t,
 		apigen.PermissionCheck{Action: org.ActionOrgRead},
 		apigen.PermissionCheck{Action: org.ActionOrgUpdate},
@@ -587,8 +581,7 @@ func TestCheckPermissions_DecidesOperatorReadByCheck(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	allowed := true
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(context.Context, api.EvalInput) (bool, error) { return allowed, nil })
+	f.answers(func(policydecision.Question) (bool, error) { return allowed, nil })
 	ask := func() apigen.PermissionDecision {
 		rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks",
 			checksBody(t, apigen.PermissionCheck{Action: org.ActionOperatorRead}), owner)

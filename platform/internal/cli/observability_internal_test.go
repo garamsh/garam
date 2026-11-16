@@ -576,7 +576,7 @@ func (s brokenSessions) Delete(context.Context, string) error { return s.err }
 func TestLogServed_CarriesTheCauseOfAnAPIFailure(t *testing.T) {
 	// Internal: the answer is a held store's; serve api holds Postgres.
 	cause := errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "session delete")
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 	var out lines
 	mux := http.NewServeMux()
@@ -669,7 +669,7 @@ func TestLogServed_CarriesTheCauseAnAPIAnswerWithheld(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: tt.err},
-				nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+				nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 			var out lines
 			mux := http.NewServeMux()
@@ -952,7 +952,7 @@ func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	// Internal: serve api writes its lines to stderr, not to a writer.
 	var out lines
 	obs := recordingObservability(&out)
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 	server := httptest.NewServer(obs.apiHandler(srv))
 	t.Cleanup(server.Close)
 
@@ -1071,7 +1071,7 @@ func TestLogRequests_KeepsAnInvitationTokenOffTheLine(t *testing.T) {
 				token: "live-tok-secret",
 				fault: errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "get invitation"),
 			}
-			srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+			srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 			server := httptest.NewServer(recordingObservability(&out).apiHandler(srv))
 			t.Cleanup(server.Close)
 
@@ -1102,7 +1102,7 @@ func TestAPIHandler_KeepsAnInvitationTokenOffTheSpan(t *testing.T) {
 
 	var out lines
 	orgs := invitationOrgs{token: "live-tok-secret"}
-	srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 	server := httptest.NewServer(recordingObservability(&out).apiHandler(srv))
 	t.Cleanup(server.Close)
 

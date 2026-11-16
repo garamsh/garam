@@ -8,19 +8,20 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
 // maxHolderCandidates bounds one page of listPermissionHolders: each
-// candidate costs the engine one check, as one pair of
+// candidate costs the service one check, as one pair of
 // checkPermissions does, and the bound is the same.
 const maxHolderCandidates = maxPermissionChecks
 
 // ListPermissionHolders answers which members and agents of the org
-// the engine allows the action on the resource, a page of candidates
-// at a time, each asked as enforcement asks it. Requires
-// iam:org.member-list; agents are asked only where the caller also
-// holds iam:agent.read.
+// the policy service allows the action on the resource, a page of
+// candidates at a time, each asked as enforcement asks it, as a probe.
+// Requires iam:org.member-list; agents are asked only where the caller
+// also holds iam:agent.read.
 func (s *Server) ListPermissionHolders(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListPermissionHoldersParams) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -63,6 +64,10 @@ func (s *Server) ListPermissionHolders(w http.ResponseWriter, r *http.Request, o
 		writeError(w, errorx.New(errorx.KindInvalidArgument, check.Action+" is decided at its operation, not by the engine alone"))
 		return
 	}
+	// The page lists the candidates the caller may see and nobody acts
+	// on an answer, so each question after the list check is a probe
+	// (ADR-0148 item 2).
+	r = r.WithContext(policydecision.AsProbe(r.Context()))
 	candidates, err := s.holderCandidates(r, c)
 	if err != nil {
 		writeError(w, err)
@@ -76,7 +81,7 @@ func (s *Server) ListPermissionHolders(w http.ResponseWriter, r *http.Request, o
 		return
 	}
 	end := min(offset+limit, len(candidates))
-	if answer.Holders, err = s.holdersAmong(r, g, candidates[offset:end], target, check.Action); err != nil {
+	if answer.Holders, err = s.holdersAmong(r, candidates[offset:end], target, check.Action); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -134,13 +139,10 @@ func (s *Server) holderCandidates(r *http.Request, c *caller) ([]holderCandidate
 	return candidates, nil
 }
 
-// holdersAmong asks the engine about each candidate and answers those
-// it allows. A member is asked as allows asks the signed-in caller; an
-// agent holds no role, so it is asked with its groups and no
-// statement, and the policies reaching it decide. A member whose user
-// row is gone by now holds nothing: the delete cascades the membership
-// away.
-func (s *Server) holdersAmong(r *http.Request, orgGRN grn.GRN, candidates []holderCandidate, target grn.GRN, action string) ([]apigen.PermissionHolder, error) {
+// holdersAmong asks the policy service about each candidate and
+// answers those it allows. A member whose user row is gone by now holds
+// nothing: the delete cascades the membership away.
+func (s *Server) holdersAmong(r *http.Request, candidates []holderCandidate, target grn.GRN, action string) ([]apigen.PermissionHolder, error) {
 	var userGRNs []grn.GRN
 	for _, cand := range candidates {
 		if cand.member != nil {
@@ -157,25 +159,18 @@ func (s *Server) holdersAmong(r *http.Request, orgGRN grn.GRN, candidates []hold
 	}
 	holders := []apigen.PermissionHolder{}
 	for _, cand := range candidates {
-		groups, err := s.orgs.ListGroupsByMember(r.Context(), orgGRN, cand.grn)
-		if err != nil {
-			return nil, err
-		}
 		holder := apigen.PermissionHolder{Type: apigen.HolderAgent, Grn: cand.grn.String()}
-		var allowed bool
-		if cand.member == nil {
-			allowed, err = s.evaluator.Evaluate(r.Context(), EvalInput{
-				Subject: cand.grn, Object: target, Action: action, SubjectGroups: groups, SubjectOrg: orgGRN,
-			})
-		} else {
+		if cand.member != nil {
 			u, ok := byGRN[cand.grn]
 			if !ok {
 				continue
 			}
 			nickname := u.Nickname
 			holder.Type, holder.Nickname = apigen.HolderUser, &nickname
-			allowed, err = s.allows(r, &caller{org: orgGRN, user: u, member: cand.member, groups: groups}, target, action)
 		}
+		allowed, err := s.decides(r, policydecision.Question{
+			Subject: cand.grn, Action: action, Resource: target, Probe: true,
+		})
 		if err != nil {
 			return nil, err
 		}

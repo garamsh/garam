@@ -68,7 +68,7 @@ func issuerHandler(t *testing.T) http.Handler {
 	require.NoError(t, err)
 	issuer, err := identity.NewIssuer("https://garam.test/api", key, liveSessions{}, nil)
 	require.NoError(t, err)
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{}).WithIdentity(issuer)
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{}).WithIdentity(issuer)
 	return apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError})
 }
 

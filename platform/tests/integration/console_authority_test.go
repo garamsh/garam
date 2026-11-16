@@ -18,7 +18,6 @@ import (
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // consoleOperations is every operation a console read or publication is
@@ -310,23 +309,21 @@ func plain(t *testing.T, method, url string, cookie *http.Cookie, body string) (
 
 // TestControlEndpoint_IsTheDelegatingActNotARename holds that the
 // endpoint receiving operation authority moves only under
-// iam:operator.delegate. A member a policy lets rename the operator
+// iam:operator.delegate. A member a permit lets rename the operator
 // renames it, which is the control, and cannot set or clear its
 // endpoint; the rename leaves the endpoint where the owner put it, and
 // moving the endpoint moves no audience an authority already names.
 func TestControlEndpoint_IsTheDelegatingActNotARename(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
 	s.grant(t, "g-1", nil, consoleOperations...)
 	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
 	operatorPath := s.browser + "/orgs/acme/operators/hosted"
 
-	renamer := activePolicy(t, policies, s.acme, "rename-operators",
-		statementDoc("rename-operators", wire.EffectAllow, org.ActionOperatorUpdate, s.acme.String()))
-	attachPolicy(t, policies, renamer, s.memberGRN)
+	s.decisions.permit(s.memberGRN, org.ActionOperatorUpdate)
 	status, got := plain(t, http.MethodPatch, operatorPath, s.member, `{"name":"Hosted control"}`)
-	require.Equal(t, http.StatusOK, status, "the policy lets the member rename: %s", got)
+	require.Equal(t, http.StatusOK, status, "the permit lets the member rename: %s", got)
 	status, got = call(t, http.DefaultClient, http.MethodPut, endpointPath, s.member, `{"url":"https://evil.example.com"}`)
 	assert.Equal(t, http.StatusForbidden, status, "renaming is not the delegating act: %s", got)
 

@@ -40,6 +40,8 @@ cluster's own daemon.
   reaches the service per send and not at start, so it reports ready
   while `policy` is down and a send then fails closed.
 - `web` — the Next.js console.
+- `site` — the Next.js site, where a visitor without a session signs in
+  (ADR-0131).
 
 All of it lives in the `garam-local` namespace. Manifests are
 `namespace.yaml`, `postgres.yaml`, `migrate-job.yaml` and `garam.yaml`
@@ -61,7 +63,7 @@ image rather than taking the default this operator version carries.
 ```sh
 make -C deploy/local minikube-up        # cluster, operator, database, secret, images, migrations, processes
 make -C deploy/local minikube-rebuild   # after a code change: images, migrations, processes
-make -C deploy/local minikube-forward   # publishes the web app on localhost; holds the terminal
+make -C deploy/local minikube-forward   # publishes the console and the site on localhost; holds the terminal
 make -C deploy/local minikube-down      # removes the namespace, its volume and its key material
 ```
 
@@ -89,18 +91,20 @@ has.
 
 Nothing here is published to the host. The Services are cluster-internal
 and there is no ingress, so `make -C deploy/local minikube-forward` is
-the only way in: it forwards the web app to `http://localhost:3000`.
+the only way in: it forwards the console to port 3000 and the site to
+port 3001.
 
-Signing in is the site's handoff (ADR-0131): the web app sends `/login`
+Signing in is the site's handoff (ADR-0131): the console sends `/login`
 and `/register` to `GARAM_SITE_URL`, and a visitor without a session
-cookie goes to the handoff the site starts. This deployment does not run
-the site, so a browser cannot sign in to the console here; running it is
-tracked in [#1967](https://github.com/garamsh/garam/issues/1967).
+cookie goes to the handoff the site starts. The session cookie is
+host-only, so the two are opened under the names compose serves them
+on, which a browser resolves to this machine without a hosts entry:
 
-Until then, a console page opens only to a browser already holding the
-host-only `garam_session` cookie of a session row written against the
-database directly. `platform-web/e2e/seed.ts` writes the rows and
-`platform-web/e2e/fixtures.ts` plants the cookie by URL, with no domain.
+- `http://console.garam.localhost:3000` — the console.
+- `http://garam.localhost:3001` — the site.
+
+cowork is not part of this stack: the site names the address compose
+gives it, and nothing answers there.
 
 To reach anything else — the api, the authz engine's metrics, the
 machine process's probes — forward its Service the same way.
@@ -168,15 +172,16 @@ signing key.
 
 ## Images
 
-All three images are built into the cluster's own daemon and pushed
+All four images are built into the cluster's own daemon and pushed
 nowhere. No node here holds a registry credential, and a token for the
 cluster this project targets expires within the day (ADR-0020). The
 manifests set `imagePullPolicy: Never`, so a missing image fails as the
 build it is rather than as a silent pull from somewhere else.
 
 They are built from `deploy/local/Dockerfile`,
-`deploy/local/Dockerfile.web` and `deploy/local/Dockerfile.policy` — the
-same three the compose stack uses.
+`deploy/local/Dockerfile.web` (once for the console and once for the
+site) and `deploy/local/Dockerfile.policy` — the same three files the
+compose stack uses.
 
 Each pod template carries the id of the image it runs, stamped in by
 `make -C deploy/local minikube-apps`. The tag alone cannot carry a
@@ -189,8 +194,19 @@ restarts nothing.
 
 ## Which cluster, and whose kubeconfig
 
-Every command names `--context minikube`, so nothing in `deploy/local/Makefile`
-can reach a cluster that is not the local one.
+Every command names `--context $(MINIKUBE_PROFILE)`, so nothing in
+`deploy/local/Makefile` can reach a cluster that is not the local one.
+`MINIKUBE_PROFILE` defaults to `minikube`; minikube names the context
+after the profile, so one variable on any target runs it against a
+profile of that name, and the two key-material scripts take the context
+as their argument:
+
+```sh
+make -C deploy/local minikube-up MINIKUBE_PROFILE=<name>
+```
+
+The commands in this file that spell `--context minikube` name the
+default.
 
 The cluster's credentials go in `$HOME/.minikube/kubeconfig`, beside the
 rest of its state, rather than into `~/.kube/config` — bringing up a

@@ -197,10 +197,25 @@ func TestDelegatedAuthorityPolicy_TheOperatorHalfIsTheServicesDecision(t *testin
 	assert.Equal(t, http.StatusForbidden, got.status, "the grant ended: %s", got.body)
 	assert.Len(t, rp.asked.questions(), before, "the platform refused an ended grant before it asked")
 
-	s.delegate(t, "g-2", nil, time.Now().Add(time.Hour), s.controller)
+	started := s.clock.now()
+	second := s.delegate(t, "g-2", nil, started.Add(30*time.Minute), s.controller)
 	rp.deliver(t)
 	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	require.Equal(t, http.StatusOK, got.status, "granted again: %s", got.body)
+
+	// A grant past its expiry is still on record, so it is the platform
+	// that refuses it, before the service is asked.
+	s.clock.set(started.Add(30*time.Minute + time.Second))
+	before = len(rp.asked.questions())
+	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
+	assert.Equal(t, http.StatusForbidden, got.status, "the grant expired: %s", got.body)
+	assert.Len(t, rp.asked.questions(), before, "the platform refused an expired grant before it asked")
+
+	s.clock.set(started)
+	s.delegate(t, "g-3", &second, started.Add(time.Hour), s.controller)
+	rp.deliver(t)
+	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
+	require.Equal(t, http.StatusOK, got.status, "granted again, unexpired: %s", got.body)
 
 	_, err = rp.client.CreatePolicy(ctx, &policyv1.CreatePolicyRequest{
 		Writer: writer, Org: s.acme.String(), Policy: policy, Name: "no-activation",

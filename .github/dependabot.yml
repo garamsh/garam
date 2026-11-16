@@ -178,11 +178,10 @@ updates:
   # The requirements of the Go libraries under lib/, of garam-cli
   # (ADR-0132, ADR-0133): the tests' assertion library, the generated
   # clients' runtime, and the client CLI's command, YAML and MCP
-  # libraries. The platform module replaces
-  # each library it imports with its folder and requires several of the
-  # same modules itself, so this entry and the one above move them
-  # apart; whichever lands second takes the other's version with
-  # `go work sync`.
+  # libraries. The platform module replaces each library it imports
+  # with its folder and requires several of the same modules itself, so
+  # this entry and the one above move them apart; whichever lands
+  # second takes the other's version with `go work sync`.
   - package-ecosystem: "gomod"
     directories:
       - "/lib/cowork-sdk-go"

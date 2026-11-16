@@ -14,7 +14,9 @@ and
 [ADR-0155](./0155-garam-ships-a-second-helm-chart-that-renders-the-gaon-kinds.md)
 in whole, and
 [ADR-0158](./0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)
-in part: item 3's handover condition and item 4.
+in part: item 3's handover condition and item 4. It supersedes
+[ADR-0152](./0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)
+in part: its gaon-specific deployment clause and one consequence.
 
 ## Context
 
@@ -23,8 +25,8 @@ in part: item 3's handover condition and item 4.
   ADR-0155) existed to run garam and its agents on a gaon cluster. With
   gaon discontinued nothing can run them, and keeping them costs a
   module in `go.work`, a row in `tooling/ci/modules`, a dependabot
-  entry, a chart in `make -C deploy/charts ci` and a harness in
-  `deploy/local`, each checked on every change.
+  entry and a chart in `make -C deploy/charts ci`, each checked on
+  every change.
 - **ADR-0158 already decided garam carries no gaon operator**, and
   made deleting `gaon-operator/` wait until
   garamsh/garam-agent-operator held the directory at a commit passing
@@ -66,10 +68,14 @@ describing a gaon deployment leave the repository.
      kinds, built only in `deploy/charts/garam-gaon/`.
    - ADR-0158 in part, as above.
    - ADR-0156 is already superseded by ADR-0158 and stays so.
-   - **ADR-0152 is not superseded.** It decides a login form garam
-     implements and tests without any gaon object, so it stays
-     `accepted`. Its text that names gaon as the identity's writer is
-     the record of why it was written.
+   - ADR-0152 in part only: the gaon-specific deployment clause of
+     its §Decision ("Where gaon's file cannot meet the owner-only rule"
+     and the gaon issuer and file in "What the deployment owes"), and
+     its §Consequences bullet saying `deployment-contract.md`'s account
+     of the gaon side is a pointer to what gaon has decided, which this
+     change removes. The login mechanism stands: it is built in
+     `platform/internal/message/transit` and names no platform, so the
+     ADR stays `accepted` with that mechanism unchanged.
 
 ADRs are not deleted: each superseded one keeps its body and takes a
 status naming this one.
@@ -80,7 +86,8 @@ status naming this one.
   `deploy/charts/Makefile` name no gaon path, and every Go entry point
   covers one module fewer.
 - [operators.md](../operators.md), [agents.md](../agents.md),
-  [structure.md](../structure.md), [deployment-contract.md](../deployment-contract.md),
+  [structure.md](../structure.md),
+  [deployment-contract.md](../deployment-contract.md),
   [deployment-needs.md](../deployment-needs.md) and the index describe
   no gaon deployment.
 - No published image or ECR repository is deleted: no release
@@ -90,9 +97,10 @@ status naming this one.
 
 ## Signs the decision was wrong
 
-- A deployment target is chosen that needs what `deploy/charts/garam-gaon/`
-  or `gaon-operator/` held, and the history is read for it more than
-  once: the removal was premature in kind, not only in time.
+- A deployment target is chosen that needs what
+  `deploy/charts/garam-gaon/` or `gaon-operator/` held, and the
+  history is read for it more than once: the removal was premature in
+  kind, not only in time.
 - A reader of `deployment-contract.md` finds the Transit identity file
   without any account of what writes it and asks for it: the document
   needed a writer named.

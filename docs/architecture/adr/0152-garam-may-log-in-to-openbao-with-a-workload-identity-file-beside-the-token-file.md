@@ -1,6 +1,10 @@
 # ADR 0152: garam may log in to OpenBao with a workload identity file, beside the token file
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0170](./0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
+> (the gaon-specific deployment clause of §Decision and the
+> §Consequences bullet on `deployment-contract.md`; the login mechanism
+> stands)
 > Date: 2026-11-13
 
 Drafted for #1830, which reserves this number. It adds a second form to

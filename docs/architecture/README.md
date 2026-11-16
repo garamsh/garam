@@ -1357,7 +1357,9 @@ ADRs:
   by a login where renewal is refused or a served token is answered
   403; gaon serves the token request only and has decided, not built,
   the file's writer, discovery and key set; accepted, built in
-  `platform/internal/message/transit`; supersedes nothing
+  `platform/internal/message/transit`; superseded in part by ADR-0170
+  (the gaon-specific deployment clause and the consequence on
+  deployment-contract.md's gaon pointer); supersedes nothing
 - [0153](./adr/0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)
   — the gaon guest's MicroVM runs as `0:0` and its supervisor drops the
   runtime and the adapter to 65532 with no capability and keeps the
@@ -1517,4 +1519,6 @@ ADRs:
   describing a gaon deployment are deleted, gaon having been
   discontinued on 2026-11-13, without the handover ADR-0158 waited for;
   accepted, built (#1946); supersedes 0151, 0153, 0154 and 0155 in
-  whole and 0158 in part (item 3's condition and item 4); 0152 stands
+  whole, 0158 in part (item 3's condition and item 4) and 0152 in
+  part (its gaon-specific deployment clause and one consequence; the
+  login mechanism stands)

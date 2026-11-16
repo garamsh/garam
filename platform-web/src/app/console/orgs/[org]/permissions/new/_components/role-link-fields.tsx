@@ -54,8 +54,10 @@ export function RoleLinkFields({
         value={role}
         onChange={setRole}
         choices={ROLES}
+        unlisted={[]}
         empty=""
       />
+      <input type="hidden" name="scope" value={scope} />
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 font-medium">Who holds it</legend>
         {SCOPES.map((option) => (
@@ -65,7 +67,7 @@ export function RoleLinkFields({
           >
             <input
               type="radio"
-              name="scope"
+              name="scope-choice"
               value={option.value}
               checked={scope === option.value}
               onChange={() => {
@@ -89,6 +91,11 @@ export function RoleLinkFields({
             ? choices.organizationPrincipals
             : choices.scopedPrincipals
         }
+        unlisted={
+          organization
+            ? choices.unlisted.organizationPrincipals
+            : choices.unlisted.scopedPrincipals
+        }
         empty={
           organization
             ? "The organization holds no team or agent."
@@ -104,6 +111,7 @@ export function RoleLinkFields({
           value={resource}
           onChange={setResource}
           choices={choices.scopedResources}
+          unlisted={choices.unlisted.scopedResources}
           empty="The organization holds no team or project."
         />
       )}

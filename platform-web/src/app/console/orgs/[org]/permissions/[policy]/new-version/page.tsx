@@ -15,7 +15,7 @@ import { SettingsPage } from "../../../../../_components/templates/settings-page
 import { WRITE_ACTION } from "../../_components/policy-actions";
 import { NewVersionForm } from "./_components/new-version-form";
 
-/** Head metadata for the new-version route; Next.js reads it by name. */
+/** Head metadata for this route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "New version — garam" };
 
 type Params = { params: Promise<{ org: string; policy: string }> };
@@ -34,9 +34,10 @@ function Unshown({ children }: { children: React.ReactNode }) {
  * Writes the next version of a guardrail or a permit (ADR-0173). The
  * form starts from the text the policy decides by. A role link takes
  * no version, since a changed link is a new one, so its page says so
- * in place of a form. The server is asked whether the caller may write
- * the policy, as its own page asks, and only an explicit deny
- * withdraws the form; the policy service enforces the write either way.
+ * in place of a form. The server is asked on the organization whether
+ * the caller may write, as the policy's own page asks, and only an
+ * explicit deny withdraws the form; the policy service enforces the
+ * write either way.
  */
 export default async function NewVersionPage({ params }: Params) {
   const { org, policy: slug } = await params;
@@ -62,9 +63,7 @@ export default async function NewVersionPage({ params }: Params) {
   const { policy, versions } = read.data;
   const back = `${orgHref(org, "permissions")}/${policy.id}`;
   const action = WRITE_ACTION[policy.kind].write;
-  const permissions = await checkPermissions(org, {
-    write: { action, resource: { type: "policy", id: policy.id } },
-  });
+  const permissions = await checkPermissions(org, { write: { action } });
   const current = versions.find(
     (version) => version.version === policy.defaultVersion,
   )?.body;

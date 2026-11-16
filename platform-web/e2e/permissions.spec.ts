@@ -283,17 +283,18 @@ test.describe("permissions", () => {
 
     await page.getByRole("radio", { name: /Role link/ }).check();
     await page.getByLabel("Name", { exact: true }).fill("Engineering admins");
-    await page.getByLabel("Role", { exact: true }).selectOption("admin");
+    await page.getByRole("combobox", { name: "Role", exact: true }).click();
+    await page.getByRole("option", { name: "admin", exact: true }).click();
     // A person is not offered over the organization: its role there is
     // its membership's.
-    const principal = page.getByLabel("Team or agent");
-    await expect(principal.locator('optgroup[label="Teams"]')).toHaveCount(1);
+    await page.getByRole("combobox", { name: "Team or agent" }).click();
+    await expect(page.getByRole("group", { name: "Teams" })).toHaveCount(1);
     await expect(
-      principal.getByRole("option", { name: new RegExp(signedIn.nickname) }),
+      page.getByRole("option", { name: new RegExp(signedIn.nickname) }),
     ).toHaveCount(0);
-    await principal.selectOption({
-      label: `${signedIn.groupName} (engineering)`,
-    });
+    await page
+      .getByRole("option", { name: `${signedIn.groupName} (engineering)` })
+      .click();
     await page.getByRole("button", { name: "Create policy" }).click();
 
     await expect(page).toHaveURL(new RegExp(`${base}/p-[0-9a-f]+$`));

@@ -343,27 +343,19 @@ const PermissionCheckRequest = z.object({
 });
 
 /**
- * The actions the platform checks only on a policy, and refuses on the
- * organization (permission_check.go), with the whole request.
+ * The action the platform answers only on the organization and refuses
+ * on a policy (permission_check.go), with the whole request. Every
+ * other policy write it answers on either.
  */
-const ON_A_POLICY = [
-  "iam:policy.update",
-  "iam:policy.attach",
-  "iam:policy.detach",
-  "iam:policy.delete",
-];
+const ON_THE_ORGANIZATION_ONLY = ["iam:permit.write"];
 
 /**
  * Answers Acme's permission checks with `decide(action)` for each pair,
  * in the order asked, as the server does, and refuses a request that
- * pairs a policy's action with no policy, 400. `onOrganization` names
- * the actions a test models the platform answering on the organization
- * as well, which the new-policy page asks (ADR-0173) and the platform
- * does not yet answer there.
+ * pairs `iam:permit.write` with a resource, 400.
  */
 export function answerPermissionChecks(
   decide: (action: string) => "allow" | "deny" | "unknown",
-  onOrganization: readonly string[] = [],
 ) {
   return http.post(
     `${API_URL}/orgs/acme/permission-checks`,
@@ -371,15 +363,14 @@ export function answerPermissionChecks(
       const { checks } = PermissionCheckRequest.parse(await request.json());
       const misplaced = checks.find(
         (check) =>
-          ON_A_POLICY.includes(check.action) &&
-          !onOrganization.includes(check.action) &&
-          check.resource?.type !== "policy",
+          ON_THE_ORGANIZATION_ONLY.includes(check.action) &&
+          check.resource !== undefined,
       );
       if (misplaced) {
         return HttpResponse.json(
           {
             kind: "invalid_argument",
-            message: `${misplaced.action} is not checked on organization`,
+            message: `${misplaced.action} is not checked on a ${misplaced.resource?.type}`,
           },
           { status: 400 },
         );
@@ -499,10 +490,10 @@ function refusedBody(body: z.infer<typeof PolicyWrite>["body"]) {
       link.scope === "organization" &&
       parseGrn(link.principal)?.serviceType === "user"
     ) {
-      return "an organization role of a user is its membership's";
+      return "a user's organization role is its membership's and is not written here";
     }
     if (link.scope === "team-or-project" && link.principal === link.resource) {
-      return "a role link's principal cannot be its resource";
+      return "a team's or project's own scoped link is derived from it and is not written here";
     }
     return null;
   }
@@ -559,9 +550,6 @@ export const handlers = [
         );
       }
       const { body } = PolicyWrite.parse(await request.json());
-      if (detail.policy.kind === "role-link") {
-        return invalid("a role link takes no new version");
-      }
       if (body.kind !== detail.policy.kind) {
         return invalid(
           `a ${detail.policy.kind} takes a ${detail.policy.kind} body`,

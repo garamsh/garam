@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useState } from "react";
 
 import { FormField } from "@garam/design/components/form-field";
 import { Refusal } from "@garam/design/components/refusal";
@@ -29,7 +29,10 @@ const KIND_NOTE: Record<IamPolicyKind, string> = {
  * stored as a draft, so it decides nothing until activated on its own
  * page. A refusal is said where it belongs: the name's at the name, the
  * Cedar text's at the editor, a role link's above the buttons.
- * The fields are controlled, so what was typed survives a refusal.
+ * The fields are controlled, and the role form's choices, the kind and
+ * the scope are sent from hidden inputs: the reset React runs after the
+ * action returns a radio to its first state and keeps a hidden input as
+ * it was.
  */
 export function CreatePolicyForm({
   org,
@@ -39,7 +42,7 @@ export function CreatePolicyForm({
 }: {
   org: string;
   orgGrn: string;
-  /** The kinds the caller is not known to be denied, in display order. */
+  /** The kinds the caller is not known to be denied, in order. */
   offered: readonly IamPolicyKind[];
   choices: RoleLinkChoices;
 }) {
@@ -47,7 +50,6 @@ export function CreatePolicyForm({
     createPolicy,
     initialState,
   );
-  const [, startTransition] = useTransition();
   const [kind, setKind] = useState<IamPolicyKind>(offered[0] ?? "guardrail");
   const [name, setName] = useState("");
   const [text, setText] = useState("");
@@ -55,18 +57,9 @@ export function CreatePolicyForm({
   const message = state.status === "error" ? state.message : undefined;
 
   return (
-    <form
-      onSubmit={(event) => {
-        // Submitted by hand, not as the form's `action`: React resets
-        // an action's form once it returns, which would empty the
-        // role form's selects and lose a refused link's choices.
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        startTransition(() => formAction(data));
-      }}
-      className="flex flex-col gap-4"
-    >
+    <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="org" value={org} />
+      <input type="hidden" name="kind" value={kind} />
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 font-medium">Kind</legend>
         {offered.map((option) => (
@@ -76,7 +69,7 @@ export function CreatePolicyForm({
           >
             <input
               type="radio"
-              name="kind"
+              name="kind-choice"
               value={option}
               checked={kind === option}
               onChange={() => setKind(option)}

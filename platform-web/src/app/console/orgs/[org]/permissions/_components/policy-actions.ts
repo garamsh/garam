@@ -30,10 +30,11 @@ export async function creatableKinds(org: string) {
 }
 
 /**
- * The action a write on each kind is taken as, asked on the policy:
- * `write` for activating a policy, moving its default version or
- * adding a version, `remove` for deleting it. The platform answers
- * these only on the policy itself. The policy service takes a
+ * The action a write on each kind is taken as, asked on the
+ * organization, never on the policy: `write` for activating a policy,
+ * moving its default version or adding a version, `remove` for
+ * deleting it. The policy service decides each write there, and the
+ * platform answers `iam:permit.write` nowhere else. It takes a
  * permit's removal as it takes a guardrail's, `iam:policy.delete`, and
  * every other write of one as `iam:permit.write`.
  */

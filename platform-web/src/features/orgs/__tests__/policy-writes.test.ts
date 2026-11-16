@@ -167,6 +167,15 @@ describe("createPolicy", () => {
 
     expect(state).toMatchObject({ status: "error", at: "body" });
     expect(posted).toEqual([]);
+
+    // The control: a complete body is stored.
+    await expect(
+      createPolicy(
+        IDLE,
+        form({ org: "acme", name: "N", kind: "guardrail", text: CEDAR }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
+    expect(posted).toHaveLength(1);
   });
 
   it("shows the service's message at the body when it refuses the text", async () => {
@@ -180,6 +189,13 @@ describe("createPolicy", () => {
       at: "body",
       message: "unexpected token at line 1: expected a policy",
     });
+    // The control: Cedar the service parses is stored.
+    await expect(
+      createPolicy(
+        IDLE,
+        form({ org: "acme", name: "Ok", kind: "guardrail", text: CEDAR }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
   });
 
   it("refuses a user principal at organization scope, which the platform derives", async () => {
@@ -197,7 +213,8 @@ describe("createPolicy", () => {
     ).resolves.toMatchObject({
       status: "error",
       at: "body",
-      message: "an organization role of a user is its membership's",
+      message:
+        "a user's organization role is its membership's and is not written here",
     });
     // The control: a team in the same place is stored.
     await expect(
@@ -251,6 +268,15 @@ describe("createPolicy", () => {
           form({ org: "acme", name: "N", kind: "permit", text: CEDAR }),
         ),
       ).resolves.toEqual({ status: "error", at: "form", message: said });
+
+      // The control: the same policy, accepted.
+      server.resetHandlers();
+      await expect(
+        createPolicy(
+          IDLE,
+          form({ org: "acme", name: "N", kind: "permit", text: CEDAR }),
+        ),
+      ).rejects.toThrow("NEXT_REDIRECT");
     },
   );
 
@@ -278,6 +304,23 @@ describe("createPolicy", () => {
       at: "form",
       message: "You can't write a role link in this organization.",
     });
+
+    // The control: the same link, accepted.
+    server.resetHandlers();
+    await expect(
+      createPolicy(
+        IDLE,
+        form({
+          org: "acme",
+          name: "N",
+          kind: "role-link",
+          role: "admin",
+          scope: "organization",
+          principal: engineering.grn,
+          resource: ORG,
+        }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
   });
 });
 
@@ -376,6 +419,20 @@ describe("createPolicyVersion", () => {
         }),
       ),
     ).resolves.toEqual({ status: "error", at: "form", message: said });
+
+    // The control: the same version, accepted.
+    server.resetHandlers();
+    await expect(
+      createPolicyVersion(
+        IDLE,
+        form({
+          org: "acme",
+          policy: DENY_DELETES_ID,
+          kind: "guardrail",
+          text: CEDAR,
+        }),
+      ),
+    ).resolves.toMatchObject({ status: "stored" });
   });
 });
 
@@ -409,7 +466,14 @@ describe("roleLinkChoices", () => {
     ]);
   });
 
-  it("offers nothing from a list that was not read", () => {
+  it("offers nothing from a list that was not read, and names it unlisted", () => {
+    // The control: lists that were read name nothing unlisted.
+    expect(roleLinkChoices(sources).unlisted).toEqual({
+      organizationPrincipals: [],
+      scopedPrincipals: [],
+      scopedResources: [],
+    });
+
     expect(
       roleLinkChoices({
         teams: null,
@@ -421,6 +485,18 @@ describe("roleLinkChoices", () => {
       organizationPrincipals: [],
       scopedPrincipals: [],
       scopedResources: [],
+      unlisted: {
+        organizationPrincipals: ["teams", "agents"],
+        scopedPrincipals: ["people"],
+        scopedResources: ["teams", "projects"],
+      },
     });
+  });
+
+  it("does not call an empty list unlisted", () => {
+    expect(
+      roleLinkChoices({ ...sources, teams: [], agents: [] }).unlisted
+        .organizationPrincipals,
+    ).toEqual([]);
   });
 });

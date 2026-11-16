@@ -25,17 +25,12 @@ export const metadata: Metadata = { title: "Policy — garam" };
 
 type Params = { params: Promise<{ org: string; policy: string }> };
 
-/** The actions `WRITE_ACTION` names, each once, on the policy. */
-function askedOn(policy: string) {
+/** The actions `WRITE_ACTION` names, each once, on the organization. */
+function asked() {
   const actions = new Set(
     Object.values(WRITE_ACTION).flatMap(({ write, remove }) => [write, remove]),
   );
-  return Object.fromEntries(
-    [...actions].map((action) => [
-      action,
-      { action, resource: { type: "policy", id: policy } as const },
-    ]),
-  );
+  return Object.fromEntries([...actions].map((action) => [action, { action }]));
 }
 
 /** The page's header where no policy could be shown. */
@@ -56,16 +51,16 @@ function Unshown({ children }: { children: React.ReactNode }) {
  * version, written on a page of its own.
  *
  * The kind decides which action each write is taken as, so the server
- * is asked once for them all, on the policy, beside the read, and only
- * an explicit deny withdraws a control (ADR-0103). The policy service
- * enforces every write either way.
+ * is asked once for them all, on the organization, beside the read, and
+ * only an explicit deny withdraws a control (ADR-0103). The policy
+ * service enforces every write either way.
  */
 export default async function PolicyPage({ params }: Params) {
   const { org, policy: slug } = await params;
   const [organization, read, permissions] = await Promise.all([
     getOrg(org),
     getIamPolicy(org, slug),
-    checkPermissions(org, askedOn(slug)),
+    checkPermissions(org, asked()),
   ]);
 
   if (organization.status === "unreachable" || read.status === "unreachable") {

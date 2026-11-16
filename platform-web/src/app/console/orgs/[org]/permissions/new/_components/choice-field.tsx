@@ -1,12 +1,23 @@
 import { FormField } from "@garam/design/components/form-field";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@garam/design/ui/select";
 
-/** One option of a `ChoiceField`, under the heading of its group if any. */
+/** One option of a `ChoiceField`, under the heading of its group. */
 export type Choice = { value: string; label: string; group?: string };
 
 /**
- * One labelled choice among `choices`, grouped by kind, submitted under
- * `name`. A native select: it is a form control the browser submits and
- * a test drives without a portal.
+ * One labelled choice among `choices`, grouped by kind, and sent from
+ * a hidden input named `name`, so the form posts before hydration as
+ * after it (as the add-member form does). The select answers the
+ * form's reset with its empty default, which is no choice and is
+ * ignored, so a refused choice stays chosen.
  */
 export function ChoiceField({
   label,
@@ -14,6 +25,7 @@ export function ChoiceField({
   value,
   onChange,
   choices,
+  unlisted,
   empty,
 }: {
   label: string;
@@ -21,37 +33,57 @@ export function ChoiceField({
   value: string;
   onChange: (value: string) => void;
   choices: readonly Choice[];
-  /** What is said where there is nothing to choose from. */
+  /** The kinds whose list garam refused the caller, as plural nouns. */
+  unlisted: readonly string[];
+  /** What is said where nothing was refused and nothing is offered. */
   empty: string;
 }) {
   const groups = [...new Set(choices.map((choice) => choice.group))];
-  const option = (choice: Choice) => (
-    <option key={choice.value} value={choice.value}>
+  const hint =
+    unlisted.length > 0
+      ? `This organization's ${unlisted.join(" and ")} are not listed to you, so none of them can be chosen here.`
+      : choices.length === 0
+        ? empty
+        : undefined;
+  const item = (choice: Choice) => (
+    <SelectItem key={choice.value} value={choice.value}>
       {choice.label}
-    </option>
+    </SelectItem>
   );
   return (
-    <FormField label={label} hint={choices.length === 0 ? empty : undefined}>
+    <FormField label={label} hint={hint}>
       {(control) => (
-        <select
-          {...control}
-          name={name}
-          required
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="h-8 w-full max-w-sm rounded-lg border border-input bg-background px-2.5 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
-        >
-          <option value="">Choose…</option>
-          {groups.map((group) =>
-            group === undefined ? (
-              choices.filter((choice) => choice.group === undefined).map(option)
-            ) : (
-              <optgroup key={group} label={group}>
-                {choices.filter((choice) => choice.group === group).map(option)}
-              </optgroup>
-            ),
-          )}
-        </select>
+        <>
+          <input type="hidden" name={name} value={value} />
+          <Select
+            value={value}
+            onValueChange={(next) => {
+              // The form's reset answers with the empty default; no
+              // option is empty, so that is not a choice.
+              if (next !== "") onChange(next);
+            }}
+          >
+            <SelectTrigger {...control} className="w-full max-w-sm">
+              <SelectValue placeholder="Choose…" />
+            </SelectTrigger>
+            <SelectContent>
+              {groups.map((group) =>
+                group === undefined ? (
+                  choices
+                    .filter((choice) => choice.group === undefined)
+                    .map(item)
+                ) : (
+                  <SelectGroup key={group}>
+                    <SelectLabel>{group}</SelectLabel>
+                    {choices
+                      .filter((choice) => choice.group === group)
+                      .map(item)}
+                  </SelectGroup>
+                ),
+              )}
+            </SelectContent>
+          </Select>
+        </>
       )}
     </FormField>
   );

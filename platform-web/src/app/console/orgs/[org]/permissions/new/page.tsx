@@ -15,7 +15,7 @@ import { SettingsPage } from "../../../../_components/templates/settings-page";
 import { creatableKinds } from "../_components/policy-actions";
 import { CreatePolicyForm } from "./_components/create-policy-form";
 
-/** Head metadata for the create-policy route; Next.js reads it by name. */
+/** Head metadata for the create route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "New policy — garam" };
 
 type Params = { params: Promise<{ org: string }> };

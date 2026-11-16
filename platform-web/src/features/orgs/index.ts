@@ -98,6 +98,7 @@ export {
   roleLinkChoices,
   type RoleLinkChoice,
   type RoleLinkChoices,
+  type RoleLinkSources,
 } from "./role-link-choices";
 export {
   memberLabel,

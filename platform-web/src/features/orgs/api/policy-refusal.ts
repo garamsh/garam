@@ -33,7 +33,9 @@ export function policyRefusal(
   return refusal(error);
 }
 
-/** What is written: a guardrail or permit's Cedar, a link, a version. */
+/**
+ * What is written: a guardrail or permit's Cedar, a link, a version.
+ */
 export type PolicyWrite = "create-cedar" | "create-link" | "version";
 
 /**
@@ -54,7 +56,10 @@ const WRITE_FORBIDDEN: Record<PolicyWrite, string> = {
   version: "You can't add a version to this policy.",
 };
 
-/** What each write says of the policy service holding what it clashes with. */
+/**
+ * What each write says of the policy service holding what it clashes
+ * with.
+ */
 const WRITE_CONFLICT: Record<PolicyWrite, string> = {
   "create-cedar":
     "The policy service holds a policy that conflicts with this one.",

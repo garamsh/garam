@@ -23,8 +23,9 @@ CLI. Three questions were left to this round.
   JSON policy documents. Cedar is parsed by the policy service alone,
   so no editor here can check it.
 - **Where a write is asked.** A policy that does not exist yet has no
-  resource, and the platform answers some of these actions only on a
-  policy.
+  resource, and the platform answers `iam:permit.write` only on the
+  organization; the four `iam:policy.*` writes it answers on the
+  organization as well (#1796).
 
 ## Decision
 
@@ -48,13 +49,20 @@ CLI. Three questions were left to this round.
    the kind, name and body, and opens the policy it created as the
    draft it is. `permissions/{policy}/new-version` is the version
    editor, starting from the default version's text.
-6. **Each write is offered unless the server denies it.** A new policy
-   is asked on the organization: `iam:policy.create` for a guardrail,
-   `iam:permit.write` for a permit and `iam:policy.attach` for a link. A
-   version is asked on the policy, as its other writes are. Only an
-   explicit deny withdraws a control, and the policy service enforces
-   every write either way. A permit's removal stays
-   `iam:policy.delete`, which is what the service takes it as.
+6. **Each write is offered unless the server denies it, asked on the
+   organization.** A new policy is asked with `iam:policy.create` for a
+   guardrail, `iam:permit.write` for a permit and `iam:policy.attach`
+   for a link. Every write of an existing policy is asked on the
+   organization too, never on the policy: `iam:policy.update` for a
+   version, `iam:policy.detach` and `iam:policy.delete` for a removal,
+   and `iam:permit.write` for a permit's writes, which the platform
+   answers on the organization alone. Only an explicit deny withdraws a
+   control, and the policy service enforces every write either way. A
+   permit's removal stays `iam:policy.delete`, which is what the
+   service takes it as.
+   A role link is offered no new version: a changed link is a new link,
+   and the console has no meaning for a link's version beyond the one
+   it was created with, though the relay accepts one.
 7. **A write's refusal is worded for the write.** A 400 shows the
    service's message at the body; 403, 404, 409 and 504 are the
    console's sentences for that write, and any other error is the SDK's.
@@ -65,9 +73,9 @@ CLI. Three questions were left to this round.
   drafts, previews or explains what Cedar would decide.
 - A person sees the service's parse error and nothing the editor knew
   first: no highlighting, no inline marks.
-- Until the platform answers `iam:policy.attach` and `iam:permit.write`
-  on the organization, the one request that asks them is refused with a
-  400, every answer is `unknown`, and every kind is offered; the
+- Until the platform answers the writes asked on the organization
+  (#1981), a request that asks one it does not answer is refused with a
+  400, every answer is `unknown`, and every control is offered; the
   service still refuses a caller who may not, with a 403 said at the
   form.
 - One fewer client dependency family to keep current, and no browser

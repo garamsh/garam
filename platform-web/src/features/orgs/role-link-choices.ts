@@ -14,15 +14,26 @@ export type RoleLinkChoice = {
  * (ADR-0173): at organization scope an agent or a team as principal,
  * never a user, whose organization role is its membership's; at
  * team-or-project scope a user as principal and a team or a project as
- * resource. A list that was not read offers nothing.
+ * resource. A list that was not read offers nothing, and each field
+ * names the kinds it could not list, so a refused read is not said as
+ * an empty one.
  */
 export type RoleLinkChoices = {
   organizationPrincipals: RoleLinkChoice[];
   scopedPrincipals: RoleLinkChoice[];
   scopedResources: RoleLinkChoice[];
+  /** Per field, the plural nouns of the lists it could not read. */
+  unlisted: {
+    organizationPrincipals: string[];
+    scopedPrincipals: string[];
+    scopedResources: string[];
+  };
 };
 
-/** What each list the form draws on holds, or null where it was refused. */
+/**
+ * What each list the form draws on holds, or null where it was
+ * refused.
+ */
 export type RoleLinkSources = {
   teams: readonly Group[] | null;
   agents: readonly Agent[] | null;
@@ -52,7 +63,20 @@ export function roleLinkChoices({
     label: agentChoiceLabel(agent),
     group: "Agents",
   }));
+  const refused = (list: unknown, noun: string) =>
+    list === null ? [noun] : [];
   return {
+    unlisted: {
+      organizationPrincipals: [
+        ...refused(teams, "teams"),
+        ...refused(agents, "agents"),
+      ],
+      scopedPrincipals: refused(members, "people"),
+      scopedResources: [
+        ...refused(teams, "teams"),
+        ...refused(projects, "projects"),
+      ],
+    },
     organizationPrincipals: [...teamChoices, ...agentChoices],
     scopedPrincipals: (members ?? []).map((member): RoleLinkChoice => ({
       value: member.userGrn,

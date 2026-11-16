@@ -20,8 +20,9 @@ const initialState: CreatePolicyVersionState = { status: "idle" };
  * Writes the next version of a guardrail or a permit, starting from the
  * text of the version the policy decides by. A stored version is not
  * the default, and the form says so beside the link that returns to the
- * policy, where the default is moved. A refusal is the editor's error when
- * the policy service refused the text, and above the buttons otherwise.
+ * policy, where the default is moved. A refusal is the editor's error
+ * when the policy service refused the text, and above the buttons
+ * otherwise.
  * The text is controlled so that the reset React runs after an action
  * leaves what was typed.
  */

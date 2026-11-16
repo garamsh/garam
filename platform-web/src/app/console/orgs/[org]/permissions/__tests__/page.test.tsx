@@ -72,11 +72,11 @@ describe("permissions page", () => {
   });
 
   it("offers Create policy unless the server denies every kind", async () => {
-    // The control: one kind allowed and the rest denied still offers it.
+    // The control: one kind allowed and the rest denied still offers
+    // it.
     server.use(
-      answerPermissionChecks(
-        (action) => (action === "iam:policy.create" ? "allow" : "deny"),
-        ["iam:policy.attach"],
+      answerPermissionChecks((action) =>
+        action === "iam:policy.create" ? "allow" : "deny",
       ),
     );
     const some = await renderPolicies();
@@ -86,7 +86,7 @@ describe("permissions page", () => {
     );
     some.unmount();
 
-    server.use(answerPermissionChecks(() => "deny", ["iam:policy.attach"]));
+    server.use(answerPermissionChecks(() => "deny"));
     await renderPolicies();
     expect(
       screen.queryByRole("link", { name: "Create policy" }),

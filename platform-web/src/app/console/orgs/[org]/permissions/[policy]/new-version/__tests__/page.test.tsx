@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import NewVersionPage from "@/app/console/orgs/[org]/permissions/[policy]/new-version/page";
+import { HttpResponse, http } from "msw";
 import {
+  API_URL,
   DENY_DELETES_ID,
   ENGINEERING_ADMINS_ID,
   answerPermissionChecks,
@@ -79,6 +81,12 @@ describe("new version page", () => {
     );
     expect(text).toHaveValue("not cedar");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    // The control: Cedar the service parses is stored.
+    await user.clear(text);
+    await user.type(text, "forbid (principal, action, resource);");
+    await user.click(screen.getByRole("button", { name: "Store version" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Stored as v3");
   });
 
   it("offers a role link no form, and says why", async () => {
@@ -92,6 +100,33 @@ describe("new version page", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "A role link takes no new version",
     );
+    expect(screen.queryByLabelText("Cedar text")).not.toBeInTheDocument();
+  });
+
+  it("withdraws the form from a caller the server denies, asking on the organization", async () => {
+    // The control: a caller allowed is offered the editor.
+    const allowed = await renderNewVersion();
+    expect(screen.getByLabelText("Cedar text")).toBeInTheDocument();
+    allowed.unmount();
+
+    const asked: unknown[] = [];
+    server.use(
+      http.post(
+        `${API_URL}/orgs/acme/permission-checks`,
+        async ({ request }) => {
+          const { checks } = (await request.json()) as { checks: unknown[] };
+          asked.push(...checks);
+          return HttpResponse.json({
+            results: checks.map((check) => ({
+              ...(check as object),
+              decision: "deny",
+            })),
+          });
+        },
+      ),
+    );
+    await renderNewVersion();
+    expect(asked).toEqual([{ action: "iam:policy.update" }]);
     expect(screen.queryByLabelText("Cedar text")).not.toBeInTheDocument();
   });
 

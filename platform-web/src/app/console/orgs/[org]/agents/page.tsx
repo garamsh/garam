@@ -43,8 +43,7 @@ const STANDALONE = "standalone";
 
 /**
  * The organization's agents (ADR-0116), failing ones first, filtered
- * by team and by what runs them, and added to a team or given a policy
- * several at once. Creating one is the page's primary action. A list
+ * by team and by what runs them, and added to a team several at once. Creating one is the page's primary action. A list
  * garam refused is said, never shown as empty. The organization is read
  * for itself, so one the caller cannot read answers 404 (ADR-0011).
  */
@@ -156,7 +155,6 @@ export default async function AgentsPage({ params, searchParams }: Params) {
           ],
         }}
         teamChoices={choices.teamChoices}
-        policyChoices={choices.policyChoices}
         empty={
           <EmptyState
             icon={Bot}

@@ -47,7 +47,7 @@ function useChordLabel(): string {
  * there opens it on the page's own actions alone. None opens it over
  * an alert dialog, which holds the visitor until they answer it — a
  * secret shown once among them. It finds the organization's people,
- * agents, teams, policies and projects by name, and lists its
+ * agents, teams and projects by name, and lists its
  * sections, the page's actions, the caller's organizations and the
  * theme. `orgs` is null when the list was not answered.
  */

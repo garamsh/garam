@@ -1,117 +1,104 @@
 import { z } from "zod";
 
 import { garamFetchAuthenticated, parserFor } from "@/lib/garam";
-import type { PolicyDocument } from "@/lib/policy-document";
 import type { components } from "@garam/platform-sdk-ts/api";
 
-import { parseGrn } from "@/lib/grn";
 import { orgPath, refusableRead, type RefusableRead } from "./orgs";
 
 /**
- * A policy of an organization, as the API returns one. Only an
- * `active` one contributes statements to a check, and then its
- * `defaultVersion` alone (`docs/architecture/authz.md`).
+ * A policy of an organization as the policy service holds it, read
+ * through garam's relay (ADR-0169). Only an `active` one decides, and
+ * then its `defaultVersion` alone.
  */
-export type Policy = components["schemas"]["Policy"];
+export type IamPolicy = components["schemas"]["IamPolicy"];
+/** What a policy is: a role link, a guardrail or a permit. */
+export type IamPolicyKind = components["schemas"]["IamPolicyKind"];
 /** A policy's lifecycle state. */
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
-/**
- * One stored version of a policy. `document` is typed as the console
- * holds it rather than as generated (`PolicyDocument`).
- */
-export type PolicyVersion = Omit<
-  components["schemas"]["PolicyVersion"],
-  "document"
-> & { document: PolicyDocument };
-/**
- * One subject a policy is attached to. `subjectGrn` may name a user,
- * a group or an agent, and nothing guarantees it still names any of
- * them — resolving it is the reader's job.
- */
-export type PolicyAttachment = components["schemas"]["PolicyAttachment"];
+/** What a role link says: who holds which role over what. */
+export type IamRoleLink = components["schemas"]["IamRoleLink"];
+/** What one version holds: Cedar text, or a role link. */
+export type IamPolicyBody = components["schemas"]["IamPolicyBody"];
+/** One stored version of a policy. */
+export type IamPolicyVersion = components["schemas"]["IamPolicyVersion"];
+/** A policy with every version it holds, oldest first. */
+export type IamPolicyDetail = components["schemas"]["IamPolicyDetail"];
 
-const GrnParser = z.string().refine((value) => parseGrn(value) !== null);
+const KindParser = parserFor<IamPolicyKind>()(
+  z.enum(["role-link", "guardrail", "permit"]),
+);
+const StatusParser = parserFor<PolicyStatus>()(z.enum(["draft", "active"]));
 
 /** Parses a policy as `platform/api/openapi.yaml` describes one. */
-export const PolicyParser = parserFor<Policy>()(
+const IamPolicyParser = parserFor<IamPolicy>()(
   z.object({
-    grn: GrnParser,
-    orgGrn: GrnParser,
+    id: z.string().min(1),
     name: z.string(),
-    status: z.enum(["draft", "active"]),
+    kind: KindParser,
+    status: StatusParser,
     defaultVersion: z.number().int().min(1),
-    createdAt: z.string(),
-    updatedAt: z.string(),
+  }),
+);
+
+const IamRoleLinkParser = parserFor<IamRoleLink>()(
+  z.object({
+    role: z.enum(["owner", "admin", "member"]),
+    scope: z.enum(["organization", "team-or-project"]),
+    principal: z.string(),
+    resource: z.string(),
+  }),
+);
+
+const IamPolicyBodyParser = parserFor<IamPolicyBody>()(
+  z.object({
+    kind: KindParser,
+    text: z.string().optional(),
+    roleLink: IamRoleLinkParser.optional(),
+  }),
+);
+
+const IamPolicyDetailParser = parserFor<IamPolicyDetail>()(
+  z.object({
+    policy: IamPolicyParser,
+    versions: z.array(
+      z.object({
+        version: z.number().int().min(1),
+        body: IamPolicyBodyParser,
+        createdBy: z.string(),
+      }),
+    ),
   }),
 );
 
 /**
- * Parses a policy version: the generated fields, and the document as a
- * JSON object rather than the generated `Record<string, never>`.
+ * An organization's policies. Reading them is the policy service's
+ * decision, so a refusal is a state of its own; a page reading this
+ * also reads the organization, whose refusal stays not-found
+ * (ADR-0011).
  */
-export const PolicyVersionParser = parserFor<
-  Omit<components["schemas"]["PolicyVersion"], "document">
->()(
-  z.object({
-    policyGrn: GrnParser,
-    version: z.number().int().min(1),
-    createdBy: GrnParser,
-    createdAt: z.string(),
-  }),
-).and(z.object({ document: z.record(z.string(), z.unknown()) }));
-
-/** Parses one attachment of a policy to a subject. */
-export const PolicyAttachmentParser = parserFor<PolicyAttachment>()(
-  z.object({
-    policyGrn: GrnParser,
-    subjectGrn: GrnParser,
-    createdAt: z.string(),
-  }),
-);
-
-/**
- * An organization's policies. Reading them is an admin action, so a
- * refusal is a state of its own; a page reading this also reads the
- * organization, whose refusal stays not-found (ADR-0011).
- */
-export function listPolicies(org: string): Promise<RefusableRead<Policy[]>> {
+export function listIamPolicies(
+  org: string,
+): Promise<RefusableRead<IamPolicy[]>> {
   return refusableRead(
     garamFetchAuthenticated(
-      `/orgs/${orgPath(org)}/policies`,
-      z.array(PolicyParser),
+      `/orgs/${orgPath(org)}/iam-policies`,
+      z.array(IamPolicyParser),
     ),
   );
 }
 
 /**
- * The stored versions of one policy, oldest first. garam answers an
- * empty list for a policy that does not exist, so a page establishes
- * that the policy exists from `listPolicies`.
+ * One policy with its versions. A policy the organization does not
+ * hold is a 404, which `refusableRead` leaves to throw.
  */
-export function listPolicyVersions(
+export function getIamPolicy(
   org: string,
   policy: string,
-): Promise<RefusableRead<PolicyVersion[]>> {
+): Promise<RefusableRead<IamPolicyDetail>> {
   return refusableRead(
     garamFetchAuthenticated(
-      `/orgs/${orgPath(org)}/policies/${orgPath(policy)}/versions`,
-      z.array(PolicyVersionParser),
-    ),
-  );
-}
-
-/**
- * The subjects one policy is attached to. As with versions, a policy
- * that does not exist answers an empty list.
- */
-export function listPolicyAttachments(
-  org: string,
-  policy: string,
-): Promise<RefusableRead<PolicyAttachment[]>> {
-  return refusableRead(
-    garamFetchAuthenticated(
-      `/orgs/${orgPath(org)}/policies/${orgPath(policy)}/attachments`,
-      z.array(PolicyAttachmentParser),
+      `/orgs/${orgPath(org)}/iam-policies/${orgPath(policy)}`,
+      IamPolicyDetailParser,
     ),
   );
 }

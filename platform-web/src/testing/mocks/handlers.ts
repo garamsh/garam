@@ -18,9 +18,8 @@ import type {
   OrgConsent,
   OrgDeletionPreview,
   Organization,
-  Policy,
-  PolicyAttachment,
-  PolicyVersion,
+  IamPolicy,
+  IamPolicyDetail,
   Project,
 } from "@/features/orgs";
 
@@ -128,56 +127,71 @@ export const engineeringMembers: GroupMember[] = [
   { memberGrn: reportedAgent.grn },
 ];
 
-/**
- * An active policy of Acme attached to Engineering, evaluating the
- * first of its two versions.
- */
-export const denyDeletes: Policy = {
-  grn: "grn:acme/iam/policy/d1e2f3a4b5c6d7e8",
-  orgGrn: acme.grn,
-  name: "Deny project deletion",
-  status: "active",
-  defaultVersion: 1,
-  createdAt: "2026-01-02T03:04:05Z",
-  updatedAt: "2026-01-02T03:04:05Z",
+/** The identifier of `denyDeletes`, as the policy service issues one. */
+export const DENY_DELETES_ID = "p-d1e2f3a4b5c6d7e8d1e2f3a4b5c6d7e8";
+
+/** The identifier of `engineeringAdmins`. */
+export const ENGINEERING_ADMINS_ID = "p-0a1b2c3d4e5f60710a1b2c3d4e5f6071";
+
+/** An active guardrail of Acme, deciding by the first of two versions. */
+export const denyDeletes: IamPolicyDetail = {
+  policy: {
+    id: DENY_DELETES_ID,
+    name: "Deny project deletion",
+    kind: "guardrail",
+    status: "active",
+    defaultVersion: 1,
+  },
+  versions: [1, 2].map((version) => ({
+    version,
+    body: {
+      kind: "guardrail",
+      text: `forbid (principal, action == Action::"${
+        version === 1 ? "iam:project.delete" : "iam:project.update"
+      }", resource);`,
+    },
+    createdBy: alice.grn,
+  })),
 };
 
-/** The two versions `denyDeletes` holds, oldest first. */
-export const denyDeletesVersions: PolicyVersion[] = [1, 2].map((version) => ({
-  policyGrn: denyDeletes.grn,
-  version,
-  document: {
-    Version: "2026-07-25",
-    Statement: [
-      {
-        Effect: "Deny",
-        Action: version === 1 ? ["iam:project.delete"] : ["iam:project.*"],
-        Resource: ["grn:acme/*"],
+/** A draft role link: Engineering holds admin over the frontend project. */
+export const engineeringAdmins: IamPolicyDetail = {
+  policy: {
+    id: ENGINEERING_ADMINS_ID,
+    name: "Engineering admins",
+    kind: "role-link",
+    status: "draft",
+    defaultVersion: 1,
+  },
+  versions: [
+    {
+      version: 1,
+      body: {
+        kind: "role-link",
+        roleLink: {
+          role: "admin",
+          scope: "team-or-project",
+          principal: engineering.grn,
+          resource: frontend.grn,
+        },
       },
-    ],
-  },
-  createdBy: alice.grn,
-  createdAt: "2026-01-02T03:04:05Z",
-}));
+      createdBy: alice.grn,
+    },
+  ],
+};
 
-/** `denyDeletes`'s one attachment, to Engineering. */
-export const denyDeletesAttachments: PolicyAttachment[] = [
-  {
-    policyGrn: denyDeletes.grn,
-    subjectGrn: engineering.grn,
-    createdAt: "2026-01-02T03:04:05Z",
-  },
-];
+/** Every policy Acme holds, read through the list. */
+export const acmePolicies: IamPolicy[] = [denyDeletes, engineeringAdmins].map(
+  ({ policy }) => policy,
+);
 
-/** An active policy of Acme with no attachment: it reaches everyone. */
-export const baselineRead: Policy = {
-  grn: "grn:acme/iam/policy/0a1b2c3d4e5f6071",
-  orgGrn: acme.grn,
-  name: "Baseline read",
-  status: "active",
-  defaultVersion: 1,
-  createdAt: "2026-01-02T03:04:05Z",
-  updatedAt: "2026-01-02T03:04:05Z",
+/**
+ * A policy of the earlier engine, which the search still finds and the
+ * permissions pages no longer open.
+ */
+const earlierEnginePolicy = {
+  grn: "grn:acme/iam/policy/d1e2f3a4b5c6d7e8",
+  name: "Deny project deletion",
 };
 
 /**
@@ -311,31 +325,12 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
     body: [pendingApproval],
   },
   { path: "/orgs/acme/agent-supervisors", guarded: true, body: [buildHost] },
-  {
-    path: "/orgs/acme/policies",
+  { path: "/orgs/acme/iam-policies", guarded: true, body: acmePolicies },
+  ...[denyDeletes, engineeringAdmins].map((detail) => ({
+    path: `/orgs/acme/iam-policies/${detail.policy.id}`,
     guarded: true,
-    body: [denyDeletes, baselineRead],
-  },
-  {
-    path: "/orgs/acme/policies/d1e2f3a4b5c6d7e8/versions",
-    guarded: true,
-    body: denyDeletesVersions,
-  },
-  {
-    path: "/orgs/acme/policies/d1e2f3a4b5c6d7e8/attachments",
-    guarded: true,
-    body: denyDeletesAttachments,
-  },
-  {
-    path: "/orgs/acme/policies/0a1b2c3d4e5f6071/versions",
-    guarded: true,
-    body: [{ ...denyDeletesVersions[0], policyGrn: baselineRead.grn }],
-  },
-  {
-    path: "/orgs/acme/policies/0a1b2c3d4e5f6071/attachments",
-    guarded: true,
-    body: [],
-  },
+    body: detail,
+  })),
 ];
 
 const PermissionCheckRequest = z.object({
@@ -408,7 +403,7 @@ function searchFixtures(org: string, q: string, limit: number): OrgSearch {
     ],
     ["agent", [{ grn: reportedAgent.grn }]],
     ["team", [engineering]],
-    ["policy", [denyDeletes, baselineRead]],
+    ["policy", [earlierEnginePolicy]],
     ["project", [frontend]],
   ];
   const needle = q.trim().toLowerCase();

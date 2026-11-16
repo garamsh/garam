@@ -5,7 +5,7 @@ import { History } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { JsonDiff } from "@/components/json-diff";
 import { StatusDot } from "@/components/status-dot";
-import { Time } from "@/components/time";
+import type { IamPolicyBody } from "@/features/orgs";
 import { Button } from "@garam/design/ui/button";
 import {
   Dialog,
@@ -18,15 +18,14 @@ import {
 
 import { EmptyState } from "../../../../../_components/empty-state";
 import { MakeDefaultDialog } from "./make-default-dialog";
+import { PolicyBody, bodyText } from "./policy-body";
 
 /** One stored version as the table shows it. */
 export type VersionRow = {
   version: number;
-  /** The document, as indented JSON. */
-  text: string;
-  savedAt: string;
+  body: IamPolicyBody;
+  /** Who wrote it, as the policy service names them. */
   author: string;
-  conditioned: boolean;
 };
 
 /** What every row's make-default control needs to know. */
@@ -34,15 +33,14 @@ export type VersionTableContext = {
   org: string;
   policy: string;
   defaultVersion: number;
-  defaultText: string | null;
+  /** The default version's body, or undefined where it was not stored. */
+  defaultBody: IamPolicyBody | undefined;
   active: boolean;
-  reach: string;
-  orgWide: boolean;
   /** Whether making a version the default is offered. */
-  canUpdate: boolean;
+  canWrite: boolean;
 };
 
-/** One version's document, against the default where it is not it. */
+/** One version's body, against the default where it is not it. */
 function CompareDialog({
   row,
   context,
@@ -51,11 +49,15 @@ function CompareDialog({
   context: VersionTableContext;
 }) {
   const isDefault = row.version === context.defaultVersion;
+  const defaultText =
+    context.defaultBody === undefined ? null : bodyText(context.defaultBody);
+  const text = bodyText(row.body);
+  const diffed = !isDefault && defaultText !== null && text !== null;
   return (
     <Dialog>
       <DialogTrigger asChild>
         <Button type="button" variant="ghost" size="sm">
-          {isDefault || context.defaultText === null ? "View" : "Compare"}
+          {diffed ? "Compare" : "View"}
           <span className="sr-only"> v{row.version}</span>
         </Button>
       </DialogTrigger>
@@ -63,23 +65,21 @@ function CompareDialog({
         <DialogHeader>
           <DialogTitle>Version {row.version}</DialogTitle>
           <DialogDescription>
-            Saved by {row.author}.{" "}
+            Written by {row.author}.{" "}
             {isDefault
               ? "The default."
               : `Against v${context.defaultVersion}, the default.`}
           </DialogDescription>
         </DialogHeader>
-        {isDefault || context.defaultText === null ? (
-          <pre className="max-h-96 overflow-auto rounded-lg border bg-muted/30 p-3 font-mono text-table leading-[1.6]">
-            {row.text}
-          </pre>
-        ) : (
+        {diffed ? (
           <JsonDiff
-            before={context.defaultText}
-            after={row.text}
+            before={defaultText}
+            after={text}
             beforeLabel={`v${context.defaultVersion} (default)`}
             afterLabel={`v${row.version}`}
           />
+        ) : (
+          <PolicyBody body={row.body} />
         )}
       </DialogContent>
     </Dialog>
@@ -105,23 +105,16 @@ function columns(
               label={context.active ? "In use" : "Default"}
             />
           )}
-          {row.original.conditioned && (
-            <StatusDot tone="warn" label="Has a Condition" />
-          )}
         </span>
       ),
     },
     {
-      id: "saved",
-      header: "Saved",
-      accessorFn: (row) => row.savedAt,
-      enableGlobalFilter: false,
+      id: "author",
+      header: "Written by",
+      accessorFn: (row) => row.author,
       cell: ({ row }) => (
-        <span className="flex flex-col">
-          <Time value={row.original.savedAt} />
-          <span className="text-muted-foreground">
-            by {row.original.author}
-          </span>
+        <span className="break-all font-mono text-table">
+          {row.original.author}
         </span>
       ),
     },
@@ -132,19 +125,20 @@ function columns(
       cell: ({ row }) => (
         <span className="flex flex-wrap items-center justify-end gap-1">
           <CompareDialog row={row.original} context={context} />
-          {context.canUpdate &&
+          {context.canWrite &&
             row.original.version !== context.defaultVersion && (
               <MakeDefaultDialog
                 org={context.org}
                 policy={context.policy}
                 current={context.defaultVersion}
-                currentText={context.defaultText}
+                currentText={
+                  context.defaultBody === undefined
+                    ? null
+                    : bodyText(context.defaultBody)
+                }
                 target={row.original.version}
-                targetText={row.original.text}
+                targetText={bodyText(row.original.body)}
                 active={context.active}
-                reach={context.reach}
-                orgWide={context.orgWide}
-                conditioned={row.original.conditioned}
               />
             )}
         </span>
@@ -155,7 +149,7 @@ function columns(
 
 /**
  * A policy's versions, newest first. The default is marked, and every
- * other one can be compared with it and made the default — a rollback,
+ * other one can be compared with it and made the default, a rollback
  * where it is older.
  */
 export function VersionTable({

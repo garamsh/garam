@@ -9,91 +9,95 @@ import { DeletePolicyDialog } from "@/app/console/orgs/[org]/permissions/[policy
 import { MakeDefaultDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/make-default-dialog";
 import { Outcome, OutcomeProvider } from "@/app/console/_components/outcome";
 import { REFUSAL_COPY } from "@garam/platform-sdk-ts/refusal-copy";
-import { API_URL, baselineRead, denyDeletes } from "@/testing/mocks/handlers";
+import { API_URL, DENY_DELETES_ID } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const BASELINE = `${API_URL}/orgs/acme/policies/0a1b2c3d4e5f6071`;
-const DENY = `${API_URL}/orgs/acme/policies/d1e2f3a4b5c6d7e8`;
-const EVERYONE = "Applies to everyone: it has no attachments.";
-const V1 = '{\n  "Effect": "Deny"\n}';
-const V2 = '{\n  "Effect": "Allow"\n}';
+const DENY = `${API_URL}/orgs/acme/iam-policies/${DENY_DELETES_ID}`;
+const V1 =
+  'forbid (principal, action == Action::"iam:project.delete", resource);';
+const V2 =
+  'forbid (principal, action == Action::"iam:project.update", resource);';
 
 describe("activate policy dialog", () => {
-  it("states the version and the scope, and asks to confirm everyone", async () => {
+  it("states the version it decides by and posts the activation", async () => {
     const activated: string[] = [];
     server.use(
-      http.post(`${BASELINE}/activate`, () => {
-        activated.push("baseline");
-        return HttpResponse.json(baselineRead);
+      http.post(`${DENY}/activate`, () => {
+        activated.push("deny");
+        return new HttpResponse(null, { status: 204 });
       }),
     );
     const user = userEvent.setup();
     render(
       <ActivatePolicyDialog
         org="acme"
-        policy="0a1b2c3d4e5f6071"
-        policyName="Baseline read"
-        version={1}
-        reach={EVERYONE}
-        orgWide
-        conditioned={false}
+        policy={DENY_DELETES_ID}
+        policyName="Deny project deletion"
+        version={2}
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "Activate" }));
     const dialog = await screen.findByRole("alertdialog", {
-      name: "Activate Baseline read?",
+      name: "Activate Deny project deletion?",
     });
 
-    expect(dialog).toHaveAccessibleDescription(EVERYONE);
-    const confirm = within(dialog).getByRole("checkbox", {
-      name: "Apply it to everyone",
-    });
-    expect(confirm).toBeRequired();
-    await user.click(confirm);
-    await user.click(
-      within(dialog).getByRole("button", { name: "Activate for everyone" }),
+    expect(dialog).toHaveAccessibleDescription(
+      "v2 decides for this organization from now on.",
     );
-    await waitFor(() => expect(activated).toEqual(["baseline"]));
+    expect(activated).toEqual([]);
+    await user.click(
+      within(dialog).getByRole("button", { name: "Activate policy" }),
+    );
+    await waitFor(() => expect(activated).toEqual(["deny"]));
     await waitFor(() =>
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
     );
   });
 
-  it("asks nothing more of an attached policy", async () => {
+  it("keeps a refusal in the dialog and does not say it activated", async () => {
+    server.use(
+      http.post(`${DENY}/activate`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "denied: iam:policy.update" },
+          { status: 403 },
+        ),
+      ),
+    );
     const user = userEvent.setup();
     render(
-      <ActivatePolicyDialog
-        org="acme"
-        policy="d1e2f3a4b5c6d7e8"
-        policyName="Deny project deletion"
-        version={1}
-        reach="Applies to Engineering (Team)."
-        orgWide={false}
-        conditioned={false}
-      />,
+      <OutcomeProvider>
+        <Outcome area="lifecycle" />
+        <ActivatePolicyDialog
+          org="acme"
+          policy={DENY_DELETES_ID}
+          policyName="Deny project deletion"
+          version={1}
+        />
+      </OutcomeProvider>,
     );
 
     await user.click(screen.getByRole("button", { name: "Activate" }));
     const dialog = await screen.findByRole("alertdialog");
-
-    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(
+    await user.click(
       within(dialog).getByRole("button", { name: "Activate policy" }),
-    ).toBeInTheDocument();
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.permissionDenied,
+    );
+    expect(screen.queryByText("Activated v1")).not.toBeInTheDocument();
   });
 });
 
 describe("make default dialog", () => {
   const props = {
     org: "acme",
-    policy: "d1e2f3a4b5c6d7e8",
+    policy: DENY_DELETES_ID,
     currentText: V2,
     targetText: V1,
-    reach: "Applies to Engineering (Team).",
-    orgWide: false,
   };
 
   it("names both versions, shows the change and posts the chosen one", async () => {
@@ -102,31 +106,23 @@ describe("make default dialog", () => {
     server.use(
       http.post(`${DENY}/rollback`, async ({ request }) => {
         posted.push(Rollback.parse(await request.json()));
-        return HttpResponse.json(denyDeletes);
+        return new HttpResponse(null, { status: 204 });
       }),
     );
     const user = userEvent.setup();
-    render(
-      <MakeDefaultDialog
-        {...props}
-        current={2}
-        target={1}
-        active
-        conditioned={false}
-      />,
-    );
+    render(<MakeDefaultDialog {...props} current={2} target={1} active />);
 
     await user.click(screen.getByRole("button", { name: "Roll back to v1" }));
     const dialog = await screen.findByRole("alertdialog", {
       name: "Roll back to v1?",
     });
     expect(dialog).toHaveAccessibleDescription(
-      "Applies to Engineering (Team).",
+      "v1 decides for this organization from now on.",
     );
-    // The diff says what the rollback removes and adds, in words.
+    // The diff says what the rollback removes and adds.
     const diff = within(dialog).getByRole("figure");
-    expect(diff).toHaveTextContent('Removed: "Effect": "Allow"');
-    expect(diff).toHaveTextContent('Added: "Effect": "Deny"');
+    expect(diff).toHaveTextContent("iam:project.update");
+    expect(diff).toHaveTextContent("iam:project.delete");
 
     await user.click(
       within(dialog).getByRole("button", { name: "Roll back to v1" }),
@@ -139,19 +135,16 @@ describe("make default dialog", () => {
 
   it("says a new default in the versions area, which outlives its row", async () => {
     server.use(
-      http.post(`${DENY}/rollback`, () => HttpResponse.json(denyDeletes)),
+      http.post(
+        `${DENY}/rollback`,
+        () => new HttpResponse(null, { status: 204 }),
+      ),
     );
     const user = userEvent.setup();
     render(
       <OutcomeProvider>
         <Outcome area="versions" />
-        <MakeDefaultDialog
-          {...props}
-          current={1}
-          target={2}
-          active
-          conditioned={false}
-        />
+        <MakeDefaultDialog {...props} current={1} target={2} active />
       </OutcomeProvider>,
     );
 
@@ -165,82 +158,54 @@ describe("make default dialog", () => {
     expect(said.closest("[role=status]")).toBeInTheDocument();
   });
 
-  it("says the version to evaluate carries a Condition that restricts nothing", async () => {
-    const user = userEvent.setup();
-    // The control: without a Condition, the dialog carries no notice.
-    const plain = render(
-      <MakeDefaultDialog
-        {...props}
-        current={1}
-        target={2}
-        active
-        conditioned={false}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: "Make v2 default" }));
-    expect(
-      screen.queryByText(
-        "Conditions are ignored: the statement applies as if it had none",
+  it("keeps a refusal in the dialog and does not say the default moved", async () => {
+    server.use(
+      http.post(`${DENY}/rollback`, () =>
+        HttpResponse.json(
+          { kind: "unavailable", message: "policy service down" },
+          { status: 503 },
+        ),
       ),
-    ).not.toBeInTheDocument();
-    plain.unmount();
-
-    render(
-      <MakeDefaultDialog
-        {...props}
-        current={1}
-        target={2}
-        active
-        conditioned
-      />,
     );
-    await user.click(screen.getByRole("button", { name: "Make v2 default" }));
-
-    expect(
-      await screen.findByText(
-        "Conditions are ignored: the statement applies as if it had none",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("carries the everyone confirmation for an active policy with no attachment", async () => {
     const user = userEvent.setup();
-    const active = render(
-      <MakeDefaultDialog
-        {...props}
-        reach={EVERYONE}
-        orgWide
-        current={1}
-        target={2}
-        active
-        conditioned={false}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: "Make v2 default" }));
-    expect(
-      await screen.findByRole("checkbox", {
-        name: "Apply it to everyone",
-      }),
-    ).toBeRequired();
-    active.unmount();
-
-    // The control: the same change on a draft evaluates nothing, so it
-    // carries no such confirmation.
     render(
-      <MakeDefaultDialog
-        {...props}
-        reach={EVERYONE}
-        orgWide
-        current={1}
-        target={2}
-        active={false}
-        conditioned={false}
-      />,
+      <OutcomeProvider>
+        <Outcome area="versions" />
+        <MakeDefaultDialog {...props} current={1} target={2} active />
+      </OutcomeProvider>,
     );
+
     await user.click(screen.getByRole("button", { name: "Make v2 default" }));
     const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(dialog).toHaveAccessibleDescription(
+    await user.click(
+      within(dialog).getByRole("button", { name: "Make v2 default" }),
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.unreachable,
+    );
+    expect(
+      screen.queryByText("v2 is now the default."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says nothing applies yet for a draft, and decides at once for an active policy", async () => {
+    const user = userEvent.setup();
+    const active = render(
+      <MakeDefaultDialog {...props} current={1} target={2} active />,
+    );
+    await user.click(screen.getByRole("button", { name: "Make v2 default" }));
+    expect(await screen.findByRole("alertdialog")).toHaveAccessibleDescription(
+      "v2 decides for this organization from now on.",
+    );
+    active.unmount();
+
+    // The control: the same change on a draft evaluates nothing.
+    render(
+      <MakeDefaultDialog {...props} current={1} target={2} active={false} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Make v2 default" }));
+    expect(await screen.findByRole("alertdialog")).toHaveAccessibleDescription(
       "Nothing applies until activated.",
     );
   });
@@ -259,7 +224,7 @@ describe("delete policy dialog", () => {
     render(
       <DeletePolicyDialog
         org="acme"
-        policy="d1e2f3a4b5c6d7e8"
+        policy={DENY_DELETES_ID}
         policyName="Deny project deletion"
       />,
     );
@@ -295,7 +260,7 @@ describe("delete policy dialog", () => {
     render(
       <DeletePolicyDialog
         org="acme"
-        policy="d1e2f3a4b5c6d7e8"
+        policy={DENY_DELETES_ID}
         policyName="Deny project deletion"
       />,
     );

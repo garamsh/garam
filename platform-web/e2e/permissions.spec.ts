@@ -4,7 +4,7 @@ import { z } from "zod";
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, holdSession, test } from "./fixtures";
 import { seedMember, type Seed } from "./seed";
-import { formatGrn, slugFromGrn } from "../src/lib/grn";
+import { formatGrn } from "../src/lib/grn";
 
 /** Opens a tab of the page and waits until it is the one shown. */
 async function openTab(page: Page, name: string | RegExp): Promise<void> {
@@ -25,463 +25,234 @@ async function clickUntil(control: Locator, opened: Locator): Promise<void> {
   }).toPass({ timeout: 15_000 });
 }
 
-/** A document denying actions across the seeded organization. */
-function denyDocument(orgSlug: string, actions: string[]): string {
-  return JSON.stringify({
-    Version: "2026-07-25",
-    Statement: [
-      { Effect: "Deny", Action: actions, Resource: [`grn:${orgSlug}/*`] },
-    ],
-  });
+/** One Cedar `forbid` over an action, which a guardrail holds. */
+function forbid(action: string): string {
+  return `forbid (principal, action == Iam::Action::"${action}", resource);`;
 }
 
-/** The seeded team's GRN: its identifier is `engineering`. */
-function teamGrn(seed: Seed): string {
-  return formatGrn(seed.orgSlug, "iam", "group", "engineering");
-}
+const CreatedPolicy = z.object({ id: z.string() });
 
 /**
- * Creates a policy through the API the console calls, for a test whose
- * subject is what happens after creation. Answers its identifier.
+ * Creates a guardrail through the API the console calls, for a test
+ * whose subject is what the console does with it. Answers its
+ * identifier.
  */
-async function createPolicy(
+async function createGuardrail(
   request: APIRequestContext,
   seed: Seed,
   name: string,
-  document: string,
+  action = "agent.activate",
 ): Promise<string> {
-  const created = await request.post(`/api/orgs/${seed.orgSlug}/policies`, {
-    data: { name, document: JSON.parse(document) },
+  const created = await request.post(`/api/orgs/${seed.orgSlug}/iam-policies`, {
+    data: { name, body: { kind: "guardrail", text: forbid(action) } },
   });
   expect(created.status()).toBe(201);
-  const { grn } = z.object({ grn: z.string() }).parse(await created.json());
-  return slugFromGrn(grn);
+  return CreatedPolicy.parse(await created.json()).id;
 }
 
-/** Attaches a policy to the seeded team and activates it, through the API. */
-async function attachToTeamAndActivate(
+/** Creates a role link of the seeded team over the organization. */
+async function createRoleLink(
+  request: APIRequestContext,
+  seed: Seed,
+  name: string,
+): Promise<string> {
+  const created = await request.post(`/api/orgs/${seed.orgSlug}/iam-policies`, {
+    data: {
+      name,
+      body: {
+        kind: "role-link",
+        roleLink: {
+          role: "admin",
+          scope: "organization",
+          principal: formatGrn(seed.orgSlug, "iam", "group", "engineering"),
+          resource: formatGrn("root", "iam", "org", seed.orgSlug),
+        },
+      },
+    },
+  });
+  expect(created.status()).toBe(201);
+  return CreatedPolicy.parse(await created.json()).id;
+}
+
+/** Stores a second version of a guardrail, which is not the default. */
+async function storeVersion(
   request: APIRequestContext,
   seed: Seed,
   policy: string,
+  action: string,
 ): Promise<void> {
-  const base = `/api/orgs/${seed.orgSlug}/policies/${policy}`;
-  const attached = await request.post(`${base}/attachments`, {
-    data: { subjectGrn: teamGrn(seed) },
-  });
-  expect(attached.status()).toBe(201);
-  expect((await request.post(`${base}/activate`)).status()).toBe(200);
-}
-
-function policyUrl(seed: Seed, policy: string): string {
-  return `/console/orgs/${seed.orgSlug}/permissions/${policy}`;
-}
-
-function heading(page: Page, name: string): Locator {
-  return page.getByRole("heading", { level: 1, name, exact: true });
-}
-
-/**
- * Replaces the JSON view's whole text. CodeMirror is a content-editable
- * region, not a field, so it is selected and typed over as a person
- * would; it takes input once it has loaded.
- */
-async function replaceJson(page: Page, text: string): Promise<void> {
-  await page.getByRole("tab", { name: "JSON", exact: true }).click();
-  const json = page.getByRole("textbox", { name: "Document JSON" });
-  await json.click();
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.insertText(text);
+  const saved = await request.post(
+    `/api/orgs/${seed.orgSlug}/iam-policies/${policy}/versions`,
+    { data: { body: { kind: "guardrail", text: forbid(action) } } },
+  );
+  expect(saved.status()).toBe(201);
 }
 
 test.describe("permissions", () => {
-  test("creates a draft, attaches it to a team and sees it deny a member", async ({
+  test("lists the policies by kind and state, each opening its page", async ({
     page,
     signedIn,
   }) => {
-    // The seeded person joins the seeded team, so a policy attached to
-    // the team reaches them through it.
-    const joined = await page.request.post(
-      `/api/orgs/${signedIn.orgSlug}/groups/engineering/members`,
-      { data: { memberGrn: signedIn.userGrn } },
+    const guardrail = await createGuardrail(
+      page.request,
+      signedIn,
+      "Deny project deletion",
     );
-    expect(joined.status()).toBe(204);
+    await createRoleLink(page.request, signedIn, "Engineering admins");
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
-    await expect(page.getByText("No policies", { exact: true })).toBeVisible();
-    await page
-      .getByRole("link", { name: "Create policy", exact: true })
-      .first()
-      .click();
-    await expect(heading(page, "New policy")).toBeVisible();
 
-    // A document the engine refuses leaves what was typed in place, and
-    // the refusal attaches to the editor.
-    const name = page.getByLabel("Policy name", { exact: true });
-    await expect(name).toBeEnabled();
-    await name.fill("Deny project renames");
-    await replaceJson(
-      page,
-      JSON.stringify({
-        Version: "2026-07-25",
-        Statement: [
-          { Effect: "Maybe", Action: ["iam:project.delete"], Resource: ["*"] },
-        ],
-      }),
+    const row = page.getByRole("row", { name: /Deny project deletion/ });
+    await expect(row).toContainText("Guardrail");
+    await expect(row).toContainText("Draft");
+    await expect(row).toContainText("v1");
+    await expect(
+      page.getByRole("row", { name: /Engineering admins/ }),
+    ).toContainText("Role link");
+    // Creating one is not offered here: the page says where it is done.
+    await expect(
+      page.getByText("A policy is created through the API or the CLI."),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Create policy" })).toHaveCount(
+      0,
     );
-    const create = page.getByRole("button", {
-      name: "Create draft",
-      exact: true,
-    });
-    await create.click();
-    const editor = page.getByRole("group", { name: "Document", exact: true });
-    // The engine names the rule and the place (#1387), and the reason
-    // crosses the gRPC hop and the API to the sentence the editor
-    // shows.
-    await expect(editor.getByRole("alert")).toHaveText(
-      "Statement 1's Effect must be Allow or Deny.",
+
+    await page.getByRole("link", { name: "Deny project deletion" }).click();
+
+    await expect(page).toHaveURL(
+      `/console/orgs/${signedIn.orgSlug}/permissions/${guardrail}`,
     );
     await expect(
-      page.getByRole("textbox", { name: "Document JSON" }),
-    ).toHaveAttribute("aria-invalid", "true");
-    await expect(name).toHaveValue("Deny project renames");
-    // The structured view marks the control the place names, and only
-    // it.
-    await page.getByRole("tab", { name: "Statements", exact: true }).click();
-    const effect = page.getByRole("combobox", { name: "Statement 1 effect" });
-    await expect(effect).toContainText("Maybe");
-    await expect(effect).toHaveAttribute("aria-invalid", "true");
-    await expect(
-      page.getByRole("textbox", { name: "Statement 1 action 1" }),
-    ).not.toHaveAttribute("aria-invalid");
-
-    // A document naming the resource garam authorizes a project rename
-    // against, so activated it denies the rename.
-    await replaceJson(
-      page,
-      JSON.stringify({
-        Version: "2026-07-25",
-        Statement: [
-          {
-            Effect: "Deny",
-            Action: ["iam:project.update"],
-            Resource: [`grn:${signedIn.orgSlug}/iam/project/*`],
-          },
-        ],
-      }),
+      page.getByRole("heading", { level: 1, name: "Deny project deletion" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Cedar text")).toContainText(
+      forbid("agent.activate"),
     );
-    await expect(editor.getByRole("alert")).toBeHidden();
-    await create.click();
-    await expect(heading(page, "Deny project renames")).toBeVisible();
+  });
+
+  test("shows a role link's role, scope, principal and resource", async ({
+    page,
+    signedIn,
+  }) => {
+    const roleLink = await createRoleLink(
+      page.request,
+      signedIn,
+      "Engineering admins",
+    );
+
+    await page.goto(
+      `/console/orgs/${signedIn.orgSlug}/permissions/${roleLink}`,
+    );
+
+    await expect(page.getByText("Role link", { exact: true })).toBeVisible();
+    await expect(page.getByText("admin", { exact: true })).toBeVisible();
+    await expect(
+      page.getByLabel("Definition").getByText("Organization", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        formatGrn(signedIn.orgSlug, "iam", "group", "engineering"),
+        {
+          exact: true,
+        },
+      ),
+    ).toBeVisible();
+  });
+
+  test("activates a draft, then makes another version the default", async ({
+    page,
+    signedIn,
+  }) => {
+    const policy = await createGuardrail(
+      page.request,
+      signedIn,
+      "Deny project deletion",
+    );
+    await storeVersion(page.request, signedIn, policy, "agent.configure");
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions/${policy}`);
+    await expectHydrated(page);
     await expect(page.getByText("Draft", { exact: true })).toBeVisible();
 
-    await page.getByRole("tab", { name: /^Attachments/ }).click();
-    await clickUntil(
-      page.getByRole("combobox", { name: "Attach to" }),
-      page.getByRole("option", { name: `${signedIn.groupName} · Team` }),
-    );
-    await page
-      .getByRole("option", { name: `${signedIn.groupName} · Team` })
-      .click();
-    await page.getByRole("button", { name: "Attach", exact: true }).click();
-    // Substring on purpose: a row's accessible name is all of its
-    // cells.
-    await expect(
-      page.getByRole("row", { name: signedIn.groupName }),
-    ).toContainText("Team");
-
-    const dialog = page.getByRole("alertdialog", {
-      name: "Activate Deny project renames?",
-    });
     await clickUntil(
       page.getByRole("button", { name: "Activate", exact: true }),
-      dialog,
+      page.getByRole("alertdialog"),
     );
-    await expect(dialog).toContainText(
-      `Applies to ${signedIn.groupName} (Team).`,
-    );
-    await expect(dialog.getByRole("checkbox")).toHaveCount(0);
-
-    // The control: while the policy is a draft, the seeded person may
-    // still rename the seeded project, so the refusal below is the
-    // policy taking effect.
-    const rename = (name: string) =>
-      page.request.patch(`/api/orgs/${signedIn.orgSlug}/projects/frontend`, {
-        data: { name },
-      });
-    expect((await rename("Frontend draft")).status()).toBe(200);
-
-    await dialog
-      .getByRole("button", { name: "Activate policy", exact: true })
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Activate policy" })
       .click();
-    await expect(dialog).toBeHidden();
-    // The state is said on the Document tab, above the editor.
-    await page.getByRole("tab", { name: "Document", exact: true }).click();
+
+    await expect(page.getByText("Activated v1")).toBeVisible();
     await expect(page.getByText("Active", { exact: true })).toBeVisible();
     await expect(
-      page.getByText("v1, the default.", { exact: true }),
-    ).toBeVisible();
-    expect((await rename("Frontend active")).status()).toBe(403);
-
-    // The person reaches it through the team, not directly.
-    await page.goto(
-      `/console/orgs/${signedIn.orgSlug}/permissions/attachments?subject=person:${signedIn.userSlug}`,
-    );
-    const through = page.getByRole("region", {
-      name: "Through teams",
-      exact: true,
-    });
-    await expect(
-      through.getByRole("link", { name: "Deny project renames", exact: true }),
-    ).toBeVisible();
-    await expect(
-      through.getByRole("link", { name: signedIn.groupName, exact: true }),
-    ).toBeVisible();
-    await expect(
-      page
-        .getByRole("region", { name: "Attached directly", exact: true })
-        .getByText(`No policy is attached to ${signedIn.nickname}.`, {
-          exact: true,
-        }),
-    ).toBeVisible();
-
-    // The team's page opens its own attachments.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/teams/engineering`);
-    await page
-      .getByRole("link", { name: "Manage policies", exact: true })
-      .click();
-    await expect(
-      page.getByRole("heading", {
-        level: 2,
-        name: `${signedIn.groupName} · Team`,
-        exact: true,
-      }),
-    ).toBeVisible();
-    await expect(
-      page
-        .getByRole("region", { name: "Attached directly", exact: true })
-        .getByRole("link", { name: "Deny project renames", exact: true }),
-    ).toBeVisible();
-  });
-
-  test("asks to confirm everyone before activating a policy with no attachment", async ({
-    page,
-    signedIn,
-  }) => {
-    const policy = await createPolicy(
-      page.request,
-      signedIn,
-      "Baseline read",
-      JSON.stringify({
-        Version: "2026-07-25",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: ["iam:org.read"],
-            Resource: [`grn:${signedIn.orgSlug}/*`],
-          },
-        ],
-      }),
-    );
-
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
-    await page
-      .getByRole("link", { name: "Baseline read", exact: true })
-      .click();
-    await expect(page).toHaveURL(policyUrl(signedIn, policy));
-
-    const dialog = page.getByRole("alertdialog", {
-      name: "Activate Baseline read?",
-    });
-    await clickUntil(
       page.getByRole("button", { name: "Activate", exact: true }),
-      dialog,
-    );
-    await expect(dialog).toContainText(
-      "Applies to everyone: it has no attachments.",
-    );
-    const activate = dialog.getByRole("button", {
-      name: "Activate for everyone",
-      exact: true,
-    });
-    const confirm = dialog.getByRole("checkbox", {
-      name: "Apply it to everyone",
-      exact: true,
-    });
-    // Unconfirmed, the browser does not send the form.
-    await activate.click();
-    await expect(dialog).toBeVisible();
-    await expect(page.getByText("Draft", { exact: true })).toBeAttached();
-    await confirm.check();
-    await activate.click();
-    await expect(page.getByText("Active", { exact: true })).toBeVisible();
-    await expect(
-      page.getByText("v1, the default.", { exact: true }),
-    ).toBeVisible();
-
-    await page.goto(
-      `/console/orgs/${signedIn.orgSlug}/permissions/attachments?subject=person:${signedIn.userSlug}`,
-    );
-    await expect(
-      page
-        .getByRole("region", { name: "Organization-wide", exact: true })
-        .getByRole("link", { name: "Baseline read", exact: true }),
-    ).toBeVisible();
-  });
-
-  test("keeps an active policy's last attachment and names the next step", async ({
-    page,
-    signedIn,
-  }) => {
-    const policy = await createPolicy(
-      page.request,
-      signedIn,
-      "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
-    );
-    await attachToTeamAndActivate(page.request, signedIn, policy);
-    const second = await page.request.post(
-      `/api/orgs/${signedIn.orgSlug}/policies/${policy}/attachments`,
-      { data: { subjectGrn: signedIn.userGrn } },
-    );
-    expect(second.status()).toBe(201);
-
-    await page.goto(policyUrl(signedIn, policy));
-    await page.getByRole("tab", { name: /^Attachments/ }).click();
-    const dialog = page.getByRole("alertdialog", {
-      name: "Detach Deny project deletion?",
-    });
-    const confirm = dialog.getByRole("button", {
-      name: "Detach policy",
-      exact: true,
-    });
-    // The control: with the team still attached, detaching the person
-    // goes through, so the refusal below is the last attachment's.
-    await clickUntil(
-      page.getByRole("button", {
-        name: `Detach Deny project deletion from ${signedIn.nickname}`,
-        exact: true,
-      }),
-      dialog,
-    );
-    await confirm.click();
-    await expect(dialog).toBeHidden();
-    // Substring on purpose: a row's accessible name is all of its
-    // cells.
-    await expect(
-      page.getByRole("row", { name: signedIn.nickname }),
     ).toHaveCount(0);
 
-    await clickUntil(
-      page.getByRole("button", {
-        name: `Detach Deny project deletion from ${signedIn.groupName}`,
-        exact: true,
-      }),
-      dialog,
-    );
-    await confirm.click();
+    await openTab(page, /^Versions/);
+    await page
+      .getByRole("row", { name: /^v2/ })
+      .getByRole("button", { name: "Make v2 default" })
+      .click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Make v2 default" })
+      .click();
 
-    const refusal = dialog.getByRole("alert");
-    await expect(refusal).toContainText("This is its last attachment");
-    await expect(refusal).toContainText(
-      "Without it, it applies to everyone. Attach it elsewhere first.",
-    );
-
-    await page.reload();
-    await page.getByRole("tab", { name: /^Attachments/ }).click();
-    // Substring on purpose: a row's accessible name is all of its
-    // cells.
+    await expect(page.getByText("v2 is now the default.")).toBeVisible();
     await expect(
-      page.getByRole("row", { name: signedIn.groupName }),
-    ).toContainText("Team");
+      page.getByRole("row", { name: /^v2/ }).getByText("In use"),
+    ).toBeVisible();
   });
 
-  test("publishes an edit as the next version after its diff, and rolls back", async ({
+  test("deletes a policy once its name is typed, and opens the list without it", async ({
     page,
     signedIn,
   }) => {
-    const policy = await createPolicy(
+    const policy = await createGuardrail(
       page.request,
       signedIn,
       "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
     );
-    await attachToTeamAndActivate(page.request, signedIn, policy);
-    await page.goto(policyUrl(signedIn, policy));
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions/${policy}`);
+    await expectHydrated(page);
 
-    const publish = page.getByRole("button", {
-      name: "Publish v2",
-      exact: true,
-    });
-    // Nothing differs from the default yet, so nothing is offered.
-    await expect(publish).toBeDisabled();
+    // The danger zone closes the last tab.
+    await openTab(page, /^Versions/);
     await clickUntil(
-      page.getByRole("button", { name: "Add action", exact: true }),
-      page.getByRole("textbox", { name: "Statement 1 action 2" }),
+      page.getByRole("button", { name: "Delete policy", exact: true }),
+      page.getByRole("alertdialog"),
     );
-    await page
-      .getByRole("textbox", { name: "Statement 1 action 2" })
-      .fill("iam:project.update");
-    await expect(page.getByText("Edited, not published")).toBeVisible();
+    const dialog = page.getByRole("alertdialog");
+    const confirm = dialog.getByRole("button", { name: "Delete policy" });
+    await expect(confirm).toBeDisabled();
+    await dialog.getByRole("textbox").fill("Deny project deletion");
+    await confirm.click();
 
-    await publish.click();
-    const dialog = page.getByRole("alertdialog", {
-      name: "Publish v2 of Deny project deletion?",
-    });
-    await expect(dialog).toContainText(
-      `It applies at once. Applies to ${signedIn.groupName} (Team).`,
+    await expect(page).toHaveURL(
+      `/console/orgs/${signedIn.orgSlug}/permissions`,
     );
-    await expect(dialog.getByRole("figure")).toContainText(
-      'Added: "iam:project.update"',
-    );
-    await dialog
-      .getByRole("button", { name: "Publish v2", exact: true })
-      .click();
     await expect(
-      page.getByText("Published v2.", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText("Active", { exact: true })).toBeVisible();
+      page.getByRole("link", { name: "Deny project deletion" }),
+    ).toHaveCount(0);
+    // The control: the list is read, and holds the owner's role link
+    // an organization is created with.
     await expect(
-      page.getByText("v2, the default.", { exact: true }),
-    ).toBeVisible();
-
-    // v2 -> v1, from the versions list.
-    await page.getByRole("tab", { name: /^Versions/ }).click();
-    const rollBack = page.getByRole("alertdialog", {
-      name: "Roll back to v1?",
-    });
-    await clickUntil(
-      page
-        .getByRole("row", { name: /^v1/ })
-        .getByRole("button", { name: "Roll back to v1", exact: true }),
-      rollBack,
-    );
-    await expect(rollBack).toContainText(
-      `Applies to ${signedIn.groupName} (Team).`,
-    );
-    await rollBack
-      .getByRole("button", { name: "Roll back to v1", exact: true })
-      .click();
-    await expect(
-      page.getByRole("row", { name: /^v1/ }).getByText("In use"),
-    ).toBeVisible();
-    await page.getByRole("tab", { name: "Document", exact: true }).click();
-    await expect(page.getByText("Active", { exact: true })).toBeVisible();
-    await expect(
-      page.getByText("v1, the default.", { exact: true }),
+      page.getByRole("link", { name: "role link owner" }),
     ).toBeVisible();
   });
 
-  test("shows a member who may not read policies a refusal, with nothing to create", async ({
+  test("shows a member who may not read policies a refusal", async ({
     page,
     context,
     signedIn,
     baseURL,
   }) => {
+    await createGuardrail(page.request, signedIn, "Deny project deletion");
     const permissions = `/console/orgs/${signedIn.orgSlug}/permissions`;
-    // The control: the owner is offered the create action on the page.
+    // The control: the owner reads the list.
     await page.goto(permissions);
     await expect(
-      page.getByRole("link", { name: "Create policy", exact: true }).first(),
+      page.getByRole("link", { name: "Deny project deletion" }),
     ).toBeVisible();
 
     const member = await seedMember(signedIn);
@@ -494,9 +265,6 @@ test.describe("permissions", () => {
         exact: true,
       }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "Create policy", exact: true }),
-    ).toBeHidden();
     // A refused list is not an empty one.
     await expect(page.getByText("No policies", { exact: true })).toBeHidden();
   });
@@ -512,19 +280,16 @@ test.describe("permissions accessibility", () => {
     signedIn,
   }) => {
     for (const name of ["Deny project deletion", "Deny project renames"]) {
-      await createPolicy(
-        page.request,
-        signedIn,
-        name,
-        denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
-      );
+      await createGuardrail(page.request, signedIn, name);
     }
     await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
     await expectHydrated(page);
     const copies = page
       .getByRole("table")
       .getByRole("button", { name: /^Copy the identifier of/ });
-    await expect(copies).toHaveCount(2);
+    // The two made here and the owner's role link, which an
+    // organization is created with.
+    await expect(copies).toHaveCount(3);
 
     for (const copy of await copies.all()) {
       const box = await copy.boundingBox();
@@ -536,38 +301,21 @@ test.describe("permissions accessibility", () => {
   });
 
   /**
-   * What the area's routes read: a policy attached to the team and
-   * active, with a stored v2 beside the default v1, so a diff has both
-   * kinds of line to scan.
+   * What the area's routes read: a guardrail with a stored v2 beside
+   * the default v1, so a diff has both kinds of line to scan.
    */
   async function seedArea(request: APIRequestContext, signedIn: Seed) {
-    const policy = await createPolicy(
+    const policy = await createGuardrail(
       request,
       signedIn,
       "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
     );
-    await attachToTeamAndActivate(request, signedIn, policy);
-    const saved = await request.post(
-      `/api/orgs/${signedIn.orgSlug}/policies/${policy}/versions`,
-      {
-        data: {
-          document: JSON.parse(
-            denyDocument(signedIn.orgSlug, ["iam:project.update"]),
-          ),
-        },
-      },
-    );
-    expect(saved.status()).toBe(201);
-    return {
-      base: `/console/orgs/${signedIn.orgSlug}/permissions`,
-      policy,
-      person: signedIn.userSlug,
-    };
+    await storeVersion(request, signedIn, policy, "agent.configure");
+    return { base: `/console/orgs/${signedIn.orgSlug}/permissions`, policy };
   }
 
-  // One test reads one of these: a route, a tab of the policy page,
-  // or a state a step on it reaches. `reach` waits for what the scan
+  // One test reads one of these: a route, a tab of the policy page, or
+  // a state a step on it reaches. `reach` waits for what the scan
   // reads, and `include` limits the scan to a dialog.
   const views: {
     name: string;
@@ -578,28 +326,6 @@ test.describe("permissions accessibility", () => {
   }[] = [
     { name: "the policy list", path: (a) => a.base, title: /^Permissions/ },
     {
-      name: "a new policy",
-      path: (a) => `${a.base}/new`,
-      title: /^New policy$/,
-      // The shell hydrates before this page's form, whose submit stays
-      // disabled until its own part does; the scan reads it enabled.
-      reach: async (page) => {
-        await expect(
-          page.getByRole("button", { name: "Create draft" }),
-        ).toBeEnabled();
-      },
-    },
-    {
-      name: "the attachments view",
-      path: (a) => `${a.base}/attachments`,
-      title: /^Permissions/,
-    },
-    {
-      name: "a subject's attachments",
-      path: (a) => `${a.base}/attachments?subject=person:${a.person}`,
-      title: /^Permissions/,
-    },
-    {
       name: "a policy",
       path: (a) => `${a.base}/${a.policy}`,
       title: /^Deny project deletion$/,
@@ -609,24 +335,6 @@ test.describe("permissions accessibility", () => {
       path: (a) => `${a.base}/${a.policy}`,
       title: /^Deny project deletion$/,
       reach: (page) => openTab(page, /^Versions/),
-    },
-    {
-      name: "a policy's Attachments tab",
-      path: (a) => `${a.base}/${a.policy}`,
-      title: /^Deny project deletion$/,
-      reach: (page) => openTab(page, /^Attachments/),
-    },
-    {
-      name: "a policy's document as JSON",
-      path: (a) => `${a.base}/${a.policy}`,
-      title: /^Deny project deletion$/,
-      reach: async (page) => {
-        await openTab(page, "Document");
-        await page.getByRole("tab", { name: "JSON", exact: true }).click();
-        await expect(
-          page.getByRole("textbox", { name: "Document JSON" }),
-        ).toBeVisible();
-      },
     },
     {
       name: "a stored version's dialog",
@@ -654,8 +362,8 @@ test.describe("permissions accessibility", () => {
           .getByRole("button", { name: /^Compare/ })
           .click();
         const diff = page.getByRole("dialog").getByRole("figure");
-        await expect(diff).toContainText('Added: "iam:project.update"');
-        await expect(diff).toContainText('Removed: "iam:project.delete"');
+        await expect(diff).toContainText("agent.configure");
+        await expect(diff).toContainText("agent.activate");
       },
       include: ['[role="dialog"]'],
     },

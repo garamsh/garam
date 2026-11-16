@@ -53,18 +53,12 @@ describe("parseConsolePath", () => {
     });
   });
 
-  it("reads a policy's page and the Attachments view of Permissions", () => {
+  it("reads a policy's page below Permissions", () => {
     expect(
       parseConsolePath("/console/orgs/acme/permissions/9f2ac1b4"),
     ).toMatchObject({
       section: { segment: "permissions" },
       item: "9f2ac1b4",
-    });
-    expect(
-      parseConsolePath("/console/orgs/acme/permissions/attachments"),
-    ).toMatchObject({
-      section: { segment: "permissions" },
-      item: "attachments",
     });
   });
 
@@ -154,18 +148,6 @@ describe("consoleCrumbs", () => {
     expect(crumbs.at(-1)).toEqual({ label: "New team" });
   });
 
-  it("names the Attachments view by its label, not as a policy", () => {
-    const crumbs = consoleCrumbs(
-      parseConsolePath("/console/orgs/acme/permissions/attachments"),
-      orgs,
-    );
-
-    expect(crumbs.slice(2)).toEqual([
-      { label: "Permissions", href: "/console/orgs/acme/permissions" },
-      { label: "Attachments" },
-    ]);
-  });
-
   it("links Agents above an agent and names the page that creates one", () => {
     expect(
       consoleCrumbs(
@@ -184,19 +166,13 @@ describe("consoleCrumbs", () => {
     ).toEqual({ label: "New agent" });
   });
 
-  it("names a policy's page and the page that creates one", () => {
+  it("names a policy's page", () => {
     const policy = parseConsolePath("/console/orgs/acme/permissions/9f2ac1b4");
 
     expect(consoleCrumbs(policy, orgs).at(-1)).toEqual({ label: "Policy" });
     expect(consoleCrumbs(policy, orgs, "Deny exports").at(-1)).toEqual({
       label: "Deny exports",
     });
-    expect(
-      consoleCrumbs(
-        parseConsolePath("/console/orgs/acme/permissions/new"),
-        orgs,
-      ).at(-1),
-    ).toEqual({ label: "New policy" });
   });
 
   it("names an operator's page, the identifier new included", () => {

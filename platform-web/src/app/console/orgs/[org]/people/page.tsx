@@ -74,8 +74,8 @@ function PendingPart({
 
 /**
  * The organization's people (ADR-0116), filtered by team, added to a
- * team or given a policy several at once, offered only for the teams
- * and policies the server does not deny. Inviting is the page's one
+ * team several at once, offered only for the teams the server does not
+ * deny. Inviting is the page's one
  * primary action, and whoever may invite sees the invitations still
  * pending and revokes one. A list garam refused is said, never shown as
  * empty.
@@ -167,7 +167,6 @@ export default async function PeoplePage({ params, searchParams }: Params) {
           runsOn: null,
         }}
         teamChoices={choices.teamChoices}
-        policyChoices={choices.policyChoices}
         empty={<EmptyState icon={UserRound} title="No one matches." />}
       />
       {pendingPart}

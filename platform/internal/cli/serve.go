@@ -86,6 +86,12 @@ func serveAPI(cmd *cobra.Command) error {
 	}
 	defer closeDecisions()
 
+	relay, closeRelay, err := dialPolicyRelay()
+	if err != nil {
+		return err
+	}
+	defer closeRelay()
+
 	ttl, err := time.ParseDuration(envOr(envSessionTTL, "168h"))
 	if err != nil {
 		return errorx.Wrap(err, string(envSessionTTL), errorx.KindInvalidArgument)
@@ -150,7 +156,8 @@ func serveAPI(cmd *cobra.Command) error {
 		},
 	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
-		WithIdentity(issuer)
+		WithIdentity(issuer).
+		WithPolicyRelay(relay)
 
 	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger, obs.registry)
 	if err != nil {

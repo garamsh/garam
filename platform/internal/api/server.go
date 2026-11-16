@@ -16,6 +16,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 	"github.com/garamsh/garam/platform/internal/user"
 	"github.com/garamsh/garam/platform/internal/watch"
 )
@@ -68,6 +69,10 @@ type Server struct {
 	// feed holds a membership change's answer until the policy service
 	// has applied its role links (ADR-0146); nil waits for nothing.
 	feed policyfeed.Gate
+	// policyRelay relays role links, guardrails and permits to the
+	// policy service (ADR-0169). Nil answers those endpoints as
+	// unavailable.
+	policyRelay policyrelay.Service
 }
 
 // Compile-time check that Server satisfies the generated interface.

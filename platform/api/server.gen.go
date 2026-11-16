@@ -418,6 +418,45 @@ func (e FoundKindKind) Valid() bool {
 	}
 }
 
+// Defines values for IamPolicyKind.
+const (
+	Guardrail IamPolicyKind = "guardrail"
+	Permit    IamPolicyKind = "permit"
+	RoleLink  IamPolicyKind = "role-link"
+)
+
+// Valid indicates whether the value is a known member of the IamPolicyKind enum.
+func (e IamPolicyKind) Valid() bool {
+	switch e {
+	case Guardrail:
+		return true
+	case Permit:
+		return true
+	case RoleLink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IamRoleLinkScope.
+const (
+	IamRoleLinkScopeOrganization  IamRoleLinkScope = "organization"
+	IamRoleLinkScopeTeamOrProject IamRoleLinkScope = "team-or-project"
+)
+
+// Valid indicates whether the value is a known member of the IamRoleLinkScope enum.
+func (e IamRoleLinkScope) Valid() bool {
+	switch e {
+	case IamRoleLinkScopeOrganization:
+		return true
+	case IamRoleLinkScopeTeamOrProject:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationCreateRole.
 const (
 	InvitationCreateRoleAdmin  InvitationCreateRole = "admin"
@@ -1332,6 +1371,75 @@ type GroupPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
+// IamPolicy defines model for IamPolicy.
+type IamPolicy struct {
+	DefaultVersion int32         `json:"defaultVersion"`
+	Id             string        `json:"id"`
+	Kind           IamPolicyKind `json:"kind"`
+	Name           string        `json:"name"`
+
+	// Status A policy's lifecycle state. Only an `active` policy contributes statements to a check.
+	Status PolicyStatus `json:"status"`
+}
+
+// IamPolicyBody What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+type IamPolicyBody struct {
+	Kind     IamPolicyKind `json:"kind"`
+	RoleLink *IamRoleLink  `json:"roleLink,omitempty"`
+	Text     *string       `json:"text,omitempty"`
+}
+
+// IamPolicyCreate defines model for IamPolicyCreate.
+type IamPolicyCreate struct {
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	Body IamPolicyBody `json:"body"`
+	Name string        `json:"name"`
+}
+
+// IamPolicyDetail defines model for IamPolicyDetail.
+type IamPolicyDetail struct {
+	Policy IamPolicy `json:"policy"`
+
+	// Versions Oldest first.
+	Versions []IamPolicyVersion `json:"versions"`
+}
+
+// IamPolicyKind defines model for IamPolicyKind.
+type IamPolicyKind string
+
+// IamPolicyVersion defines model for IamPolicyVersion.
+type IamPolicyVersion struct {
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	Body      IamPolicyBody `json:"body"`
+	CreatedBy string        `json:"createdBy"`
+	Version   int32         `json:"version"`
+}
+
+// IamPolicyVersionCreate defines model for IamPolicyVersionCreate.
+type IamPolicyVersionCreate struct {
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	Body IamPolicyBody `json:"body"`
+}
+
+// IamPolicyVersionNumber defines model for IamPolicyVersionNumber.
+type IamPolicyVersionNumber struct {
+	Version int32 `json:"version"`
+}
+
+// IamRoleLink defines model for IamRoleLink.
+type IamRoleLink struct {
+	// Principal GRN of the user, agent, team or project linked.
+	Principal string `json:"principal"`
+
+	// Resource GRN of the organization, team or project linked to.
+	Resource string           `json:"resource"`
+	Role     Role             `json:"role"`
+	Scope    IamRoleLinkScope `json:"scope"`
+}
+
+// IamRoleLinkScope defines model for IamRoleLink.Scope.
+type IamRoleLinkScope string
+
 // Invitation defines model for Invitation.
 type Invitation struct {
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -2062,6 +2170,9 @@ type ContractVersion = string
 // GroupSlug defines model for group.
 type GroupSlug = string
 
+// IamPolicyId defines model for iamPolicy.
+type IamPolicyId = string
+
 // KeyID defines model for kid.
 type KeyID = string
 
@@ -2302,6 +2413,15 @@ type UpdateGroupJSONRequestBody = GroupPatch
 // AddGroupMemberJSONRequestBody defines body for AddGroupMember for application/json ContentType.
 type AddGroupMemberJSONRequestBody = MemberRef
 
+// CreateIamPolicyJSONRequestBody defines body for CreateIamPolicy for application/json ContentType.
+type CreateIamPolicyJSONRequestBody = IamPolicyCreate
+
+// RollbackIamPolicyJSONRequestBody defines body for RollbackIamPolicy for application/json ContentType.
+type RollbackIamPolicyJSONRequestBody = PolicyRollback
+
+// CreateIamPolicyVersionJSONRequestBody defines body for CreateIamPolicyVersion for application/json ContentType.
+type CreateIamPolicyVersionJSONRequestBody = IamPolicyVersionCreate
+
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreate
 
@@ -2496,6 +2616,27 @@ type ServerInterface interface {
 	// RemoveGroupMember Remove a member from a group. Requires the `admin` role.
 	// (DELETE /orgs/{org}/groups/{group}/members/{member})
 	RemoveGroupMember(w http.ResponseWriter, r *http.Request, org Org, groupSlug GroupSlug, memberGrn MemberGrn)
+	// ListIamPolicies List an organization's role links, guardrails and permits.
+	// (GET /orgs/{org}/iam-policies)
+	ListIamPolicies(w http.ResponseWriter, r *http.Request, org Org)
+	// CreateIamPolicy Write an organization's role link, guardrail or permit.
+	// (POST /orgs/{org}/iam-policies)
+	CreateIamPolicy(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteIamPolicy Delete a role link, guardrail or permit.
+	// (DELETE /orgs/{org}/iam-policies/{iamPolicy})
+	DeleteIamPolicy(w http.ResponseWriter, r *http.Request, org Org, iamPolicyId IamPolicyId)
+	// GetIamPolicy Read a role link, guardrail or permit with its versions.
+	// (GET /orgs/{org}/iam-policies/{iamPolicy})
+	GetIamPolicy(w http.ResponseWriter, r *http.Request, org Org, iamPolicyId IamPolicyId)
+	// ActivateIamPolicy Activate a role link, guardrail or permit.
+	// (POST /orgs/{org}/iam-policies/{iamPolicy}/activate)
+	ActivateIamPolicy(w http.ResponseWriter, r *http.Request, org Org, iamPolicyId IamPolicyId)
+	// RollbackIamPolicy Point a role link, guardrail or permit at a stored version.
+	// (POST /orgs/{org}/iam-policies/{iamPolicy}/rollback)
+	RollbackIamPolicy(w http.ResponseWriter, r *http.Request, org Org, iamPolicyId IamPolicyId)
+	// CreateIamPolicyVersion Append a version to a role link, guardrail or permit.
+	// (POST /orgs/{org}/iam-policies/{iamPolicy}/versions)
+	CreateIamPolicyVersion(w http.ResponseWriter, r *http.Request, org Org, iamPolicyId IamPolicyId)
 	// ListInvitations List the invitations that can still be accepted. Requires `iam:org.invite`.
 	// (GET /orgs/{org}/invitations)
 	ListInvitations(w http.ResponseWriter, r *http.Request, org Org, params ListInvitationsParams)
@@ -4015,6 +4156,233 @@ func (siw *ServerInterfaceWrapper) RemoveGroupMember(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemoveGroupMember(w, r, org, groupSlug, memberGrn)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIamPolicies operation middleware
+func (siw *ServerInterfaceWrapper) ListIamPolicies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIamPolicies(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIamPolicy operation middleware
+func (siw *ServerInterfaceWrapper) CreateIamPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIamPolicy(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteIamPolicy operation middleware
+func (siw *ServerInterfaceWrapper) DeleteIamPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "iamPolicy" -------------
+	var iamPolicyId IamPolicyId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "iamPolicy", r.PathValue("iamPolicy"), &iamPolicyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "iamPolicy", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteIamPolicy(w, r, org, iamPolicyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIamPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetIamPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "iamPolicy" -------------
+	var iamPolicyId IamPolicyId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "iamPolicy", r.PathValue("iamPolicy"), &iamPolicyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "iamPolicy", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIamPolicy(w, r, org, iamPolicyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ActivateIamPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ActivateIamPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "iamPolicy" -------------
+	var iamPolicyId IamPolicyId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "iamPolicy", r.PathValue("iamPolicy"), &iamPolicyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "iamPolicy", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ActivateIamPolicy(w, r, org, iamPolicyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RollbackIamPolicy operation middleware
+func (siw *ServerInterfaceWrapper) RollbackIamPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "iamPolicy" -------------
+	var iamPolicyId IamPolicyId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "iamPolicy", r.PathValue("iamPolicy"), &iamPolicyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "iamPolicy", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RollbackIamPolicy(w, r, org, iamPolicyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIamPolicyVersion operation middleware
+func (siw *ServerInterfaceWrapper) CreateIamPolicyVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "iamPolicy" -------------
+	var iamPolicyId IamPolicyId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "iamPolicy", r.PathValue("iamPolicy"), &iamPolicyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "iamPolicy", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIamPolicyVersion(w, r, org, iamPolicyId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5964,6 +6332,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/control-endpoint", wrapper.ClearOperatorControlEndpoint)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/control-endpoint", wrapper.SetOperatorControlEndpoint)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operation-authorities", wrapper.MintOperationAuthority)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/iam-policies", wrapper.ListIamPolicies)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies", wrapper.CreateIamPolicy)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}", wrapper.DeleteIamPolicy)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}", wrapper.GetIamPolicy)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/versions", wrapper.CreateIamPolicyVersion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/activate", wrapper.ActivateIamPolicy)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/rollback", wrapper.RollbackIamPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.ListPolicyVersions)

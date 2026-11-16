@@ -216,9 +216,11 @@ true of the platform.
   (§Operator operations under Delivery), and for creating, updating
   and deleting a group or a project, which wait on its scoped link's
   mark (§Role links). A request that changes any other entity does not
-  wait, except those §Consents names, and the policy write is not the
-  platform's yet. cowork's creates of a channel, a page, a task and an
-  artifact, and its delete of a page, wait on the written entity's mark
+  wait, except those §Consents names, and the policy write the platform
+  relays (§Managing policies over HTTP) waits for nothing: the service
+  stores it in the call that decides it. cowork's creates of a
+  channel, a page, a task and an artifact, and its delete of a page,
+  wait on the written entity's mark
   ([ADR-0166](./adr/0166-a-cowork-create-or-delete-answers-after-the-policy-service-holds-the-change.md)),
   where its policy client is configured.
 - **Every present capability has a place.** The ADR's inventory gives
@@ -1060,6 +1062,21 @@ attachments. Documents are validated at the write boundary, so a stored
 document always parses.
 
 ## Managing policies over HTTP
+
+**Writes of links, guardrails and permits go to the policy service.**
+`/orgs/{org}/iam-policies` creates, versions, activates, rolls back,
+deletes, reads and lists an organization's role links, guardrails and
+permits ([ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md)).
+Each route authenticates the session and relays the call to the policy
+service naming the caller as the writer, and the platform stores none
+of the body: the service decides, read current, whether the writer may,
+and its refusal is the answer (403, 400 or 503). A write it refuses
+stores nothing. Only an owner writes a permit, because the service asks
+`iam:permit.write` and `role-owner` alone holds it. The platform refuses
+before asking a role link it derives from a membership, a user in
+organization scope or a team or project linked to itself, so a user's
+organization role stays the membership's. **The endpoints below remain
+until round 11 of #1796** and write the removed engine's documents.
 
 Org admins reach that lifecycle under `/orgs/{org}/policies`
 (`platform/api/openapi.yaml`). The api server passes each call through

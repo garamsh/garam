@@ -9,6 +9,7 @@ import {
   API_URL,
   DENY_DELETES_ID,
   ENGINEERING_ADMINS_ID,
+  answerPermissionChecks,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -70,18 +71,30 @@ describe("permissions page", () => {
     expect(container.textContent).not.toContain("grn:");
   });
 
-  it("says where a policy is created, and offers no create or attach link", async () => {
-    await renderPolicies();
+  it("offers Create policy unless the server denies every kind", async () => {
+    // The control: one kind allowed and the rest denied still offers it.
+    server.use(
+      answerPermissionChecks(
+        (action) => (action === "iam:policy.create" ? "allow" : "deny"),
+        ["iam:policy.attach"],
+      ),
+    );
+    const some = await renderPolicies();
+    expect(screen.getByRole("link", { name: "Create policy" })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/permissions/new",
+    );
+    some.unmount();
 
-    expect(
-      screen.getByText("A policy is created through the API or the CLI."),
-    ).toBeInTheDocument();
+    server.use(answerPermissionChecks(() => "deny", ["iam:policy.attach"]));
+    await renderPolicies();
     expect(
       screen.queryByRole("link", { name: "Create policy" }),
     ).not.toBeInTheDocument();
+    // The list itself is still read.
     expect(
-      screen.queryByRole("link", { name: "Attachments" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("link", { name: "Deny project deletion" }),
+    ).toBeInTheDocument();
   });
 
   it("says the organization has no policies rather than showing an empty table", async () => {

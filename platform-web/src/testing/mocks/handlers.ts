@@ -356,10 +356,14 @@ const ON_A_POLICY = [
 /**
  * Answers Acme's permission checks with `decide(action)` for each pair,
  * in the order asked, as the server does, and refuses a request that
- * pairs a policy's action with no policy, 400.
+ * pairs a policy's action with no policy, 400. `onOrganization` names
+ * the actions a test models the platform answering on the organization
+ * as well, which the new-policy page asks (ADR-0173) and the platform
+ * does not yet answer there.
  */
 export function answerPermissionChecks(
   decide: (action: string) => "allow" | "deny" | "unknown",
+  onOrganization: readonly string[] = [],
 ) {
   return http.post(
     `${API_URL}/orgs/acme/permission-checks`,
@@ -368,6 +372,7 @@ export function answerPermissionChecks(
       const misplaced = checks.find(
         (check) =>
           ON_A_POLICY.includes(check.action) &&
+          !onOrganization.includes(check.action) &&
           check.resource?.type !== "policy",
       );
       if (misplaced) {
@@ -455,6 +460,61 @@ function searchFixtures(org: string, q: string, limit: number): OrgSearch {
   };
 }
 
+/** The identifier the mock issues to the policy a test creates. */
+export const CREATED_POLICY_ID = "p-c0ffee00c0ffee00c0ffee00c0ffee00";
+
+const PolicyWrite = z.object({
+  name: z.string().optional(),
+  body: z.object({
+    kind: z.enum(["guardrail", "permit", "role-link"]),
+    text: z.string().optional(),
+    roleLink: z
+      .object({
+        role: z.string(),
+        scope: z.enum(["organization", "team-or-project"]),
+        principal: z.string(),
+        resource: z.string(),
+      })
+      .optional(),
+  }),
+});
+
+function invalid(message: string) {
+  return HttpResponse.json(
+    { kind: "invalid_argument", message },
+    { status: 400 },
+  );
+}
+
+/**
+ * What the platform refuses of a body (ADR-0169), 400 with the reason:
+ * Cedar the service cannot parse, a role link its membership derives, a
+ * link whose principal is its resource, and a body missing its half.
+ */
+function refusedBody(body: z.infer<typeof PolicyWrite>["body"]) {
+  if (body.kind === "role-link") {
+    const link = body.roleLink;
+    if (link === undefined) return "a role link carries its roleLink";
+    if (
+      link.scope === "organization" &&
+      parseGrn(link.principal)?.serviceType === "user"
+    ) {
+      return "an organization role of a user is its membership's";
+    }
+    if (link.scope === "team-or-project" && link.principal === link.resource) {
+      return "a role link's principal cannot be its resource";
+    }
+    return null;
+  }
+  if (body.text === undefined || body.text.trim() === "") {
+    return "a guardrail or a permit carries its Cedar text";
+  }
+  if (!body.text.includes("(")) {
+    return "unexpected token at line 1: expected a policy";
+  }
+  return null;
+}
+
 export const handlers = [
   ...routes.map(({ path, body }) =>
     http.get(`${API_URL}${path}`, () => HttpResponse.json(body)),
@@ -469,6 +529,52 @@ export const handlers = [
       ),
     );
   }),
+  http.post(`${API_URL}/orgs/acme/iam-policies`, async ({ request }) => {
+    const { name, body } = PolicyWrite.parse(await request.json());
+    const refusal = refusedBody(body);
+    if (name === undefined || name.trim() === "")
+      return invalid("a policy is named");
+    if (refusal !== null) return invalid(refusal);
+    return HttpResponse.json(
+      {
+        id: CREATED_POLICY_ID,
+        name,
+        kind: body.kind,
+        status: "draft",
+        defaultVersion: 1,
+      } satisfies IamPolicy,
+      { status: 201 },
+    );
+  }),
+  http.post(
+    `${API_URL}/orgs/acme/iam-policies/:policy/versions`,
+    async ({ params, request }) => {
+      const detail = [denyDeletes, engineeringAdmins].find(
+        ({ policy }) => policy.id === params.policy,
+      );
+      if (detail === undefined) {
+        return HttpResponse.json(
+          { kind: "not_found", message: "no such policy" },
+          { status: 404 },
+        );
+      }
+      const { body } = PolicyWrite.parse(await request.json());
+      if (detail.policy.kind === "role-link") {
+        return invalid("a role link takes no new version");
+      }
+      if (body.kind !== detail.policy.kind) {
+        return invalid(
+          `a ${detail.policy.kind} takes a ${detail.policy.kind} body`,
+        );
+      }
+      const refusal = refusedBody(body);
+      if (refusal !== null) return invalid(refusal);
+      return HttpResponse.json(
+        { version: detail.versions.length + 1 },
+        { status: 201 },
+      );
+    },
+  ),
   // An owner may take every action, by the owner role.
   answerPermissionChecks(() => "allow"),
   answerExplanations(() => ownerAllows),

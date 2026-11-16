@@ -43,6 +43,11 @@ export {
   type DeleteOperatorState,
 } from "./api/delete-operator";
 export { deletePolicy, type DeletePolicyState } from "./api/delete-policy";
+export { createPolicy, type CreatePolicyState } from "./api/create-policy";
+export {
+  createPolicyVersion,
+  type CreatePolicyVersionState,
+} from "./api/create-policy-version";
 export { deleteProject, type DeleteProjectState } from "./api/delete-project";
 export {
   grantOrgConsent,

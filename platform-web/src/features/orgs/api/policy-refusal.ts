@@ -32,3 +32,70 @@ export function policyRefusal(
   }
   return refusal(error);
 }
+
+/** What is written: a guardrail or permit's Cedar, a link, a version. */
+export type PolicyWrite = "create-cedar" | "create-link" | "version";
+
+/**
+ * What a write of a policy or a version returns for an error. `at`
+ * says where the form shows it: the name, the body (the Cedar editor
+ * or the role form's fields), or beside the submit.
+ */
+export type PolicyWriteError = {
+  status: "error";
+  at: "name" | "body" | "form";
+  message: string;
+};
+
+/** What each write says of the policy service refusing the caller. */
+const WRITE_FORBIDDEN: Record<PolicyWrite, string> = {
+  "create-cedar": "You can't create this kind of policy in this organization.",
+  "create-link": "You can't write a role link in this organization.",
+  version: "You can't add a version to this policy.",
+};
+
+/** What each write says of the policy service holding what it clashes with. */
+const WRITE_CONFLICT: Record<PolicyWrite, string> = {
+  "create-cedar":
+    "The policy service holds a policy that conflicts with this one.",
+  "create-link": "The policy service already holds this role link.",
+  version:
+    "The policy changed since this page was read. Reload the page and try again.",
+};
+
+/**
+ * What a Server Action that writes a policy returns for an error. A
+ * 400 carries the policy service's own message, shown at the body it
+ * refused, because the service parses Cedar and knows what is wrong
+ * with it. 403, 404, 409 and 504 are worded for the write, which
+ * `refusal-copy.ts` does not do for these operations; every other
+ * error is `refusal`'s.
+ */
+export function policyWriteRefusal(
+  error: unknown,
+  write: PolicyWrite,
+): PolicyWriteError {
+  if (error instanceof GaramApiError) {
+    switch (error.status) {
+      case 400:
+        return { status: "error", at: "body", message: error.message };
+      case 403:
+        return { status: "error", at: "form", message: WRITE_FORBIDDEN[write] };
+      case 404:
+        return {
+          status: "error",
+          at: "form",
+          message: "This policy is no longer in the organization.",
+        };
+      case 409:
+        return { status: "error", at: "form", message: WRITE_CONFLICT[write] };
+      case 504:
+        return {
+          status: "error",
+          at: "form",
+          message: POLICY_SERVICE_TIMED_OUT,
+        };
+    }
+  }
+  return { at: "form", ...refusal(error) };
+}

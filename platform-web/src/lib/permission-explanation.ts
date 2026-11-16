@@ -16,10 +16,10 @@ import type { components } from "@garam/platform-sdk-ts/api";
 export type PermissionExplanation =
   components["schemas"]["PermissionExplanation"];
 
-/** One statement that decided, and the path it reaches the caller by. */
-export type ExplainedStatement = components["schemas"]["ExplainedStatement"];
+/** One ground of a decision, as the policy service names it. */
+export type ExplainedGround = components["schemas"]["ExplainedGround"];
 
-/** A member or agent the policy engine allows an action. */
+/** A member or agent the policy service allows an action. */
 export type PermissionHolder = components["schemas"]["PermissionHolder"];
 
 const ResourceParser = z.object({
@@ -41,23 +41,24 @@ const ExplanationParser = parserFor<PermissionExplanation>()(
     action: z.string(),
     resource: ResourceParser.optional(),
     decision: z.enum(["allow", "deny", "unknown"]),
-    basis: z.enum(["statements", "operation", "undefined-action"]),
-    statements: z.array(
+    basis: z.enum(["policy-service", "operation", "undefined-action"]),
+    grounds: z.array(
       z.object({
-        effect: z.enum(["Allow", "Deny"]),
-        source: z.enum([
-          "org-role",
-          "group-role",
-          "project-role",
-          "policy",
-          "unreadable-policy",
+        kind: z.enum([
+          "role-link",
+          "guardrail",
+          "permit",
+          "system-policy",
+          "error",
         ]),
-        sid: z.string().optional(),
-        roles: z.array(z.string()).optional(),
-        group: z.string().optional(),
-        project: z.string().optional(),
         policy: z.string().optional(),
-        attachment: z.enum(["organization", "caller", "group"]).optional(),
+        role: z.enum(["owner", "admin", "member"]).optional(),
+        path: z.enum(["organization", "team", "project"]).optional(),
+        team: z.string().optional(),
+        project: z.string().optional(),
+        name: z.string().optional(),
+        text: z.string().optional(),
+        error: z.string().optional(),
       }),
     ),
   }),
@@ -122,7 +123,7 @@ export async function explainPermission(
 }
 
 /**
- * Who among the organization's first fifty candidates the engine allows
+ * Who among the organization's first fifty candidates the policy service allows
  * an action: `forbidden` where garam refuses the caller the list, and
  * null where it did not answer. `more` says candidates past the first
  * fifty were not asked.

@@ -56,11 +56,8 @@ var feedClassification = map[string]string{
 	"setOperatorManager":           "writes operators.manager, which no trigger watches",
 	"setOperatorControlEndpoint":   "writes operators.control_endpoint, which no trigger watches",
 	"clearOperatorControlEndpoint": "writes operators.control_endpoint, which no trigger watches",
-	"mintOperationAuthority":       "mints a token", "createPolicy": "the policy store is not fed by the outbox",
-	"addPolicyVersion": "the policy store is not fed by the outbox", "activatePolicy": "the policy store is not fed by the outbox",
-	"deletePolicy": "the policy store is not fed by the outbox", "rollbackPolicy": "the policy store is not fed by the outbox",
-	"attachPolicy": "the policy store is not fed by the outbox", "detachPolicy": "the policy store is not fed by the outbox",
-	"createInvitation": "writes invitations", "revokeInvitation": "writes invitations",
+	"mintOperationAuthority":       "mints a token",
+	"createInvitation":             "writes invitations", "revokeInvitation": "writes invitations",
 	// The relayed writes (ADR-0169): the service stores in the call.
 	"createIamPolicy": relayed, "createIamPolicyVersion": relayed,
 	"activateIamPolicy": relayed, "rollbackIamPolicy": relayed,

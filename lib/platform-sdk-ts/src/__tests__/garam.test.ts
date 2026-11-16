@@ -196,24 +196,9 @@ describe("refusal", () => {
     );
     // The control: the same answer to an operation with no sentence of
     // its own for it reads the generic one.
-    expect(refusal(notFound, "createPolicy").message).toBe(
+    expect(refusal(notFound, "approveAgentEnrollment").message).toBe(
       refusal(notFound).message,
     );
-  });
-
-  it("names the rules a policy document breaks, in plain words", () => {
-    const refused = new GaramApiError(
-      400,
-      "policy document: statement : Effect must be Allow or Deny",
-      "invalid_argument",
-    );
-
-    const { message } = refusal(refused, "addPolicyVersion");
-
-    expect(message).toMatch(
-      /an Effect of Allow or Deny, an Action and a Resource/,
-    );
-    expect(message).not.toContain("policy document:");
   });
 
   it("reads a documented reason before the status and kind, naming the place it points at", () => {
@@ -223,7 +208,6 @@ describe("refusal", () => {
           code: reason,
           path,
         }),
-        "addPolicyVersion",
       ).message;
 
     expect(
@@ -245,15 +229,13 @@ describe("refusal", () => {
     expect(refused("policy_document_version_missing", "/Version")).toBe(
       "The document needs a Version.",
     );
-    // The control: the same status and kind with no reason read the
-    // sentence that names every rule, so the ones above are the
-    // reason's.
+    // The control: the same status and kind with no reason read none of
+    // the sentences above, so they are the reason's.
     expect(
       refusal(
         new GaramApiError(400, "policy document: rule", "invalid_argument"),
-        "addPolicyVersion",
       ).message,
-    ).toMatch(/needs a Version and at least one statement/);
+    ).not.toMatch(/Statement 1|needs a Version/);
   });
 
   it("tells a used invitation from an expired one by reason", () => {

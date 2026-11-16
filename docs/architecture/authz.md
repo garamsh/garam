@@ -90,10 +90,10 @@ error of the service is a 503 `unavailable`. `checkPermissions` answers
 `iam:permit.write` on the organization the same way, and the four
 policy writes (`attach`, `detach`, `update`, `delete`) on the
 organization or on a policy. The explanation
-(`permission_explanation.go`) is the only caller of the platform's
-engine left on this listener, until round 11.
-[policy-matrix.md](./policy-matrix.md) reports where the two engines
-differ.
+(`permission_explanation.go`) asks the service's `Evaluate` as a probe
+and names the policies it reasons give ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)), so nothing
+on this listener calls the platform's engine. The parity matrix that
+reported where the two engines differ is retired.
 
 **Two further decisions are taken, both partly built.** The policy
 service loads `policy/schema/iam.cedarschema` and
@@ -1382,8 +1382,8 @@ and the subjects of the request that policy is attached to — none for
 one applying org-wide — so a denied request is reproducible after the
 fact down to the attachment that carried it.
 
-Its one caller is `explainPermission` on the browser-facing listener,
-which names a policy only to a caller who may read it
+It has no caller on the browser-facing listener now:
+`explainPermission` asks the policy service ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md))
 ([api-surface.md](./api-surface.md) §What decides the rest). No CLI
 subcommand asks it, and the machine listener does not.
 

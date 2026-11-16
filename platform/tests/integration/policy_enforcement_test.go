@@ -1,4 +1,4 @@
-//go:build policymatrix
+//go:build policyservice
 
 package integration_test
 
@@ -30,7 +30,6 @@ import (
 	relaygrpc "github.com/garamsh/garam/platform/internal/policyrelay/grpc"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // The cases here hold the browser listener's enforcement, its
@@ -187,30 +186,37 @@ func TestEnforcement_AnUnreachableServiceIsUnavailableNotForbidden(t *testing.T)
 }
 
 // TestEnforcement_AQuestionOnAPolicyIsAskedOnItsOrganization shows what
-// the service decides about a policy of the platform's own store. The
-// service holds no entity for one, so a question put on the policy
-// itself is denied to everyone; the platform asks it on the policy's
-// organization, as the service decides a write to a policy, and the
-// owner is allowed what the member is refused (ADR-0171 item 7). The
-// member's refusal is the owner's control.
+// the service decides about a policy. The service holds no entity for
+// one, so a question put on the policy itself is denied to everyone;
+// the platform asks it on the policy's organization, as the service
+// decides a write to a policy, and the owner is allowed what the member
+// is refused (ADR-0171 item 7). The member's refusal is the owner's
+// control.
 func TestEnforcement_AQuestionOnAPolicyIsAskedOnItsOrganization(t *testing.T) {
 	s := newEnforcementStack(t, realDecisions)
-	policy, err := grn.Parse(activePolicy(t, s.policies, s.acme, "held",
-		statementDoc("held", wire.EffectAllow, org.ActionOrgRead, s.acme.String())))
-	require.NoError(t, err)
+	id := s.writeGuardrail(t, "held", enforcementGuardrail, false)
 	onPolicy := apigen.PermissionCheck{Action: org.ActionPolicyUpdate,
-		Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypePolicy, Id: policy.Identifier}}
+		Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypePolicy, Id: id}}
 
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow},
 		checkedDecisions(t, s.url, s.owner, onPolicy), "an owner's role carries iam:policy.update")
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny},
 		checkedDecisions(t, s.url, s.member, onPolicy), "a member's role does not")
+}
 
-	versions := "/orgs/acme/policies/" + policy.Identifier + "/versions"
-	status, body := s.get(t, versions, s.owner)
-	assert.Equal(t, http.StatusOK, status, "an owner reads the policy's versions: %s", body)
-	status, body = s.get(t, versions, s.member)
-	assert.Equal(t, http.StatusForbidden, status, "a member does not: %s", body)
+// writeGuardrail writes a guardrail through the relay as the owner and
+// answers its identifier. It is activated only when activate is set, so
+// a draft is not the service's decision.
+func (s *enforcementStack) writeGuardrail(t *testing.T, name, cedar string, activate bool) string {
+	t.Helper()
+	status, got := browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies", s.owner, `{"name":"`+name+`","body":`+textBody("guardrail", cedar)+`}`)
+	require.Equal(t, http.StatusCreated, status, got)
+	id := policyID(t, got)
+	if activate {
+		status, got = browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies/"+id+"/activate", s.owner, "")
+		require.Equal(t, http.StatusNoContent, status, got)
+	}
+	return id
 }
 
 // TestEnforcement_AMissingResourceIsNotFoundOnlyToACallerTheServiceAllowsOnTheOrganization

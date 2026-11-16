@@ -26,7 +26,6 @@ import (
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // explainStack is the browser-facing listener over real Postgres and a
@@ -136,118 +135,22 @@ func grns(holders []apigen.PermissionHolder) []string {
 	return out
 }
 
-// TestExplainPermission_NamesTheRoleThatAllows explains
-// iam:operator.register to the owner, whose org role allows it, and to
-// a member, whose role does not: the owner's answer names the org role,
-// and the member's is a deny no statement decided. Each decision is the
-// one checkPermissions answers the same caller, so the explanation is
-// of the decision enforcement reaches.
-func TestExplainPermission_NamesTheRoleThatAllows(t *testing.T) {
-	s := newExplainStack(t)
-
-	owner := s.explain(t, s.ada, org.ActionOperatorRegister)
-	assert.Equal(t, apigen.DecisionAllow, owner.Decision)
-	assert.Equal(t, apigen.BasisStatements, owner.Basis)
-	require.Len(t, owner.Statements, 1)
-	assert.Equal(t, apigen.SourceOrgRole, owner.Statements[0].Source)
-	assert.Equal(t, apigen.StatementEffectAllow, owner.Statements[0].Effect)
-	require.NotNil(t, owner.Statements[0].Roles)
-	assert.Equal(t, []string{string(org.RoleOwner)}, *owner.Statements[0].Roles)
-
-	member := s.explain(t, s.bob, org.ActionOperatorRegister)
-	assert.Equal(t, apigen.DecisionDeny, member.Decision)
-	assert.Equal(t, apigen.BasisStatements, member.Basis)
-	assert.Empty(t, member.Statements, "nothing allows it, and nothing denied it")
-
-	assert.Equal(t, []apigen.PermissionDecision{owner.Decision}, permissionDecisions(t, s.url, s.ada, org.ActionOperatorRegister))
-	assert.Equal(t, []apigen.PermissionDecision{member.Decision}, permissionDecisions(t, s.url, s.bob, org.ActionOperatorRegister))
-}
-
-// TestExplainPermission_NamesTheDenyAndThePathItReached attaches a Deny
-// of iam:operator.register to eng, a group the owner belongs to: the
-// owner, who may read the policy, is answered deny by that statement,
-// naming the policy and eng as the path. The owner's role still allows
-// it and is not named, since the Deny is what decided. The answer
-// before the attachment is the control: allow, by the role.
-func TestExplainPermission_NamesTheDenyAndThePathItReached(t *testing.T) {
-	s := newExplainStack(t)
-	require.Equal(t, apigen.DecisionAllow, s.explain(t, s.ada, org.ActionOperatorRegister).Decision)
-
-	denied := activePolicy(t, s.policies, s.acme, "deny-register",
-		statementDoc("deny-register", wire.EffectDeny, org.ActionOperatorRegister, s.acme.String()))
-	attachPolicy(t, s.policies, denied, s.eng)
-	// The explanation is the platform engine's until round 11; the
-	// check beside it is the policy service's (ADR-0171).
-	s.decisions.forbid(s.adaGRN, org.ActionOperatorRegister)
-	policy, err := grn.Parse(denied)
-	require.NoError(t, err)
-
-	got := s.explain(t, s.ada, org.ActionOperatorRegister)
-	assert.Equal(t, apigen.DecisionDeny, got.Decision)
-	require.Len(t, got.Statements, 1)
-	st := got.Statements[0]
-	assert.Equal(t, apigen.SourcePolicy, st.Source)
-	assert.Equal(t, apigen.StatementEffectDeny, st.Effect)
-	assert.Equal(t, ptr("deny-register"), st.Sid)
-	assert.Equal(t, ptr(policy.Identifier), st.Policy)
-	assert.Equal(t, ptr(apigen.AttachmentGroup), st.Attachment)
-	assert.Equal(t, ptr("eng"), st.Group)
-	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny}, permissionDecisions(t, s.url, s.ada, org.ActionOperatorRegister))
-}
-
-// TestExplainPermission_HidesAPolicyTheCallerCannotRead attaches an
-// Allow of iam:consent.read, which no member role holds, to a member
-// and to the owner. The member is allowed by it and may not read
-// policies, so the statement is answered as an unreadable policy and
-// nothing of it — sid or policy — appears in the answer. The owner, who
-// may read it, is the control: the same statement comes back named,
-// attached to the caller, so what hides it from the member is the read
-// check.
-func TestExplainPermission_HidesAPolicyTheCallerCannotRead(t *testing.T) {
-	s := newExplainStack(t)
-	granted := activePolicy(t, s.policies, s.acme, "secret-consent-reader",
-		statementDoc("secret-consent-reader", wire.EffectAllow, org.ActionConsentRead, s.acme.String()))
-	attachPolicy(t, s.policies, granted, s.bobGRN)
-	attachPolicy(t, s.policies, granted, s.adaGRN)
-	policy, err := grn.Parse(granted)
-	require.NoError(t, err)
-
-	status, body := s.get(t, "/orgs/acme/permission-explanation", url.Values{"action": {org.ActionConsentRead}}, s.bob)
-	require.Equal(t, http.StatusOK, status, body)
-	var member apigen.PermissionExplanation
-	require.NoError(t, json.Unmarshal([]byte(body), &member))
-	assert.Equal(t, apigen.DecisionAllow, member.Decision)
-	assert.Equal(t, []apigen.ExplainedStatement{{Effect: apigen.StatementEffectAllow, Source: apigen.SourceUnreadablePolicy}}, member.Statements)
-	assert.NotContains(t, body, "secret-consent-reader")
-	assert.NotContains(t, body, policy.Identifier)
-
-	owner := s.explain(t, s.ada, org.ActionConsentRead)
-	var named []apigen.ExplainedStatement
-	for _, st := range owner.Statements {
-		if st.Source == apigen.SourcePolicy {
-			named = append(named, st)
-		}
-	}
-	require.Len(t, named, 1, "the owner reads the policy: %+v", owner.Statements)
-	assert.Equal(t, ptr("secret-consent-reader"), named[0].Sid)
-	assert.Equal(t, ptr(policy.Identifier), named[0].Policy)
-	assert.Equal(t, ptr(apigen.AttachmentCaller), named[0].Attachment)
-}
-
 // TestExplainPermission_LeavesOperationDecidedActionsToTheOperation
 // explains to the owner the actions checkPermissions puts to more than
-// the engine's Check — one a delegation grant decides, iam:agent.enroll
-// and iam:operator.delegate, each decided by the check its writes run —
-// and one garam does not define. Each carries checkPermissions'
-// decision and no statement. iam:operator.register, which Check alone
-// decides, is the control: it is explained by statements.
+// the policy service's Evaluate — one a delegation grant decides,
+// iam:agent.enroll and iam:operator.delegate, each decided by the check
+// its writes run — and one garam does not define. Each carries
+// checkPermissions' decision and no grounds. iam:operator.register,
+// which the service alone decides, is the control: it is explained by
+// the service. The grounds the service names are held against the real
+// service by the policyservice suite.
 func TestExplainPermission_LeavesOperationDecidedActionsToTheOperation(t *testing.T) {
 	s := newExplainStack(t)
 
 	for _, action := range []string{org.ActionAgentCreate, org.ActionAgentEnroll, org.ActionOperatorDelegate} {
 		got := s.explain(t, s.ada, action)
 		assert.Equal(t, apigen.BasisOperation, got.Basis, action)
-		assert.Empty(t, got.Statements, action)
+		assert.Empty(t, got.Grounds, action)
 		assert.Equal(t, permissionDecisions(t, s.url, s.ada, action), []apigen.PermissionDecision{got.Decision}, action)
 	}
 	assert.Equal(t, apigen.DecisionUnknown, s.explain(t, s.ada, org.ActionAgentCreate).Decision)
@@ -256,7 +159,7 @@ func TestExplainPermission_LeavesOperationDecidedActionsToTheOperation(t *testin
 	assert.Equal(t, apigen.DecisionDeny, undefined.Decision)
 	assert.Equal(t, apigen.BasisUndefinedAction, undefined.Basis)
 
-	assert.Equal(t, apigen.BasisStatements, s.explain(t, s.ada, org.ActionOperatorRegister).Basis)
+	assert.Equal(t, apigen.BasisPolicyService, s.explain(t, s.ada, org.ActionOperatorRegister).Basis)
 }
 
 // TestExplainPermission_RefusesAHalfNamedResource names a resource type

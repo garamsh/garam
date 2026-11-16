@@ -34,8 +34,6 @@ export type RefusalAnswer = {
 export type RefusalOperation =
   | "acceptInvitation"
   | "registerPassword"
-  | "createPolicy"
-  | "addPolicyVersion"
   | "grantOrgConsent"
   | "approveAgentEnrollment"
   | "withdrawAgentEnrollment"
@@ -53,12 +51,6 @@ const INVITATION_NOT_FOUND =
 // status and kind (`failed_precondition`), so one sentence covers both.
 const INVITATION_SPENT =
   "This invitation can no longer be used: it was already accepted or it has expired. Ask an admin of the organization for a new one.";
-
-// garam answers every rule a policy document breaks with the same
-// status and kind (`invalid_argument`), so the sentence names the rules
-// rather than the one that failed.
-const POLICY_DOCUMENT_REFUSED =
-  "This policy document can't be saved. It needs a Version and at least one statement, and every statement needs an Effect of Allow or Deny, an Action and a Resource. Keys other than Version, Statement, Sid, Effect, Action, Resource and Condition aren't allowed.";
 
 const CONSENT_WITH_ITSELF =
   "That is this organization's own identifier. A consent is granted to another organization.";
@@ -104,8 +96,6 @@ const BY_OPERATION: Record<
     "409 failed_precondition": INVITATION_SPENT,
     "409 already_exists": "That username is taken. Choose another one.",
   },
-  createPolicy: { "400 invalid_argument": POLICY_DOCUMENT_REFUSED },
-  addPolicyVersion: { "400 invalid_argument": POLICY_DOCUMENT_REFUSED },
   // garam answers a grant naming this organization itself with 400 and
   // one naming no organization it holds with 404, neither for a reason
   // the generic sentences say.
@@ -137,7 +127,6 @@ export const REFUSAL_COPY = {
   unreachable: "garam can't be reached right now. Try again in a moment.",
   invitationNotFound: INVITATION_NOT_FOUND,
   invitationSpent: INVITATION_SPENT,
-  policyDocumentRefused: POLICY_DOCUMENT_REFUSED,
   consentWithItself: CONSENT_WITH_ITSELF,
   consentPartnerNotFound: CONSENT_PARTNER_NOT_FOUND,
   preparedUnreadable: PREPARED_UNREADABLE,

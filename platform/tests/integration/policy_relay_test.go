@@ -1,4 +1,4 @@
-//go:build policymatrix
+//go:build policyservice
 
 package integration_test
 

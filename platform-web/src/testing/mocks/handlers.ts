@@ -406,8 +406,8 @@ export function answerExplanations(
 /** Alice's owner role allows an action, as garam explains it. */
 export const ownerAllows: Omit<PermissionExplanation, "action" | "resource"> = {
   decision: "allow",
-  basis: "statements",
-  statements: [{ effect: "Allow", source: "org-role", roles: ["owner"] }],
+  basis: "policy-service",
+  grounds: [{ kind: "role-link", role: "owner", path: "organization" }],
 };
 
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */

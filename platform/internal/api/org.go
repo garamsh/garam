@@ -295,9 +295,8 @@ func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action
 // Org membership is the precondition; non-members and denied actions
 // both yield 403. Collection: authz.md §Statement collection.
 //
-// Both GRNs are validated first because scopedStatements splices the
-// org identifier into a resource pattern, where a wildcard would widen
-// the statement past the org it was scoped to.
+// Both GRNs are validated first: the target's here, the org's in
+// callerIn.
 func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.User, action string) error {
 	_, err := s.authorizedCaller(r, orgGRN, target, u, action)
 	return err
@@ -380,13 +379,10 @@ func (s *Server) resourceExists(ctx context.Context, orgGRN, target grn.GRN) (bo
 }
 
 // caller is what every check of one user inside one org shares: the
-// membership every check requires, and the groups the engine finds
-// attached policies through (ADR-0008).
+// membership every check requires.
 type caller struct {
-	org    grn.GRN
-	user   *user.User
-	member *org.Membership
-	groups []grn.GRN
+	org  grn.GRN
+	user *user.User
 }
 
 // callerIn resolves u inside orgGRN. A non-member is refused, since
@@ -395,18 +391,14 @@ func (s *Server) callerIn(r *http.Request, orgGRN grn.GRN, u *user.User) (*calle
 	if err := orgGRN.Validate(); err != nil {
 		return nil, err
 	}
-	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN)
+	_, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN)
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return nil, errorx.New(errorx.KindPermissionDenied, "not a member of this org")
 	}
 	if err != nil {
 		return nil, err
 	}
-	groups, err := s.orgs.ListGroupsByMember(r.Context(), orgGRN, u.GRN)
-	if err != nil {
-		return nil, err
-	}
-	return &caller{org: orgGRN, user: u, member: m, groups: groups}, nil
+	return &caller{org: orgGRN, user: u}, nil
 }
 
 // allows asks the policy service whether c may take action on target,
@@ -416,7 +408,15 @@ func (s *Server) callerIn(r *http.Request, orgGRN grn.GRN, u *user.User) (*calle
 // error of the service is unavailable, never an allow (ADR-0168
 // item 7).
 func (s *Server) allows(r *http.Request, c *caller, target grn.GRN, action string) (bool, error) {
-	return s.decides(r, policydecision.Question{
+	d, err := s.asks(r, c, target, action)
+	return d.Allowed, err
+}
+
+// asks is allows with the service's whole decision, the reasons it
+// names included. The explanation reads them, and a pair's decision is
+// the one question allows asks.
+func (s *Server) asks(r *http.Request, c *caller, target grn.GRN, action string) (policydecision.Decision, error) {
+	return s.evaluate(r, policydecision.Question{
 		Subject: c.user.GRN, Action: action, Resource: askedOn(target), Probe: policydecision.IsProbe(r.Context()),
 	})
 }
@@ -437,30 +437,18 @@ func askedOn(target grn.GRN) grn.GRN {
 // decides asks the policy service one question and answers whether it
 // allows it.
 func (s *Server) decides(r *http.Request, q policydecision.Question) (bool, error) {
-	d, err := s.decisions.Evaluate(r.Context(), q)
-	if err != nil {
-		return false, errorx.Wrap(err, "policy decision", errorx.KindUnavailable)
-	}
-	return d.Allowed, nil
+	d, err := s.evaluate(r, q)
+	return d.Allowed, err
 }
 
-// question is what the platform's engine is asked about c taking
-// action on target: the statements c's roles grant there, c's groups
-// and c's org. explainPermission asks it, until the policy service
-// explains (round 11 of #1796).
-func (s *Server) question(r *http.Request, c *caller, target grn.GRN, action string) (EvalInput, error) {
-	statements, err := s.scopedStatements(r, c.org, c.member, target, c.user)
+// evaluate asks the policy service one question. An error of the
+// service is unavailable, never a decision.
+func (s *Server) evaluate(r *http.Request, q policydecision.Question) (policydecision.Decision, error) {
+	d, err := s.decisions.Evaluate(r.Context(), q)
 	if err != nil {
-		return EvalInput{}, err
+		return policydecision.Decision{}, errorx.Wrap(err, "policy decision", errorx.KindUnavailable)
 	}
-	return EvalInput{
-		Subject:       c.user.GRN,
-		Object:        target,
-		Action:        action,
-		SubjectGroups: c.groups,
-		Statements:    statements,
-		SubjectOrg:    c.org,
-	}, nil
+	return d, nil
 }
 
 // orgGRN builds the GRN for an org identifier from an API path.

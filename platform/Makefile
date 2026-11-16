@@ -6,7 +6,7 @@
 include ../tooling/make/go.mk
 include ../tooling/make/stack.mk
 
-.PHONY: ci format lint test build gen check-gen stack-up suites integration policy-matrix e2e workload-integration standalone-e2e mutation
+.PHONY: ci format lint test build gen check-gen stack-up suites integration policy-service e2e workload-integration standalone-e2e mutation
 
 # A third tool directive on the terms go.mk states, and the only one no
 # whole-set name reaches: `mutation` is invoked by hand and by nothing
@@ -64,11 +64,11 @@ check-gen:
 
 # The stack the suites below run against: postgres, the openbao
 # `integration` signs against and the rustfs it shares with cowork's,
-# and the backend policy-matrix asks the policy service of.
+# and the backend policy-service asks the policy service of.
 stack-up:
 	@$(MAKE) --no-print-directory -C ../deploy/local db-up backend-up
 
-suites: integration e2e policy-matrix
+suites: integration e2e policy-service
 
 INTEGRATION_PKGS = $(call go-test-pkgs,./tests/integration/...)
 INTEGRATION_TEST_FILES = $(call go-test-files,./tests/integration/...)
@@ -87,22 +87,22 @@ integration:
 		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' \
 		go test -count=1 $(INTEGRATION_PKGS)
 
-# policy-matrix asks the platform's engine and the stack's policy
-# service the same questions and compares the answers (#1915). It needs
-# the whole backend (make -C deploy/local backend-up), which publishes
+# policy-service runs the platform's suites that ask the stack's real
+# policy service: what it decides, what the relay writes to it and what
+# the platform asks of it. It needs the whole backend (make -C deploy/local backend-up), which publishes
 # the service on loopback under a certificate naming localhost and
 # leaves that certificate and the platform's signing key in
 # POLICY_LOCAL_DIR (deploy/local/README.md §policy). The tag keeps the
 # suite out of `integration`.
-policy-matrix:
-	@test -n '$(TEST_DATABASE_URL)' || { echo "policy-matrix: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
-	@test -n '$(POLICY_HOST_ADDR)' || { echo "policy-matrix: no policy service published on this host — run make -C platform stack-up" >&2; exit 1; }
-	@test -r '$(POLICY_LOCAL_DIR)/ca.pem' && test -r '$(POLICY_LOCAL_DIR)/signing.pem' || { echo "policy-matrix: no ca.pem and signing.pem in $(POLICY_LOCAL_DIR) — run make -C platform stack-up" >&2; exit 1; }
-	@echo 'policy-matrix: the policy service at $(POLICY_HOST_ADDR), trusting and signing with the files in $(POLICY_LOCAL_DIR)'
-	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' POLICY_MATRIX_ADDR='$(POLICY_HOST_ADDR)' \
-		POLICY_MATRIX_CA='$(POLICY_LOCAL_DIR)/ca.pem' POLICY_MATRIX_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
-		POLICY_MATRIX_ISSUER=https://garam.localhost/api \
-		go test -count=1 -tags policymatrix -run 'TestPolicyMatrix$$|TestCompareDifferences|TestDelegatedAuthorityPolicy_|TestPolicyRelay_|TestEnforcement_' ./tests/integration/
+policy-service:
+	@test -n '$(TEST_DATABASE_URL)' || { echo "policy-service: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
+	@test -n '$(POLICY_HOST_ADDR)' || { echo "policy-service: no policy service published on this host — run make -C platform stack-up" >&2; exit 1; }
+	@test -r '$(POLICY_LOCAL_DIR)/ca.pem' && test -r '$(POLICY_LOCAL_DIR)/signing.pem' || { echo "policy-service: no ca.pem and signing.pem in $(POLICY_LOCAL_DIR) — run make -C platform stack-up" >&2; exit 1; }
+	@echo 'policy-service: the policy service at $(POLICY_HOST_ADDR), trusting and signing with the files in $(POLICY_LOCAL_DIR)'
+	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' POLICY_SERVICE_ADDR='$(POLICY_HOST_ADDR)' \
+		POLICY_SERVICE_CA='$(POLICY_LOCAL_DIR)/ca.pem' POLICY_SERVICE_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
+		POLICY_SERVICE_ISSUER=https://garam.localhost/api \
+		go test -count=1 -tags policyservice -run 'TestDelegatedAuthorityPolicy_|TestPolicyRelay_|TestEnforcement_' ./tests/integration/
 
 # e2e runs the built binary as the processes a deployment runs, against
 # the same Postgres.

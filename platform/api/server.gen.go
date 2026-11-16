@@ -6,7 +6,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -325,66 +324,48 @@ func (e DeviceTokenRequestGrantType) Valid() bool {
 	}
 }
 
-// Defines values for ExplainedStatementAttachment.
+// Defines values for ExplainedGroundKind.
 const (
-	AttachmentCaller       ExplainedStatementAttachment = "caller"
-	AttachmentGroup        ExplainedStatementAttachment = "group"
-	AttachmentOrganization ExplainedStatementAttachment = "organization"
+	GroundError        ExplainedGroundKind = "error"
+	GroundGuardrail    ExplainedGroundKind = "guardrail"
+	GroundPermit       ExplainedGroundKind = "permit"
+	GroundRoleLink     ExplainedGroundKind = "role-link"
+	GroundSystemPolicy ExplainedGroundKind = "system-policy"
 )
 
-// Valid indicates whether the value is a known member of the ExplainedStatementAttachment enum.
-func (e ExplainedStatementAttachment) Valid() bool {
+// Valid indicates whether the value is a known member of the ExplainedGroundKind enum.
+func (e ExplainedGroundKind) Valid() bool {
 	switch e {
-	case AttachmentCaller:
+	case GroundError:
 		return true
-	case AttachmentGroup:
+	case GroundGuardrail:
 		return true
-	case AttachmentOrganization:
+	case GroundPermit:
+		return true
+	case GroundRoleLink:
+		return true
+	case GroundSystemPolicy:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ExplainedStatementEffect.
+// Defines values for ExplainedGroundPath.
 const (
-	StatementEffectAllow ExplainedStatementEffect = "Allow"
-	StatementEffectDeny  ExplainedStatementEffect = "Deny"
+	GroundPathOrganization ExplainedGroundPath = "organization"
+	GroundPathProject      ExplainedGroundPath = "project"
+	GroundPathTeam         ExplainedGroundPath = "team"
 )
 
-// Valid indicates whether the value is a known member of the ExplainedStatementEffect enum.
-func (e ExplainedStatementEffect) Valid() bool {
+// Valid indicates whether the value is a known member of the ExplainedGroundPath enum.
+func (e ExplainedGroundPath) Valid() bool {
 	switch e {
-	case StatementEffectAllow:
+	case GroundPathOrganization:
 		return true
-	case StatementEffectDeny:
+	case GroundPathProject:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ExplainedStatementSource.
-const (
-	SourceGroupRole        ExplainedStatementSource = "group-role"
-	SourceOrgRole          ExplainedStatementSource = "org-role"
-	SourcePolicy           ExplainedStatementSource = "policy"
-	SourceProjectRole      ExplainedStatementSource = "project-role"
-	SourceUnreadablePolicy ExplainedStatementSource = "unreadable-policy"
-)
-
-// Valid indicates whether the value is a known member of the ExplainedStatementSource enum.
-func (e ExplainedStatementSource) Valid() bool {
-	switch e {
-	case SourceGroupRole:
-		return true
-	case SourceOrgRole:
-		return true
-	case SourcePolicy:
-		return true
-	case SourceProjectRole:
-		return true
-	case SourceUnreadablePolicy:
+	case GroundPathTeam:
 		return true
 	default:
 		return false
@@ -724,7 +705,7 @@ func (e OperatorKeyState) Valid() bool {
 // Defines values for PermissionBasis.
 const (
 	BasisOperation       PermissionBasis = "operation"
-	BasisStatements      PermissionBasis = "statements"
+	BasisPolicyService   PermissionBasis = "policy-service"
 	BasisUndefinedAction PermissionBasis = "undefined-action"
 )
 
@@ -733,7 +714,7 @@ func (e PermissionBasis) Valid() bool {
 	switch e {
 	case BasisOperation:
 		return true
-	case BasisStatements:
+	case BasisPolicyService:
 		return true
 	case BasisUndefinedAction:
 		return true
@@ -1272,33 +1253,37 @@ type Error struct {
 	Resource *string `json:"resource,omitempty"`
 }
 
-// ExplainedStatement One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the three role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone.
-type ExplainedStatement struct {
-	// Attachment How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
-	Attachment *ExplainedStatementAttachment `json:"attachment,omitempty"`
-	Effect     ExplainedStatementEffect      `json:"effect"`
+// ExplainedGround One ground of a decision, as the policy service names it. `kind` says which fields are present: `role`, `path` and, for a team or a project, `team` or `project`, for `role-link`; `name` and `text`, where the caller may read the policy, for `guardrail` and `permit`; `error` for `error`. `policy` names the policy where it is the caller's organization's, or a system policy's file name.
+type ExplainedGround struct {
+	// Error Why the policy failed to evaluate.
+	Error *string             `json:"error,omitempty"`
+	Kind  ExplainedGroundKind `json:"kind"`
 
-	// Group The group's slug.
-	Group *string `json:"group,omitempty"`
+	// Name The policy's name, to a caller who may read it.
+	Name *string `json:"name,omitempty"`
 
-	// Policy The policy's identifier, as `getPolicy` addresses it.
+	// Path How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it.
+	Path *ExplainedGroundPath `json:"path,omitempty"`
+
+	// Policy The policy's identifier, as `getIamPolicy` addresses it, or the file name of a system policy.
 	Policy *string `json:"policy,omitempty"`
 
 	// Project The project's slug.
-	Project *string                  `json:"project,omitempty"`
-	Roles   *[]string                `json:"roles,omitempty"`
-	Sid     *string                  `json:"sid,omitempty"`
-	Source  ExplainedStatementSource `json:"source"`
+	Project *string `json:"project,omitempty"`
+	Role    *Role   `json:"role,omitempty"`
+
+	// Team The team's slug.
+	Team *string `json:"team,omitempty"`
+
+	// Text The Cedar text of the policy's default version, to a caller who may read it.
+	Text *string `json:"text,omitempty"`
 }
 
-// ExplainedStatementAttachment How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
-type ExplainedStatementAttachment string
+// ExplainedGroundKind defines model for ExplainedGround.Kind.
+type ExplainedGroundKind string
 
-// ExplainedStatementEffect defines model for ExplainedStatement.Effect.
-type ExplainedStatementEffect string
-
-// ExplainedStatementSource defines model for ExplainedStatement.Source.
-type ExplainedStatementSource string
+// ExplainedGroundPath How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it.
+type ExplainedGroundPath string
 
 // FoundKind defines model for FoundKind.
 type FoundKind struct {
@@ -1837,7 +1822,7 @@ type PendingInvitation struct {
 	Role Role               `json:"role"`
 }
 
-// PermissionBasis `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
+// PermissionBasis `policy-service` is a decision the policy service reached, explained by `grounds`. `operation` is an action the operation decides past the policy service, explained no further than the decision. `undefined-action` is a name garam does not define.
 type PermissionBasis string
 
 // PermissionCheck defines model for PermissionCheck.
@@ -1876,17 +1861,17 @@ type PermissionDecision string
 type PermissionExplanation struct {
 	Action string `json:"action"`
 
-	// Basis `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
+	// Basis `policy-service` is a decision the policy service reached, explained by `grounds`. `operation` is an action the operation decides past the policy service, explained no further than the decision. `undefined-action` is a name garam does not define.
 	Basis PermissionBasis `json:"basis"`
 
 	// Decision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
 	Decision PermissionDecision `json:"decision"`
 
+	// Grounds What the policy service names, where `basis` is `policy-service`; empty otherwise, and where nothing permits the action. The order is not stated.
+	Grounds []ExplainedGround `json:"grounds"`
+
 	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page`, a `cowork-channel`, a `cowork-task` or a `cowork-artifact` is named as cowork names it (ADR-0127): garam keeps none of them, and answers only what may be done to one.
 	Resource *PermissionResource `json:"resource,omitempty"`
-
-	// Statements The statements that decided, where `basis` is `statements`; empty otherwise, and where nothing allows the action.
-	Statements []ExplainedStatement `json:"statements"`
 }
 
 // PermissionHolder defines model for PermissionHolder.
@@ -1918,43 +1903,6 @@ type PermissionResource struct {
 // PermissionResourceType defines model for PermissionResourceType.
 type PermissionResourceType string
 
-// Policy defines model for Policy.
-type Policy struct {
-	CreatedAt time.Time `json:"createdAt"`
-
-	// DefaultVersion The version evaluated while the policy is active.
-	DefaultVersion int    `json:"defaultVersion"`
-	Grn            string `json:"grn"`
-	Name           string `json:"name"`
-	OrgGrn         string `json:"orgGrn"`
-
-	// Status A policy's lifecycle state. Only an `active` policy contributes statements to a check.
-	Status    PolicyStatus `json:"status"`
-	UpdatedAt time.Time    `json:"updatedAt"`
-}
-
-// PolicyAttachment defines model for PolicyAttachment.
-type PolicyAttachment struct {
-	CreatedAt  time.Time `json:"createdAt"`
-	PolicyGrn  string    `json:"policyGrn"`
-	SubjectGrn string    `json:"subjectGrn"`
-}
-
-// PolicyAttachmentCreate The user or group the policy applies to.
-type PolicyAttachmentCreate struct {
-	SubjectGrn string `json:"subjectGrn"`
-}
-
-// PolicyCreate defines model for PolicyCreate.
-type PolicyCreate struct {
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-	Document PolicyDocument `json:"document"`
-	Name     string         `json:"name"`
-}
-
-// PolicyDocument An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-type PolicyDocument = json.RawMessage
-
 // PolicyRollback defines model for PolicyRollback.
 type PolicyRollback struct {
 	// Version A stored version of the policy, older or newer than its current default.
@@ -1963,23 +1911,6 @@ type PolicyRollback struct {
 
 // PolicyStatus A policy's lifecycle state. Only an `active` policy contributes statements to a check.
 type PolicyStatus string
-
-// PolicyVersion defines model for PolicyVersion.
-type PolicyVersion struct {
-	CreatedAt time.Time `json:"createdAt"`
-	CreatedBy string    `json:"createdBy"`
-
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-	Document  PolicyDocument `json:"document"`
-	PolicyGrn string         `json:"policyGrn"`
-	Version   int            `json:"version"`
-}
-
-// PolicyVersionCreate defines model for PolicyVersionCreate.
-type PolicyVersionCreate struct {
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-	Document PolicyDocument `json:"document"`
-}
 
 // Project defines model for Project.
 type Project struct {
@@ -2200,17 +2131,11 @@ type PermissionAction = string
 // PermissionResourceId defines model for permissionResourceId.
 type PermissionResourceId = string
 
-// PolicySlug defines model for policy.
-type PolicySlug = string
-
 // ProjectSlug defines model for project.
 type ProjectSlug = string
 
 // Provider defines model for provider.
 type Provider = string
-
-// SubjectGrn defines model for subject.
-type SubjectGrn = string
 
 // ContractError defines model for ContractError.
 type ContractError = Error
@@ -2452,18 +2377,6 @@ type SetOperatorManagerJSONRequestBody = OperatorManagerWrite
 // CheckPermissionsJSONRequestBody defines body for CheckPermissions for application/json ContentType.
 type CheckPermissionsJSONRequestBody = PermissionCheckRequest
 
-// CreatePolicyJSONRequestBody defines body for CreatePolicy for application/json ContentType.
-type CreatePolicyJSONRequestBody = PolicyCreate
-
-// AttachPolicyJSONRequestBody defines body for AttachPolicy for application/json ContentType.
-type AttachPolicyJSONRequestBody = PolicyAttachmentCreate
-
-// RollbackPolicyJSONRequestBody defines body for RollbackPolicy for application/json ContentType.
-type RollbackPolicyJSONRequestBody = PolicyRollback
-
-// AddPolicyVersionJSONRequestBody defines body for AddPolicyVersion for application/json ContentType.
-type AddPolicyVersionJSONRequestBody = PolicyVersionCreate
-
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = ProjectCreate
 
@@ -2703,36 +2616,6 @@ type ServerInterface interface {
 	// ListPermissionHolders List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 	// (GET /orgs/{org}/permission-holders)
 	ListPermissionHolders(w http.ResponseWriter, r *http.Request, org Org, params ListPermissionHoldersParams)
-	// ListPolicies List an organization's policies. Requires the `admin` role.
-	// (GET /orgs/{org}/policies)
-	ListPolicies(w http.ResponseWriter, r *http.Request, org Org)
-	// CreatePolicy Create a policy in an organization. Requires the `admin` role.
-	// (POST /orgs/{org}/policies)
-	CreatePolicy(w http.ResponseWriter, r *http.Request, org Org)
-	// DeletePolicy Delete a policy. Requires the `admin` role.
-	// (DELETE /orgs/{org}/policies/{policy})
-	DeletePolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
-	// ActivatePolicy Activate a policy. Requires the `admin` role.
-	// (POST /orgs/{org}/policies/{policy}/activate)
-	ActivatePolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
-	// ListPolicyAttachments List a policy's attachments. Requires the `admin` role.
-	// (GET /orgs/{org}/policies/{policy}/attachments)
-	ListPolicyAttachments(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
-	// AttachPolicy Attach a policy to a subject. Requires the `admin` role.
-	// (POST /orgs/{org}/policies/{policy}/attachments)
-	AttachPolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
-	// DetachPolicy Detach a policy from a subject. Requires the `admin` role.
-	// (DELETE /orgs/{org}/policies/{policy}/attachments/{subject})
-	DetachPolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug, subjectGrn SubjectGrn)
-	// RollbackPolicy Point a policy at a stored version. Requires the `admin` role.
-	// (POST /orgs/{org}/policies/{policy}/rollback)
-	RollbackPolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
-	// ListPolicyVersions List a policy's versions. Requires the `admin` role.
-	// (GET /orgs/{org}/policies/{policy}/versions)
-	ListPolicyVersions(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
-	// AddPolicyVersion Append a version to a policy. Requires the `admin` role.
-	// (POST /orgs/{org}/policies/{policy}/versions)
-	AddPolicyVersion(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
 	// ListProjects List an organization's projects. Requires the `member` role.
 	// (GET /orgs/{org}/projects)
 	ListProjects(w http.ResponseWriter, r *http.Request, org Org, params ListProjectsParams)
@@ -5397,347 +5280,6 @@ func (siw *ServerInterfaceWrapper) ListPermissionHolders(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
-// ListPolicies operation middleware
-func (siw *ServerInterfaceWrapper) ListPolicies(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListPolicies(w, r, org)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreatePolicy operation middleware
-func (siw *ServerInterfaceWrapper) CreatePolicy(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreatePolicy(w, r, org)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeletePolicy operation middleware
-func (siw *ServerInterfaceWrapper) DeletePolicy(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeletePolicy(w, r, org, policySlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ActivatePolicy operation middleware
-func (siw *ServerInterfaceWrapper) ActivatePolicy(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ActivatePolicy(w, r, org, policySlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListPolicyAttachments operation middleware
-func (siw *ServerInterfaceWrapper) ListPolicyAttachments(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListPolicyAttachments(w, r, org, policySlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// AttachPolicy operation middleware
-func (siw *ServerInterfaceWrapper) AttachPolicy(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AttachPolicy(w, r, org, policySlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DetachPolicy operation middleware
-func (siw *ServerInterfaceWrapper) DetachPolicy(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "subject" -------------
-	var subjectGrn SubjectGrn
-
-	err = runtime.BindStyledParameterWithOptions("simple", "subject", r.PathValue("subject"), &subjectGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subject", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DetachPolicy(w, r, org, policySlug, subjectGrn)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RollbackPolicy operation middleware
-func (siw *ServerInterfaceWrapper) RollbackPolicy(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RollbackPolicy(w, r, org, policySlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListPolicyVersions operation middleware
-func (siw *ServerInterfaceWrapper) ListPolicyVersions(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListPolicyVersions(w, r, org, policySlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// AddPolicyVersion operation middleware
-func (siw *ServerInterfaceWrapper) AddPolicyVersion(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AddPolicyVersion(w, r, org, policySlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListProjects operation middleware
 func (siw *ServerInterfaceWrapper) ListProjects(w http.ResponseWriter, r *http.Request) {
 
@@ -6339,16 +5881,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/versions", wrapper.CreateIamPolicyVersion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/activate", wrapper.ActivateIamPolicy)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/rollback", wrapper.RollbackIamPolicy)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.ListPolicyVersions)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.AddPolicyVersion)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/activate", wrapper.ActivatePolicy)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/policies/{policy}", wrapper.DeletePolicy)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/rollback", wrapper.RollbackPolicy)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/attachments", wrapper.ListPolicyAttachments)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/attachments", wrapper.AttachPolicy)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/attachments/{subject}", wrapper.DetachPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/consents", wrapper.ListOrgConsents)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.WithdrawOrgConsent)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.GrantOrgConsent)

@@ -66,7 +66,7 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 
 // newAuthorityStackDeciding is newAuthorityStack where decisions is
 // the policy service both listeners ask, which the suite tagged
-// policymatrix gives the real one.
+// policyservice gives the real one.
 func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, decisions policydecision.Service) *authorityStack {
 	t.Helper()
 	ctx := context.Background()

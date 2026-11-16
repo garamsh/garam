@@ -1,10 +1,11 @@
-//go:build policymatrix
+//go:build policyservice
 
 package integration_test
 
 import (
 	"context"
 	"net/http"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/policydecision"
 	decisiongrpc "github.com/garamsh/garam/platform/internal/policydecision/grpc"
+	"github.com/garamsh/garam/platform/internal/policyfeed"
 	feedgrpc "github.com/garamsh/garam/platform/internal/policyfeed/grpc"
 	feedpg "github.com/garamsh/garam/platform/internal/policyfeed/postgres"
 	"github.com/garamsh/garam/platform/internal/signer"
@@ -30,9 +32,8 @@ import (
 // The cases here hold the platform's delegated operation authority and
 // controller proof against the stack's real policy service (ADR-0146
 // items 14 and 15): what the service was fed decides, read current, and
-// what the platform decides itself it decides before it asks. They run
-// with the matrix, since each needs the service the matrix runs
-// against.
+// what the platform decides itself it decides before it asks. They are
+// the policyservice suite's, which needs the stack's policy service.
 
 // askedOf wraps the real policy service and records every question the
 // platform put to it.
@@ -85,7 +86,7 @@ type realPolicy struct {
 // marked, and dials the service as `serve api` does.
 func startRealPolicy(t *testing.T, p *pgxpool.Pool) *realPolicy {
 	t.Helper()
-	addr, caFile, keyFile, issuer := matrixEnv(t)
+	addr, caFile, keyFile, issuer := serviceEnv(t)
 	startFeed(t, p)
 	key, err := signer.LoadKey(keyFile)
 	require.NoError(t, err)
@@ -97,6 +98,45 @@ func startRealPolicy(t *testing.T, p *pgxpool.Pool) *realPolicy {
 		asked: &askedOf{Service: decisiongrpc.New(client)}, client: client, pool: p,
 		store: feedpg.NewStore(p), sender: feedgrpc.NewSender(client),
 	}
+}
+
+// The suite reads the stack through the variables
+// `make -C platform policy-service` sets.
+const (
+	serviceAddrEnv   = "POLICY_SERVICE_ADDR"
+	serviceCAEnv     = "POLICY_SERVICE_CA"
+	serviceKeyEnv    = "POLICY_SERVICE_KEY"
+	serviceIssuerEnv = "POLICY_SERVICE_ISSUER"
+)
+
+// serviceEnv names the stack's policy service, the CA that signed its
+// certificate and the key and issuer the platform's tokens carry.
+func serviceEnv(t *testing.T) (addr, caFile, keyFile, issuer string) {
+	t.Helper()
+	get := func(name string) string {
+		v := os.Getenv(name)
+		require.NotEmpty(t, v, "%s names the stack's policy service; run make -C platform policy-service", name)
+		return v
+	}
+	return get(serviceAddrEnv), get(serviceCAEnv), get(serviceKeyEnv), get(serviceIssuerEnv)
+}
+
+// deliverAll sends the feed until the outbox is empty, and fails if
+// the service refuses any of it, since the state would not have
+// arrived.
+func deliverAll(t *testing.T, p *pgxpool.Pool, store *feedpg.Store, sender policyfeed.Sender) {
+	t.Helper()
+	for range 50 {
+		result, err := store.Deliver(context.Background(), policyfeed.BatchLimit, sender)
+		require.NoError(t, err)
+		require.Empty(t, result.Refused, "the service refused an entity")
+		require.Empty(t, result.SetAside, "the service refused a role link")
+		require.Empty(t, result.ScopedSetAside, "the service refused a scoped role link")
+		if len(outboxMarks(t, p)) == 0 {
+			return
+		}
+	}
+	t.Fatal("the outbox did not empty")
 }
 
 // deliver sends the outbox to the service until it is empty.

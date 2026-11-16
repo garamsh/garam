@@ -2515,9 +2515,11 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
-        '404':
+        '409':
           $ref: '#/components/responses/Error'
         '503':
+          $ref: '#/components/responses/Error'
+        '504':
           $ref: '#/components/responses/Error'
     get:
       operationId: listIamPolicies
@@ -2545,6 +2547,8 @@ paths:
           $ref: '#/components/responses/Error'
         '503':
           $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/iam-policies/{iamPolicy}:
     get:
       operationId: getIamPolicy
@@ -2568,6 +2572,8 @@ paths:
           $ref: '#/components/responses/Error'
         '503':
           $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
     delete:
       operationId: deleteIamPolicy
       tags: [policy]
@@ -2587,7 +2593,11 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
         '503':
+          $ref: '#/components/responses/Error'
+        '504':
           $ref: '#/components/responses/Error'
   /orgs/{org}/iam-policies/{iamPolicy}/versions:
     post:
@@ -2621,7 +2631,11 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
         '503':
+          $ref: '#/components/responses/Error'
+        '504':
           $ref: '#/components/responses/Error'
   /orgs/{org}/iam-policies/{iamPolicy}/activate:
     post:
@@ -2642,7 +2656,11 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
         '503':
+          $ref: '#/components/responses/Error'
+        '504':
           $ref: '#/components/responses/Error'
   /orgs/{org}/iam-policies/{iamPolicy}/rollback:
     post:
@@ -2669,7 +2687,11 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
         '503':
+          $ref: '#/components/responses/Error'
+        '504':
           $ref: '#/components/responses/Error'
   /orgs/{org}/policies:
     post:
@@ -4388,7 +4410,8 @@ components:
       description: >-
         What one version says: `text` for a guardrail (one Cedar
         `forbid`) or a permit (one Cedar `permit`), `roleLink` for a
-        role link. The service validates it again.
+        role link. The service validates the Cedar text; the platform
+        refuses only the role links it derives from a membership.
       properties:
         kind:
           $ref: '#/components/schemas/IamPolicyKind'

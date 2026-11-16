@@ -108,7 +108,7 @@ func (s *Server) GetIamPolicy(
 	}
 	for i, v := range detail.Versions {
 		out.Versions[i] = apigen.IamPolicyVersion{
-			Version: int32(v.Number), //nolint:gosec // the service's int32
+			Version: v.Number,
 			Body:    iamBodyToAPI(v.Body), CreatedBy: v.CreatedBy,
 		}
 	}
@@ -138,7 +138,7 @@ func (s *Server) CreateIamPolicyVersion(
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, apigen.IamPolicyVersionNumber{Version: int32(version)}) //nolint:gosec // the service's int32
+	writeJSON(w, http.StatusCreated, apigen.IamPolicyVersionNumber{Version: version})
 }
 
 // ActivateIamPolicy relays an activation.
@@ -169,7 +169,7 @@ func (s *Server) RollbackIamPolicy(
 		writeError(w, err)
 		return
 	}
-	if err := s.policyRelay.RollBack(r.Context(), pw, int(req.Version)); err != nil {
+	if err := s.policyRelay.RollBack(r.Context(), pw, req.Version); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -234,6 +234,6 @@ func iamBodyToAPI(b policyrelay.Body) apigen.IamPolicyBody {
 func iamPolicyToAPI(p policyrelay.Policy) apigen.IamPolicy {
 	return apigen.IamPolicy{
 		Id: p.ID, Name: p.Name, Kind: apigen.IamPolicyKind(p.Kind),
-		Status: apigen.PolicyStatus(p.Status), DefaultVersion: int32(p.DefaultVersion), //nolint:gosec // the service's int32
+		Status: apigen.PolicyStatus(p.Status), DefaultVersion: p.DefaultVersion,
 	}
 }

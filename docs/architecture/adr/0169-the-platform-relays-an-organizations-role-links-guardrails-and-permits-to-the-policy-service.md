@@ -47,9 +47,13 @@ engine's documents. Three questions were left to this round.
   calls the service naming that user as the writer. The platform asks
   no authorization question of its own and stores no body: the
   service's refusals are the answer, PERMISSION_DENIED as 403,
-  INVALID_ARGUMENT as 400, NOT_FOUND, ALREADY_EXISTS and
-  FAILED_PRECONDITION as the service made them, and a service that
-  cannot be reached as 503. A write refused stores nothing, because the
+  INVALID_ARGUMENT as 400, NOT_FOUND as 404, ALREADY_EXISTS and
+  FAILED_PRECONDITION as 409 (a concurrent rollback moves the default
+  an activation reads), a service that cannot be reached as 503, and
+  a call that outlasts its timeout as 504. A reply naming a role,
+  scope, kind or status the platform does not know is the service's
+  fault, answered 500, and never a value the spec's enums forbid. A
+  write refused stores nothing, because the
   service stores in the call that decides. Only an owner writes a
   permit for the same reason: `iam:permit.write` is the service's check.
 - **The platform names the policy.** An identifier is generated as
@@ -58,8 +62,9 @@ engine's documents. Three questions were left to this round.
 - **The platform refuses the membership's shapes.** A role link whose
   principal is a user in organization scope, or whose principal equals
   its resource in team-or-project scope, is answered 400 before the
-  service is asked. An agent or a team linked to the organization, or
-  a user linked to a team or project, is a writer's.
+  service is asked. An agent, a team or a project linked to the
+  organization, or a user linked to a team or project, is a writer's:
+  the service accepts each and no membership derives it.
 
 ## Consequences
 

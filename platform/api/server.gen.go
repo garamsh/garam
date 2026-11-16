@@ -1382,7 +1382,7 @@ type IamPolicy struct {
 	Status PolicyStatus `json:"status"`
 }
 
-// IamPolicyBody What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+// IamPolicyBody What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
 type IamPolicyBody struct {
 	Kind     IamPolicyKind `json:"kind"`
 	RoleLink *IamRoleLink  `json:"roleLink,omitempty"`
@@ -1391,7 +1391,7 @@ type IamPolicyBody struct {
 
 // IamPolicyCreate defines model for IamPolicyCreate.
 type IamPolicyCreate struct {
-	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
 	Body IamPolicyBody `json:"body"`
 	Name string        `json:"name"`
 }
@@ -1409,7 +1409,7 @@ type IamPolicyKind string
 
 // IamPolicyVersion defines model for IamPolicyVersion.
 type IamPolicyVersion struct {
-	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
 	Body      IamPolicyBody `json:"body"`
 	CreatedBy string        `json:"createdBy"`
 	Version   int32         `json:"version"`
@@ -1417,7 +1417,7 @@ type IamPolicyVersion struct {
 
 // IamPolicyVersionCreate defines model for IamPolicyVersionCreate.
 type IamPolicyVersionCreate struct {
-	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
 	Body IamPolicyBody `json:"body"`
 }
 

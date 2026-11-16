@@ -106,12 +106,12 @@ type Policy struct {
 	Name           string
 	Kind           Kind
 	Status         Status
-	DefaultVersion int
+	DefaultVersion int32
 }
 
 // Version is one stored version.
 type Version struct {
-	Number    int
+	Number    int32
 	Body      Body
 	CreatedBy string
 }
@@ -138,11 +138,11 @@ type Service interface {
 	// Create stores a policy's first version, as a draft.
 	Create(ctx context.Context, w Write, name string, body Body) error
 	// AppendVersion stores a further version and returns its number.
-	AppendVersion(ctx context.Context, w Write, body Body) (int, error)
+	AppendVersion(ctx context.Context, w Write, body Body) (int32, error)
 	// Activate makes the default version the policy's decision.
 	Activate(ctx context.Context, w Write) error
 	// RollBack makes an earlier version the default.
-	RollBack(ctx context.Context, w Write, version int) error
+	RollBack(ctx context.Context, w Write, version int32) error
 	// Delete removes the policy.
 	Delete(ctx context.Context, w Write) error
 	// Get reads a policy and its versions.

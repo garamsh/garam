@@ -2070,7 +2070,7 @@ export interface components {
             /** @description GRN of the organization, team or project linked to. */
             resource: string;
         };
-        /** @description What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again. */
+        /** @description What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership. */
         IamPolicyBody: {
             kind: components["schemas"]["IamPolicyKind"];
             text?: string;
@@ -4674,6 +4674,7 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     createIamPolicy: {
@@ -4704,8 +4705,9 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     getIamPolicy: {
@@ -4735,6 +4737,7 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     deleteIamPolicy: {
@@ -4761,7 +4764,9 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     createIamPolicyVersion: {
@@ -4795,7 +4800,9 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     activateIamPolicy: {
@@ -4822,7 +4829,9 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     rollbackIamPolicy: {
@@ -4854,7 +4863,9 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     listPolicies: {

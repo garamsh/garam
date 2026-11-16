@@ -47,7 +47,7 @@ func (c *Client) Create(ctx context.Context, w policyrelay.Write, name string, b
 }
 
 // AppendVersion stores a further version.
-func (c *Client) AppendVersion(ctx context.Context, w policyrelay.Write, body policyrelay.Body) (int, error) {
+func (c *Client) AppendVersion(ctx context.Context, w policyrelay.Write, body policyrelay.Body) (int32, error) {
 	writer, pb, err := parties(w, body)
 	if err != nil {
 		return 0, err
@@ -60,7 +60,7 @@ func (c *Client) AppendVersion(ctx context.Context, w policyrelay.Write, body po
 	if err != nil {
 		return 0, relayed(err)
 	}
-	return int(resp.GetVersion()), nil
+	return resp.GetVersion(), nil
 }
 
 // Activate makes the default version the policy's decision.
@@ -78,7 +78,7 @@ func (c *Client) Activate(ctx context.Context, w policyrelay.Write) error {
 }
 
 // RollBack makes an earlier version the default.
-func (c *Client) RollBack(ctx context.Context, w policyrelay.Write, version int) error {
+func (c *Client) RollBack(ctx context.Context, w policyrelay.Write, version int32) error {
 	writer, err := subject(w.Writer)
 	if err != nil {
 		return err
@@ -86,7 +86,7 @@ func (c *Client) RollBack(ctx context.Context, w policyrelay.Write, version int)
 	ctx, cancel := context.WithTimeout(ctx, feedgrpc.CallTimeout)
 	defer cancel()
 	_, err = c.client.RollBackPolicy(ctx, &policyv1.RollBackPolicyRequest{
-		Writer: writer, Org: w.Org.String(), Policy: policyGRN(w), Version: int32(version), //nolint:gosec // bounded by the spec's int32
+		Writer: writer, Org: w.Org.String(), Policy: policyGRN(w), Version: version,
 	})
 	return relayed(err)
 }
@@ -119,14 +119,18 @@ func (c *Client) Get(ctx context.Context, w policyrelay.Write) (policyrelay.Deta
 	if err != nil {
 		return policyrelay.Detail{}, relayed(err)
 	}
-	detail := policyrelay.Detail{Policy: policyOf(resp.GetPolicy())}
+	summary, err := policyOf(resp.GetPolicy())
+	if err != nil {
+		return policyrelay.Detail{}, err
+	}
+	detail := policyrelay.Detail{Policy: summary}
 	for _, v := range resp.GetVersions() {
 		body, err := bodyOf(v.GetBody())
 		if err != nil {
 			return policyrelay.Detail{}, err
 		}
 		detail.Versions = append(detail.Versions, policyrelay.Version{
-			Number: int(v.GetVersion()), Body: body, CreatedBy: v.GetCreatedBy(),
+			Number: v.GetVersion(), Body: body, CreatedBy: v.GetCreatedBy(),
 		})
 	}
 	return detail, nil
@@ -148,7 +152,9 @@ func (c *Client) List(ctx context.Context, reader, orgGRN grn.GRN) ([]policyrela
 	}
 	out := make([]policyrelay.Policy, len(resp.GetPolicies()))
 	for i, p := range resp.GetPolicies() {
-		out[i] = policyOf(p)
+		if out[i], err = policyOf(p); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
@@ -289,11 +295,14 @@ func bodyOf(pb *policyv1.PolicyBody) (policyrelay.Body, error) {
 		if err != nil {
 			return policyrelay.Body{}, errorx.Wrap(err, "policy service answered a role link resource", errorx.KindInternal)
 		}
-		scope := policyrelay.ScopeOrganization
-		if l.GetScope() == policyv1.RoleScope_ROLE_SCOPE_TEAM_OR_PROJECT {
-			scope = policyrelay.ScopeTeamOrProject
+		scope, err := scopeOf(l.GetScope())
+		if err != nil {
+			return policyrelay.Body{}, err
 		}
-		role := org.Role(strings.ToLower(strings.TrimPrefix(l.GetRole().String(), "ROLE_")))
+		role, err := roleOf(l.GetRole())
+		if err != nil {
+			return policyrelay.Body{}, err
+		}
 		return policyrelay.Body{Kind: policyrelay.KindRoleLink, Link: &policyrelay.RoleLink{
 			Role: role, Scope: scope, Principal: principal, Resource: resource,
 		}}, nil
@@ -301,23 +310,73 @@ func bodyOf(pb *policyv1.PolicyBody) (policyrelay.Body, error) {
 	return policyrelay.Body{}, errorx.New(errorx.KindInternal, "policy service answered a body of no kind")
 }
 
-func policyOf(p *policyv1.PolicySummary) policyrelay.Policy {
+// roleOf, scopeOf, kindOf and statusOf read the service's enums back
+// exhaustively: a value the platform does not know, or one left
+// unspecified, is the service's fault and never a value the spec's
+// enums forbid.
+func roleOf(r policyv1.Role) (org.Role, error) {
+	switch r {
+	case policyv1.Role_ROLE_OWNER:
+		return org.RoleOwner, nil
+	case policyv1.Role_ROLE_ADMIN:
+		return org.RoleAdmin, nil
+	case policyv1.Role_ROLE_MEMBER:
+		return org.RoleMember, nil
+	case policyv1.Role_ROLE_UNSPECIFIED:
+	}
+	return "", errorx.New(errorx.KindInternal, "policy service answered a role link of no role")
+}
+
+func scopeOf(s policyv1.RoleScope) (policyrelay.Scope, error) {
+	switch s {
+	case policyv1.RoleScope_ROLE_SCOPE_ORGANIZATION:
+		return policyrelay.ScopeOrganization, nil
+	case policyv1.RoleScope_ROLE_SCOPE_TEAM_OR_PROJECT:
+		return policyrelay.ScopeTeamOrProject, nil
+	case policyv1.RoleScope_ROLE_SCOPE_UNSPECIFIED:
+	}
+	return "", errorx.New(errorx.KindInternal, "policy service answered a role link of no scope")
+}
+
+func kindOf(k policyv1.PolicyKind) (policyrelay.Kind, error) {
+	switch k {
+	case policyv1.PolicyKind_POLICY_KIND_ROLE_LINK:
+		return policyrelay.KindRoleLink, nil
+	case policyv1.PolicyKind_POLICY_KIND_GUARDRAIL:
+		return policyrelay.KindGuardrail, nil
+	case policyv1.PolicyKind_POLICY_KIND_PERMIT:
+		return policyrelay.KindPermit, nil
+	case policyv1.PolicyKind_POLICY_KIND_UNSPECIFIED:
+	}
+	return "", errorx.New(errorx.KindInternal, "policy service answered a policy of no kind")
+}
+
+func statusOf(s policyv1.PolicyStatus) (policyrelay.Status, error) {
+	switch s {
+	case policyv1.PolicyStatus_POLICY_STATUS_DRAFT:
+		return policyrelay.StatusDraft, nil
+	case policyv1.PolicyStatus_POLICY_STATUS_ACTIVE:
+		return policyrelay.StatusActive, nil
+	case policyv1.PolicyStatus_POLICY_STATUS_UNSPECIFIED:
+	}
+	return "", errorx.New(errorx.KindInternal, "policy service answered a policy of no status")
+}
+
+func policyOf(p *policyv1.PolicySummary) (policyrelay.Policy, error) {
 	id := p.GetPolicy()
 	if i := strings.LastIndex(id, "/"); i >= 0 {
 		id = id[i+1:]
 	}
-	out := policyrelay.Policy{ID: id, Name: p.GetName(), DefaultVersion: int(p.GetDefaultVersion())}
-	switch p.GetKind() {
-	case policyv1.PolicyKind_POLICY_KIND_ROLE_LINK:
-		out.Kind = policyrelay.KindRoleLink
-	case policyv1.PolicyKind_POLICY_KIND_GUARDRAIL:
-		out.Kind = policyrelay.KindGuardrail
-	case policyv1.PolicyKind_POLICY_KIND_PERMIT:
-		out.Kind = policyrelay.KindPermit
+	kind, err := kindOf(p.GetKind())
+	if err != nil {
+		return policyrelay.Policy{}, err
 	}
-	out.Status = policyrelay.StatusDraft
-	if p.GetStatus() == policyv1.PolicyStatus_POLICY_STATUS_ACTIVE {
-		out.Status = policyrelay.StatusActive
+	status, err := statusOf(p.GetStatus())
+	if err != nil {
+		return policyrelay.Policy{}, err
 	}
-	return out
+	return policyrelay.Policy{
+		ID: id, Name: p.GetName(), Kind: kind, Status: status,
+		DefaultVersion: p.GetDefaultVersion(),
+	}, nil
 }

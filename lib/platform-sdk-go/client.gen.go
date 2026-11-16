@@ -1384,7 +1384,7 @@ type IamPolicy struct {
 	Status PolicyStatus `json:"status"`
 }
 
-// IamPolicyBody What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+// IamPolicyBody What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
 type IamPolicyBody struct {
 	Kind     IamPolicyKind `json:"kind"`
 	RoleLink *IamRoleLink  `json:"roleLink,omitempty"`
@@ -1393,7 +1393,7 @@ type IamPolicyBody struct {
 
 // IamPolicyCreate defines model for IamPolicyCreate.
 type IamPolicyCreate struct {
-	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
 	Body IamPolicyBody `json:"body"`
 	Name string        `json:"name"`
 }
@@ -1411,7 +1411,7 @@ type IamPolicyKind string
 
 // IamPolicyVersion defines model for IamPolicyVersion.
 type IamPolicyVersion struct {
-	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
 	Body      IamPolicyBody `json:"body"`
 	CreatedBy string        `json:"createdBy"`
 	Version   int32         `json:"version"`
@@ -1419,7 +1419,7 @@ type IamPolicyVersion struct {
 
 // IamPolicyVersionCreate defines model for IamPolicyVersionCreate.
 type IamPolicyVersionCreate struct {
-	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates it again.
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
 	Body IamPolicyBody `json:"body"`
 }
 
@@ -14751,6 +14751,8 @@ type ListIamPoliciesResponse struct {
 	JSON404 *Error
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -14776,6 +14778,11 @@ func (r ListIamPoliciesResponse) GetJSON404() *Error {
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
 func (r ListIamPoliciesResponse) GetJSON503() *Error {
 	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r ListIamPoliciesResponse) GetJSON504() *Error {
+	return r.JSON504
 }
 
 // GetBody returns the raw response body bytes
@@ -14818,10 +14825,12 @@ type CreateIamPolicyResponse struct {
 	JSON401 *Error
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -14844,14 +14853,19 @@ func (r CreateIamPolicyResponse) GetJSON403() *Error {
 	return r.JSON403
 }
 
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r CreateIamPolicyResponse) GetJSON404() *Error {
-	return r.JSON404
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON409() *Error {
+	return r.JSON409
 }
 
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
 func (r CreateIamPolicyResponse) GetJSON503() *Error {
 	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
 }
 
 // GetBody returns the raw response body bytes
@@ -14892,8 +14906,12 @@ type DeleteIamPolicyResponse struct {
 	JSON403 *Error
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -14911,9 +14929,19 @@ func (r DeleteIamPolicyResponse) GetJSON404() *Error {
 	return r.JSON404
 }
 
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DeleteIamPolicyResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
 func (r DeleteIamPolicyResponse) GetJSON503() *Error {
 	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r DeleteIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
 }
 
 // GetBody returns the raw response body bytes
@@ -14958,6 +14986,8 @@ type GetIamPolicyResponse struct {
 	JSON404 *Error
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -14983,6 +15013,11 @@ func (r GetIamPolicyResponse) GetJSON404() *Error {
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
 func (r GetIamPolicyResponse) GetJSON503() *Error {
 	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r GetIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
 }
 
 // GetBody returns the raw response body bytes
@@ -15023,8 +15058,12 @@ type ActivateIamPolicyResponse struct {
 	JSON403 *Error
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -15042,9 +15081,19 @@ func (r ActivateIamPolicyResponse) GetJSON404() *Error {
 	return r.JSON404
 }
 
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ActivateIamPolicyResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
 func (r ActivateIamPolicyResponse) GetJSON503() *Error {
 	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r ActivateIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
 }
 
 // GetBody returns the raw response body bytes
@@ -15087,8 +15136,12 @@ type RollbackIamPolicyResponse struct {
 	JSON403 *Error
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -15111,9 +15164,19 @@ func (r RollbackIamPolicyResponse) GetJSON404() *Error {
 	return r.JSON404
 }
 
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
 func (r RollbackIamPolicyResponse) GetJSON503() *Error {
 	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
 }
 
 // GetBody returns the raw response body bytes
@@ -15158,8 +15221,12 @@ type CreateIamPolicyVersionResponse struct {
 	JSON403 *Error
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -15187,9 +15254,19 @@ func (r CreateIamPolicyVersionResponse) GetJSON404() *Error {
 	return r.JSON404
 }
 
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
 // GetJSON503 returns the response for an HTTP 503 `application/json` response
 func (r CreateIamPolicyVersionResponse) GetJSON503() *Error {
 	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON504() *Error {
+	return r.JSON504
 }
 
 // GetBody returns the raw response body bytes
@@ -22512,6 +22589,13 @@ func ParseListIamPoliciesResponse(rsp *http.Response) (*ListIamPoliciesResponse,
 		}
 		response.JSON503 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
 	}
 
 	return response, nil
@@ -22559,12 +22643,12 @@ func ParseCreateIamPolicyResponse(rsp *http.Response) (*CreateIamPolicyResponse,
 		}
 		response.JSON403 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.JSON404 = &dest
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
 		var dest Error
@@ -22572,6 +22656,13 @@ func ParseCreateIamPolicyResponse(rsp *http.Response) (*CreateIamPolicyResponse,
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 
@@ -22616,12 +22707,26 @@ func ParseDeleteIamPolicyResponse(rsp *http.Response) (*DeleteIamPolicyResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 
@@ -22677,6 +22782,13 @@ func ParseGetIamPolicyResponse(rsp *http.Response) (*GetIamPolicyResponse, error
 		}
 		response.JSON503 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
 	}
 
 	return response, nil
@@ -22720,12 +22832,26 @@ func ParseActivateIamPolicyResponse(rsp *http.Response) (*ActivateIamPolicyRespo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 
@@ -22777,12 +22903,26 @@ func ParseRollbackIamPolicyResponse(rsp *http.Response) (*RollbackIamPolicyRespo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 
@@ -22838,12 +22978,26 @@ func ParseCreateIamPolicyVersionResponse(rsp *http.Response) (*CreateIamPolicyVe
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 

@@ -250,6 +250,11 @@ func TestPolicyRelay_ARefusedVersionIsNotStored(t *testing.T) {
 	var detail apigen.IamPolicyDetail
 	require.NoError(t, json.Unmarshal([]byte(got), &detail))
 	assert.Len(t, detail.Versions, 1, "no refused version was stored")
+
+	status, got = s.send(t, http.MethodPost, "/"+id+"/versions", s.owner, `{"body":`+textBody("guardrail", relayGuardrail)+`}`)
+	assert.Equal(t, http.StatusCreated, status, "control: the owner's valid version is stored: %s", got)
+	status, got = s.send(t, http.MethodDelete, "/"+id, s.owner, "")
+	assert.Equal(t, http.StatusNoContent, status, "control: the owner deletes it: %s", got)
 }
 
 // TestPolicyRelay_TheServiceBeingDownIsUnavailable points the relay at
@@ -307,4 +312,6 @@ func TestPolicyRelay_AMembershipsRoleLinkIsNotWrittenHere(t *testing.T) {
 
 	status, got = s.create(t, s.owner, linkBody(grn.New("acme", "agent", "bot").String(), org, "organization"))
 	assert.Equal(t, http.StatusCreated, status, "control: an agent's link is a writer's: %s", got)
+	status, got = s.create(t, s.owner, linkBody(s.ownerGRN.String(), team, "team-or-project"))
+	assert.Equal(t, http.StatusCreated, status, "control: a user's link to a team is a writer's: %s", got)
 }

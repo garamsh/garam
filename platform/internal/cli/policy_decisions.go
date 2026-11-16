@@ -28,16 +28,17 @@ func dialPolicyDecisions() (policydecision.Service, func(), error) {
 		func() { _ = conn.Close() }, nil
 }
 
-// dialPolicyRelay connects the client that relays an organization's
-// role links, guardrails and permits to the policy service
-// (ADR-0169), over the same address and credentials. The returned
-// function closes the connection.
-func dialPolicyRelay() (policyrelay.Service, func(), error) {
+// dialPolicyClients connects, over one connection, the decision client
+// and the client that relays an organization's role links, guardrails
+// and permits to the policy service (ADR-0169). The returned function
+// closes the connection.
+func dialPolicyClients() (policydecision.Service, policyrelay.Service, func(), error) {
 	conn, err := dialPolicyConn()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return policyrelaygrpc.New(policyv1.NewPolicyServiceClient(conn)),
+	client := policyv1.NewPolicyServiceClient(conn)
+	return policydecisiongrpc.New(client), policyrelaygrpc.New(client),
 		func() { _ = conn.Close() }, nil
 }
 
@@ -48,7 +49,7 @@ func dialPolicyConn() (*grpc.ClientConn, error) {
 	}
 	if cfg == nil {
 		return nil, errorx.New(errorx.KindInvalidArgument,
-			string(envPolicyAddr)+" is required: the policy service decides every send")
+			string(envPolicyAddr)+" is required: the policy service decides every send and every policy write")
 	}
 	key, err := signer.LoadKey(cfg.keyFile)
 	if err != nil {

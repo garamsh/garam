@@ -450,8 +450,9 @@ and not in the same place on every surface.
   in the body. The platform names the signed-in user as the writer and
   stores none of the body, so the service's answer is the response:
   403 for a writer it refuses (only an owner writes a permit), 400 for
-  an invalid body, 503 when it cannot be reached, and a write refused
-  stores nothing. The platform answers 400 itself for a role link it
+  an invalid body, 404 and 409 as it made them, 503 when it cannot be
+  reached, 504 when the call times out, and a write refused stores
+  nothing. The platform answers 400 itself for a role link it
   derives from a membership. `listIamPolicies` is the service's read,
   not filtered here. The `/orgs/{org}/policies*` operations remain
   until round 11 of #1796

@@ -99,11 +99,12 @@ CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg
 
 minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild
 
-# minikube-rebuild is everything a code change touches: the images, the
+# minikube-rebuild is everything a code change touches: the key
+# material the processes mount (kept when present), the images, the
 # migrations the new code expects, and the processes that run it. The
 # bring-up above composes it rather than restating its steps, so the two
 # cannot come apart.
-minikube-rebuild: minikube-images minikube-migrate minikube-apps
+minikube-rebuild: minikube-secret minikube-images minikube-migrate minikube-apps
 
 # Every kubectl recipe needs the apiserver reachable through the project
 # kubeconfig, and `minikube status` does not answer that: a cluster
@@ -126,16 +127,17 @@ minikube-start: minikube-context
 	$(KUBECTL_MINIKUBE) apply --server-side -f $(CNPG_MANIFEST)
 	$(KUBECTL_MINIKUBE) -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=300s
 
-# minikube-images builds both images (ADR-0020) into the cluster's own
-# daemon, which docker-env points the client at for the length of the
-# recipe. Nothing is pushed, and the manifests pull Never, so what runs
-# is what was built here. Both Dockerfiles sit outside the context they
-# build — `minikube image build` uploads the context and cannot reach
-# them — and this is the same pair of contexts the compose file uses.
+# minikube-images builds the three images (ADR-0020) into the cluster's
+# own daemon, which docker-env points the client at for the length of
+# the recipe. Nothing is pushed, and the manifests pull Never, so what
+# runs is what was built here. The Dockerfiles sit outside the context
+# they build — `minikube image build` uploads the context and cannot
+# reach them — and these are the same contexts the compose file uses.
 minikube-images:
 	eval "$$(minikube docker-env --shell bash)"; \
 		docker build -t garam:local -f Dockerfile ../.. && \
-		docker build -t garam-web:local -f Dockerfile.web --build-arg APP=platform-web ../..
+		docker build -t garam-web:local -f Dockerfile.web --build-arg APP=platform-web ../.. && \
+		docker build -t policy:local -f Dockerfile.policy ../..
 
 # minikube-db creates the namespace everything else lands in and the
 # Postgres cluster CNPG reconciles, and returns once it is reachable.
@@ -151,16 +153,21 @@ minikube-db: minikube-context
 
 minikube-secret: minikube-context
 	$(MINIKUBE_DIR)/machine-key-material.sh
+	$(MINIKUBE_DIR)/policy-key-material.sh
 
 # minikube-migrate applies pending migrations and waits for them. A
 # Job's pod template is immutable, so the finished one is deleted rather
-# than updated.
+# than updated. postgres.yaml is applied again first: it holds the
+# databases the migrations run against, so a cluster brought up before
+# one was added gets it here.
 minikube-migrate: minikube-context
+	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/postgres.yaml
 	$(KUBECTL_LOCAL) delete job migrate --ignore-not-found
 	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/migrate-job.yaml
 	$(KUBECTL_LOCAL) wait --for=condition=complete job/migrate --timeout=300s
 
-# minikube-apps starts the three serve processes and the web app, and
+# minikube-apps starts the policy service, the three serve processes and
+# the web app, and
 # reports what is running rather than that it finished. Each pod
 # template is stamped with the id of the image it runs, so a rebuilt
 # image is a changed Deployment the apply rolls and an unrebuilt one
@@ -169,10 +176,11 @@ minikube-apps: minikube-context
 	@eval "$$(minikube docker-env --shell bash)"; \
 		id="$$(docker image inspect --format '{{.Id}}' garam:local)" && \
 		web_id="$$(docker image inspect --format '{{.Id}}' garam-web:local)" && \
-		echo "minikube-apps: garam:local=$$id garam-web:local=$$web_id" && \
-		sed -e "s|GARAM_IMAGE_ID|$$id|" -e "s|GARAM_WEB_IMAGE_ID|$$web_id|" $(MINIKUBE_DIR)/garam.yaml \
+		policy_id="$$(docker image inspect --format '{{.Id}}' policy:local)" && \
+		echo "minikube-apps: garam:local=$$id garam-web:local=$$web_id policy:local=$$policy_id" && \
+		sed -e "s|GARAM_IMAGE_ID|$$id|" -e "s|GARAM_WEB_IMAGE_ID|$$web_id|" -e "s|GARAM_POLICY_IMAGE_ID|$$policy_id|" $(MINIKUBE_DIR)/garam.yaml \
 		| $(KUBECTL_LOCAL) apply -f -
-	@for d in authz api machine web; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
+	@for d in authz policy api machine web; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
 	@$(KUBECTL_LOCAL) get pods
 
 # minikube-forward is how the web app is reached: the Services are

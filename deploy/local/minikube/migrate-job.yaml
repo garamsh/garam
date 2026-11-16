@@ -1,12 +1,13 @@
-# One-shot: applies pending migrations and exits.
+# One-shot: applies pending migrations, the policy service's included,
+# turns the policy feed on, and exits.
 # `make -C deploy/local minikube-migrate` waits for it to complete
 # before `make -C deploy/local minikube-apps` starts anything that reads
 # the schema.
 #
 # A Job's pod template is immutable, so the bring-up deletes this one
-# before applying it rather than updating it. golang-migrate records what
-# it has applied, so the rerun that follows a second bring-up succeeds
-# having changed nothing.
+# before applying it rather than updating it. Each migrator records what
+# it has applied, so a rerun applies no migration twice; `policy-feed
+# start` marks every live entity again on each run.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -17,7 +18,7 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      containers:
+      initContainers:
         - name: migrate
           image: garam:local
           # Never, not IfNotPresent: an image missing from the cluster's
@@ -25,6 +26,72 @@ spec:
           # holds a credential to fall back on (ADR-0020).
           imagePullPolicy: Never
           args: ["migrate"]
+          env:
+            - name: GARAM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: uri
+        # The Database in postgres.yaml is reconciled by the operator
+        # after the cluster is ready, so it can still be absent when
+        # this Job starts. The image is the one postgres.yaml pins,
+        # which carries psql.
+        - name: policy-db
+          image: ghcr.io/cloudnative-pg/postgresql:17.11-system-trixie@sha256:d3601aae9a06dd1b8069864ffed80344720e289a98fbf749954d2edeec715fa0
+          command: ["/bin/sh", "-c", "until psql -tAc 'SELECT 1' >/dev/null; do sleep 2; done"]
+          env:
+            - name: PGDATABASE
+              value: policy
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: host
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: password
+        - name: policy-migrate
+          image: policy:local
+          imagePullPolicy: Never
+          args: ["migrate"]
+          env:
+            # Composed from the operator's Secret so that no file here
+            # holds the credential. The Secret's URI names the garam
+            # database and this one is the service's own.
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: host
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: password
+            - name: POLICY_DATABASE_URL
+              value: postgres://$(PGUSER):$(PGPASSWORD)@$(PGHOST):5432/policy
+      containers:
+        # Turns the feed of the platform's entities on and marks every
+        # live one (ADR-0140), which the api's loop delivers to the
+        # policy service. It reads only the platform's own database, so
+        # it runs once that is migrated and does not wait on the
+        # service.
+        - name: policy-feed
+          image: garam:local
+          imagePullPolicy: Never
+          args: ["policy-feed", "start"]
           env:
             - name: GARAM_DATABASE_URL
               valueFrom:

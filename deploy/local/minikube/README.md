@@ -23,11 +23,22 @@ cluster's own daemon.
 
 ## What runs
 
-- `postgres` — one instance, reconciled by the CloudNativePG operator.
-- `migrate` — a Job that applies pending migrations and exits.
+- `postgres` — one instance, reconciled by the CloudNativePG operator,
+  holding the platform's database and the policy service's own.
+- `migrate` — a Job that applies pending migrations, the platform's and
+  the policy service's, turns the policy feed on, and exits.
+- `policy` — the policy service
+  ([ADR-0130](../../../docs/architecture/adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)),
+  which serves no plaintext.
 - `authz`, `api`, `machine` — the three serve processes of
   [ADR-0017](../../../docs/architecture/adr/0017-machine-process.md),
-  from one image.
+  from one image. `api` and `machine` both reach `policy` over its TLS
+  and sign their calls with one key, under one issuer, which `policy`
+  trusts. `machine` refuses to start without that configuration
+  ([ADR-0168](../../../docs/architecture/adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)),
+  so the bring-up deploys `policy` beside it. The listener
+  reaches the service per send and not at start, so it reports ready
+  while `policy` is down and a send then fails closed.
 - `web` — the Next.js console.
 
 All of it lives in the `garam-local` namespace. Manifests are
@@ -57,7 +68,8 @@ make -C deploy/local minikube-down      # removes the namespace, its volume and 
 `make -C deploy/local minikube-up` starts the cluster if it is not
 already running, so it works from nothing. Rerunning it is safe: the key
 material is kept rather than regenerated, and the migration Job runs
-again against an already-migrated database and applies nothing.
+again: it applies no migration twice, and `policy-feed start` marks
+every live entity again.
 
 `make -C deploy/local minikube-rebuild` is what a code change needs, and
 it is the whole of `minikube-up` past the cluster and the database. The
@@ -79,13 +91,16 @@ Nothing here is published to the host. The Services are cluster-internal
 and there is no ingress, so `make -C deploy/local minikube-forward` is
 the only way in: it forwards the web app to `http://localhost:3000`.
 
-`/login` takes Google, which needs real credentials this deployment
-sets none of, or a username and a password, which `/register` mints
-only from an invitation an org admin issued
-([ADR-0041](../../../docs/architecture/adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
-The database this stack starts with holds no admin, so reaching the
-console means writing user and session rows against it directly, as
-`platform-web/e2e/seed.ts` does for the browser suite.
+Signing in is the site's handoff (ADR-0131): the web app sends `/login`
+and `/register` to `GARAM_SITE_URL`, and a visitor without a session
+cookie goes to the handoff the site starts. This deployment does not run
+the site, so a browser cannot sign in to the console here; running it is
+tracked in [#1967](https://github.com/garamsh/garam/issues/1967).
+
+Until then, a console page opens only to a browser already holding the
+host-only `garam_session` cookie of a session row written against the
+database directly. `platform-web/e2e/seed.ts` writes the rows and
+`platform-web/e2e/fixtures.ts` plants the cookie by URL, with no domain.
 
 To reach anything else — the api, the authz engine's metrics, the
 machine process's probes — forward its Service the same way.
@@ -123,24 +138,45 @@ that was already there, so a cluster brought up before
 [ADR-0040](../../../docs/architecture/adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
 keeps its authorities and starts.
 
+`policy-key-material.sh` does the same for the policy service, into a
+second Secret: the certificate it serves under, which `api` and
+`machine` trust as their CA, the RSA key they sign their calls with, and
+the JWKS the service trusts for it. The service is given the
+certificate, its key and the JWKS, and never the signing key. The pair
+is kept whole when it exists, because the service holds the JWKS it
+started with and a new key beside it would be refused until the service
+restarted. Each pod mounts only the Secret keys it copies.
+
+The certificate is valid for 30 days and is kept across runs, so a
+cluster older than that refuses the connection. To recover, delete the
+Secret and restart the three consumers:
+
+```sh
+kubectl --context minikube -n garam-local delete secret policy-throwaway-key-material
+make -C deploy/local minikube-secret
+kubectl --context minikube -n garam-local rollout restart deploy/policy deploy/api deploy/machine
+```
+
 Key material reaches the process as a file readable only by its owner,
 with the process running as that owner
 ([ADR-0015](../../../docs/architecture/adr/0015-operator-identity.md)).
 A Secret volume is owned by root, so an init container copies the files
 as the same unprivileged user the process runs as, into a memory-backed
 volume that never reaches the node's disk. The serving container does
-not mount the Secret at all.
+not mount the Secret at all. `api` and `machine` each do this for the
+signing key.
 
 ## Images
 
-Both images are built into the cluster's own daemon and pushed nowhere.
-No node here holds a registry credential, and a token for the cluster
-this project targets expires within the day (ADR-0020). The manifests
-set `imagePullPolicy: Never`, so a missing image fails as the build it
-is rather than as a silent pull from somewhere else.
+All three images are built into the cluster's own daemon and pushed
+nowhere. No node here holds a registry credential, and a token for the
+cluster this project targets expires within the day (ADR-0020). The
+manifests set `imagePullPolicy: Never`, so a missing image fails as the
+build it is rather than as a silent pull from somewhere else.
 
-They are built from `deploy/local/Dockerfile` and
-`deploy/local/Dockerfile.web` — the same two the compose stack uses.
+They are built from `deploy/local/Dockerfile`,
+`deploy/local/Dockerfile.web` and `deploy/local/Dockerfile.policy` — the
+same three the compose stack uses.
 
 Each pod template carries the id of the image it runs, stamped in by
 `make -C deploy/local minikube-apps`. The tag alone cannot carry a
@@ -215,9 +251,10 @@ to prevent.
 
 The operator generates the database role's password and publishes it,
 with a ready-made connection URI, in a Secret it maintains
-(CloudNativePG 1.30.0). Every process reads `GARAM_DATABASE_URL` from
-that Secret, so no file under `deploy/local/minikube/` holds a database
-credential.
+(CloudNativePG 1.30.0). The garam processes read `GARAM_DATABASE_URL`
+from that Secret and the policy service builds `POLICY_DATABASE_URL`
+from its `host`, `username` and `password`, so no file under
+`deploy/local/minikube/` holds a database credential.
 
 ## What this proves and what it does not
 

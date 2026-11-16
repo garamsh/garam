@@ -74,7 +74,7 @@ func newListStack(t *testing.T) *listStack {
 
 	srv := api.NewServer(users, orgs, s.agents, nil, messagepg.New(p), nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, engine), nil,
+		api.NewGRPCEvaluator(engine), api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, newCurrentDecisions(p)), nil,
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

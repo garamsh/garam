@@ -102,7 +102,7 @@ policy-matrix:
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' POLICY_MATRIX_ADDR='$(POLICY_HOST_ADDR)' \
 		POLICY_MATRIX_CA='$(POLICY_LOCAL_DIR)/ca.pem' POLICY_MATRIX_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
 		POLICY_MATRIX_ISSUER=https://garam.localhost/api \
-		go test -count=1 -tags policymatrix -run 'TestPolicyMatrix$$|TestCompareDifferences' ./tests/integration/
+		go test -count=1 -tags policymatrix -run 'TestPolicyMatrix$$|TestCompareDifferences|TestDelegatedAuthorityPolicy_' ./tests/integration/
 
 # e2e runs the built binary as the processes a deployment runs, against
 # the same Postgres.
@@ -110,7 +110,11 @@ e2e:
 	@echo 'e2e: $(words $(E2E_PKGS)) packages, $(words $(E2E_TEST_FILES)) test files, against $(TEST_DB_NAME)'
 	@test -n '$(E2E_PKGS)' || { echo 'e2e: nothing to run — no package under ./tests/e2e/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
-	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
+	@test -n '$(POLICY_HOST_ADDR)' || { echo "e2e: no policy service published on this host — run make -C platform stack-up" >&2; exit 1; }
+	@test -r '$(POLICY_LOCAL_DIR)/ca.pem' && test -r '$(POLICY_LOCAL_DIR)/signing.pem' || { echo "e2e: no ca.pem and signing.pem in $(POLICY_LOCAL_DIR) — run make -C platform stack-up" >&2; exit 1; }
+	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' GARAM_TEST_POLICY_ADDR='$(POLICY_HOST_ADDR)' \
+		GARAM_TEST_POLICY_CA='$(POLICY_LOCAL_DIR)/ca.pem' GARAM_TEST_POLICY_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
+		go test -count=1 $(E2E_PKGS)
 
 # The Sherlock release the real-runtime suites run against, by tag and
 # digest, recorded here alone (#1220). v0.9.0 keeps v0.8.0's ingress
@@ -159,7 +163,9 @@ standalone-e2e:
 	@echo 'standalone-e2e: $(words $(STANDALONE_PKGS)) packages, $(words $(STANDALONE_TEST_FILES)) test files, against $(GARAM_TEST_DOCKER_HOST)'
 	@test -n '$(STANDALONE_PKGS)' || { echo 'standalone-e2e: nothing to run — no package under ./tests/standalone/... holds a test file'; exit 1; }
 	@test -n '$(DB_HOST_ADDR)' || { echo "standalone-e2e: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
-	GARAM_TEST_SERVER_URL='postgres://garam:garam@$(DB_HOST_ADDR)/postgres?sslmode=disable' \
+	@test -r '$(POLICY_LOCAL_DIR)/ca.pem' && test -r '$(POLICY_LOCAL_DIR)/signing.pem' || { echo "standalone-e2e: no ca.pem and signing.pem in $(POLICY_LOCAL_DIR) — run make -C platform stack-up" >&2; exit 1; }
+	GARAM_TEST_POLICY_CA='$(POLICY_LOCAL_DIR)/ca.pem' GARAM_TEST_POLICY_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
+		GARAM_TEST_SERVER_URL='postgres://garam:garam@$(DB_HOST_ADDR)/postgres?sslmode=disable' \
 		GARAM_TEST_POSTGRES_CONTAINER="$$($(COMPOSE_LOCAL) ps -q postgres)" \
 		go test -count=1 -timeout 60m $(STANDALONE_PKGS)
 

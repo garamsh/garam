@@ -60,6 +60,36 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * Waits until the api has delivered what the organization's rows
+ * marked to the policy service, which decides a user's delegated
+ * authority from what it holds (ADR-0146, ADR-0140): the stack's feed
+ * is on, so the seed's rows are marked, and a delegation or an approval
+ * asked before the delivery is refused for an organization the service
+ * does not yet hold. A mark's id names the organization's slug, which
+ * is how the wait reads only this seed's own.
+ */
+async function awaitDelivery(client: Client, slug: string): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const {
+      rows: [row],
+    } = await client.query<{ n: string }>(
+      `SELECT count(*) AS n FROM policy_outbox WHERE position($1 in entity_id) > 0`,
+      [slug],
+    );
+    if (row!.n === "0") {
+      return;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `the api did not deliver ${row!.n} marks of ${slug} to the policy service in 30s`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
 /** Writes the user and session rows a completed OAuth callback wrote. */
 async function insertUserAndSession(
   client: Client,
@@ -182,6 +212,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
       [orgGrn, partnerGrn],
     );
     await client.query("COMMIT");
+    await awaitDelivery(client, seed.orgSlug);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -309,6 +340,7 @@ export async function seedHostedOperator(
       ],
     );
     await client.query("COMMIT");
+    await awaitDelivery(client, seed.orgSlug);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -376,6 +408,7 @@ export async function seedMember(seed: Seed): Promise<SeededUser> {
       [`grn:root/iam/org/${seed.orgSlug}`, member.userGrn],
     );
     await client.query("COMMIT");
+    await awaitDelivery(client, seed.orgSlug);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -446,6 +479,7 @@ export async function seedMemberDeniedOperatorRead(
       [policyGrn, member.userGrn],
     );
     await client.query("COMMIT");
+    await awaitDelivery(client, seed.orgSlug);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -551,6 +585,7 @@ export async function seedHosts(seed: Seed): Promise<SeededHosts> {
       [spent!.supervisor_grn, agentGrn, spent!.id, hosts.active],
     );
     await client.query("COMMIT");
+    await awaitDelivery(client, seed.orgSlug);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

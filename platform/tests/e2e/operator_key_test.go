@@ -96,13 +96,13 @@ func TestOperatorKey_TheBuiltBinariesIssueAKeyAndExchangeItsAssertion(t *testing
 	serve(t, garam, "authz", []string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_GRPC_ADDR=" + grpcAddr, "GARAM_METRICS_ADDR=" + metricsAddr,
 	}, "http://"+metricsAddr+readyPath)
-	serve(t, garam, "api", []string{
+	serve(t, garam, "api", append([]string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + apiAddr, "GARAM_AUTHZ_ADDR=" + grpcAddr,
 		"GARAM_MACHINE_TOKEN_URL=" + tokenURL,
-	}, "http://"+apiAddr+readyPath)
-	serve(t, garam, "api", []string{
+	}, apiPolicyEnv(t)...), "http://"+apiAddr+readyPath)
+	serve(t, garam, "api", append([]string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + unconfiguredAddr, "GARAM_AUTHZ_ADDR=" + grpcAddr,
-	}, "http://"+unconfiguredAddr+readyPath)
+	}, apiPolicyEnv(t)...), "http://"+unconfiguredAddr+readyPath)
 	certFile, keyFile, kekFile, rootFile := machineKeyMaterialFiles(t)
 	serve(t, garam, "machine", append([]string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_AUTHZ_ADDR=" + grpcAddr,
@@ -110,7 +110,7 @@ func TestOperatorKey_TheBuiltBinariesIssueAKeyAndExchangeItsAssertion(t *testing
 		"GARAM_MACHINE_TLS_CERT_FILE=" + certFile, "GARAM_MACHINE_TLS_KEY_FILE=" + keyFile,
 		"GARAM_CA_KEY_FILE=" + kekFile, "GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
 		"GARAM_MACHINE_ISSUER=https://garam.test", "GARAM_MACHINE_TOKEN_URL=" + tokenURL,
-	}, machinePolicyEnv(t, rootFile)...), "http://"+machineHealthAddr+readyPath)
+	}, policyEnv(t, rootFile)...), "http://"+machineHealthAddr+readyPath)
 
 	c := consumerClient{t: t, base: "http://" + apiAddr}
 	owner := p.Session.Token

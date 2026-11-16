@@ -2,11 +2,17 @@ package cli_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -23,20 +29,42 @@ import (
 // its first query.
 const unreachableDatabase = "postgres://garam@127.0.0.1:1/garam"
 
+// policyFiles writes the trust anchor and the signing key a decision
+// client is built from. Nothing dials the service at a start, so what
+// they hold only has to load.
+func policyFiles(t *testing.T) (caFile, keyFile string) {
+	t.Helper()
+	dir := t.TempDir()
+	certPEM, _ := selfSigned(t, "policy")
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	caFile, keyFile = filepath.Join(dir, "ca.pem"), filepath.Join(dir, "signing.pem")
+	require.NoError(t, os.WriteFile(caFile, certPEM, 0o600))
+	require.NoError(t, os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600))
+	return caFile, keyFile
+}
+
 // serveAPIEnv sets what `serve api` reads to a start that opens no
 // connection, with overrides applied over it.
 func serveAPIEnv(t *testing.T, overrides map[string]string) {
 	t.Helper()
+	caFile, keyFile := policyFiles(t)
 	env := map[string]string{
-		"GARAM_DATABASE_URL":      unreachableDatabase,
-		"GARAM_AUTHZ_ADDR":        "127.0.0.1:1",
-		"GARAM_HTTP_ADDR":         "",
-		"GARAM_SESSION_TTL":       "",
-		"GARAM_COOKIE_SECURE":     "",
-		"GARAM_MACHINE_TOKEN_URL": "",
-		"GOOGLE_CLIENT_ID":        "",
-		"GOOGLE_CLIENT_SECRET":    "",
-		"GOOGLE_REDIRECT_URL":     "",
+		"GARAM_POLICY_ADDR":             "127.0.0.1:1",
+		"GARAM_POLICY_CA_FILE":          caFile,
+		"GARAM_POLICY_SIGNING_KEY_FILE": keyFile,
+		"GARAM_POLICY_TOKEN_ISSUER":     "https://garam.test",
+		"GARAM_DATABASE_URL":            unreachableDatabase,
+		"GARAM_AUTHZ_ADDR":              "127.0.0.1:1",
+		"GARAM_HTTP_ADDR":               "",
+		"GARAM_SESSION_TTL":             "",
+		"GARAM_COOKIE_SECURE":           "",
+		"GARAM_MACHINE_TOKEN_URL":       "",
+		"GOOGLE_CLIENT_ID":              "",
+		"GOOGLE_CLIENT_SECRET":          "",
+		"GOOGLE_REDIRECT_URL":           "",
 	}
 	for name, value := range overrides {
 		env[name] = value
@@ -94,6 +122,19 @@ func servedAPI(t *testing.T) string {
 		assert.Equal(c, http.StatusOK, resp.StatusCode)
 	}, 10*time.Second, 10*time.Millisecond, "serve api never answered liveness")
 	return url
+}
+
+// TestServeAPI_RefusesToStartWithoutAPolicyService holds that a
+// listener serving delegated authority has a decision client or does
+// not start, naming the variable that would give it one. The start
+// with the address is its control: it goes past the client.
+func TestServeAPI_RefusesToStartWithoutAPolicyService(t *testing.T) {
+	err := refusedStart(t, map[string]string{"GARAM_POLICY_ADDR": ""})
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "got %v", err)
+	assert.Contains(t, err.Error(), "GARAM_POLICY_ADDR")
+
+	err = refusedStart(t, map[string]string{})
+	assert.NotContains(t, err.Error(), "GARAM_POLICY_ADDR")
 }
 
 func TestGoogleProvider_NotConfigured(t *testing.T) {

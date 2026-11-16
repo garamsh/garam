@@ -197,6 +197,30 @@ func TestClient_StatesProbeWhereItsCallerSaysSo(t *testing.T) {
 	assert.False(t, *asked[1].Probe, "an attempt asked as a probe")
 }
 
+func TestClient_AsksReadCurrentOnlyWhereItsCallerSaysSo(t *testing.T) {
+	f := &fakeService{answers: []*policyv1.EvaluateResponse{{}, {}}}
+	c := start(t, f)
+	q := policydecision.Question{Subject: ada, Action: "iam:org.read", Resource: acme}
+	current := q
+	current.Current = true
+
+	_, err := c.Evaluate(context.Background(), current)
+	require.NoError(t, err)
+	_, err = c.Evaluate(context.Background(), q)
+	require.NoError(t, err)
+	_, err = c.Evaluations(context.Background(), []policydecision.Question{current, q})
+	require.NoError(t, err)
+	_, err = c.Evaluations(context.Background(), []policydecision.Question{q, q})
+	require.NoError(t, err)
+
+	require.Len(t, f.evals, 2)
+	assert.Equal(t, policyv1.Read_READ_CURRENT, f.evals[0].GetRead(), "a current question asked as one")
+	assert.Equal(t, policyv1.Read_READ_UNSPECIFIED, f.evals[1].GetRead(), "any other asked as today")
+	require.Len(t, f.batches, 2)
+	assert.Equal(t, policyv1.Read_READ_CURRENT, f.batches[0].GetRead(), "a batch with a current question")
+	assert.Equal(t, policyv1.Read_READ_UNSPECIFIED, f.batches[1].GetRead(), "a batch with none")
+}
+
 func TestClient_NamesTheEntityTypesItsGRNsAre(t *testing.T) {
 	f := &fakeService{answers: []*policyv1.EvaluateResponse{{}}}
 	c := start(t, f)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
@@ -24,17 +23,14 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
-	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
 	"github.com/garamsh/garam/platform/internal/cli"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // authorityStack is both listeners as the serve commands compose them,
@@ -46,10 +42,12 @@ import (
 type authorityStack struct {
 	pool       *pgxpool.Pool
 	engine     *grpc.ClientConn
+	decisions  *currentDecisions
 	browser    string
 	machine    string
 	acme       grn.GRN
 	owner      *http.Cookie
+	ownerGRN   grn.GRN
 	member     *http.Cookie
 	memberGRN  grn.GRN
 	hosted     grn.GRN
@@ -59,6 +57,17 @@ type authorityStack struct {
 }
 
 func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *authorityStack {
+	t.Helper()
+	decisions := newCurrentDecisions(p)
+	s := newAuthorityStackDeciding(t, engine, p, decisions)
+	s.decisions = decisions
+	return s
+}
+
+// newAuthorityStackDeciding is newAuthorityStack where decisions is
+// the policy service both listeners ask, which the suite tagged
+// policymatrix gives the real one.
+func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, decisions policydecision.Service) *authorityStack {
 	t.Helper()
 	ctx := context.Background()
 	orgs := orgpg.New(p)
@@ -74,22 +83,22 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
-	owner, _ := session("ada", org.RoleOwner)
+	owner, ownerGRN := session("ada", org.RoleOwner)
 	member, memberGRN := session("bob", org.RoleMember)
 
 	srv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil, api.Config{SessionTTL: time.Hour})
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 
 	_, sealer := keyEncryptionKey(t)
 	hosted := scopedGRN("acme", operator.ServiceType, "hosted")
 	controller := scopedGRN("acme", operator.ServiceType, "controller")
-	machine := machineListener(t, p, sealer, engine)
+	machine := machineListenerDeciding(t, p, sealer, nil, decisions)
 	return &authorityStack{
 		pool: p, engine: engine, browser: browser.URL, machine: machine,
-		acme: acme, owner: owner, member: member, memberGRN: memberGRN, hosted: hosted, controller: controller,
+		acme: acme, owner: owner, ownerGRN: ownerGRN, member: member, memberGRN: memberGRN, hosted: hosted, controller: controller,
 		hostedTLS:  operatorClient(t, p, machine, hosted),
 		controlTLS: operatorClient(t, p, machine, controller),
 	}
@@ -254,13 +263,13 @@ func (s *authorityStack) provisionAgent(t *testing.T) string {
 	return g.String()
 }
 
-// TestDelegatedAuthority_RefusesPastAStaleCachedAllow holds that a Deny
-// the engine's cache has not seen still refuses: another process writes
-// it, the engine's ordinary Check goes on answering the allow it
-// cached, and introspection and minting, which ask CheckCurrent,
-// refuse.
-func TestDelegatedAuthority_RefusesPastAStaleCachedAllow(t *testing.T) {
-	ctx := context.Background()
+// TestDelegatedAuthority_RefusesWhatTheServiceNowDenies holds that the
+// authority a member minted is decided by the policy service when
+// introspection and minting ask, read current (ADR-0146 item 14): a
+// denial the service gives after the authority was minted refuses
+// both, and every question went to the service as read-current. The
+// first mint and the owner's authority are the controls.
+func TestDelegatedAuthority_RefusesWhatTheServiceNowDenies(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
@@ -268,42 +277,34 @@ func TestDelegatedAuthority_RefusesPastAStaleCachedAllow(t *testing.T) {
 	status, got := s.mint(t, s.member, "iam:agent.create", s.controller.String(), "req-1")
 	require.Equal(t, http.StatusCreated, status, got)
 	minted := authorityOf(t, got)
+	status, got = s.mint(t, s.owner, "iam:agent.create", s.controller.String(), "req-2")
+	require.Equal(t, http.StatusCreated, status, got)
+	ownerMinted := authorityOf(t, got)
 
-	check := &authzv1.CheckRequest{
-		SubjectGrn: s.memberGRN.String(), ObjectGrn: s.acme.String(), Action: "iam:agent.create",
-		Statements: []*authzv1.Statement{{Sid: "member", Effect: authzv1.Effect_EFFECT_ALLOW,
-			Action: []string{"iam:agent.create"}, Resource: []string{s.acme.String(), "grn:acme/*"}}},
-		SubjectOrg: s.acme.String(),
-	}
-	client := authzv1.NewAuthzServiceClient(engine)
-	cached, err := client.Check(ctx, check)
-	require.NoError(t, err)
-	require.True(t, cached.GetAllowed())
-
-	// Another process's write: it drops its own cache, not the engine's.
-	store := authzpg.New(p)
-	activePolicy(t, authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store)), s.acme, "deny-create",
-		statementDoc("deny-create", wire.EffectDeny, "iam:agent.create", s.acme.String()))
-	stale, err := client.Check(ctx, check)
-	require.NoError(t, err)
-	require.True(t, stale.GetAllowed(), "the control: the ordinary check still answers its cached allow")
+	s.decisions.forbid(s.memberGRN, "iam:agent.create")
 
 	status, _ = s.introspect(t, s.hostedTLS, minted.Authority)
 	assert.Equal(t, http.StatusForbidden, status)
 	status, _ = s.mint(t, s.member, "iam:agent.create", s.controller.String(), "req-1")
 	assert.Equal(t, http.StatusForbidden, status)
+	status, got = s.introspect(t, s.hostedTLS, ownerMinted.Authority)
+	assert.Equal(t, http.StatusOK, status, "the owner is not forbidden: %s", got)
+
+	asked := s.decisions.currentQuestions()
+	require.NotEmpty(t, asked)
+	for _, q := range asked {
+		assert.True(t, q.Current, "%s asked for %s was not read current", q.Subject, q.Action)
+	}
 }
 
-// TestDelegatedAuthority_RechecksRolesAndGroups holds that the roles
-// and groups an introspection decides on are read when it asks. A
-// high-trust authority minted by an admin is refused once the
-// membership is demoted; a Deny attached to a group refuses its
-// member's authority. The owner's authorities, which none of the changes reach,
-// are the control for each.
-func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
+// TestDelegatedAuthority_RechecksRoles holds that the role an
+// introspection decides on is read when it asks: a high-trust authority
+// minted by an admin is refused once the membership is demoted. The
+// owner's authority, which the change does not reach, is the control.
+func TestDelegatedAuthority_RechecksRoles(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
@@ -326,10 +327,8 @@ func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
 		return authorityOf(t, got).Authority
 	}
 	byAdmin := minted(cookieFor(admin), "iam:agent.configure", agentGRN, "admin-1")
-	byMember := minted(s.member, "iam:agent.create", s.controller.String(), "member-1")
 	ownerConfigure := minted(s.owner, "iam:agent.configure", agentGRN, "owner-1")
-	ownerCreate := minted(s.owner, "iam:agent.create", s.controller.String(), "owner-2")
-	for _, a := range []string{byAdmin, byMember, ownerConfigure, ownerCreate} {
+	for _, a := range []string{byAdmin, ownerConfigure} {
 		status, got := s.introspect(t, s.hostedTLS, a)
 		require.Equal(t, http.StatusOK, status, got)
 	}
@@ -340,47 +339,19 @@ func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, status, "membership demoted to member")
 	status, got := s.introspect(t, s.hostedTLS, ownerConfigure)
 	assert.Equal(t, http.StatusOK, status, "the owner is not demoted: %s", got)
-
-	team := scopedGRN("acme", org.ServiceTypeGroup, "batch")
-	require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(team, "batch", s.acme)))
-	require.NoError(t, orgs.AddGroupMember(ctx, team, s.memberGRN))
-	denied := activePolicy(t, policies, s.acme, "deny-batch-create",
-		statementDoc("deny-batch-create", wire.EffectDeny, "iam:agent.create", s.acme.String()))
-	attachPolicy(t, policies, denied, team)
-	status, _ = s.introspect(t, s.hostedTLS, byMember)
-	assert.Equal(t, http.StatusForbidden, status, "a Deny attached to the member's group")
-	status, got = s.introspect(t, s.hostedTLS, ownerCreate)
-	assert.Equal(t, http.StatusOK, status, "the owner is in no group the Deny reaches: %s", got)
 }
 
-// checkOnlyEngine is an engine predating CheckCurrent: it answers Check
-// and nothing else.
-type checkOnlyEngine struct {
-	authzv1.UnimplementedAuthzServiceServer
-	check authzv1.AuthzServiceServer
-}
-
-func (e checkOnlyEngine) Check(ctx context.Context, r *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
-	return e.check.Check(ctx, r)
-}
-
-// TestDelegatedAuthority_AnEngineWithoutCheckCurrentRefuses holds that
-// an older engine, which would answer Check with a cached allow, makes
-// every privileged call unavailable rather than answered from Check.
-// Reading the grant, an ordinary cached read, is the control: the
-// engine answers it.
-func TestDelegatedAuthority_AnEngineWithoutCheckCurrentRefuses(t *testing.T) {
+// TestDelegatedAuthority_AServiceFailureRefuses holds that a policy
+// service that cannot answer makes every privileged call unavailable
+// and never an allow, and that the failure's own kind does not turn it
+// into a denial or into the caller's fault (ADR-0146 item 2). Reading
+// the grant, an ordinary cached read, is the control: the engine
+// answers it.
+func TestDelegatedAuthority_AServiceFailureRefuses(t *testing.T) {
 	p := pool(t)
-	srv := grpc.NewServer()
-	authzv1.RegisterAuthzServiceServer(srv, checkOnlyEngine{check: authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p)))})
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(srv.Stop)
-	engine, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = engine.Close() })
+	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
+	s.decisions.failWith(errorx.New(errorx.KindPermissionDenied, "the service refused this caller"))
 
 	body := `{"requestId":"g-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent.create"],"expiresAt":"` +
 		time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`

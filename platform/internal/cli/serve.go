@@ -78,6 +78,14 @@ func serveAPI(cmd *cobra.Command) error {
 	}
 	defer func() { _ = conn.Close() }()
 
+	// A user's delegated authority is the policy service's decision
+	// (ADR-0146), so a process without one does not start.
+	decisions, closeDecisions, err := dialPolicyDecisions()
+	if err != nil {
+		return err
+	}
+	defer closeDecisions()
+
 	ttl, err := time.ParseDuration(envOr(envSessionTTL, "168h"))
 	if err != nil {
 		return errorx.Wrap(err, string(envSessionTTL), errorx.KindInvalidArgument)
@@ -133,8 +141,8 @@ func serveAPI(cmd *cobra.Command) error {
 		api.NewGRPCEvaluator(conn),
 		api.NewGRPCPolicyManager(conn),
 		authorityPresence{orgs: orgpg.New(pool)},
-		NewAuthorityService(pool, conn),
-		NewStandaloneService(pool, conn),
+		NewAuthorityService(pool, decisions),
+		NewStandaloneService(pool, decisions),
 		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: cookieSecure,

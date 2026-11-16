@@ -233,9 +233,12 @@ certificate `policy-tls` made as its CA, and signs its tokens with the
 key `policy-keys` made, under the issuer `https://garam.localhost/api`
 (`GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
 `GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER`; ADR-0146).
-The same name is `GARAM_IDENTITY_ISSUER` on the api and on the machine
-listener, so the identity issuer is on in both, signing with the same
-key.
+A user's and an operator's delegated operation authority and the
+controller proof are the service's decision too, read current, so the
+api refuses to start without `GARAM_POLICY_ADDR` and waits for a
+healthy `policy`. The same name is `GARAM_IDENTITY_ISSUER` on the api
+and on the machine listener, so the identity issuer is on in both,
+signing with the same key.
 `policy-feed` turns the feed on once `migrate` has applied the api's
 schema and the service is healthy, and backfills the outbox, so what the
 api wrote before is delivered as well. Running it again changes nothing
@@ -272,8 +275,8 @@ certificate `policy-tls` made, signing each call with the key
 `policy-keys` made under the issuer `https://garam.localhost/api`
 (`GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
 `GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER`). It
-refuses to start without `GARAM_POLICY_ADDR`, so unlike the api it
-waits for a healthy `policy`. The run file that swaps its keys
+refuses to start without `GARAM_POLICY_ADDR` and waits for a healthy
+`policy`, as the api does. The run file that swaps its keys
 (`codehub-e2e`) leaves the address and the certificate as they are.
 
 Both scripts run on first start and generate what they hold:

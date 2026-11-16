@@ -31,9 +31,9 @@ func TestCLI_TheBuiltBinaryLogsInByTheDeviceGrant(t *testing.T) {
 	serve(t, garam, "authz", []string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_GRPC_ADDR=" + grpcAddr, "GARAM_METRICS_ADDR=" + metricsAddr,
 	}, "http://"+metricsAddr+readyPath)
-	stopAPI := serve(t, garam, "api", []string{
+	stopAPI := serve(t, garam, "api", append([]string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + httpAddr, "GARAM_AUTHZ_ADDR=" + grpcAddr,
-	}, "http://"+httpAddr+readyPath)
+	}, apiPolicyEnv(t)...), "http://"+httpAddr+readyPath)
 	api, err := url.Parse("http://" + httpAddr)
 	require.NoError(t, err)
 	console := httptest.NewServer(http.StripPrefix("/api", httputil.NewSingleHostReverseProxy(api)))

@@ -191,18 +191,6 @@ WHERE org_a = least(sqlc.arg('org'), sqlc.arg('other'))
   AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'))
   AND (CASE WHEN org_a = sqlc.arg('org') THEN b_consented_at ELSE a_consented_at END) IS NULL;
 
--- ConsentStands answers the send path's one question: whether both
--- halves of the pair stand right now (ADR-0035). A missing row and a
--- half-withdrawn row are the same answer.
--- name: ConsentStands :one
-SELECT EXISTS (
-    SELECT 1 FROM message_consents
-    WHERE org_a = least(sqlc.arg('org'), sqlc.arg('other'))
-      AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'))
-      AND a_consented_at IS NOT NULL
-      AND b_consented_at IS NOT NULL
-) AS stands;
-
 -- ListConsents reads every relation the organization is a side of,
 -- standing or half-withdrawn, so an administrator sees what its half
 -- joins and what still waits on the other side.

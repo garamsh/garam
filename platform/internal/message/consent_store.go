@@ -19,10 +19,6 @@ type ConsentStore interface {
 	// the relation falls, and the half still up is what a later
 	// re-grant joins. Withdrawing a half already down changes nothing.
 	Withdraw(ctx context.Context, org, other grn.GRN) error
-	// Stands reports whether both halves of the pair stand right now.
-	// A pair nobody ever granted and a half-withdrawn one are the same
-	// answer.
-	Stands(ctx context.Context, a, b grn.GRN) (bool, error)
 	// List reads every relation org is a side of, standing or
 	// half-withdrawn.
 	List(ctx context.Context, org grn.GRN) ([]*Consent, error)

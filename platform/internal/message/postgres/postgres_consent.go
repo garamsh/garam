@@ -40,18 +40,6 @@ func (s *Store) Withdraw(ctx context.Context, org, other grn.GRN) error {
 	return nil
 }
 
-// Stands answers the send path's one question. The two organizations of
-// a ghost recipient's pair name no row, which reads as no consent —
-// the refusal that follows is the routing failure ADR-0013 reports back
-// as a message.
-func (s *Store) Stands(ctx context.Context, a, b grn.GRN) (bool, error) {
-	stands, err := s.q.ConsentStands(ctx, db.ConsentStandsParams{Org: a.String(), Other: b.String()})
-	if err != nil {
-		return false, pgxerr.Classify(err, "consent stands", nil, nil)
-	}
-	return stands, nil
-}
-
 // List reads every relation org is a side of.
 func (s *Store) List(ctx context.Context, org grn.GRN) ([]*message.Consent, error) {
 	rows, err := s.q.ListConsents(ctx, org.String())

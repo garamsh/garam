@@ -1550,3 +1550,10 @@ ADRs:
   it; accepted, built (#1979); builds ADR-0146; supersedes 0115 in part
   (the engine's `CheckBatch` as the list filter) and 0171 in part
   (item 6's list filter, item 7's reservation of `iam:permit.write`)
+- [0173](./adr/0173-the-console-writes-role-links-guardrails-and-permits-through-the-relay.md)
+  — the console writes a role link in a role form that offers only what
+  the relay accepts, and a guardrail or a permit, and a new version of
+  either, in a plain Cedar text editor that shows the service's
+  message; a new version is stored and not the default; each write is
+  offered unless the server denies it; accepted, built (#1980); builds
+  ADR-0169

@@ -28,8 +28,8 @@ export function bodyText(body: IamPolicyBody): string {
 
 /**
  * One version's body, read-only: Cedar text as written, or a role
- * link's role, scope, principal and resource. The console edits
- * neither.
+ * link's role, scope, principal and resource. A new version of Cedar
+ * is written in the editor, and a role link takes none.
  */
 export function PolicyBody({ body }: { body: IamPolicyBody }) {
   switch (body.kind) {

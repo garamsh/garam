@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
+import { Button } from "@garam/design/ui/button";
 import { getOrg, listIamPolicies } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
-import { orgHref } from "../../../_components/navigation";
+import { NEW_ITEM, orgHref } from "../../../_components/navigation";
 import { ListPage } from "../../../_components/templates/list-page";
 import { RefusedRead } from "../../../_components/refused-read";
+import { creatableKinds } from "./_components/policy-actions";
 import { PolicyTable } from "./_components/policy-table";
 
 /** Head metadata for the permissions route; Next.js reads it by name. */
@@ -18,14 +21,15 @@ type Params = { params: Promise<{ org: string }> };
  * each opening a page of its own (ADR-0169). The organization is read
  * for itself, so one the caller cannot read answers 404 (ADR-0011), and
  * a refused policy list inside one it reads says so. Creating one is
- * not offered here yet, and the page says where it is done.
+ * offered unless the server denies every kind (ADR-0173).
  */
 export default async function PermissionsPage({ params }: Params) {
   const { org } = await params;
   const base = orgHref(org, "permissions");
-  const [organization, policies] = await Promise.all([
+  const [organization, policies, creatable] = await Promise.all([
     getOrg(org),
     listIamPolicies(org),
+    creatableKinds(org),
   ]);
   const listed = policies.status === "ok" ? policies.data : null;
 
@@ -34,9 +38,11 @@ export default async function PermissionsPage({ params }: Params) {
       title="Permissions"
       count={listed?.length}
       primaryAction={
-        <p className="text-muted-foreground">
-          A policy is created through the API or the CLI.
-        </p>
+        creatable.length > 0 && (
+          <Button asChild>
+            <Link href={`${base}/${NEW_ITEM}`}>Create policy</Link>
+          </Button>
+        )
       }
     >
       {organization.status === "unreachable" ||

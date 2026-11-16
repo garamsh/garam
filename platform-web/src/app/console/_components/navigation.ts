@@ -115,7 +115,13 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     label: "Permissions",
     icon: ShieldCheck,
     read: "iam:policy.read",
-    items: { fallback: "Policy" },
+    // A policy's identifier is the platform's `p-` or `link-` one, so
+    // `new` takes none; `new-version` sits below an identifier.
+    items: {
+      create: "New policy",
+      fallback: "Policy",
+      pages: [{ segment: "new-version", label: "New version" }],
+    },
   },
   {
     segment: "settings",

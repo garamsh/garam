@@ -109,12 +109,12 @@ test.describe("permissions", () => {
     await expect(
       page.getByRole("row", { name: /Engineering admins/ }),
     ).toContainText("Role link");
-    // Creating one is not offered here: the page says where it is done.
+    // The owner is offered the creation, in place of a note about it.
     await expect(
-      page.getByText("A policy is created through the API or the CLI."),
-    ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Create policy" })).toHaveCount(
-      0,
+      page.getByRole("link", { name: "Create policy" }),
+    ).toHaveAttribute(
+      "href",
+      `/console/orgs/${signedIn.orgSlug}/permissions/new`,
     );
 
     await page.getByRole("link", { name: "Deny project deletion" }).click();
@@ -204,6 +204,116 @@ test.describe("permissions", () => {
     ).toBeVisible();
   });
 
+  test("creates a guardrail in the editor, appends a version and activates it", async ({
+    page,
+    signedIn,
+  }) => {
+    const base = `/console/orgs/${signedIn.orgSlug}/permissions`;
+    await page.goto(base);
+    await expectHydrated(page);
+    await page.getByRole("link", { name: "Create policy" }).click();
+    await expect(page).toHaveURL(`${base}/new`);
+    await expectHydrated(page);
+
+    // Text the service cannot parse is said at the editor, with what
+    // was typed kept.
+    await page.getByLabel("Name", { exact: true }).fill("Deny activation");
+    const editor = page.getByLabel("Cedar text");
+    await editor.fill("not cedar");
+    await page.getByRole("button", { name: "Create policy" }).click();
+    await expect(editor).toHaveAttribute("aria-invalid", "true");
+    await expect(editor).toHaveValue("not cedar");
+
+    // The control: Cedar the service parses is stored, as a draft.
+    await editor.fill(forbid("agent.activate"));
+    await page.getByRole("button", { name: "Create policy" }).click();
+    await expect(page).toHaveURL(new RegExp(`${base}/p-[0-9a-f]+$`));
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Deny activation" }),
+    ).toBeVisible();
+    await expect(page.getByText("Draft", { exact: true })).toBeVisible();
+    const policy = page.url().split("/").pop();
+
+    await page.getByRole("link", { name: "New version" }).click();
+    await expect(page).toHaveURL(`${base}/${policy}/new-version`);
+    await expectHydrated(page);
+    const next = page.getByLabel("Cedar text");
+    await expect(next).toHaveValue(forbid("agent.activate"));
+    await next.fill(forbid("agent.configure"));
+    await page.getByRole("button", { name: "Store version" }).click();
+    await expect(page.getByRole("status")).toContainText(
+      "Stored as v2. It is not the default yet",
+    );
+
+    await page.getByRole("link", { name: "Back to the policy" }).click();
+    await expectHydrated(page);
+    // Stored, and not the default: v1 stays it.
+    await openTab(page, /^Versions/);
+    await expect(
+      page
+        .getByRole("row", { name: /^v1/ })
+        .getByText("Default", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("row", { name: /^v2/ })
+        .getByText("Default", { exact: true }),
+    ).toHaveCount(0);
+    await openTab(page, "Definition");
+    await clickUntil(
+      page.getByRole("button", { name: "Activate", exact: true }),
+      page.getByRole("alertdialog"),
+    );
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Activate policy" })
+      .click();
+
+    await expect(page.getByText("Activated v1")).toBeVisible();
+    await expect(page.getByText("Active", { exact: true })).toBeVisible();
+  });
+
+  test("creates a role link with a team principal over the organization", async ({
+    page,
+    signedIn,
+  }) => {
+    const base = `/console/orgs/${signedIn.orgSlug}/permissions`;
+    await page.goto(`${base}/new`);
+    await expectHydrated(page);
+
+    await page.getByRole("radio", { name: /Role link/ }).check();
+    await page.getByLabel("Name", { exact: true }).fill("Engineering admins");
+    await page.getByRole("combobox", { name: "Role", exact: true }).click();
+    await page.getByRole("option", { name: "admin", exact: true }).click();
+    // A person is not offered over the organization: its role there is
+    // its membership's.
+    await page.getByRole("combobox", { name: "Team or agent" }).click();
+    await expect(page.getByRole("group", { name: "Teams" })).toHaveCount(1);
+    await expect(
+      page.getByRole("option", { name: new RegExp(signedIn.nickname) }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("option", { name: `${signedIn.groupName} (engineering)` })
+      .click();
+    await page.getByRole("button", { name: "Create policy" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`${base}/p-[0-9a-f]+$`));
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Engineering admins" }),
+    ).toBeVisible();
+    await expect(page.getByText("Role link", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(
+        formatGrn(signedIn.orgSlug, "iam", "group", "engineering"),
+        { exact: true },
+      ),
+    ).toBeVisible();
+    // A role link takes no new version.
+    await expect(page.getByRole("link", { name: "New version" })).toHaveCount(
+      0,
+    );
+  });
+
   test("deletes a policy once its name is typed, and opens the list without it", async ({
     page,
     signedIn,
@@ -288,6 +398,7 @@ test.describe("permissions", () => {
     await expect(
       page.getByRole("button", { name: "Activate", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("link", { name: "New version" })).toBeVisible();
     await openTab(page, /^Versions/);
     await expect(
       page.getByRole("button", { name: "Delete policy", exact: true }),
@@ -304,6 +415,9 @@ test.describe("permissions", () => {
     await expect(
       page.getByRole("button", { name: "Activate", exact: true }),
     ).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "New version" })).toHaveCount(
+      0,
+    );
     await expect(
       page.getByRole("button", { name: "Delete policy", exact: true }),
     ).toHaveCount(0);

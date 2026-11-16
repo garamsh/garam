@@ -1,14 +1,18 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
-import { getIamPolicy, getOrg, type IamPolicyKind } from "@/features/orgs";
+import { Button } from "@garam/design/ui/button";
+import { getIamPolicy, getOrg } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../_components/item-crumb";
+import { orgHref } from "../../../../_components/navigation";
 import { Outcome, OutcomeProvider } from "../../../../_components/outcome";
 import { PageHeader } from "../../../../_components/page-header";
 import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
+import { WRITE_ACTION } from "../_components/policy-actions";
 import { POLICY_KIND_LABEL } from "../_components/policy-kind";
 import { PolicyStatus } from "../_components/policy-status";
 import { ActivatePolicyDialog } from "./_components/activate-policy-dialog";
@@ -21,31 +25,12 @@ export const metadata: Metadata = { title: "Policy — garam" };
 
 type Params = { params: Promise<{ org: string; policy: string }> };
 
-/**
- * The action a write on each kind is taken as: `write` for activating
- * a policy or moving its default version, `remove` for deleting it.
- * The platform answers these four, and only on the policy itself. A
- * permit is asked as a guardrail is until `checkPermissions` answers
- * `iam:permit.write`; the policy service refuses a caller who may not,
- * and that refusal is shown.
- */
-const WRITE_ACTION: Record<IamPolicyKind, { write: string; remove: string }> = {
-  "role-link": { write: "iam:policy.attach", remove: "iam:policy.detach" },
-  guardrail: { write: "iam:policy.update", remove: "iam:policy.delete" },
-  permit: { write: "iam:policy.update", remove: "iam:policy.delete" },
-};
-
-/** The actions `WRITE_ACTION` names, each once, on the policy. */
-function askedOn(policy: string) {
+/** The actions `WRITE_ACTION` names, each once, on the organization. */
+function asked() {
   const actions = new Set(
     Object.values(WRITE_ACTION).flatMap(({ write, remove }) => [write, remove]),
   );
-  return Object.fromEntries(
-    [...actions].map((action) => [
-      action,
-      { action, resource: { type: "policy", id: policy } as const },
-    ]),
-  );
+  return Object.fromEntries([...actions].map((action) => [action, { action }]));
 }
 
 /** The page's header where no policy could be shown. */
@@ -62,19 +47,20 @@ function Unshown({ children }: { children: React.ReactNode }) {
  * One policy, on the Detail template: its default version's body, its
  * versions, and deleting it in the danger zone (ADR-0169). A guardrail
  * or a permit shows its Cedar text read-only, and a role link its role,
- * scope, principal and resource.
+ * scope, principal and resource. A guardrail or a permit offers a new
+ * version, written on a page of its own.
  *
  * The kind decides which action each write is taken as, so the server
- * is asked once for them all, on the policy, beside the read, and only
- * an explicit deny withdraws a control (ADR-0103). The policy service
- * enforces every write either way.
+ * is asked once for them all, on the organization, beside the read, and
+ * only an explicit deny withdraws a control (ADR-0103). The policy
+ * service enforces every write either way.
  */
 export default async function PolicyPage({ params }: Params) {
   const { org, policy: slug } = await params;
   const [organization, read, permissions] = await Promise.all([
     getOrg(org),
     getIamPolicy(org, slug),
-    checkPermissions(org, askedOn(slug)),
+    checkPermissions(org, asked()),
   ]);
 
   if (organization.status === "unreachable" || read.status === "unreachable") {
@@ -123,6 +109,15 @@ export default async function PolicyPage({ params }: Params) {
         actions={
           <>
             <Outcome area="lifecycle" />
+            {policy.kind !== "role-link" && canWrite && (
+              <Button asChild variant="outline">
+                <Link
+                  href={`${orgHref(org, "permissions")}/${policy.id}/new-version`}
+                >
+                  New version
+                </Link>
+              </Button>
+            )}
             {!active && canWrite && (
               <ActivatePolicyDialog
                 org={org}

@@ -210,6 +210,7 @@ describe("policy page", () => {
         "iam:policy.attach",
         "iam:policy.detach",
         "iam:policy.update",
+        "iam:permit.write",
         "iam:policy.delete",
       ]),
     );
@@ -228,7 +229,7 @@ describe("policy page", () => {
     },
     {
       detail: { ...permit, policy: { ...permit.policy, status: "draft" } },
-      write: "iam:policy.update",
+      write: "iam:permit.write",
       remove: "iam:policy.delete",
     },
   ] as const)(
@@ -417,5 +418,48 @@ describe("policy page", () => {
     );
 
     expect(await within(header).findByText("Activated v1")).toBeInTheDocument();
+  });
+
+  it.each([
+    { detail: denyDeletes, write: "iam:policy.update" },
+    { detail: permit, write: "iam:permit.write" },
+  ] as const)(
+    "offers a new version of a $detail.policy.kind unless $write is denied",
+    async ({ detail, write }) => {
+      serve(detail as IamPolicyDetail);
+      server.use(answerPermissionChecks(() => "allow"));
+      const allowed = await renderPolicy(detail.policy.id);
+      expect(screen.getByRole("link", { name: "New version" })).toHaveAttribute(
+        "href",
+        `/console/orgs/acme/permissions/${detail.policy.id}/new-version`,
+      );
+      allowed.unmount();
+
+      server.use(
+        answerPermissionChecks((action) =>
+          action === write ? "deny" : "allow",
+        ),
+      );
+      await renderPolicy(detail.policy.id);
+      expect(
+        screen.queryByRole("link", { name: "New version" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it("offers a role link no new version, since a changed link is a new link", async () => {
+    // The control: the same page offers it for a guardrail.
+    server.use(answerPermissionChecks(() => "allow"));
+    serve(denyDeletes);
+    const guardrail = await renderPolicy();
+    expect(
+      screen.getByRole("link", { name: "New version" }),
+    ).toBeInTheDocument();
+    guardrail.unmount();
+
+    await renderPolicy(ENGINEERING_ADMINS_ID);
+    expect(
+      screen.queryByRole("link", { name: "New version" }),
+    ).not.toBeInTheDocument();
   });
 });

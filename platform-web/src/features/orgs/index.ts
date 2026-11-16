@@ -95,6 +95,12 @@ export {
 } from "./api/policies";
 export { parseGrn, slugFromGrn } from "@/lib/grn";
 export {
+  roleLinkChoices,
+  type RoleLinkChoice,
+  type RoleLinkChoices,
+  type RoleLinkSources,
+} from "./role-link-choices";
+export {
   memberLabel,
   memberName,
   resolveTeamMembers,

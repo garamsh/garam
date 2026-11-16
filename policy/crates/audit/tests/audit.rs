@@ -320,8 +320,11 @@ async fn a_record_that_blocks_is_given_up_at_its_bound_and_counted_as_lost(pool:
     );
     assert_eq!(recorder.lost(), 1);
     blocker.rollback().await.unwrap();
+    // The blocked record's connection may have been closed, so this
+    // denial can open one: it runs under the default bound, not the
+    // short one.
     assert_eq!(
-        recorder.deny(&denial(LEE, &none)).await,
+        Recorder::new(pool.clone()).deny(&denial(LEE, &none)).await,
         Recorded::Stored,
         "the connection the blocked record held is not left behind"
     );

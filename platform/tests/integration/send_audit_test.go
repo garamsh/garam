@@ -51,8 +51,8 @@ func sendEvents(t *testing.T, p *pgxpool.Pool, sender grn.GRN) []sendEvent {
 // policy engine, with acme and globex created and no consent between
 // them.
 type sendStack struct {
-	p        *pgxpool.Pool
-	url      string
+	p         *pgxpool.Pool
+	url       string
 	decisions *sendsRefusing
 	operator  *http.Client
 }

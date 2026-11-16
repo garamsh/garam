@@ -20,7 +20,7 @@ builds the gaon operator here and
 [ADR-0153](./0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)
 composes the guest image its microvm boots. Neither has a published
 image: a deployment of
-[deployment-gaon.md](../deployment-gaon.md) cannot pull what no release
+[deployment-gaon.md](https://github.com/garamsh/garam/blob/80c5006e3f3c3e6c68382e674496ac21044c76d8/docs/architecture/deployment-gaon.md) cannot pull what no release
 pushes.
 
 The guest's Dockerfile reads three images from the private registry,

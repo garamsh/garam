@@ -1,6 +1,8 @@
 # ADR 0153: The gaon guest runs as root and its supervisor drops each program to the account it needs
 
-> Status: accepted; built in `gaon-operator/`
+> Status: superseded by
+> [ADR-0170](./0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
+> (`gaon-operator/` is deleted; was accepted, built in it)
 > Date: 2026-11-13
 
 Drafted for #1846, which reserves this number. It supersedes

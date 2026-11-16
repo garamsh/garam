@@ -315,7 +315,7 @@ func TestTransitCustodian_HoldsTheTokenOneWayOrTheOther(t *testing.T) {
 
 	for name, values := range map[string]map[envName]string{
 		"the login":                   with(map[envName]string{envTransitIdentityFile: identity, envTransitAuthRole: "garam"}),
-		"the login on a named mount":  with(map[envName]string{envTransitIdentityFile: identity, envTransitAuthRole: "garam", envTransitAuthMount: "gaon/jwt"}),
+		"the login on a named mount":  with(map[envName]string{envTransitIdentityFile: identity, envTransitAuthRole: "garam", envTransitAuthMount: "workload/jwt"}),
 		"the token file, the control": with(map[envName]string{envTransitTokenFile: token}),
 	} {
 		t.Run(name, func(t *testing.T) {

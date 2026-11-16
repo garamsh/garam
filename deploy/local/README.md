@@ -273,9 +273,8 @@ certificate `policy-tls` made, signing each call with the key
 (`GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
 `GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER`). It
 refuses to start without `GARAM_POLICY_ADDR`, so unlike the api it
-waits for a healthy `policy`. The run files that swap its keys
-(`codehub-e2e`, `pair-run`) leave the address and the certificate as
-they are.
+waits for a healthy `policy`. The run file that swaps its keys
+(`codehub-e2e`) leaves the address and the certificate as they are.
 
 Both scripts run on first start and generate what they hold:
 `machine-material.sh` an EC P-256 certificate and key and 32 random

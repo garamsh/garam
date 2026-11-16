@@ -30,3 +30,18 @@ spec:
       owner: garam
   storage:
     size: 1Gi
+---
+# The policy service's database (ADR-0130): its own on this one
+# Postgres, as the compose stack's policy-db creates it. The owner is
+# the role the other databases' processes connect as, which a role
+# without CREATEDB could not create it for itself.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: policy
+  namespace: garam-local
+spec:
+  name: policy
+  owner: garam
+  cluster:
+    name: postgres

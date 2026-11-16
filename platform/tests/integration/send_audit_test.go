@@ -14,12 +14,10 @@ import (
 
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
-	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/ca"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // sendEvent is one row of the send record as a test reads it back.
@@ -55,8 +53,8 @@ func sendEvents(t *testing.T, p *pgxpool.Pool, sender grn.GRN) []sendEvent {
 type sendStack struct {
 	p        *pgxpool.Pool
 	url      string
-	policies *authz.PolicyGRPCServer
-	operator *http.Client
+	decisions *sendsRefusing
+	operator  *http.Client
 }
 
 func newSendStack(t *testing.T) sendStack {
@@ -72,10 +70,11 @@ func newSendStack(t *testing.T) sendStack {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	policies, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	decisions := &sendsRefusing{}
+	_, engine := policyEngine(t, p)
+	url := machineListenerDeciding(t, p, sealer, engine, nil, decisions)
 	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
-	return sendStack{p: p, url: url, policies: policies, operator: operator}
+	return sendStack{p: p, url: url, decisions: decisions, operator: operator}
 }
 
 // post sends body to recipient under key as client and answers the
@@ -168,9 +167,7 @@ func TestSendAudit_NoEventCarriesABody(t *testing.T) {
 	deniedGRN, _ := provisioned(t, s.url, s.operator)
 	foreign := scopedGRN("globex", agent.ServiceType, "0a1b2c3d4e5f6071")
 
-	denied := activePolicy(t, s.policies, orgRootGRN("acme"), "no-talking",
-		statementDoc("no-talking", wire.EffectDeny, message.ActionSend, deniedGRN.String()))
-	attachPolicy(t, s.policies, denied, senderGRN)
+	s.decisions.deny(senderGRN, deniedGRN)
 
 	body := distinctBody(t)
 	require.Equal(t, http.StatusCreated, s.post(t, sender, siblingGRN, "stored", body))

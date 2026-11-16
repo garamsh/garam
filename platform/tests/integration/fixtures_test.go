@@ -431,6 +431,37 @@ func (sameOrganizationSends) Evaluate(_ context.Context, q policydecision.Questi
 	return policydecision.Decision{Allowed: q.Subject.Organization == q.Resource.Organization}, nil
 }
 
+// sendsRefusing is sameOrganizationSends with the pairs a test names
+// denied, which is what the service answers once an organization's
+// policy denies the send (ADR-0168). Which policy denies it, and
+// whom it attaches to, is the service's and is held by its own
+// suites; this suite holds what the listener does with the answer.
+type sendsRefusing struct {
+	sameOrganizationSends
+	mu     sync.Mutex
+	denied map[[2]string]bool
+}
+
+// deny makes every send from sender to recipient a denial.
+func (s *sendsRefusing) deny(sender, recipient grn.GRN) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.denied == nil {
+		s.denied = map[[2]string]bool{}
+	}
+	s.denied[[2]string{sender.String(), recipient.String()}] = true
+}
+
+func (s *sendsRefusing) Evaluate(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {
+	s.mu.Lock()
+	denied := s.denied[[2]string{q.Subject.String(), q.Resource.String()}]
+	s.mu.Unlock()
+	if denied {
+		return policydecision.Decision{}, nil
+	}
+	return s.sameOrganizationSends.Evaluate(ctx, q)
+}
+
 // refusalText is the body of the refusal garam stores to a sender whose
 // message to recipient the policy service did not allow across the
 // boundary, or whose recipient is no agent (ADR-0168). It names neither

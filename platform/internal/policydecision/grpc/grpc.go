@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -35,22 +36,37 @@ func New(client policyv1.PolicyServiceClient) *Client {
 func (c *Client) Evaluate(
 	ctx context.Context, q policydecision.Question,
 ) (policydecision.Decision, error) {
+	resp, err := c.evaluate(ctx, q)
+	switch {
+	case err == nil:
+		return decision(resp), nil
+	case principalNotApplicable(err):
+		return policydecision.Decision{Reasons: policydecision.Reasons{}}, nil
+	case errorx.KindOf(err) != errorx.KindUnknown:
+		// The question named no entity type: it was never asked.
+		return policydecision.Decision{}, err
+	default:
+		return policydecision.Decision{}, wrapCall(err, "Evaluate")
+	}
+}
+
+// evaluate asks one question and returns the service's answer or its
+// refusal as the status it came in, which carries the cause.
+func (c *Client) evaluate(
+	ctx context.Context, q policydecision.Question,
+) (*policyv1.EvaluateResponse, error) {
 	subject, resource, err := parties(q)
 	if err != nil {
-		return policydecision.Decision{}, err
+		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, feedgrpc.CallTimeout)
 	defer cancel()
-	resp, err := c.client.Evaluate(ctx, &policyv1.EvaluateRequest{
+	return c.client.Evaluate(ctx, &policyv1.EvaluateRequest{
 		Subject:  subject,
 		Action:   &policyv1.Action{Name: q.Action},
 		Resource: resource,
 		Probe:    q.Probe,
 	})
-	if err != nil {
-		return policydecision.Decision{}, wrapCall(err, "Evaluate")
-	}
-	return decision(resp), nil
 }
 
 // Evaluations asks the questions in one call. Each carries its own
@@ -88,8 +104,59 @@ func (c *Client) Evaluations(
 	out := make([]policydecision.Decision, len(qs))
 	for i, r := range resp.GetEvaluations() {
 		out[i] = decision(r)
+		if !refused(out[i]) {
+			continue
+		}
+		// A refused entry names no cause, only a text, so the cause is
+		// read from the refusal of the same question asked alone
+		// (ADR-0167).
+		_, err := c.evaluate(ctx, qs[i])
+		switch {
+		case principalNotApplicable(err):
+			out[i] = policydecision.Decision{Reasons: policydecision.Reasons{}}
+		case err == nil, status.Code(err) == codes.InvalidArgument:
+			// Decided when asked alone, or refused for another cause:
+			// the entry stays as the batch gave it.
+		default:
+			return nil, wrapCall(err, "Evaluate")
+		}
 	}
 	return out, nil
+}
+
+// refused reports a decision of a question the service refused, which
+// carries a reason naming no policy.
+func refused(d policydecision.Decision) bool {
+	for r := range d.Reasons {
+		if r.PolicyID == "" && r.Error != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// causeReason and causeDomain name the refusal of a question whose
+// principal type the action does not apply to (ADR-0167).
+const (
+	causeReason = "PRINCIPAL_NOT_APPLICABLE"
+	causeDomain = "garam.policy.v1"
+)
+
+// principalNotApplicable reports whether err is a refusal that names
+// that cause in an ErrorInfo detail. A refusal that names no cause, or
+// another, is not.
+func principalNotApplicable(err error) bool {
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.InvalidArgument {
+		return false
+	}
+	for _, d := range st.Details() {
+		if info, ok := d.(*errdetails.ErrorInfo); ok &&
+			info.GetReason() == causeReason && info.GetDomain() == causeDomain {
+			return true
+		}
+	}
+	return false
 }
 
 // parties names the subject and the resource as the entity types their

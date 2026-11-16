@@ -3,7 +3,7 @@
 mod fixture;
 
 use decision::{Engine, Error, Role, RoleScope};
-use fixture::{ACME, ACME_MEMBERS, ENG, LEE, WEB, World, evaluation, link, organization};
+use fixture::{ACME, ACME_MEMBERS, ENG, LEE, OPERATOR, WEB, World, evaluation, link, organization};
 use serde_json::{Value, json};
 
 fn engine() -> Engine {
@@ -40,6 +40,38 @@ fn a_context_attribute_the_schema_does_not_name_is_refused() {
 
     let refused = engine.request(&question);
     assert!(matches!(refused, Err(Error::Evaluation(_))), "{refused:?}");
+}
+
+#[test]
+fn an_action_that_does_not_apply_to_the_principals_type_is_named_apart() {
+    let engine = engine();
+
+    // `iam:agent.read` declares no `Operator` among its principals.
+    let named = engine.request(&evaluation(OPERATOR, "iam:agent.read", ACME));
+    assert!(
+        matches!(named, Err(Error::PrincipalNotApplicable(_))),
+        "{named:?}"
+    );
+
+    // The same operator asked an action it is a principal of is decided.
+    let control = engine.request(&evaluation(OPERATOR, "iam:agent.create", ACME));
+    assert!(control.is_ok(), "{control:?}");
+
+    // Every other refusal of a question stays the evaluation's.
+    let unknown = engine.request(&evaluation(OPERATOR, "iam:org.rename", ACME));
+    assert!(matches!(unknown, Err(Error::Evaluation(_))), "{unknown:?}");
+    let wrong_resource = engine.request(&evaluation(OPERATOR, "iam:agent.create", WEB));
+    assert!(
+        matches!(wrong_resource, Err(Error::Evaluation(_))),
+        "{wrong_resource:?}"
+    );
+    let mut context = evaluation(OPERATOR, "iam:agent.create", ACME);
+    context.context = json!({"hour": 3});
+    let bad_context = engine.request(&context);
+    assert!(
+        matches!(bad_context, Err(Error::Evaluation(_))),
+        "{bad_context:?}"
+    );
 }
 
 fn team(id: &str, attrs: Value, parents: Value) -> Value {

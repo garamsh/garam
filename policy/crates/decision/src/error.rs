@@ -10,6 +10,11 @@ pub enum Error {
     /// An evaluation names what the schema does not.
     #[error("the evaluation does not fit the schema")]
     Evaluation(#[source] Cause),
+    /// An evaluation's action does not apply to its principal's type
+    /// (ADR-0167): the one refusal of a question a caller reads as a
+    /// denial, so it is no [`Error::Evaluation`].
+    #[error("the action does not apply to the principal's type")]
+    PrincipalNotApplicable(#[source] Cause),
     /// Entities do not conform to the schema.
     #[error("the entities do not fit the schema")]
     Entities(#[source] Cause),

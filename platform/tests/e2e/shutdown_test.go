@@ -142,10 +142,10 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 	}{
 		{"api", func(t *testing.T) ([]string, string) {
 			addr := freeAddr(t)
-			return []string{
+			return append([]string{
 				"GARAM_DATABASE_URL=" + databaseURL,
 				"GARAM_HTTP_ADDR=" + addr,
-			}, "http://" + addr
+			}, apiPolicyEnv(t)...), "http://" + addr
 		}},
 		{"authz", func(t *testing.T) ([]string, string) {
 			metricsAddr := freeAddr(t)
@@ -167,7 +167,7 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 				"GARAM_CA_KEY_FILE=" + kekFile,
 				"GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
 				"GARAM_MACHINE_ISSUER=https://garam.test",
-			}, machinePolicyEnv(t, rootFile)...), "http://" + healthAddr
+			}, policyEnv(t, rootFile)...), "http://" + healthAddr
 		}},
 	}
 	for _, tc := range tests {
@@ -214,10 +214,10 @@ func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 
 	var logs bytes.Buffer
 	cmd := exec.Command(bin, "serve", "api")
-	cmd.Env = []string{
+	cmd.Env = append([]string{
 		"GARAM_DATABASE_URL=" + databaseURL,
 		"GARAM_HTTP_ADDR=" + addr,
-	}
+	}, apiPolicyEnv(t)...)
 	cmd.Stdout = &logs
 	cmd.Stderr = &logs
 	require.NoError(t, cmd.Start())
@@ -343,13 +343,25 @@ func waitForProbe(t *testing.T, url string, logs *bytes.Buffer) {
 	}
 }
 
-// machinePolicyEnv is what `serve machine` refuses to start without
-// since every send is the policy service's decision (ADR-0168): its
-// address, the root it verifies it by and the key it signs each call
-// with. The connection is made lazily, so nothing here listens: these
-// tests start and stop the listener and never send. The root is the
-// one file machineKeyMaterialFiles made, which holds a certificate.
-func machinePolicyEnv(t *testing.T, caFile string) []string {
+// apiPolicyEnv is policyEnv for `serve api`, which refuses to start
+// without them too since a user's delegated authority is the policy
+// service's decision (ADR-0146). The root it verifies the service by is
+// a certificate from machineKeyMaterialFiles, which the api never
+// dials.
+func apiPolicyEnv(t *testing.T) []string {
+	t.Helper()
+	_, _, _, rootFile := machineKeyMaterialFiles(t)
+	return policyEnv(t, rootFile)
+}
+
+// policyEnv is what `serve machine` and `serve api` refuse to start
+// without since what they decide is the policy service's decision
+// (ADR-0168, ADR-0146): its address, the root it verifies it by and the
+// key it signs each call with. The connection is made lazily, so
+// nothing here listens: these tests start and stop the listener and
+// never send. The root is the one file machineKeyMaterialFiles made,
+// which holds a certificate.
+func policyEnv(t *testing.T, caFile string) []string {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)

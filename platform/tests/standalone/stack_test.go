@@ -234,15 +234,43 @@ func (s *stack) serve() {
 	s.mustDocker("run", "-d", "--name", authz, "--network", s.network,
 		"-e", "GARAM_DATABASE_URL="+s.inside(), s.garam, "serve", "authz")
 	api := s.prefix + "api"
-	s.mustDocker("run", "-d", "--name", api, "--network", s.network, "-p", "127.0.0.1::8080",
+	// The api refuses to start without a policy service to decide a
+	// user's delegated authority (ADR-0146), so it is given what the
+	// machine listener is: a root and a key, and an address that names
+	// no service, since nothing here asks it.
+	_, _, apiRootPEM := mintRoot(s.t)
+	s.mustDocker("create", "--name", api, "--network", s.network, "-p", "127.0.0.1::8080",
 		"-e", "GARAM_DATABASE_URL="+s.inside(), "-e", "GARAM_AUTHZ_ADDR="+authz+":9090",
-		"-e", "GARAM_COOKIE_SECURE=false", s.garam, "serve", "api")
+		"-e", "GARAM_COOKIE_SECURE=false",
+		"-e", "GARAM_POLICY_ADDR=policy.invalid:8443", "-e", "GARAM_POLICY_CA_FILE=/etc/garam/policy-ca.pem",
+		"-e", "GARAM_POLICY_SIGNING_KEY_FILE=/etc/garam/policy-signing.pem",
+		"-e", "GARAM_POLICY_TOKEN_ISSUER=https://garam.test",
+		s.garam, "serve", "api")
+	apiFile := func(path string, data []byte) workload.File {
+		return workload.File{Path: path, Data: data, Mode: 0o600, UID: 10001, GID: 10001}
+	}
+	require.NoError(s.t, s.engine.CopyFiles(context.Background(), api, "/etc", []workload.File{
+		{Path: "garam", Mode: 0o700, Dir: true, UID: 10001, GID: 10001},
+		apiFile("garam/policy-ca.pem", apiRootPEM), apiFile("garam/policy-signing.pem", signingKeyPEM(s.t)),
+	}))
+	s.mustDocker("start", api)
 	s.apiURL = "http://" + s.mustDocker("port", api, "8080")
 	s.startMachine(authz)
 	s.eventually("the api answering", func() bool {
 		status, _ := s.browse(http.MethodGet, "/me", "")
 		return status == http.StatusOK
 	})
+}
+
+// signingKeyPEM mints the key a listener signs its calls to the policy
+// service with.
+func signingKeyPEM(t *testing.T) []byte {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 }
 
 // startMachine starts the machine listener with key material this
@@ -261,11 +289,7 @@ func (s *stack) startMachine(authz string) {
 	// a send (ADR-0168). The connection is made lazily and nothing here
 	// sends, so the address names no service: what it needs is a root
 	// to verify by and a key to sign with.
-	policyKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(s.t, err)
-	policyKeyDER, err := x509.MarshalPKCS8PrivateKey(policyKey)
-	require.NoError(s.t, err)
-	policyKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: policyKeyDER})
+	policyKeyPEM := signingKeyPEM(s.t)
 
 	name := s.prefix + "machine"
 	s.mustDocker("create", "--name", name, "--network", s.network, "-p", "127.0.0.1::8443",

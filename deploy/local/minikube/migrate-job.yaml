@@ -34,8 +34,8 @@ spec:
                   key: uri
         # The Database in postgres.yaml is reconciled by the operator
         # after the cluster is ready, so it can still be absent when
-        # this Job starts. The image is the one postgres.yaml pins, which
-        # carries psql.
+        # this Job starts. The image is the one postgres.yaml pins,
+        # which carries psql.
         - name: policy-db
           image: ghcr.io/cloudnative-pg/postgresql:17.11-system-trixie@sha256:d3601aae9a06dd1b8069864ffed80344720e289a98fbf749954d2edeec715fa0
           command: ["/bin/sh", "-c", "until psql -tAc 'SELECT 1' >/dev/null; do sleep 2; done"]

@@ -23,11 +23,22 @@ cluster's own daemon.
 
 ## What runs
 
-- `postgres` — one instance, reconciled by the CloudNativePG operator.
-- `migrate` — a Job that applies pending migrations and exits.
+- `postgres` — one instance, reconciled by the CloudNativePG operator,
+  holding the platform's database and the policy service's own.
+- `migrate` — a Job that applies pending migrations, the platform's and
+  the policy service's, turns the policy feed on, and exits.
+- `policy` — the policy service
+  ([ADR-0130](../../../docs/architecture/adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)),
+  which serves no plaintext.
 - `authz`, `api`, `machine` — the three serve processes of
   [ADR-0017](../../../docs/architecture/adr/0017-machine-process.md),
-  from one image.
+  from one image. `api` and `machine` both reach `policy` over its TLS
+  and sign their calls with one key, under one issuer, which `policy`
+  trusts. `machine` refuses to start without that configuration
+  ([ADR-0168](../../../docs/architecture/adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)),
+  so the bring-up deploys `policy` beside it. The listener
+  reaches the service per send and not at start, so it reports ready
+  while `policy` is down and a send then fails closed.
 - `web` — the Next.js console.
 
 All of it lives in the `garam-local` namespace. Manifests are
@@ -123,24 +134,35 @@ that was already there, so a cluster brought up before
 [ADR-0040](../../../docs/architecture/adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
 keeps its authorities and starts.
 
+`policy-key-material.sh` does the same for the policy service, into a
+second Secret: the certificate it serves under, which `api` and
+`machine` trust as their CA, the RSA key they sign their calls with, and
+the JWKS the service trusts for it. The service is given the
+certificate, its key and the JWKS, and never the signing key. The pair
+is kept whole when it exists, because the service holds the JWKS it
+started with and a new key beside it would be refused until the service
+restarted.
+
 Key material reaches the process as a file readable only by its owner,
 with the process running as that owner
 ([ADR-0015](../../../docs/architecture/adr/0015-operator-identity.md)).
 A Secret volume is owned by root, so an init container copies the files
 as the same unprivileged user the process runs as, into a memory-backed
 volume that never reaches the node's disk. The serving container does
-not mount the Secret at all.
+not mount the Secret at all. `api` and `machine` each do this for the
+signing key.
 
 ## Images
 
-Both images are built into the cluster's own daemon and pushed nowhere.
-No node here holds a registry credential, and a token for the cluster
-this project targets expires within the day (ADR-0020). The manifests
-set `imagePullPolicy: Never`, so a missing image fails as the build it
-is rather than as a silent pull from somewhere else.
+All three images are built into the cluster's own daemon and pushed
+nowhere. No node here holds a registry credential, and a token for the
+cluster this project targets expires within the day (ADR-0020). The
+manifests set `imagePullPolicy: Never`, so a missing image fails as the
+build it is rather than as a silent pull from somewhere else.
 
-They are built from `deploy/local/Dockerfile` and
-`deploy/local/Dockerfile.web` — the same two the compose stack uses.
+They are built from `deploy/local/Dockerfile`,
+`deploy/local/Dockerfile.web` and `deploy/local/Dockerfile.policy` — the
+same three the compose stack uses.
 
 Each pod template carries the id of the image it runs, stamped in by
 `make -C deploy/local minikube-apps`. The tag alone cannot carry a

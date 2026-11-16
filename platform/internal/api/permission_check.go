@@ -96,10 +96,12 @@ var actionRules = map[string]actionRule{
 
 	org.ActionPolicyCreate: {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionPolicyRead:   {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
-	org.ActionPolicyUpdate: {on: []apigen.PermissionResourceType{kindPolicy}},
-	org.ActionPolicyAttach: {on: []apigen.PermissionResourceType{kindPolicy}},
-	org.ActionPolicyDetach: {on: []apigen.PermissionResourceType{kindPolicy}},
-	org.ActionPolicyDelete: {on: []apigen.PermissionResourceType{kindPolicy}},
+	// A policy write is decided on the organization (ADR-0172), so a
+	// policy not yet written can be asked about there.
+	org.ActionPolicyUpdate: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
+	org.ActionPolicyAttach: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
+	org.ActionPolicyDetach: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
+	org.ActionPolicyDelete: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
 	org.ActionAuditRead:    {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionPermitWrite:  {on: []apigen.PermissionResourceType{onOrg}},
 

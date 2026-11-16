@@ -276,3 +276,20 @@ func TestEnforcement_PermitWriteIsAnsweredAsTheServiceDecidesAPermitWrite(t *tes
 	assert.Equal(t, apigen.DecisionDeny, s.check(t, s.owner, org.ActionPermitWrite), "a guardrail forbids the owner the check")
 	assert.Equal(t, http.StatusForbidden, write(s.owner), "and the write")
 }
+
+// TestEnforcement_APolicyWriteIsAskedOnTheOrganization asks the
+// permission check for each policy write that names an existing
+// policy, on the organization alone, as an owner and a member. The
+// service decides every policy write on the organization, so a policy
+// not yet written can be asked about there (ADR-0172): the owner is
+// allowed each and the member refused, and a refusal is a decision,
+// not the 400 an action not accepted there answers.
+func TestEnforcement_APolicyWriteIsAskedOnTheOrganization(t *testing.T) {
+	s := newEnforcementStack(t, realDecisions)
+	for _, action := range []string{
+		org.ActionPolicyAttach, org.ActionPolicyDetach, org.ActionPolicyUpdate, org.ActionPolicyDelete,
+	} {
+		assert.Equal(t, apigen.DecisionAllow, s.check(t, s.owner, action), "the owner, %s", action)
+		assert.Equal(t, apigen.DecisionDeny, s.check(t, s.member, action), "the member, %s", action)
+	}
+}

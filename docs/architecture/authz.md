@@ -87,7 +87,9 @@ A list and the search ask it too
 object's own read and through `askedOn`, in one `Evaluations` call (as
 many as it takes past the service's 1000), and keeps those allowed; an
 error of the service is a 503 `unavailable`. `checkPermissions` answers
-`iam:permit.write` on the organization the same way. The explanation
+`iam:permit.write` on the organization the same way, and the four
+policy writes (`attach`, `detach`, `update`, `delete`) on the
+organization or on a policy. The explanation
 (`permission_explanation.go`) is the only caller of the platform's
 engine left on this listener, until round 11.
 [policy-matrix.md](./policy-matrix.md) reports where the two engines

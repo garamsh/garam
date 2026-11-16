@@ -82,6 +82,15 @@ check left it out of `org.Actions()`.
    a write the service then refuses, which is the safe direction.
    Making them agree needs an option of the service's `Evaluate`, which
    is not this change's; #1983 carries it.
+7. **A policy write is also asked on the organization.**
+   `checkPermissions` accepted `iam:policy.attach`, `.detach`, `.update`
+   and `.delete` on a policy only, and answered 400 for the whole batch
+   when one was asked on the organization. The service decides every
+   policy write on the organization (`Iam::Org`, `policy_write.rs`), and
+   a role link or guardrail not yet written can be asked about nowhere
+   else, which is the reasoning of `askedOn`. The four actions are
+   accepted on the organization beside `iam:policy.create` and
+   `iam:permit.write`, and stay accepted on a policy.
 
 ## Consequences
 

@@ -11,6 +11,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -157,7 +158,7 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 		{"machine", func(t *testing.T) ([]string, string) {
 			certFile, keyFile, kekFile, rootFile := machineKeyMaterialFiles(t)
 			healthAddr := freeAddr(t)
-			return []string{
+			return append([]string{
 				"GARAM_DATABASE_URL=" + databaseURL,
 				"GARAM_MACHINE_ADDR=" + freeAddr(t),
 				"GARAM_MACHINE_HEALTH_ADDR=" + healthAddr,
@@ -166,7 +167,7 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 				"GARAM_CA_KEY_FILE=" + kekFile,
 				"GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
 				"GARAM_MACHINE_ISSUER=https://garam.test",
-			}, "http://" + healthAddr
+			}, machinePolicyEnv(t, rootFile)...), "http://" + healthAddr
 		}},
 	}
 	for _, tc := range tests {
@@ -339,6 +340,28 @@ func waitForProbe(t *testing.T, url string, logs *bytes.Buffer) {
 		}
 		require.False(t, time.Now().After(deadline), "probe %s never answered ok; logs:\n%s", url, logs.String())
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// machinePolicyEnv is what `serve machine` refuses to start without
+// since every send is the policy service's decision (ADR-0168): its
+// address, the root it verifies it by and the key it signs each call
+// with. The connection is made lazily, so nothing here listens: these
+// tests start and stop the listener and never send. The root is the
+// one file machineKeyMaterialFiles made, which holds a certificate.
+func machinePolicyEnv(t *testing.T, caFile string) []string {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	keyFile := filepath.Join(t.TempDir(), "policy-signing.pem")
+	require.NoError(t, os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600))
+	return []string{
+		"GARAM_POLICY_ADDR=" + freeAddr(t),
+		"GARAM_POLICY_CA_FILE=" + caFile,
+		"GARAM_POLICY_SIGNING_KEY_FILE=" + keyFile,
+		"GARAM_POLICY_TOKEN_ISSUER=https://garam.test",
 	}
 }
 

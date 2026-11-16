@@ -143,6 +143,10 @@ type listKind struct {
 	query      url.Values
 	action     string
 	readSuffix string
+	// readsOnOrg is set where the read is asked of the policy service
+	// on the organization and not on the object (ADR-0171 item 7), so
+	// the service cannot refuse one object of the kind alone.
+	readsOnOrg bool
 	seed       func(t *testing.T, s *listStack, name string) grn.GRN
 }
 
@@ -156,7 +160,7 @@ func listKinds() []listKind {
 			seed: func(t *testing.T, s *listStack, _ string) grn.GRN { return seedAgent(t, s.agents, s.acme) }},
 		// A policy is read by its versions, the one read iam:policy.read
 		// gates on the policy itself.
-		{name: "policies", path: "/orgs/acme/policies", action: org.ActionPolicyRead, readSuffix: "/versions",
+		{name: "policies", path: "/orgs/acme/policies", action: org.ActionPolicyRead, readSuffix: "/versions", readsOnOrg: true,
 			seed: func(t *testing.T, s *listStack, name string) grn.GRN {
 				g, err := grn.Parse(activePolicy(t, s.policies, s.acme, name,
 					statementDoc(name, wire.EffectAllow, org.ActionOrgRead, s.acme.String())))
@@ -194,7 +198,8 @@ func seedListProject(t *testing.T, s *listStack, name string) grn.GRN {
 // control that the list is what narrows. After it, her list is dan's
 // without that object, and dan's still holds it: the Deny hid one
 // object from one caller. Reading the hidden object itself is refused,
-// so the list and the read agree.
+// so the list and the read agree, except for a policy: the service
+// decides its read on the organization, so no policy is refused alone.
 func TestLists_ADenyOnOneObjectHidesThatObjectAlone(t *testing.T) {
 	for _, k := range listKinds() {
 		t.Run(k.name, func(t *testing.T) {
@@ -210,13 +215,18 @@ func TestLists_ADenyOnOneObjectHidesThatObjectAlone(t *testing.T) {
 			// which the attached Deny narrows; the read is the
 			// policy service's (ADR-0171), which a guardrail on
 			// the pair would refuse.
-			s.decisions.forbidOn(s.adaGRN, k.action, hidden)
+			if !k.readsOnOrg {
+				s.decisions.forbidOn(s.adaGRN, k.action, hidden)
+			}
 
 			control := s.listed(t, k.path, k.query, s.dan)
 			require.Contains(t, control, hidden.String(), "the Deny does not reach dan")
 			want := slices.DeleteFunc(slices.Clone(control), func(g string) bool { return g == hidden.String() })
 			assert.Equal(t, want, s.listed(t, k.path, k.query, s.ada), "ada's list is dan's without the denied object")
 
+			if k.readsOnOrg {
+				return
+			}
 			status, body := s.get(t, k.path+"/"+hidden.Identifier+k.readSuffix, nil, s.ada)
 			assert.Equal(t, http.StatusForbidden, status, "the read of the hidden object refuses as the list hides it: %s", body)
 			status, body = s.get(t, k.path+"/"+first.Identifier+k.readSuffix, nil, s.ada)

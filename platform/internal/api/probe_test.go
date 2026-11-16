@@ -41,7 +41,7 @@ func TestExplainPermission_AsksWhetherThePolicyIsReadableAsAProbe(t *testing.T) 
 	reads := a.about(org.ActionPolicyRead)
 	require.Len(t, reads, 1)
 	assert.True(t, reads[0].Probe, "naming a statement is not acted on")
-	assert.Equal(t, policy, reads[0].Resource)
+	assert.Equal(t, grn.Org(slug), reads[0].Resource, "a policy is asked on its organization")
 
 	require.Equal(t, http.StatusForbidden, f.do(t, "GET", "/orgs/"+slug, "", owner).Code)
 	enforced := a.about(org.ActionOrgRead)
@@ -175,6 +175,31 @@ func TestListPermissionHolders_AsksTheCheckAsAnAttemptAndTheCandidatesAsProbes(t
 	}
 	assert.ElementsMatch(t, []string{ownerGRN.String(), memberGRN.String()}, got)
 	assert.NotContains(t, got, held.String(), "the agent the service denies is not a holder")
+}
+
+// TestPolicyRoute_AsksTheServiceOnThePolicysOrganization holds that a
+// route addressing a policy asks the service on the organization, since
+// the service holds no entity for a policy (ADR-0171 item 7), as an
+// attempt. A route addressing a group is the control: it is asked on
+// the group itself.
+func TestPolicyRoute_AsksTheServiceOnThePolicysOrganization(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	eng := grn.New(slug, org.ServiceTypeGroup, "eng")
+	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(eng, "eng", orgGRNOf(slug))))
+	a := f.record(func(policydecision.Question) bool { return false })
+
+	require.Equal(t, http.StatusForbidden, f.do(t, "GET", "/orgs/"+slug+"/policies/p-1/versions", "", owner).Code)
+	reads := a.about(org.ActionPolicyRead)
+	require.Len(t, reads, 1)
+	assert.Equal(t, orgGRNOf(slug), reads[0].Resource)
+	assert.False(t, reads[0].Probe)
+
+	require.Equal(t, http.StatusForbidden, f.do(t, "PATCH", "/orgs/"+slug+"/groups/eng", `{"name":"renamed"}`, owner).Code)
+	updates := a.about(org.ActionGroupUpdate)
+	require.Len(t, updates, 1)
+	assert.Equal(t, eng, updates[0].Resource, "control: a group is asked as itself")
 }
 
 // TestSearch_AsksEachKindAsAProbe holds that the kinds a search offers

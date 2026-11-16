@@ -1107,9 +1107,15 @@ Policy management is authorized like any other action. The
 constants live in `platform/internal/org`, because the api server
 enforces them and may not import the engine that stores policies.
 `owner` and `admin` grant `iam:policy.*`; `member` grants none, so
-reading a policy is an admin action. The addressed policy's GRN is the
-object of the check, and its organization segment is the org in the
-path, so a policy of another org is not addressable.
+reading a policy is an admin action. The addressed policy's GRN names
+the object, and its organization segment is the org in the path, so a
+policy of another org is not addressable. The policy service holds no
+entity for a policy, so the platform asks it an `iam:policy.*`
+question on the policy's organization, as the service decides a write
+to a policy, and a caller's question naming the policy is answered
+that way
+([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)
+item 7).
 
 The console does not call these operations. Since
 [ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md)

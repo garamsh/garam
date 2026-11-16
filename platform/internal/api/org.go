@@ -361,8 +361,21 @@ func (s *Server) callerIn(r *http.Request, orgGRN grn.GRN, u *user.User) (*calle
 // item 7).
 func (s *Server) allows(r *http.Request, c *caller, target grn.GRN, action string) (bool, error) {
 	return s.decides(r, policydecision.Question{
-		Subject: c.user.GRN, Action: action, Resource: target, Probe: policydecision.IsProbe(r.Context()),
+		Subject: c.user.GRN, Action: action, Resource: askedOn(target), Probe: policydecision.IsProbe(r.Context()),
 	})
+}
+
+// askedOn is the resource the policy service is asked about for a
+// question on target. The service holds no entity for a policy, so it
+// decides a write to one, and a read of it, as the action on the
+// policy's organization (policy_write.rs); a question whose resource
+// is a policy is asked there too, which is what every route, check and
+// explanation that names a policy takes (ADR-0171 item 7).
+func askedOn(target grn.GRN) grn.GRN {
+	if target.ServiceType == serviceTypePolicy {
+		return grn.Org(target.Organization)
+	}
+	return target
 }
 
 // decides asks the policy service one question and answers whether it

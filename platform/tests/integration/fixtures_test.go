@@ -581,22 +581,27 @@ func (c *currentDecisions) questions() []policydecision.Question {
 
 func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {
 	c.mu.Lock()
-	written := c.permitted[[2]string{q.Subject.String(), q.Action}]
-	c.mu.Unlock()
-	if !q.Current && q.Subject.ServiceType != user.ServiceType && !written {
-		return c.Service.Evaluate(ctx, q)
-	}
-	c.mu.Lock()
-	if q.Current {
-		c.asked = append(c.asked, q)
-	}
-	c.enforced = append(c.enforced, q)
+	key := [2]string{q.Subject.String(), q.Action}
+	permitted := c.permitted[key]
 	failure := c.failure
-	permitted := c.permitted[[2]string{q.Subject.String(), q.Action}]
-	forbidden := c.forbidden[[2]string{q.Subject.String(), q.Action}] ||
+	forbidden := c.forbidden[key] ||
 		c.forbidOns[[3]string{q.Subject.String(), q.Action, q.Resource.String()}]
 	held := c.held
+	// A question no control names, from an agent, is a send's and is
+	// answered as it is without them. A control a test wrote is read
+	// before that, so it is never ignored.
+	delegated := !q.Current && q.Subject.ServiceType != user.ServiceType &&
+		!permitted && !forbidden && failure == nil && held == nil
+	if !delegated {
+		if q.Current {
+			c.asked = append(c.asked, q)
+		}
+		c.enforced = append(c.enforced, q)
+	}
 	c.mu.Unlock()
+	if delegated {
+		return c.Service.Evaluate(ctx, q)
+	}
 	if held != nil {
 		select {
 		case <-held:

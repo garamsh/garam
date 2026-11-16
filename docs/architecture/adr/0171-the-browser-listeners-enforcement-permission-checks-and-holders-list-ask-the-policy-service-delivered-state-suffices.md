@@ -28,8 +28,9 @@ and permits (ADR-0169). Three questions were left to this round.
   question as an attempt unless it is marked a probe, which the
   listener does for a question nobody acts on.
 - **What a failure answers.** The engine's failure was an internal
-  error; a policy service that cannot be reached has a status of its
-  own (ADR-0168 item 7).
+  error the platform mapped by kind (a 503 where the engine was
+  unreachable); a policy service that cannot be reached has a status
+  of its own (ADR-0168 item 7).
 
 ## Decision
 
@@ -65,12 +66,26 @@ and permits (ADR-0169). Three questions were left to this round.
    list filter belongs to the round that moves them.
 6. **What stays on the platform's engine.** `permission_explanation.go`
    (the explanation) and `list_visibility.go` (the list filter) still
-   ask `Evaluator`, until rounds 10 and 11. The one change to the
+   ask `Evaluator`, until rounds 11 and 10. The one change to the
    explanation is that `ExplainPermission` marks its whole context a
    probe: nothing it asks is acted on, and `decidingStatements`'
-   read of a deciding policy would otherwise have its denial recorded
-   as an attempt by `allows`. The rest of the file stays for its
-   round.
+   read of a deciding policy goes through `allows`, which would
+   otherwise record its denial as an attempt. That read takes item 7.
+   The rest of the file stays for its round.
+7. **A question whose resource is a policy is asked on the policy's
+   organization.** The service holds no `Iam::Policy` entity
+   (`policy/README.md` §Callers: the type's `@caller` is `none`), so
+   asked an `iam:policy.*` action on a policy it denies everyone. It
+   decides a write to a policy as the writer's step action on the
+   organization, and a read as `iam:policy.read` on it
+   (`policy_write.rs`). `allows` therefore passes every resource
+   through one seam, `askedOn`, which answers the policy's
+   `Iam::Org` for a policy GRN and the resource itself otherwise.
+   `checkPermissions`, `authorizePolicy` (every
+   `/orgs/{org}/policies/{policy}*` route) and the explanation's read
+   of a deciding policy all take it. A client's question names the policy, as the console's page
+   does, and is answered as the service decides it. `iam:permit.write`
+   stays round 10's.
 
 ## Consequences
 
@@ -80,11 +95,17 @@ and permits (ADR-0169). Three questions were left to this round.
   refuses an action its role allows.
 - A policy attached through the old `/policies*` routes no longer
   reaches enforcement; the routes remain until round 11.
+- Built as first written, which asked the service about the policy
+  itself, the owner and every admin were refused `iam:policy.*` on any
+  policy: the integration double granted a role's actions on every
+  resource of the organization, which the service never does, so no
+  test saw it. Item 7 is the repair, and a real-service case asks a
+  policy-resource pair.
 - A request costs one service call per question where it cost one
   engine call. A `checkPermissions` page of `n` pairs costs `n`.
 - Every browser request that enforces needs the service up. The
-  engine's failure was already a 500 for the request; the service's is
-  a 503 a client can retry.
+  engine's failure was already mapped by kind; the service's is a 503
+  a client can retry.
 - A decision may lag a write by the delivery interval for a caller
   that did not make the write. The writer is not behind (item 2).
 
@@ -95,5 +116,5 @@ and permits (ADR-0169). Three questions were left to this round.
   should read current.
 - The `n` calls of a `checkPermissions` page make it slow enough that
   `Evaluations` batching cannot wait for round 10.
-- The explanation's recorded attempts (item 6) show in the audit as
-  refusals nobody met.
+- The explanation's reads of a deciding policy (item 6) show in the
+  audit as refusals nobody met, which the probe mark rules out.

@@ -20,6 +20,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/policydecision"
@@ -27,6 +28,7 @@ import (
 	relaygrpc "github.com/garamsh/garam/platform/internal/policyrelay/grpc"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // The cases here hold the browser listener's enforcement, its
@@ -46,6 +48,7 @@ type enforcementStack struct {
 	owner, member       *http.Cookie
 	ownerGRN, memberGRN grn.GRN
 	acme                grn.GRN
+	policies            *authz.PolicyGRPCServer
 }
 
 // newEnforcementStack composes the listener with decisions as the
@@ -90,8 +93,11 @@ func newEnforcementStack(t *testing.T, decide func(*realPolicy) policydecision.S
 	dropGuardrails()
 	t.Cleanup(dropGuardrails)
 
+	policies, engine := policyEngine(t, p)
+	s.policies = policies
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil, authnpg.NewSessionStore(p),
-		nil, nil, nil, nil, nil, decide(rp), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
+		nil, nil, nil, nil, api.NewGRPCEvaluator(engine), decide(rp), api.NewGRPCPolicyManager(policyService(t, policies)),
+		nil, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithPolicyRelay(relaygrpc.New(rp.client))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
@@ -172,4 +178,31 @@ func TestEnforcement_AnUnreachableServiceIsUnavailableNotForbidden(t *testing.T)
 	assert.Equal(t, http.StatusOK, status, "control: the service answers: %s", got)
 	status, got = browse(t, http.MethodPost, up.url+"/orgs/acme/invitations", up.member, `{"email":"z@example.com","role":"member"}`)
 	assert.Equal(t, http.StatusForbidden, status, "a forbid is a 403: %s", got)
+}
+
+// TestEnforcement_AQuestionOnAPolicyIsAskedOnItsOrganization shows what
+// the service decides about a policy of the platform's own store. The
+// service holds no entity for one, so a question put on the policy
+// itself is denied to everyone; the platform asks it on the policy's
+// organization, as the service decides a write to a policy, and the
+// owner is allowed what the member is refused (ADR-0171 item 7). The
+// member's refusal is the owner's control.
+func TestEnforcement_AQuestionOnAPolicyIsAskedOnItsOrganization(t *testing.T) {
+	s := newEnforcementStack(t, realDecisions)
+	policy, err := grn.Parse(activePolicy(t, s.policies, s.acme, "held",
+		statementDoc("held", wire.EffectAllow, org.ActionOrgRead, s.acme.String())))
+	require.NoError(t, err)
+	onPolicy := apigen.PermissionCheck{Action: org.ActionPolicyUpdate,
+		Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypePolicy, Id: policy.Identifier}}
+
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow},
+		checkedDecisions(t, s.url, s.owner, onPolicy), "an owner's role carries iam:policy.update")
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny},
+		checkedDecisions(t, s.url, s.member, onPolicy), "a member's role does not")
+
+	versions := "/orgs/acme/policies/" + policy.Identifier + "/versions"
+	status, body := s.get(t, versions, s.owner)
+	assert.Equal(t, http.StatusOK, status, "an owner reads the policy's versions: %s", body)
+	status, body = s.get(t, versions, s.member)
+	assert.Equal(t, http.StatusForbidden, status, "a member does not: %s", body)
 }

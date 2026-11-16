@@ -475,8 +475,8 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 		require.Equal(t, http.StatusNoContent, status, string(body))
 	}
 	assert.Equal(t, []string{
-		"consent-refused:" + foreignGRN.String() + ":key-1",
-		"consent-refused:" + foreignGRN.String() + ":key-3",
-		"consent-refused:" + foreignGRN.String() + ":key-5",
+		"crossing-refused:" + foreignGRN.String() + ":key-1",
+		"crossing-refused:" + foreignGRN.String() + ":key-3",
+		"crossing-refused:" + foreignGRN.String() + ":key-5",
 	}, refusals)
 }

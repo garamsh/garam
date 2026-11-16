@@ -45,7 +45,7 @@ var errNoSendPolicy = errorx.New(errorx.KindUnavailable, "no policy service is c
 func crossingRefusal(sender, recipient grn.GRN, key string) (from, to grn.GRN, refusalKey, body string, author message.Author) {
 	body = "garam could not deliver your message to " + recipient.String() +
 		": a message to this recipient is not permitted"
-	return recipient, sender, "consent-refused:" + sender.String() + ":" + key, body, message.AuthorGaram
+	return recipient, sender, "crossing-refused:" + sender.String() + ":" + key, body, message.AuthorGaram
 }
 
 // authorizeSend reports whether sender's post to recipient is admitted

@@ -280,7 +280,7 @@ func refused(sender, recipient grn.GRN, key string) messageCall {
 		method:    "post",
 		caller:    recipient,
 		recipient: sender,
-		key:       "consent-refused:" + sender.String() + ":" + key,
+		key:       "crossing-refused:" + sender.String() + ":" + key,
 		body:      refusalBody(recipient),
 		author:    message.AuthorGaram,
 	}
@@ -687,7 +687,7 @@ func TestServer_RefusesAnOutboxMessageAcrossTheBoundaryUnderItsBudget(t *testing
 		{method: "post within budget", caller: sender, recipient: foreign, key: "entry-1", body: "hello", author: message.AuthorSender, created: created},
 		{
 			method: "post within budget", caller: stranger, recipient: sender,
-			key:     "consent-refused:" + sender.String() + ":entry-2",
+			key:     "crossing-refused:" + sender.String() + ":entry-2",
 			body:    refusalBody(stranger),
 			author:  message.AuthorGaram,
 			created: created,

@@ -1,8 +1,11 @@
 # ADR 0158: garam carries no gaon operator and a release publishes six images
 
 > Status: accepted; built in `.github/workflows/release.yml` and
-> `tooling/image-build.sh` for the six images; the removal of
-> `gaon-operator/` is not built
+> `tooling/image-build.sh` for the six images; superseded in part by
+> [ADR-0170](./0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
+> (item 3's condition that `gaon-operator/` leaves only after
+> garamsh/garam-agent-operator holds it, and item 4, which kept
+> `deploy/charts/garam-gaon`)
 > Date: 2026-11-13
 
 Drafted for #1875, which reserves this number. The direction is the
@@ -80,7 +83,7 @@ at `568c6e61e57e41ee9ebf66ac9742b5ee3fa6fd21`.
   operator and the guest describe code this repository still holds and
   no longer publishes. The pull request that removes the directory
   removes them, and rewrites the passages that name it.
-- A deployment of [deployment-gaon.md](../deployment-gaon.md) cannot
+- A deployment of [deployment-gaon.md](https://github.com/garamsh/garam/blob/80c5006e3f3c3e6c68382e674496ac21044c76d8/docs/architecture/deployment-gaon.md) cannot
   pull an operator image from garam's release, and none is owed one.
   Which image the operator of garamsh/garam-agent-operator is
   published as is that repository's.

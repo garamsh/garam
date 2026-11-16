@@ -1,6 +1,8 @@
 # ADR 0155: garam ships a second Helm chart that renders the gaon kinds
 
-> Status: accepted; built in `deploy/charts/garam-gaon/`
+> Status: superseded by
+> [ADR-0170](./0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
+> (`deploy/charts/garam-gaon/` is deleted; was accepted, built in it)
 > Date: 2026-11-13
 
 Drafted for #1850, which reserves this number. It supersedes nothing:
@@ -8,7 +10,7 @@ Drafted for #1850, which reserves this number. It supersedes nothing:
 
 ## Context
 
-[deployment-gaon.md](../deployment-gaon.md) states every object a gaon
+[deployment-gaon.md](https://github.com/garamsh/garam/blob/80c5006e3f3c3e6c68382e674496ac21044c76d8/docs/architecture/deployment-gaon.md) states every object a gaon
 deployment of garam holds, so that aurora can write them from one
 document. Aurora would then own a template of garam's, and the
 document and the template would drift.

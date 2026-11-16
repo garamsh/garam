@@ -1,3 +1,0 @@
-# An issuer identity.ParseIssuer refuses: the path is exactly /api.
-identity:
-  issuer: https://garam.example/api/

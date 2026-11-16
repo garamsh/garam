@@ -1,3 +1,0 @@
-machine:
-  service:
-    loadBalancerIP: 192.0.2.10

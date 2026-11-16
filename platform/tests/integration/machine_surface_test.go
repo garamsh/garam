@@ -285,8 +285,8 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 
 // TestMachineSurface_ADeniedSendStoresNothingForItsRecipient carries
 // what the machine listener does with a policy service's denial inside
-// the sender's organization (ADR-0024, ADR-0168), against real Postgres.
-// Which policy denies a send, and whom it attaches to, is the service's
+// the sender's organization (ADR-0024, ADR-0168), against real
+// Postgres. Which policy denies a send, and whom it attaches to, is the service's
 // and is held by its own suites; the service here is a double that
 // denies one pair once told to.
 //

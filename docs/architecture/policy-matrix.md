@@ -18,8 +18,8 @@ authorization question differently, as measured by the suite in
 
 | | Count |
 |---|---|
-| Questions asked | 1723 |
-| Agreeing: both decided, the same answer | 1713 |
+| Questions asked | 1716 |
+| Agreeing: both decided, the same answer | 1706 |
 | Differing: both decided, different answers | 10 |
 | Refused by the service: no decision | 0 |
 
@@ -122,8 +122,10 @@ organization and across it.
   every one of the three organizations.
 - **Excluded.** `iam:agent.activate` and `iam:permit.write` are not
   in the organization actions the check route offers, so they are not
-  asked. `iam:message.send` is asked through sends alone. The
-  `cowork` actions are the service's and cowork's.
+  asked. `iam:message.send` is not asked of the platform: the machine
+  listener has no platform decision for a send (ADR-0168), so the
+  matrix asks the service through the listener instead (§What a send
+  is asked). The `cowork` actions are the service's and cowork's.
 
 **How the platform is asked.**
 
@@ -133,12 +135,6 @@ organization and across it.
 - The operator through the grant's own coverage test, within its
   organization, and deny otherwise.
 - An agent's non-send actions as deny: no route admits one.
-- A send through the real machine listener. A send no consent covers
-  is answered 201 with garam's refusal stored as a message from the
-  recipient (ADR-0013), so the matrix reads the stored sender: the
-  sender asked is allow, the recipient is deny. Pairs: A to its second
-  agent, A to B and B to A (mutual consent), and every pair with C,
-  which consents to nothing.
 
 **How the service is asked.** `Evaluations` in batches of 500, as the
 caller `platform`.
@@ -157,6 +153,27 @@ names `localhost` and `127.0.0.1`, so the suite dials the published
 address and overrides no authority. The CA and the signing key come
 from `POLICY_LOCAL_DIR`, where the stack leaves them
 (`deploy/local/README.md` §policy).
+
+## What a send is asked
+
+Since ADR-0168 the machine listener's send is the policy service's
+decision, so there is no platform answer to compare and the matrix
+holds no send row. The suite drives the real machine listener against
+the real service instead and reads each answer off the message the
+listener stores: one stored to the recipient is an allow, and one
+stored to the sender from the recipient is garam's refusal.
+
+- A send inside the organization to a second agent is stored.
+- A send across the boundary is stored where both organizations'
+  halves of the consent stand, and refused where one organization
+  consents to nothing.
+- A send to an agent the service does not hold is refused across the
+  boundary and stored inside it, where garam admits it without asking
+  as the routing failure ADR-0013 keeps storable.
+- A send to an organization is refused across the boundary.
+- A refusal carries one text for every case, so a missing consent and
+  an absent agent read alike.
+- After one organization withdraws its half, the same send is refused.
 
 ## Non-agent senders on the machine listener
 

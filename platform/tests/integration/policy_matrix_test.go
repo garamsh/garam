@@ -94,7 +94,6 @@ const (
 	howRefused how = "route refused a non-member"
 	howGrant   how = "delegation grant"
 	howNoRoute how = "no route"
-	howMachine how = "machine send"
 )
 
 // row is one question and the two engines' answers.
@@ -190,7 +189,7 @@ func TestPolicyMatrix(t *testing.T) {
 	client := policyv1.NewPolicyServiceClient(conn)
 	service := decisiongrpc.New(client)
 
-	m := seedMatrix(t, p)
+	m := seedMatrix(t, p, service)
 	deliverAll(t, p, feedpg.NewStore(p), feedgrpc.NewSender(client))
 
 	rows := m.askPlatform(t)
@@ -213,6 +212,7 @@ func TestPolicyMatrix(t *testing.T) {
 
 	probeAgrees(t, ctx, service, rows)
 	m.assertNoNonAgentSender(t)
+	m.assertSendsAreTheServicesDecision(t, p, feedpg.NewStore(p), feedgrpc.NewSender(client))
 
 	fresh, gone := compareDifferences(differenceKeys(found), listedKeys(t, matrixDifferences))
 	for _, k := range fresh {
@@ -324,7 +324,7 @@ func randomSuffix(t *testing.T) string {
 // seedMatrix writes the state through the platform's own stores and
 // listeners: three organizations, the first holding every kind of
 // subject, the second consenting to it and the third not.
-func seedMatrix(t *testing.T, p *pgxpool.Pool) *matrix {
+func seedMatrix(t *testing.T, p *pgxpool.Pool, service policydecision.Service) *matrix {
 	t.Helper()
 	ctx := context.Background()
 	sfx := randomSuffix(t)
@@ -387,7 +387,7 @@ func seedMatrix(t *testing.T, p *pgxpool.Pool) *matrix {
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
 	policies, engine := policyEngine(t, p)
-	m.machine = machineListener(t, p, sealer, engine)
+	m.machine = machineListenerDeciding(t, p, sealer, engine, nil, service)
 	for _, label := range []string{"A", "B", "C"} {
 		op := operatorClient(t, p, m.machine, scopedGRN(m.slug[label], agent.ServiceTypeOperator, "op"))
 		m.operators[label] = op
@@ -549,11 +549,6 @@ func (m *matrix) askPlatform(t *testing.T) []row {
 			m.decide(t, s, r, rows, pending)
 		}
 	}
-	for _, s := range []struct{ from, to string }{
-		{"A", "A2"}, {"A", "B"}, {"A", "C"}, {"B", "A"}, {"B", "C"}, {"C", "A"}, {"C", "B"},
-	} {
-		rows = append(rows, m.send(t, s.from, s.to))
-	}
 	return rows
 }
 
@@ -604,37 +599,6 @@ func (m *matrix) operatorAnswer(action string, sameOrg bool) (answer, how) {
 		return answerAllow, howGrant
 	}
 	return answerDeny, howGrant
-}
-
-// send asks the machine listener to carry one message from the agent
-// of one organization to another and reads the answer off its status.
-func (m *matrix) send(t *testing.T, from, to string) row {
-	t.Helper()
-	recipient := m.agents[to]
-	status, body := machineSend(t, m.senders[from], http.MethodPost, m.machine+"/messages",
-		submissionTo(recipient, "mx-"+from+"-"+to))
-	r := row{
-		key:      from + ".agent iam:message.send " + to + ".agent",
-		question: policydecision.Question{Subject: m.agents[from], Action: "iam:message.send", Resource: recipient},
-		via:      howMachine,
-	}
-	switch status {
-	case http.StatusCreated:
-		// A send across a boundary no consent covers is answered 201
-		// with garam's refusal, stored as a message from the recipient
-		// to the sender (ADR-0013), so the sender named is the answer.
-		var stored machinegen.Message
-		require.NoError(t, json.Unmarshal(body, &stored))
-		r.platform = answerDeny
-		if stored.Sender == m.agents[from].String() {
-			r.platform = answerAllow
-		}
-	case http.StatusForbidden:
-		r.platform = answerDeny
-	default:
-		t.Fatalf("send %s to %s answered %d: %s", from, to, status, body)
-	}
-	return r
 }
 
 // askService asks the policy service every question in batches.
@@ -698,4 +662,64 @@ func (m *matrix) assertNoNonAgentSender(t *testing.T) {
 	status, body = machineSend(t, m.senders["A"], http.MethodPost, m.machine+"/messages",
 		submissionTo(m.agents["A2"], "mx-agent-control"))
 	assert.Equal(t, http.StatusCreated, status, string(body))
+}
+
+// post sends one message from the agent of from to recipient and
+// answers the message the listener stored and returned.
+func (m *matrix) post(t *testing.T, from string, recipient grn.GRN, key string) machinegen.Message {
+	t.Helper()
+	status, body := machineSend(t, m.senders[from], http.MethodPost, m.machine+"/messages",
+		submissionTo(recipient, key))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var stored machinegen.Message
+	require.NoError(t, json.Unmarshal(body, &stored))
+	return stored
+}
+
+// assertSendsAreTheServicesDecision drives the machine listener's send
+// against the real policy service (ADR-0168). The answer is read off the
+// message the listener returns: a message stored to the recipient is
+// an allow, and one stored to the sender from the recipient is garam's
+// refusal.
+//
+// The pair that consents and the pair that does not are the controls of
+// each other, and the refusals of a missing consent and of an agent the
+// service does not know read alike, so a sender learns nothing about
+// the other organization from the text. The withdrawal comes last,
+// because it changes what the service holds.
+func (m *matrix) assertSendsAreTheServicesDecision(t *testing.T, p *pgxpool.Pool, store *feedpg.Store, sender policyfeed.Sender) {
+	t.Helper()
+	ctx := context.Background()
+	from := m.agents["A"]
+	stored := func(got machinegen.Message, recipient grn.GRN) {
+		t.Helper()
+		assert.Equal(t, recipient.String(), got.Recipient, "the message was not stored to the recipient")
+		assert.Equal(t, from.String(), got.Sender)
+	}
+	refused := func(got machinegen.Message, recipient grn.GRN) {
+		t.Helper()
+		assert.Equal(t, from.String(), got.Recipient, "the refusal returns to the sender")
+		assert.Equal(t, recipient.String(), got.Sender, "written under the intended recipient's identity")
+		assert.Equal(t, refusalText(recipient), got.Body)
+	}
+
+	stored(m.post(t, "A", m.agents["A2"], "mx-send-same-org"), m.agents["A2"])
+	stored(m.post(t, "A", m.agents["B"], "mx-send-consenting"), m.agents["B"])
+	refused(m.post(t, "A", m.agents["C"], "mx-send-no-consent"), m.agents["C"])
+
+	ghostHere := grn.New(m.slug["A"], agent.ServiceType, "ghost"+randomSuffix(t))
+	routing := m.post(t, "A", ghostHere, "mx-send-ghost-inside")
+	stored(routing, ghostHere)
+
+	ghostOver := grn.New(m.slug["B"], agent.ServiceType, "ghost"+randomSuffix(t))
+	refused(m.post(t, "A", ghostOver, "mx-send-ghost-consenting"), ghostOver)
+	ghostElsewhere := grn.New(m.slug["C"], agent.ServiceType, "ghost"+randomSuffix(t))
+	refused(m.post(t, "A", ghostElsewhere, "mx-send-ghost-no-consent"), ghostElsewhere)
+
+	orgRecipient := orgRootGRN(m.slug["B"])
+	refused(m.post(t, "A", orgRecipient, "mx-send-org"), orgRecipient)
+
+	require.NoError(t, messagepg.New(p).Withdraw(ctx, orgRootGRN(m.slug["B"]), orgRootGRN(m.slug["A"])))
+	deliverAll(t, p, store, sender)
+	refused(m.post(t, "A", m.agents["B"], "mx-send-withdrawn"), m.agents["B"])
 }

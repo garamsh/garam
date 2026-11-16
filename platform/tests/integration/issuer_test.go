@@ -121,7 +121,7 @@ func (s *issuerStack) machineListener(t *testing.T, issuer *identity.Issuer) str
 		Admitter: identitypg.New(s.pool),
 	})
 	handler = machinegen.HandlerWithOptions(
-		machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).WithIdentity(issuer, principals),
+		machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).WithIdentity(issuer, principals),
 		machinegen.StdHTTPServerOptions{ErrorHandlerFunc: machineapi.BindingError})
 	return listener.URL
 }

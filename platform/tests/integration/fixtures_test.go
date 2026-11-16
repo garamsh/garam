@@ -54,6 +54,7 @@ import (
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/wire"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
@@ -417,6 +418,28 @@ func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, *grpc
 	return authz.NewPolicyGRPCServer(store, cache), conn
 }
 
+// sameOrganizationSends is the policydecision.Service the default
+// suite's machine listener asks about a send, in the place of the
+// policy service this suite does not run (ADR-0168). It answers what
+// the service answers for the pairs the suite sends between: allow
+// where sender and recipient share an organization, deny across the
+// boundary, where no consent relation is held. The suite tagged
+// policymatrix asks the real service instead.
+type sameOrganizationSends struct{ policydecision.Service }
+
+func (sameOrganizationSends) Evaluate(_ context.Context, q policydecision.Question) (policydecision.Decision, error) {
+	return policydecision.Decision{Allowed: q.Subject.Organization == q.Resource.Organization}, nil
+}
+
+// refusalText is the body of the refusal garam stores to a sender whose
+// message to recipient the policy service did not allow across the
+// boundary, or whose recipient is no agent (ADR-0168). It names neither
+// consent nor absence, so the two read alike.
+func refusalText(recipient grn.GRN) string {
+	return "garam could not deliver your message to " + recipient.String() +
+		": a message to this recipient is not permitted"
+}
+
 // testIssuer is the issuer every listener here signs messages as
 // (ADR-0101). No verifier dials it: a test reads the key set from the
 // listener's own address.
@@ -443,6 +466,14 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grp
 // (ADR-0104).
 func machineListenerHolding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface, signing message.Custodian) string {
 	t.Helper()
+	return machineListenerDeciding(t, p, sealer, engine, signing, sameOrganizationSends{})
+}
+
+// machineListenerDeciding is machineListenerHolding with the sends it
+// serves decided by decisions: the double the default suite uses, or
+// the real policy service where the suite runs against one.
+func machineListenerDeciding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface, signing message.Custodian, decisions policydecision.Service) string {
+	t.Helper()
 	presented := loopbackCertificate(t)
 	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
 		Sealer:           sealer,
@@ -452,6 +483,7 @@ func machineListenerHolding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, eng
 		ServerRoot:       certificatePEM(presented),
 		Delivery:         briefDelivery(),
 		Engine:           engine,
+		Decisions:        decisions,
 		Logger:           slog.New(slog.NewJSONHandler(io.Discard, nil)),
 		TokenURL:         testTokenURL,
 	})

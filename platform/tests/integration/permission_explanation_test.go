@@ -75,7 +75,7 @@ func newExplainStack(t *testing.T) *explainStack {
 
 	srv := api.NewServer(users, orgs, agents, nil, messagepg.New(p), nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), cli.NewStandaloneService(p, engine),
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, newCurrentDecisions(p)), cli.NewStandaloneService(p, newCurrentDecisions(p)),
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

@@ -68,7 +68,7 @@ func newCheckStack(t *testing.T) *checkStack {
 
 	srv := api.NewServer(users, orgs, nil, nil, messagepg.New(p), nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil, api.Config{SessionTTL: time.Hour})
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, newCurrentDecisions(p)), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	return &checkStack{url: browser.URL, acme: acme, owner: owner, ownerGRN: ownerGRN, member: member,

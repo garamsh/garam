@@ -127,7 +127,7 @@ func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, polic
 		Certificate: presented,
 		ServerRoot:  certificatePEM(presented),
 		Delivery:    briefDelivery(),
-		Engine:      engine,
+		Decisions:   newCurrentDecisions(p),
 		Logger:      slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		Now:         clock.now,
 		TokenURL:    testTokenURL,

@@ -387,7 +387,7 @@ func seedMatrix(t *testing.T, p *pgxpool.Pool, service policydecision.Service) *
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
 	policies, engine := policyEngine(t, p)
-	m.machine = machineListenerDeciding(t, p, sealer, engine, nil, service)
+	m.machine = machineListenerDeciding(t, p, sealer, nil, service)
 	for _, label := range []string{"A", "B", "C"} {
 		op := operatorClient(t, p, m.machine, scopedGRN(m.slug[label], agent.ServiceTypeOperator, "op"))
 		m.operators[label] = op
@@ -427,7 +427,7 @@ func seedMatrix(t *testing.T, p *pgxpool.Pool, service policydecision.Service) *
 
 	srv := api.NewServer(users, orgs, agents, nil, messagepg.New(p), nil, sessions,
 		nil, nil, nil, nil, api.NewGRPCEvaluator(engine), nil, nil,
-		cli.NewAuthorityService(p, engine), cli.NewStandaloneService(p, engine),
+		cli.NewAuthorityService(p, service), cli.NewStandaloneService(p, service),
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv,
 		apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))

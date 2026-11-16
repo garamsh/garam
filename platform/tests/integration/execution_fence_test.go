@@ -114,9 +114,10 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 		return &http.Cookie{Name: "garam_session", Value: token}
 	}
 
+	decisions := newCurrentDecisions(p)
 	browserSrv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), cli.NewStandaloneService(p, engine),
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, decisions), cli.NewStandaloneService(p, decisions),
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(browserSrv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
@@ -127,7 +128,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 		pool: p, browser: browser.URL,
 		config: cli.MachineConfig{
 			Sealer: sealer, Issuer: testIssuer, Certificate: presented, ServerRoot: certificatePEM(presented),
-			Delivery: briefDelivery(), Engine: engine, Decisions: sameOrganizationSends{},
+			Delivery: briefDelivery(), Decisions: decisions,
 			Logger:   slog.New(slog.NewJSONHandler(io.Discard, nil)),
 			TokenURL: testTokenURL,
 		},

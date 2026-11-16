@@ -79,8 +79,7 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
 
-	_, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	url := machineListener(t, p, sealer)
 	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
@@ -190,8 +189,8 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
 
-	policies, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	policies, _ := policyEngine(t, p)
+	url := machineListener(t, p, sealer)
 	acmeOperator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	globexOperator := operatorClient(t, p, url, scopedGRN("globex", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, acmeOperator)
@@ -310,8 +309,7 @@ func TestMachineSurface_ADeniedSendStoresNothingForItsRecipient(t *testing.T) {
 	require.NoError(t, err)
 
 	decisions := &sendsRefusing{}
-	_, engine := policyEngine(t, p)
-	url := machineListenerDeciding(t, p, sealer, engine, nil, decisions)
+	url := machineListenerDeciding(t, p, sealer, nil, decisions)
 	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	_, other := provisioned(t, url, operator)
@@ -389,8 +387,8 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
 
-	policies, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	policies, _ := policyEngine(t, p)
+	url := machineListener(t, p, sealer)
 	alphaOperator := operatorClient(t, p, url, scopedGRN("alpha", agent.ServiceTypeOperator, "one"))
 	betaOperator := operatorClient(t, p, url, scopedGRN("beta", agent.ServiceTypeOperator, "one"))
 	foreignGRN, foreign := provisioned(t, url, alphaOperator)

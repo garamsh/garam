@@ -68,7 +68,7 @@ func newDeviceStack(t *testing.T, options ...func(*pgxpool.Pool, *api.Server)) *
 
 	srv := api.NewServer(users, orgs, agentpg.New(p), operatorpg.New(p), messagepg.New(p), nil,
 		sessions, nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil,
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, newCurrentDecisions(p)), nil,
 		api.Config{SessionTTL: time.Hour}).WithDeviceGrant(authnpg.NewDeviceStore(p))
 	for _, option := range options {
 		option(p, srv)

@@ -41,8 +41,7 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy(t *testing
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	_, sealer := keyEncryptionKey(t)
-	_, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	url := machineListener(t, p, sealer)
 	store := operatorpg.New(p)
 
 	keyed := register(t, store, "keyed")

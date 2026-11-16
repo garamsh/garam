@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
@@ -55,6 +56,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/policydecision"
+	"github.com/garamsh/garam/platform/internal/user"
 	"github.com/garamsh/garam/platform/internal/wire"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
@@ -462,6 +464,83 @@ func (s *sendsRefusing) Evaluate(ctx context.Context, q policydecision.Question)
 	return s.sameOrganizationSends.Evaluate(ctx, q)
 }
 
+// currentDecisions is the policydecision.Service the default suite's
+// listeners and browser-facing authority ask about what a user or an
+// operator may do now (ADR-0146 items 14 and 15), in the place of the
+// policy service this suite does not run. A question that does not ask
+// read-current is a send, answered as sameOrganizationSends answers it.
+//
+// It answers a user by the role the membership holds now, an operator
+// as allowed, which is what the service answers for one holding the
+// operation the platform has checked its grant covers, and either as
+// denied where a test forbids the pair. What the service itself reads,
+// the fed operations, the guardrails and the role links, is held by the
+// suite tagged policymatrix against the real service.
+type currentDecisions struct {
+	policydecision.Service
+	orgs org.Store
+
+	mu        sync.Mutex
+	forbidden map[[2]string]bool
+	failure   error
+	asked     []policydecision.Question
+}
+
+func newCurrentDecisions(p *pgxpool.Pool) *currentDecisions {
+	return &currentDecisions{Service: sameOrganizationSends{}, orgs: orgpg.New(p)}
+}
+
+// forbid makes every question of subject about action a denial.
+func (c *currentDecisions) forbid(subject grn.GRN, action string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.forbidden == nil {
+		c.forbidden = map[[2]string]bool{}
+	}
+	c.forbidden[[2]string{subject.String(), action}] = true
+}
+
+// failWith makes every read-current question fail with err.
+func (c *currentDecisions) failWith(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.failure = err
+}
+
+// currentQuestions are the read-current questions asked so far.
+func (c *currentDecisions) currentQuestions() []policydecision.Question {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]policydecision.Question(nil), c.asked...)
+}
+
+func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {
+	if !q.Current {
+		return c.Service.Evaluate(ctx, q)
+	}
+	c.mu.Lock()
+	c.asked = append(c.asked, q)
+	failure, forbidden := c.failure, c.forbidden[[2]string{q.Subject.String(), q.Action}]
+	c.mu.Unlock()
+	switch {
+	case failure != nil:
+		return policydecision.Decision{}, failure
+	case forbidden:
+		return policydecision.Decision{}, nil
+	case q.Subject.ServiceType != user.ServiceType:
+		return policydecision.Decision{Allowed: true}, nil
+	}
+	m, err := c.orgs.GetMember(ctx, grn.Org(q.Resource.Organization), q.Subject)
+	if errorx.IsKind(err, errorx.KindNotFound) {
+		return policydecision.Decision{}, nil
+	}
+	if err != nil {
+		return policydecision.Decision{}, err
+	}
+	granted := authz.Statement{Action: m.Role.Actions(), Resource: []string{"*"}}
+	return policydecision.Decision{Allowed: granted.Matches(q.Action, q.Resource.String())}, nil
+}
+
 // refusalText is the body of the refusal garam stores to a sender whose
 // message to recipient the policy service did not allow across the
 // boundary, or whose recipient is no agent (ADR-0168). It names neither
@@ -484,26 +563,26 @@ const testTokenURL = "https://garam.test/oauth/token"
 
 // machineListener serves the server `garam serve machine` builds,
 // over the stores Postgres holds, and returns its URL. What the command
-// reads from its configuration is supplied here instead: the sealer and
-// engine the caller holds, a self-signed listener certificate, and
-// delivery waits shortened to what a test can sit through.
-func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface) string {
+// reads from its configuration is supplied here instead: the sealer the
+// caller holds, a self-signed listener certificate, and delivery waits
+// shortened to what a test can sit through.
+func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer) string {
 	t.Helper()
-	return machineListenerHolding(t, p, sealer, engine, nil)
+	return machineListenerHolding(t, p, sealer, nil)
 }
 
 // machineListenerHolding is machineListener with its message signing
 // keys created in signing, or sealed under sealer where signing is nil
 // (ADR-0104).
-func machineListenerHolding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface, signing message.Custodian) string {
+func machineListenerHolding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, signing message.Custodian) string {
 	t.Helper()
-	return machineListenerDeciding(t, p, sealer, engine, signing, sameOrganizationSends{})
+	return machineListenerDeciding(t, p, sealer, signing, newCurrentDecisions(p))
 }
 
 // machineListenerDeciding is machineListenerHolding with the sends it
 // serves decided by decisions: the double the default suite uses, or
 // the real policy service where the suite runs against one.
-func machineListenerDeciding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface, signing message.Custodian, decisions policydecision.Service) string {
+func machineListenerDeciding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, signing message.Custodian, decisions policydecision.Service) string {
 	t.Helper()
 	presented := loopbackCertificate(t)
 	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
@@ -513,7 +592,6 @@ func machineListenerDeciding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, en
 		Certificate:      presented,
 		ServerRoot:       certificatePEM(presented),
 		Delivery:         briefDelivery(),
-		Engine:           engine,
 		Decisions:        decisions,
 		Logger:           slog.New(slog.NewJSONHandler(io.Discard, nil)),
 		TokenURL:         testTokenURL,

@@ -90,7 +90,6 @@ export {
   type IamPolicyBody,
   type IamPolicyDetail,
   type IamPolicyKind,
-  type IamPolicyVersion,
   type IamRoleLink,
   type PolicyStatus,
 } from "./api/policies";

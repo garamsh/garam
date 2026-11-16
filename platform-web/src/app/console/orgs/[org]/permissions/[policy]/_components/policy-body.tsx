@@ -6,28 +6,23 @@ const SCOPE_LABEL: Record<IamRoleLink["scope"], string> = {
   "team-or-project": "Team or project",
 };
 
-/** What the body says where it holds nothing to show. */
-const NO_BODY = "This version holds no body.";
-
 /**
  * A version's body as text, for comparing two of them line by line:
  * the Cedar text of a guardrail or a permit, or a role link's four
- * facts. Null where the body holds what its kind should.
+ * facts.
  */
-export function bodyText(body: IamPolicyBody): string | null {
+export function bodyText(body: IamPolicyBody): string {
   switch (body.kind) {
     case "role-link":
-      return body.roleLink === undefined
-        ? null
-        : [
-            `role: ${body.roleLink.role}`,
-            `scope: ${body.roleLink.scope}`,
-            `principal: ${body.roleLink.principal}`,
-            `resource: ${body.roleLink.resource}`,
-          ].join("\n");
+      return [
+        `role: ${body.roleLink.role}`,
+        `scope: ${body.roleLink.scope}`,
+        `principal: ${body.roleLink.principal}`,
+        `resource: ${body.roleLink.resource}`,
+      ].join("\n");
     case "guardrail":
     case "permit":
-      return body.text ?? null;
+      return body.text;
   }
 }
 
@@ -39,9 +34,7 @@ export function bodyText(body: IamPolicyBody): string | null {
 export function PolicyBody({ body }: { body: IamPolicyBody }) {
   switch (body.kind) {
     case "role-link":
-      return body.roleLink === undefined ? (
-        <p className="text-muted-foreground">{NO_BODY}</p>
-      ) : (
+      return (
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <div className="flex flex-col">
             <dt className="text-xs text-muted-foreground">Role</dt>
@@ -67,9 +60,7 @@ export function PolicyBody({ body }: { body: IamPolicyBody }) {
       );
     case "guardrail":
     case "permit":
-      return body.text === undefined ? (
-        <p className="text-muted-foreground">{NO_BODY}</p>
-      ) : (
+      return (
         <pre
           tabIndex={0}
           aria-label="Cedar text"

@@ -127,13 +127,13 @@ export const engineeringMembers: GroupMember[] = [
   { memberGrn: reportedAgent.grn },
 ];
 
-/** The identifier of `denyDeletes`, as the policy service issues one. */
+/** The identifier of `denyDeletes`, as the policy service issues it. */
 export const DENY_DELETES_ID = "p-d1e2f3a4b5c6d7e8d1e2f3a4b5c6d7e8";
 
 /** The identifier of `engineeringAdmins`. */
 export const ENGINEERING_ADMINS_ID = "p-0a1b2c3d4e5f60710a1b2c3d4e5f6071";
 
-/** An active guardrail of Acme, deciding by the first of two versions. */
+/** An active guardrail of Acme, deciding by its first of two versions. */
 export const denyDeletes: IamPolicyDetail = {
   policy: {
     id: DENY_DELETES_ID,
@@ -154,7 +154,7 @@ export const denyDeletes: IamPolicyDetail = {
   })),
 };
 
-/** A draft role link: Engineering holds admin over the frontend project. */
+/** A draft role link: Engineering is admin of the frontend project. */
 export const engineeringAdmins: IamPolicyDetail = {
   policy: {
     id: ENGINEERING_ADMINS_ID,
@@ -343,8 +343,20 @@ const PermissionCheckRequest = z.object({
 });
 
 /**
+ * The actions the platform checks only on a policy, and refuses on the
+ * organization (permission_check.go), with the whole request.
+ */
+const ON_A_POLICY = [
+  "iam:policy.update",
+  "iam:policy.attach",
+  "iam:policy.detach",
+  "iam:policy.delete",
+];
+
+/**
  * Answers Acme's permission checks with `decide(action)` for each pair,
- * in the order asked, as the server does.
+ * in the order asked, as the server does, and refuses a request that
+ * pairs a policy's action with no policy, 400.
  */
 export function answerPermissionChecks(
   decide: (action: string) => "allow" | "deny" | "unknown",
@@ -353,6 +365,20 @@ export function answerPermissionChecks(
     `${API_URL}/orgs/acme/permission-checks`,
     async ({ request }) => {
       const { checks } = PermissionCheckRequest.parse(await request.json());
+      const misplaced = checks.find(
+        (check) =>
+          ON_A_POLICY.includes(check.action) &&
+          check.resource?.type !== "policy",
+      );
+      if (misplaced) {
+        return HttpResponse.json(
+          {
+            kind: "invalid_argument",
+            message: `${misplaced.action} is not checked on organization`,
+          },
+          { status: 400 },
+        );
+      }
       return HttpResponse.json({
         results: checks.map((check) => ({
           ...check,

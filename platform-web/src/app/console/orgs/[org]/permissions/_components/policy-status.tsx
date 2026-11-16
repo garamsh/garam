@@ -7,8 +7,8 @@ export const POLICY_STATUS_LABEL: Record<PolicyStatus, string> = {
   active: "Active",
 };
 
-// Only an active policy takes part in decisions, so only it reads as live;
-// a draft is inert.
+// Only an active policy takes part in decisions, so only it reads as
+// live; a draft is inert.
 const TONE: Record<PolicyStatus, StatusTone> = {
   active: "ok",
   draft: "neutral",

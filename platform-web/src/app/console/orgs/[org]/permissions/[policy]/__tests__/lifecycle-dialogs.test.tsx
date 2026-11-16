@@ -9,12 +9,18 @@ import { DeletePolicyDialog } from "@/app/console/orgs/[org]/permissions/[policy
 import { MakeDefaultDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/make-default-dialog";
 import { Outcome, OutcomeProvider } from "@/app/console/_components/outcome";
 import { REFUSAL_COPY } from "@garam/platform-sdk-ts/refusal-copy";
-import { API_URL, DENY_DELETES_ID } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  DENY_DELETES_ID,
+  ENGINEERING_ADMINS_ID,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const DENY = `${API_URL}/orgs/acme/iam-policies/${DENY_DELETES_ID}`;
+/** The policy the same write is accepted for: the control. */
+const ACCEPTED = `${API_URL}/orgs/acme/iam-policies/${ENGINEERING_ADMINS_ID}`;
 const V1 =
   'forbid (principal, action == Action::"iam:project.delete", resource);';
 const V2 =
@@ -65,19 +71,24 @@ describe("activate policy dialog", () => {
           { status: 403 },
         ),
       ),
+      http.post(
+        `${ACCEPTED}/activate`,
+        () => new HttpResponse(null, { status: 204 }),
+      ),
     );
     const user = userEvent.setup();
-    render(
+    const activate = (policy: string) => (
       <OutcomeProvider>
         <Outcome area="lifecycle" />
         <ActivatePolicyDialog
           org="acme"
-          policy={DENY_DELETES_ID}
+          policy={policy}
           policyName="Deny project deletion"
           version={1}
         />
-      </OutcomeProvider>,
+      </OutcomeProvider>
     );
+    const refused = render(activate(DENY_DELETES_ID));
 
     await user.click(screen.getByRole("button", { name: "Activate" }));
     const dialog = await screen.findByRole("alertdialog");
@@ -89,6 +100,18 @@ describe("activate policy dialog", () => {
       REFUSAL_COPY.permissionDenied,
     );
     expect(screen.queryByText("Activated v1")).not.toBeInTheDocument();
+    refused.unmount();
+
+    // The control: the same control for a policy the service accepts
+    // does say it activated, so the absence above is the refusal's.
+    render(activate(ENGINEERING_ADMINS_ID));
+    await user.click(screen.getByRole("button", { name: "Activate" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Activate policy",
+      }),
+    );
+    expect(await screen.findByText("Activated v1")).toBeInTheDocument();
   });
 });
 
@@ -166,14 +189,25 @@ describe("make default dialog", () => {
           { status: 503 },
         ),
       ),
+      http.post(
+        `${ACCEPTED}/rollback`,
+        () => new HttpResponse(null, { status: 204 }),
+      ),
     );
     const user = userEvent.setup();
-    render(
+    const makeDefault = (policy: string) => (
       <OutcomeProvider>
         <Outcome area="versions" />
-        <MakeDefaultDialog {...props} current={1} target={2} active />
-      </OutcomeProvider>,
+        <MakeDefaultDialog
+          {...props}
+          policy={policy}
+          current={1}
+          target={2}
+          active
+        />
+      </OutcomeProvider>
     );
+    const refused = render(makeDefault(DENY_DELETES_ID));
 
     await user.click(screen.getByRole("button", { name: "Make v2 default" }));
     const dialog = await screen.findByRole("alertdialog");
@@ -187,6 +221,21 @@ describe("make default dialog", () => {
     expect(
       screen.queryByText("v2 is now the default."),
     ).not.toBeInTheDocument();
+    refused.unmount();
+
+    // The control: the same control for a policy the service accepts
+    // does say the default moved, so the absence above is the
+    // refusal's.
+    render(makeDefault(ENGINEERING_ADMINS_ID));
+    await user.click(screen.getByRole("button", { name: "Make v2 default" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Make v2 default",
+      }),
+    );
+    expect(
+      await screen.findByText("v2 is now the default."),
+    ).toBeInTheDocument();
   });
 
   it("says nothing applies yet for a draft, and decides at once for an active policy", async () => {

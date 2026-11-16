@@ -743,7 +743,8 @@ ADRs:
   policy operations, any stored version made the default, a stated and
   confirmed scope before a policy evaluates, and a subject's policies
   sorted by source with what was not read marked unchecked; its archive
-  and "no delete" are superseded by 0117
+  and "no delete" are superseded by 0117, and the console no longer
+  manages attachments or creates old-engine documents (0169, #1975)
 - [0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)
   — an operator carries a name and description beside its GRN, changed
   on `iam:operator.update` and moving nothing it authenticates or enrols

@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { garamFetchAuthenticated, parserFor } from "@/lib/garam";
+import {
+  GaramApiError,
+  GaramUnreachableError,
+  garamFetchAuthenticated,
+  parserFor,
+} from "@/lib/garam";
 import type { components } from "@garam/platform-sdk-ts/api";
 
 import { orgPath, refusableRead, type RefusableRead } from "./orgs";
@@ -17,12 +22,25 @@ export type IamPolicyKind = components["schemas"]["IamPolicyKind"];
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
 /** What a role link says: who holds which role over what. */
 export type IamRoleLink = components["schemas"]["IamRoleLink"];
-/** What one version holds: Cedar text, or a role link. */
-export type IamPolicyBody = components["schemas"]["IamPolicyBody"];
-/** One stored version of a policy. */
-export type IamPolicyVersion = components["schemas"]["IamPolicyVersion"];
+/**
+ * What one version holds: a role link's facts, or the Cedar text of a
+ * guardrail or a permit. The specification leaves both optional beside
+ * the kind; the policy service sends the one the kind names, and a
+ * body that does not is refused at the seam.
+ */
+export type IamPolicyBody =
+  | { kind: "role-link"; roleLink: IamRoleLink }
+  | { kind: "guardrail" | "permit"; text: string };
 /** A policy with every version it holds, oldest first. */
-export type IamPolicyDetail = components["schemas"]["IamPolicyDetail"];
+export type IamPolicyDetail = Omit<
+  components["schemas"]["IamPolicyDetail"],
+  "versions"
+> & {
+  versions: (Omit<
+    components["schemas"]["IamPolicyDetail"]["versions"][number],
+    "body"
+  > & { body: IamPolicyBody })[];
+};
 
 const KindParser = parserFor<IamPolicyKind>()(
   z.enum(["role-link", "guardrail", "permit"]),
@@ -49,26 +67,42 @@ const IamRoleLinkParser = parserFor<IamRoleLink>()(
   }),
 );
 
-const IamPolicyBodyParser = parserFor<IamPolicyBody>()(
-  z.object({
-    kind: KindParser,
-    text: z.string().optional(),
-    roleLink: IamRoleLinkParser.optional(),
-  }),
+// Narrower than the specification on purpose (see `IamPolicyBody`), so
+// it is typed by what it produces rather than by `parserFor`.
+const IamPolicyBodyParser: z.ZodType<IamPolicyBody> = z.discriminatedUnion(
+  "kind",
+  [
+    z.object({ kind: z.literal("role-link"), roleLink: IamRoleLinkParser }),
+    z.object({ kind: z.enum(["guardrail", "permit"]), text: z.string() }),
+  ],
 );
 
-const IamPolicyDetailParser = parserFor<IamPolicyDetail>()(
-  z.object({
-    policy: IamPolicyParser,
-    versions: z.array(
-      z.object({
-        version: z.number().int().min(1),
-        body: IamPolicyBodyParser,
-        createdBy: z.string(),
-      }),
-    ),
-  }),
-);
+const IamPolicyDetailParser: z.ZodType<IamPolicyDetail> = z.object({
+  policy: IamPolicyParser,
+  versions: z.array(
+    z.object({
+      version: z.number().int().min(1),
+      body: IamPolicyBodyParser,
+      createdBy: z.string(),
+    }),
+  ),
+});
+
+/**
+ * A read of the policy service. It answers 504 when it did not answer
+ * in time, which is an outage the page says so and not a refusal, so
+ * it is read as the service being unreachable.
+ */
+async function viaPolicyService<T>(read: Promise<T>): Promise<T> {
+  try {
+    return await read;
+  } catch (error) {
+    if (error instanceof GaramApiError && error.status === 504) {
+      throw new GaramUnreachableError({ cause: error });
+    }
+    throw error;
+  }
+}
 
 /**
  * An organization's policies. Reading them is the policy service's
@@ -80,9 +114,11 @@ export function listIamPolicies(
   org: string,
 ): Promise<RefusableRead<IamPolicy[]>> {
   return refusableRead(
-    garamFetchAuthenticated(
-      `/orgs/${orgPath(org)}/iam-policies`,
-      z.array(IamPolicyParser),
+    viaPolicyService(
+      garamFetchAuthenticated(
+        `/orgs/${orgPath(org)}/iam-policies`,
+        z.array(IamPolicyParser),
+      ),
     ),
   );
 }
@@ -96,9 +132,11 @@ export function getIamPolicy(
   policy: string,
 ): Promise<RefusableRead<IamPolicyDetail>> {
   return refusableRead(
-    garamFetchAuthenticated(
-      `/orgs/${orgPath(org)}/iam-policies/${orgPath(policy)}`,
-      IamPolicyDetailParser,
+    viaPolicyService(
+      garamFetchAuthenticated(
+        `/orgs/${orgPath(org)}/iam-policies/${orgPath(policy)}`,
+        IamPolicyDetailParser,
+      ),
     ),
   );
 }

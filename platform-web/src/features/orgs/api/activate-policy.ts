@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { garamFetchAuthenticated, refusal } from "@/lib/garam";
+import { garamFetchAuthenticated } from "@/lib/garam";
 
-/** What an activation control has to show: nothing yet, or a refusal. */
+import { DEFAULT_MOVED, policyRefusal } from "./policy-refusal";
+
+/** What an activation control shows: nothing yet, or a refusal. */
 export type ActivatePolicyState =
   { status: "idle" } | { status: "error"; message: string };
 
@@ -42,7 +44,7 @@ export async function activatePolicy(
       { method: "POST" },
     );
   } catch (error) {
-    return refusal(error);
+    return policyRefusal(error, DEFAULT_MOVED);
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

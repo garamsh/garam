@@ -268,6 +268,46 @@ test.describe("permissions", () => {
     // A refused list is not an empty one.
     await expect(page.getByText("No policies", { exact: true })).toBeHidden();
   });
+
+  test("offers a member no write control on a policy's page", async ({
+    page,
+    context,
+    signedIn,
+    baseURL,
+  }) => {
+    const policy = await createGuardrail(
+      page.request,
+      signedIn,
+      "Deny project deletion",
+    );
+    const policyPage = `/console/orgs/${signedIn.orgSlug}/permissions/${policy}`;
+    // The control: the owner is offered the write and the removal, so
+    // the absence below is the member's and not the page's.
+    await page.goto(policyPage);
+    await expectHydrated(page);
+    await expect(
+      page.getByRole("button", { name: "Activate", exact: true }),
+    ).toBeVisible();
+    await openTab(page, /^Versions/);
+    await expect(
+      page.getByRole("button", { name: "Delete policy", exact: true }),
+    ).toBeVisible();
+
+    const member = await seedMember(signedIn);
+    await context.clearCookies();
+    await holdSession(context, baseURL, member.sessionToken);
+
+    await page.goto(policyPage);
+    await expect(
+      page.getByText("You can't view this policy", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Activate", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Delete policy", exact: true }),
+    ).toHaveCount(0);
+  });
 });
 
 test.describe("permissions accessibility", () => {

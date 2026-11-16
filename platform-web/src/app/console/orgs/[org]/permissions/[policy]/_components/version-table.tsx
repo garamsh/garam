@@ -33,7 +33,7 @@ export type VersionTableContext = {
   org: string;
   policy: string;
   defaultVersion: number;
-  /** The default version's body, or undefined where it was not stored. */
+  /** The default version's body, or undefined if it was not stored. */
   defaultBody: IamPolicyBody | undefined;
   active: boolean;
   /** Whether making a version the default is offered. */
@@ -52,7 +52,7 @@ function CompareDialog({
   const defaultText =
     context.defaultBody === undefined ? null : bodyText(context.defaultBody);
   const text = bodyText(row.body);
-  const diffed = !isDefault && defaultText !== null && text !== null;
+  const diffed = !isDefault && defaultText !== null;
   return (
     <Dialog>
       <DialogTrigger asChild>

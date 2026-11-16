@@ -3,10 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { garamFetchAuthenticated, refusal } from "@/lib/garam";
+import { garamFetchAuthenticated } from "@/lib/garam";
 import type { components } from "@garam/platform-sdk-ts/api";
 
-/** What a make-default control has to show: nothing yet, or a refusal. */
+import { DEFAULT_MOVED, policyRefusal } from "./policy-refusal";
+
+/** What a make-default control shows: nothing yet, or a refusal. */
 export type RollbackPolicyState =
   { status: "idle" } | { status: "error"; message: string };
 
@@ -21,8 +23,8 @@ const Schema = z.object({
  * while active. The operation is garam's rollback, which accepts any
  * stored version, older or newer (ADR-0169).
  *
- * A 409 says the default moved since the page was read, and is returned
- * as garam answers it, like every other refusal.
+ * A 409 says the default moved since the page was read, and is worded
+ * so; 504 and 503 say the policy service is unavailable.
  */
 export async function rollbackPolicy(
   _state: RollbackPolicyState,
@@ -51,7 +53,7 @@ export async function rollbackPolicy(
       },
     );
   } catch (error) {
-    return refusal(error);
+    return policyRefusal(error, DEFAULT_MOVED);
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

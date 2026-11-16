@@ -11,10 +11,12 @@ import {
   ENGINEERING_ADMINS_ID,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@garam/platform-sdk-ts/refusal-copy";
 import {
-  REFUSAL_COPY,
-  unmappedRefusalCopy,
-} from "@garam/platform-sdk-ts/refusal-copy";
+  DEFAULT_MOVED,
+  DELETE_HELD_BACK,
+  POLICY_SERVICE_TIMED_OUT,
+} from "@/features/orgs/api/policy-refusal";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
@@ -33,8 +35,9 @@ const ACCEPTED = `${POLICIES}/${ENGINEERING_ADMINS_ID}`;
 const PolicyRollback = z.strictObject({ version: z.number() });
 
 /**
- * What each refusal the lifecycle can meet reads as. 403 and 503 have
- * sentences of their own; 409 and 504 are quoted as garam answers them.
+ * What each refusal the lifecycle can meet reads as. 403 has the
+ * sentence every write has; 409, 503 and 504 are worded for the
+ * lifecycle, the 409 for what the write was.
  */
 const REFUSALS = [
   {
@@ -49,7 +52,7 @@ const REFUSALS = [
     status: 409,
     kind: "failed_precondition",
     message: "the default version moved",
-    copy: unmappedRefusalCopy("the default version moved"),
+    copy: DEFAULT_MOVED,
   },
   {
     name: "the policy service being unavailable",
@@ -63,7 +66,7 @@ const REFUSALS = [
     status: 504,
     kind: "deadline_exceeded",
     message: "the policy service did not answer in time",
-    copy: unmappedRefusalCopy("the policy service did not answer in time"),
+    copy: POLICY_SERVICE_TIMED_OUT,
   },
 ] as const;
 
@@ -177,8 +180,8 @@ describe("rollbackPolicy", () => {
         ),
       ).resolves.toEqual({ status: "error", message: refusal.copy });
 
-      // The control: the same version of a policy the service accepts is
-      // a success.
+      // The control: the same version of a policy the service
+      // accepts is a success.
       await expect(
         rollbackPolicy(
           { status: "idle" },
@@ -236,7 +239,10 @@ describe("deletePolicy", () => {
 
       await expect(
         deletePolicy({ status: "idle" }, form({ policy: DENY_DELETES_ID })),
-      ).resolves.toEqual({ status: "error", message: refusal.copy });
+      ).resolves.toEqual({
+        status: "error",
+        message: refusal.status === 409 ? DELETE_HELD_BACK : refusal.copy,
+      });
 
       // The control: a policy the service deletes opens the list.
       await expect(

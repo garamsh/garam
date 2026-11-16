@@ -146,4 +146,28 @@ describe("permissions page", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("No policies")).not.toBeInTheDocument();
   });
+
+  it("says the same when the policy service times out, not an error page", async () => {
+    // The control: answered, the same page lists the policies.
+    const allowed = await renderPolicies();
+    expect(
+      screen.getByRole("link", { name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      http.get(POLICIES, () =>
+        HttpResponse.json(
+          { kind: "deadline_exceeded", message: "no answer in time" },
+          { status: 504 },
+        ),
+      ),
+    );
+
+    await renderPolicies();
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+  });
 });

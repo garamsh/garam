@@ -22,22 +22,31 @@ export const metadata: Metadata = { title: "Policy — garam" };
 type Params = { params: Promise<{ org: string; policy: string }> };
 
 /**
- * The action the policy service decides a write on each kind by, on
- * the organization: `write` for activating a policy or moving its
- * default version, `remove` for deleting it (ADR-0169).
+ * The action a write on each kind is taken as: `write` for activating
+ * a policy or moving its default version, `remove` for deleting it.
+ * The platform answers these four, and only on the policy itself. A
+ * permit is asked as a guardrail is until `checkPermissions` answers
+ * `iam:permit.write`; the policy service refuses a caller who may not,
+ * and that refusal is shown.
  */
 const WRITE_ACTION: Record<IamPolicyKind, { write: string; remove: string }> = {
   "role-link": { write: "iam:policy.attach", remove: "iam:policy.detach" },
   guardrail: { write: "iam:policy.update", remove: "iam:policy.delete" },
-  permit: { write: "iam:permit.write", remove: "iam:policy.delete" },
+  permit: { write: "iam:policy.update", remove: "iam:policy.delete" },
 };
 
-/** Every action `WRITE_ACTION` names, each once, asked in one request. */
-const ASKED = Object.fromEntries(
-  Object.values(WRITE_ACTION)
-    .flatMap(({ write, remove }) => [write, remove])
-    .map((action) => [action, { action }]),
-);
+/** The actions `WRITE_ACTION` names, each once, on the policy. */
+function askedOn(policy: string) {
+  const actions = new Set(
+    Object.values(WRITE_ACTION).flatMap(({ write, remove }) => [write, remove]),
+  );
+  return Object.fromEntries(
+    [...actions].map((action) => [
+      action,
+      { action, resource: { type: "policy", id: policy } as const },
+    ]),
+  );
+}
 
 /** The page's header where no policy could be shown. */
 function Unshown({ children }: { children: React.ReactNode }) {
@@ -56,16 +65,16 @@ function Unshown({ children }: { children: React.ReactNode }) {
  * scope, principal and resource.
  *
  * The kind decides which action each write is taken as, so the server
- * is asked once for them all beside the read, and only an explicit deny
- * withdraws a control (ADR-0103). The policy service enforces every
- * write either way.
+ * is asked once for them all, on the policy, beside the read, and only
+ * an explicit deny withdraws a control (ADR-0103). The policy service
+ * enforces every write either way.
  */
 export default async function PolicyPage({ params }: Params) {
   const { org, policy: slug } = await params;
   const [organization, read, permissions] = await Promise.all([
     getOrg(org),
     getIamPolicy(org, slug),
-    checkPermissions(org, ASKED),
+    checkPermissions(org, askedOn(slug)),
   ]);
 
   if (organization.status === "unreachable" || read.status === "unreachable") {

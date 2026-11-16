@@ -37,12 +37,12 @@ const draftGuardrail: IamPolicyDetail = {
   policy: { ...denyDeletes.policy, status: "draft" },
 };
 
-/** The same guardrail written as a permit, with the permit's actions. */
+/** The same guardrail written as a permit, asked as one. */
 const permit: IamPolicyDetail = {
   policy: { ...denyDeletes.policy, kind: "permit" },
   versions: denyDeletes.versions.map((version) => ({
     ...version,
-    body: { ...version.body, kind: "permit" },
+    body: { kind: "permit", text: "permit (principal, action, resource);" },
   })),
 };
 
@@ -164,7 +164,22 @@ describe("policy page", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("asks each kind's own write and remove actions, and withdraws only what is denied", async () => {
+  it("offers a member no write, asking each action on the policy", async () => {
+    // The control: the owner, whom the platform allows, is offered both
+    // the write and the removal. The mock refuses, as the platform
+    // does, a policy's action asked on no policy, which would leave
+    // every control offered.
+    serve(draftGuardrail);
+    server.use(answerPermissionChecks(() => "allow"));
+    const owner = await renderPolicy();
+    expect(
+      screen.getByRole("button", { name: "Activate" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete policy" }),
+    ).toBeInTheDocument();
+    owner.unmount();
+
     const asked: string[] = [];
     server.use(
       answerPermissionChecks((action) => {
@@ -196,7 +211,6 @@ describe("policy page", () => {
         "iam:policy.detach",
         "iam:policy.update",
         "iam:policy.delete",
-        "iam:permit.write",
       ]),
     );
   });
@@ -214,7 +228,7 @@ describe("policy page", () => {
     },
     {
       detail: { ...permit, policy: { ...permit.policy, status: "draft" } },
-      write: "iam:permit.write",
+      write: "iam:policy.update",
       remove: "iam:policy.delete",
     },
   ] as const)(
@@ -293,6 +307,14 @@ describe("policy page", () => {
   });
 
   it("says the policy is refused rather than empty when garam answers 403", async () => {
+    // The control: answered, the same page shows the policy's name, so
+    // its absence below is the refusal's.
+    const allowed = await renderPolicy();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
     server.use(
       http.get(DENY, () =>
         HttpResponse.json(
@@ -321,6 +343,51 @@ describe("policy page", () => {
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
+  });
+
+  it("refuses a version whose body lacks what its kind holds", async () => {
+    // The control: a body that holds its kind's text renders.
+    const held = await renderPolicy();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+    held.unmount();
+
+    server.use(
+      http.get(DENY, () =>
+        HttpResponse.json({
+          ...denyDeletes,
+          versions: [
+            { ...denyDeletes.versions[0], body: { kind: "guardrail" } },
+          ],
+        }),
+      ),
+    );
+
+    await expect(renderPolicy()).rejects.toThrow("outside its specification");
+  });
+
+  it("says the same when the policy service times out, not an error page", async () => {
+    server.use(
+      http.get(DENY, () =>
+        HttpResponse.json(
+          { kind: "deadline_exceeded", message: "no answer in time" },
+          { status: 504 },
+        ),
+      ),
+    );
+
+    await renderPolicy();
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        level: 1,
+        name: "Deny project deletion",
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("says an activation landed beside the header once its button is gone", async () => {

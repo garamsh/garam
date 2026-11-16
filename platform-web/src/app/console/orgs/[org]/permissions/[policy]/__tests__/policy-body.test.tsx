@@ -7,7 +7,7 @@ import {
 } from "@/app/console/orgs/[org]/permissions/[policy]/_components/policy-body";
 import type { IamPolicyBody } from "@/features/orgs";
 
-const roleLink: IamPolicyBody = {
+const roleLink: Extract<IamPolicyBody, { kind: "role-link" }> = {
   kind: "role-link",
   roleLink: {
     role: "owner",
@@ -37,11 +37,6 @@ describe("bodyText", () => {
       ].join("\n"),
     );
   });
-
-  it("gives null where the body holds what its kind should and does not", () => {
-    expect(bodyText({ kind: "guardrail" })).toBeNull();
-    expect(bodyText({ kind: "role-link" })).toBeNull();
-  });
 });
 
 describe("PolicyBody", () => {
@@ -60,7 +55,7 @@ describe("PolicyBody", () => {
         body={{
           kind: "role-link",
           roleLink: {
-            ...roleLink.roleLink!,
+            ...roleLink.roleLink,
             scope: "team-or-project",
           },
         }}
@@ -78,12 +73,5 @@ describe("PolicyBody", () => {
     expect(text).toHaveTextContent("permit (a);");
     expect(text).toHaveAttribute("tabindex", "0");
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  });
-
-  it("says a version holds no body rather than showing nothing", () => {
-    render(<PolicyBody body={{ kind: "guardrail" }} />);
-
-    expect(screen.getByText("This version holds no body.")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Cedar text")).not.toBeInTheDocument();
   });
 });

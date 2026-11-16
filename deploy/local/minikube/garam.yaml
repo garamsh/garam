@@ -1,20 +1,20 @@
-# The three serve processes of ADR-0017 and the web application, as one
-# local Kubernetes deployment. Local only: no ingress, no DNS, no
-# certificate any authority issued, and images that exist nowhere but
-# this machine's cluster. What reconciles a real cluster is not this
-# (ADR-0020).
+# The three serve processes of ADR-0017, the policy service and the two
+# web applications, as one local Kubernetes deployment. Local only: no
+# ingress, no DNS, no certificate any authority issued, and images that
+# exist nowhere but this machine's cluster. What reconciles a real
+# cluster is not this (ADR-0020).
 #
 # `/healthz` and `/readyz` on the ports below are the interface ADR-0021
 # publishes. A repository this one does not control probes them, so they
 # are not free to move here.
 #
-# GARAM_IMAGE_ID, GARAM_WEB_IMAGE_ID and GARAM_POLICY_IMAGE_ID are
-# replaced by `make minikube-apps` with the ids the cluster's daemon
-# holds for the three tags below. Applying this file by hand replaces
-# those ids in the cluster with the placeholders: every pod rolls onto
-# whatever the tags point at now, and the annotation names a placeholder
-# rather than the image that is running, until the next
-# `make -C deploy/local minikube-apps`.
+# GARAM_IMAGE_ID, GARAM_WEB_IMAGE_ID, GARAM_SITE_IMAGE_ID and
+# GARAM_POLICY_IMAGE_ID are replaced by `make minikube-apps` with the
+# ids the cluster's daemon holds for the four tags below. Applying this
+# file by hand replaces those ids in the cluster with the placeholders:
+# every pod rolls onto whatever the tags point at now, and the
+# annotation names a placeholder rather than the image that is running,
+# until the next `make -C deploy/local minikube-apps`.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -629,6 +629,65 @@ metadata:
 spec:
   selector:
     app: web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+# The site, where a visitor without a session signs in (ADR-0131). The
+# console sends `/login` there and the site hands the session back to
+# the console's host, so both are reached by the names compose serves
+# them on.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: site
+  namespace: garam-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: site
+  template:
+    metadata:
+      labels:
+        app: site
+      annotations:
+        image-id: "GARAM_SITE_IMAGE_ID"
+    spec:
+      containers:
+        - name: site
+          image: garam-site:local
+          imagePullPolicy: Never
+          env:
+            - name: GARAM_API_URL
+              value: "http://api:8080"
+            - name: GARAM_CONSOLE_URL
+              value: "http://console.garam.localhost:3000"
+            # cowork is not part of this stack; the process exits
+            # without an address, so it names the one compose does.
+            - name: GARAM_COWORK_URL
+              value: "http://cowork.garam.localhost:3100"
+          ports:
+            - name: http
+              containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: site
+  namespace: garam-local
+spec:
+  selector:
+    app: site
   ports:
     - name: http
       port: 3000

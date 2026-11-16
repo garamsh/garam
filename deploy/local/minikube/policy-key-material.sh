@@ -14,7 +14,8 @@ set -eu
 
 namespace=garam-local
 secret=policy-throwaway-key-material
-kubectl="kubectl --context minikube -n $namespace"
+context=${1:?usage: $0 <kubectl context>}
+kubectl="kubectl --context $context -n $namespace"
 
 # A Secret that holds the pair is kept whole: the service holds the JWKS
 # it started with, and a new signing key beside it would leave every

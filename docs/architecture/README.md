@@ -491,12 +491,6 @@ Responsibility documents:
   give each of the six images: settings, files, listeners, probes,
   stop, order of start, what each calls, the public names, what
   codehub must reach, the three databases, and what is not established
-- [deployment-gaon.md](./deployment-gaon.md) — how each of those
-  processes is declared on a gaon cluster: the kind, what the object
-  states, the order, the names, and what gaon does not yet serve; the
-  chart in
-  [deploy/charts/garam-gaon/](../../deploy/charts/garam-gaon/README.md)
-  renders them
 - [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
   gateway, the keys it holds, how it routes and what it records; not
   yet built
@@ -505,11 +499,6 @@ Responsibility documents:
   through tools an AI can use: its binary, its ports and what it asks
   of the platform; the server's pages and real-time editing are built,
   the rest is not
-- [gaon-operator.md](../../gaon-operator/docs/gaon-operator.md) — the
-  operator that runs each managed agent as one MicroVM on a gaon
-  cluster: its reconciler, what it is tested against and what is not
-  wired; the reconciler is built, the binary cannot run against garam
-  yet
 - [web-app.md](./web-app.md) — what the application a person uses garam
   through is responsible for, the one seam it reaches the backend
   through, the design system its pages are built on, and what it does
@@ -1356,9 +1345,8 @@ ADRs:
   — the gaon operator is a service here that runs each managed agent as
   one MicroVM: a `gaon-operator/` folder with its own module and image,
   no custom gaon kind, one composed guest image, one no-ingress network
-  policy, a pair registered in garam; accepted, and unbuilt; superseded
-  in part by ADR-0153 (item 3, the guest's user) and by ADR-0158 (item
-  1, where its image is published: no release publishes it)
+  policy, a pair registered in garam; superseded by ADR-0170 in whole
+  (before it, in part by ADR-0153 and ADR-0158)
 - [0152](./adr/0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)
   — garam may hold the Transit token by logging in to OpenBao's JWT auth
   method with a workload identity file beside the token file:
@@ -1379,7 +1367,8 @@ ADRs:
   control token; records that the workspace stays root in the guest,
   the open question of the guest kernel and the placement token's
   source, and the drain in start order; supersedes 0151's item 3 in
-  part (the guest's user), accepted, built in `gaon-operator/`
+  part (the guest's user); superseded by ADR-0170 (`gaon-operator/` is
+  deleted)
 - [0154](./adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)
   — the gaon operator registers each agent's first placement with the
   control service (the MicroVM's and the memory Volume's uids, the
@@ -1387,14 +1376,15 @@ ADRs:
   and renders the feed's configuration as two inline files and the
   model key as an `env` `valueFrom` of the Secret `apiKeyRef` names;
   `MODEL_KEY_*` is removed, `previous` is not built; closes ADR-0153's
-  open dependency, accepted, built in `gaon-operator/`
+  open dependency; superseded by ADR-0170 (`gaon-operator/` is
+  deleted)
 - [0155](./adr/0155-garam-ships-a-second-helm-chart-that-renders-the-gaon-kinds.md)
   — garam ships a second Helm chart, `garam-gaon`, that renders the gaon
   kinds of deployment-gaon.md and nothing else, with migrations held
   before services by a required `stage` value that gives two renders,
   and checked in `make -C deploy/charts ci` against the settings the
-  source reads and a list of the fields gaon's files name; accepted,
-  built in `deploy/charts/garam-gaon/`; supersedes nothing
+  source reads and a list of the fields gaon's files name; superseded
+  by ADR-0170 (`deploy/charts/garam-gaon/` is deleted)
 - [0156](./adr/0156-a-release-publishes-eight-images-and-a-pull-request-builds-the-guest-only-to-its-build-stage.md)
   — a release publishes eight images, the six and `garam/gaon-operator`
   and `garam/gaon-guest`, all or none; the guest reads three private
@@ -1421,9 +1411,9 @@ ADRs:
   garamsh/garam-agent-operator holds it at a commit passing its own
   checks, and CI builds and tests the module until then;
   `deploy/charts/garam-gaon` stays; accepted, built in `release.yml`
-  and `tooling/image-build.sh`, and the directory's removal unbuilt;
-  supersedes 0156 in full and 0151 in part now, in whole when the
-  directory leaves; 0153 and 0154 follow 0151 out then
+  and `tooling/image-build.sh`; supersedes 0156 in full and 0151 in
+  part; superseded in part by ADR-0170 (item 3's handover condition
+  and item 4, which kept the chart)
 - [0159](./adr/0159-role-links-follow-the-entities-in-one-pass-the-platforms-tables-win-a-failed-write-and-a-request-finishes-its-work-before-it-waits.md)
   — a role link is delivered in the same pass and transaction as the
   entities, after them, ordered by its policy's name and not under a
@@ -1521,3 +1511,10 @@ ADRs:
   denial a 403; a service that cannot be reached fails the send
   closed, and `serve machine` with no `GARAM_POLICY_ADDR` fails at
   start; accepted, built (#1941); takes ADR-0147's owed round
+- [0170](./adr/0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
+  — garam carries no gaon integration: `gaon-operator/`,
+  `deploy/charts/garam-gaon/`, the pair-run harness and the documents
+  describing a gaon deployment are deleted, gaon having been
+  discontinued on 2026-11-13, without the handover ADR-0158 waited for;
+  accepted, built (#1946); supersedes 0151, 0153, 0154 and 0155 in
+  whole and 0158 in part (item 3's condition and item 4); 0152 stands

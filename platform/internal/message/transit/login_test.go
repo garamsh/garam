@@ -46,7 +46,7 @@ func (f *fakeBao) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch r.URL.Path {
-	case "/v1/auth/jwt/login", "/v1/auth/gaon/jwt/login":
+	case "/v1/auth/jwt/login", "/v1/auth/workload/jwt/login":
 		var req map[string]string
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		f.logins = append(f.logins, req)
@@ -131,7 +131,7 @@ func TestLogin_LogsInOnceAndPresentsWhatItWasGiven(t *testing.T) {
 
 func TestLogin_LogsInAtTheMountItIsGiven(t *testing.T) {
 	f := &fakeBao{}
-	c, _, _ := loginCustodian(t, f, "gaon/jwt")
+	c, _, _ := loginCustodian(t, f, "workload/jwt")
 
 	_, err := c.Create(context.Background())
 	require.NoError(t, err)

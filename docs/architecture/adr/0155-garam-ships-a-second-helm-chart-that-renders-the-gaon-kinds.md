@@ -1,6 +1,8 @@
 # ADR 0155: garam ships a second Helm chart that renders the gaon kinds
 
-> Status: accepted; built in `deploy/charts/garam-gaon/`
+> Status: superseded by
+> [ADR-0170](./0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
+> (`deploy/charts/garam-gaon/` is deleted; was accepted, built in it)
 > Date: 2026-11-13
 
 Drafted for #1850, which reserves this number. It supersedes nothing:

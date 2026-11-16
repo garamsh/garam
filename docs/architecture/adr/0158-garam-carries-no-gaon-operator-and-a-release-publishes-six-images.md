@@ -1,8 +1,11 @@
 # ADR 0158: garam carries no gaon operator and a release publishes six images
 
 > Status: accepted; built in `.github/workflows/release.yml` and
-> `tooling/image-build.sh` for the six images; the removal of
-> `gaon-operator/` is not built
+> `tooling/image-build.sh` for the six images; superseded in part by
+> [ADR-0170](./0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
+> (item 3's condition that `gaon-operator/` leaves only after
+> garamsh/garam-agent-operator holds it, and item 4, which kept
+> `deploy/charts/garam-gaon`)
 > Date: 2026-11-13
 
 Drafted for #1875, which reserves this number. The direction is the

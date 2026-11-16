@@ -421,9 +421,9 @@ export async function seedMember(seed: Seed): Promise<SeededUser> {
 /**
  * Adds a member of the seeded organization and denies `operator.read`
  * with a guardrail the owner writes through the relay and activates, so
- * the policy service holds the deny it decides from. A guardrail forbids
- * the action of every principal; the spec reads the owner's control
- * before this runs. Answers the member once the deny is delivered.
+ * the policy service holds the deny it decides from. The guardrail
+ * forbids the member alone, so the owner is not denied. Answers the
+ * member once the deny is delivered.
  */
 export async function seedMemberDeniedOperatorRead(
   seed: Seed,
@@ -453,7 +453,7 @@ export async function seedMemberDeniedOperatorRead(
   } finally {
     await client.end();
   }
-  await guardOperatorRead(seed);
+  await guardOperatorRead(seed, member);
   const waiting = new Client({ connectionString: DATABASE_URL });
   await waiting.connect();
   try {
@@ -464,8 +464,11 @@ export async function seedMemberDeniedOperatorRead(
   return member;
 }
 
-/** Writes and activates the guardrail as the seeded owner. */
-async function guardOperatorRead(seed: Seed): Promise<void> {
+/** Writes and activates, as the seeded owner, a guardrail on `member`. */
+async function guardOperatorRead(
+  seed: Seed,
+  member: SeededUser,
+): Promise<void> {
   const base = process.env.GARAM_API_URL;
   if (!base) {
     throw new Error("GARAM_API_URL is unset");
@@ -483,7 +486,7 @@ async function guardOperatorRead(seed: Seed): Promise<void> {
     name: "deny-operator-read",
     body: {
       kind: "guardrail",
-      text: 'forbid (principal, action == Iam::Action::"operator.read", resource);',
+      text: `forbid (principal == Iam::User::"${member.userGrn}", action == Iam::Action::"operator.read", resource);`,
     },
   });
   if (created.status !== 201) {

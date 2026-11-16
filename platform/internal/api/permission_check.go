@@ -141,7 +141,7 @@ var actionRules = map[string]actionRule{
 
 // CheckPermissions answers, for each pair asked, whether enforcement
 // would allow the signed-in caller the action on the resource: the
-// same statements, groups and engine `Check` authorizeOn uses. It
+// same policy service `Check` authorizeOn asks. It
 // answers allow or deny and never why. An action a delegation grant
 // also decides is denied where its mint's check denies and unknown
 // where only the grant is left. iam:operator.delegate and
@@ -174,6 +174,9 @@ func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
+	// A pair is a question nobody acts on, so each is asked as a probe
+	// (ADR-0148 item 2).
+	r = r.WithContext(policydecision.AsProbe(r.Context()))
 	results := make([]apigen.PermissionCheckResult, len(body.Checks))
 	for i, check := range body.Checks {
 		decision, err := s.decide(r, c, targets[i], check.Action)

@@ -7,8 +7,10 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/user"
 )
@@ -317,9 +319,64 @@ func (s *Server) authorizedCaller(r *http.Request, orgGRN, target grn.GRN, u *us
 		return nil, err
 	}
 	if !allowed {
-		return nil, errorx.New(errorx.KindPermissionDenied, "insufficient role")
+		return nil, s.denial(r, c, orgGRN, target, action)
 	}
 	return c, nil
+}
+
+// denial is the error a denied question answers. A resource of the
+// organization that does not exist answers not found when the service
+// allows the caller the action on the organization, and permission
+// denied otherwise, so a caller who may act on every resource of its
+// organization is told a missing one is missing and not refused; a
+// resource that exists keeps the service's refusal (ADR-0171 item 8).
+// Whether the resource exists is read only after a denial.
+func (s *Server) denial(r *http.Request, c *caller, orgGRN, target grn.GRN, action string) error {
+	denied := errorx.New(errorx.KindPermissionDenied, "insufficient role")
+	found, err := s.resourceExists(r.Context(), orgGRN, target)
+	if err != nil {
+		return err
+	}
+	if found {
+		return denied
+	}
+	onOrg, err := s.allows(r, c, orgGRN, action)
+	if err != nil {
+		return err
+	}
+	if !onOrg {
+		return denied
+	}
+	return errorx.New(errorx.KindNotFound, "resource not found")
+}
+
+// resourceExists reports whether target, a resource of orgGRN, is
+// stored. It is the one place that names how each kind of resource an
+// enforcement call site asks about is looked up. The organization
+// itself is held by the caller's membership; a policy is asked on its
+// organization (askedOn), so its denial is the organization's and a
+// missing policy is not told apart here.
+func (s *Server) resourceExists(ctx context.Context, orgGRN, target grn.GRN) (bool, error) {
+	if target == orgGRN {
+		return true, nil
+	}
+	var err error
+	switch target.ServiceType {
+	case org.ServiceTypeGroup:
+		_, err = s.orgs.GetGroup(ctx, target)
+	case org.ServiceTypeProject:
+		_, err = s.orgs.GetProject(ctx, target)
+	case agent.ServiceType:
+		_, err = s.agents.Get(ctx, target)
+	case serviceTypePolicy:
+		return true, nil
+	default:
+		return false, errorx.New(errorx.KindInternal, "no lookup for resource kind "+target.ServiceType)
+	}
+	if errorx.IsKind(err, errorx.KindNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // caller is what every check of one user inside one org shares: the
@@ -352,20 +409,45 @@ func (s *Server) callerIn(r *http.Request, orgGRN grn.GRN, u *user.User) (*calle
 	return &caller{org: orgGRN, user: u, member: m, groups: groups}, nil
 }
 
-// allows asks the engine whether c may take action on target, a
-// validated resource of c's org.
+// allows asks the policy service whether c may take action on target,
+// a validated resource of c's org. The question is a probe where the
+// request's context was marked by policydecision.AsProbe: a denial
+// nobody acts on is not recorded as an attempt (ADR-0148 item 2). An
+// error of the service is unavailable, never an allow (ADR-0168
+// item 7).
 func (s *Server) allows(r *http.Request, c *caller, target grn.GRN, action string) (bool, error) {
-	in, err := s.question(r, c, target, action)
-	if err != nil {
-		return false, err
-	}
-	return s.evaluator.Evaluate(r.Context(), in)
+	return s.decides(r, policydecision.Question{
+		Subject: c.user.GRN, Action: action, Resource: askedOn(target), Probe: policydecision.IsProbe(r.Context()),
+	})
 }
 
-// question is what enforcement asks the engine about c taking action
-// on target: the statements c's roles grant there, c's groups and c's
-// org. allows and explainPermission both ask it, so an explanation is
-// of the decision enforcement reaches.
+// askedOn is the resource the policy service is asked about for a
+// question on target. The service holds no entity for a policy, so it
+// decides a write to one, and a read of it, as the action on the
+// policy's organization (policy_write.rs); a question whose resource
+// is a policy is asked there too, which is what every route, check and
+// explanation that names a policy takes (ADR-0171 item 7).
+func askedOn(target grn.GRN) grn.GRN {
+	if target.ServiceType == serviceTypePolicy {
+		return grn.Org(target.Organization)
+	}
+	return target
+}
+
+// decides asks the policy service one question and answers whether it
+// allows it.
+func (s *Server) decides(r *http.Request, q policydecision.Question) (bool, error) {
+	d, err := s.decisions.Evaluate(r.Context(), q)
+	if err != nil {
+		return false, errorx.Wrap(err, "policy decision", errorx.KindUnavailable)
+	}
+	return d.Allowed, nil
+}
+
+// question is what the platform's engine is asked about c taking
+// action on target: the statements c's roles grant there, c's groups
+// and c's org. explainPermission asks it, until the policy service
+// explains (round 11 of #1796).
 func (s *Server) question(r *http.Request, c *caller, target grn.GRN, action string) (EvalInput, error) {
 	statements, err := s.scopedStatements(r, c.org, c.member, target, c.user)
 	if err != nil {

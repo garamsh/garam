@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -71,8 +72,6 @@ const (
 	// matrixRefused lists, one key per line, the questions the service
 	// refuses instead of deciding.
 	matrixRefused = "testdata/policy_matrix_refused.txt"
-	// pageSize is the most pairs one permission check takes.
-	pageSize = 50
 )
 
 // answer is what one engine says to one question.
@@ -426,7 +425,7 @@ func seedMatrix(t *testing.T, p *pgxpool.Pool, service policydecision.Service) *
 	_ = agents
 
 	srv := api.NewServer(users, orgs, agents, nil, messagepg.New(p), nil, sessions,
-		nil, nil, nil, nil, api.NewGRPCEvaluator(engine), nil, nil,
+		nil, nil, nil, nil, api.NewGRPCEvaluator(engine), service, nil, nil,
 		cli.NewAuthorityService(p, service), cli.NewStandaloneService(p, service),
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv,
@@ -527,6 +526,32 @@ func (m *matrix) check(t *testing.T, cookie *http.Cookie, orgSlug string, checks
 	return resp.StatusCode, got.Results
 }
 
+// explain asks the platform's own engine one pair through the
+// explanation route, which decides with the engine until round 11
+// moves it (ADR-0171), and answers the decision it gives.
+// /permission-checks asks the policy service, so comparing the service
+// with it would compare the service with itself.
+func (m *matrix) explain(t *testing.T, cookie *http.Cookie, orgSlug string, c apigen.PermissionCheck) (int, string) {
+	t.Helper()
+	q := url.Values{"action": {c.Action}}
+	if c.Resource != nil {
+		q.Set("resourceType", string(c.Resource.Type))
+		q.Set("resourceId", c.Resource.Id)
+	}
+	req, err := http.NewRequest(http.MethodGet, m.browser+"/orgs/"+orgSlug+"/permission-explanation?"+q.Encode(), nil)
+	require.NoError(t, err)
+	req.AddCookie(cookie)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return resp.StatusCode, ""
+	}
+	var got apigen.PermissionExplanation
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	return resp.StatusCode, string(got.Decision)
+}
+
 // askPlatform builds every question and asks the platform each one by
 // the path that enforces it for that kind of subject.
 func (m *matrix) askPlatform(t *testing.T) []row {
@@ -558,24 +583,15 @@ func (m *matrix) decide(t *testing.T, s subject, r resource, rows []row, pending
 	t.Helper()
 	switch s.kind {
 	case "user":
-		for chunk := range slices.Chunk(pending, pageSize) {
-			checks := make([]apigen.PermissionCheck, len(chunk))
-			for i, at := range chunk {
-				checks[i] = pair(rows[at].question.Action, r.kind, r.grn.Identifier)
-			}
-			status, results := m.check(t, s.cookie, m.slug[r.org], checks)
+		for _, at := range pending {
+			status, decision := m.explain(t, s.cookie, m.slug[r.org], pair(rows[at].question.Action, r.kind, r.grn.Identifier))
 			if s.org != r.org {
 				require.Equal(t, http.StatusForbidden, status, "%s across organizations", s.label)
-				for _, at := range chunk {
-					rows[at].platform, rows[at].via = answerDeny, howRefused
-				}
+				rows[at].platform, rows[at].via = answerDeny, howRefused
 				continue
 			}
 			require.Equal(t, http.StatusOK, status, s.label)
-			require.Len(t, results, len(chunk))
-			for i, at := range chunk {
-				rows[at].platform, rows[at].via = answer(results[i].Decision), howRoute
-			}
+			rows[at].platform, rows[at].via = answer(decision), howRoute
 		}
 	case "operator":
 		for _, at := range pending {

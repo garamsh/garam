@@ -63,6 +63,41 @@ async function transaction(write: (client: Client) => Promise<void>) {
   }
 }
 
+/**
+ * Waits until the api has delivered what the organization's rows marked
+ * to the policy service, which decides a user's authority from what it
+ * holds (ADR-0146, ADR-0171): the stack's feed is on, so the seed's rows
+ * are marked, and a request asked before the delivery is refused for an
+ * organization the service does not yet hold. A mark's id names the
+ * organization's slug, which is how the wait reads only this seed's own.
+ */
+async function awaitDelivery(slug: string): Promise<void> {
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      const {
+        rows: [row],
+      } = await client.query<{ n: string }>(
+        `SELECT count(*) AS n FROM policy_outbox WHERE position($1 in entity_id) > 0`,
+        [slug],
+      );
+      if (row!.n === "0") {
+        return;
+      }
+      if (Date.now() > deadline) {
+        throw new Error(
+          `the api did not deliver ${row!.n} marks of ${slug} to the policy service in 30s`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 /** Writes the user and session rows a completed OAuth callback wrote. */
 async function insertUserAndSession(
   client: Client,
@@ -108,6 +143,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
       [orgGrn, seed.userGrn],
     );
   });
+  await awaitDelivery(seed.orgSlug);
   return seed;
 }
 

@@ -67,6 +67,23 @@ and each listener a user's delegated operation authority and a hosted
 operator's controller proof, read current. `serve api` does not start
 without it. Policies attached through the engine no longer reach those
 decisions, though their endpoints remain.
+
+The browser listener asks it too
+([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)):
+a handler's own enforcement (`allows`), each `checkPermissions` pair and
+each candidate of the holders list are one `Evaluate` of the signed-in
+user or candidate, the action and the resource, over the state the
+platform has delivered and not read current, since a writer waits for
+its marks to be delivered (ADR-0146 item 5). Which is a probe is
+stated: each `checkPermissions` pair, each holder candidate, the agent
+read that admits agents among them and each kind a search offers are
+asked as probes, and the handler's enforcement and the holders list's
+`iam:org.member-list` check are attempts. Any error of the service is a
+503 `unavailable`, never an allow; a forbid is a 403. Membership of the
+organization is checked by the platform before the service is asked.
+The explanation (`permission_explanation.go`) and the list filter
+(`list_visibility.go`) are the only callers of the platform's engine
+left on this listener, until rounds 10 and 11.
 [policy-matrix.md](./policy-matrix.md) reports where the two engines
 differ.
 
@@ -1090,9 +1107,15 @@ Policy management is authorized like any other action. The
 constants live in `platform/internal/org`, because the api server
 enforces them and may not import the engine that stores policies.
 `owner` and `admin` grant `iam:policy.*`; `member` grants none, so
-reading a policy is an admin action. The addressed policy's GRN is the
-object of the check, and its organization segment is the org in the
-path, so a policy of another org is not addressable.
+reading a policy is an admin action. The addressed policy's GRN names
+the object, and its organization segment is the org in the path, so a
+policy of another org is not addressable. The policy service holds no
+entity for a policy, so the platform asks it an `iam:policy.*`
+question on the policy's organization, as the service decides a write
+to a policy, and a caller's question naming the policy is answered
+that way
+([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)
+item 7).
 
 The console does not call these operations. Since
 [ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md)
@@ -1318,9 +1341,11 @@ policy service's decision too, asked read current through one adapter,
 `currentDecision` in `platform/internal/cli/authority.go`, which sends
 the actor, the action and the object and nothing else (ADR-0146 items
 14 and 15). The
-browser listener's `Evaluator` seam has one non-test implementation,
+browser listener's `Evaluator` seam, now asked by the explanation and
+the list filter alone, has one non-test implementation,
 the gRPC client, wired by `platform/internal/cli/serve.go`, which also
-wires the policy decision client; the machine listener has no engine
+wires the policy decision client that enforcement, `checkPermissions`
+and the holders list ask; the machine listener has no engine
 seam, and wires the policy decision client in
 `platform/internal/cli/machine.go` (ADR-0168).
 The in-process evaluator is the engine's own rather than a test

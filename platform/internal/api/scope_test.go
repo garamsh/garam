@@ -1,246 +1,123 @@
 package api_test
 
 import (
-	"context"
 	"net/http"
-	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
-	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/org"
-	"github.com/garamsh/garam/platform/internal/user"
-	"github.com/garamsh/garam/platform/internal/wire"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
-// enforce answers the Evaluator seam by evaluating the statements the
-// server collected with the engine's semantics (ADR-0002), so scope
-// tests exercise statement collection instead of a stubbed verdict. The
-// evaluation is reproduced here because the api package never imports
-// the engine (ADR-0003).
+// What a role grants, and where, is the policy service's decision and
+// is shown against the real service in tests/integration
+// (policy_enforcement_test.go). What this listener owns, and what is
+// shown here, is the question it asks and what it does with the answer.
+
+// TestEnforcement_AsksTheServiceWhatTheHandlerActsOn holds the question
+// a handler's own enforcement asks: the signed-in user, the action of
+// the operation and the resource it addresses, asked as an attempt
+// (not a probe) and past no cache (not current), since the delivered
+// state suffices for a decision that acts (ADR-0171).
 //
-// A batch is decided per object over the shared statements and that
-// object's own; a test that lists nothing never asks one.
-func (f *fixture) enforce() {
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			return decides(in.Statements, in.Action, in.Object.String()), nil
-		})
-	f.evaluator.EXPECT().EvaluateBatch(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.BatchInput) ([]bool, error) {
-			allowed := make([]bool, len(in.Objects))
-			for i, o := range in.Objects {
-				statements := append(slices.Clip(in.Statements), o.Statements...)
-				allowed[i] = decides(statements, in.Action, o.Object.String())
-			}
-			return allowed, nil
-		}).Maybe()
-}
-
-// decides is the engine's decision over statements: a matching Deny
-// wins, otherwise a matching Allow permits.
-func decides(statements []api.Statement, action, resource string) bool {
-	allow := false
-	for _, s := range statements {
-		if !matches(s, action, resource) {
-			continue
-		}
-		if s.Effect == wire.EffectDeny {
-			return false
-		}
-		allow = true
-	}
-	return allow
-}
-
-// matches reports whether the statement applies to an action on a
-// resource: one action pattern and one resource pattern must match.
-func matches(s api.Statement, action, resource string) bool {
-	return matchAny(s.Action, action) && matchAny(s.Resource, resource)
-}
-
-func matchAny(patterns []string, value string) bool {
-	for _, p := range patterns {
-		if matchPattern(p, value) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchPattern applies the pattern language ADR-0002 gives a
-// statement's actions and resources: '*' matches any run of
-// characters, '?' exactly one, anything else matches literally.
-func matchPattern(pattern, value string) bool {
-	px, vx := 0, 0
-	star, starV := -1, 0
-	for vx < len(value) {
-		switch {
-		case px < len(pattern) && (pattern[px] == '?' || pattern[px] == value[vx]):
-			px++
-			vx++
-		case px < len(pattern) && pattern[px] == '*':
-			star = px
-			starV = vx
-			px++
-		case star != -1:
-			px = star + 1
-			starV++
-			vx = starV
-		default:
-			return false
-		}
-	}
-	for px < len(pattern) && pattern[px] == '*' {
-		px++
-	}
-	return px == len(pattern)
-}
-
-func TestScopedPermissions_Matrix(t *testing.T) {
+// The allowed and the refused answer each go through the same route,
+// so a handler that ignored the service would show in one of the two.
+func TestEnforcement_AsksTheServiceWhatTheHandlerActsOn(t *testing.T) {
 	f := newFixture(t)
-	f.enforce()
-
-	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
-	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
-	bob := f.sessionCookieFor(t, "bob-sub", "Bob")
-	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
-
-	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.Org(slug)
-	aliceGRN := grn.New("root", user.ServiceType, "alice-sub")
-	bobGRN := grn.New("root", user.ServiceType, "bob-sub")
-	for _, g := range []grn.GRN{aliceGRN, bobGRN} {
-		require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, g, org.RoleMember)))
-	}
-
-	// Alice administers the group "eng" and the project "web"; the
-	// sibling group "ops" and project "app" grant her nothing.
-	for _, name := range []string{"eng", "ops"} {
-		g := grn.New(slug, org.ServiceTypeGroup, name)
-		require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(g, name, orgGRN, string(org.RoleAdmin))))
-	}
-	for _, name := range []string{"web", "app"} {
-		g := grn.New(slug, org.ServiceTypeProject, name)
-		require.NoError(t, f.orgs.CreateProject(testCtx(t), org.NewProject(g, name, orgGRN, string(org.RoleAdmin))))
-	}
-	require.NoError(t, f.orgs.AddGroupMember(testCtx(t),
-		grn.New(slug, org.ServiceTypeGroup, "eng"), aliceGRN))
-	require.NoError(t, f.orgs.AddProjectMember(testCtx(t),
-		grn.New(slug, org.ServiceTypeProject, "web"), aliceGRN))
-	ada := grn.New(slug, user.ServiceType, "ada")
-
-	rename := `{"name":"renamed"}`
-	cases := []struct {
-		name         string
-		method, path string
-		body         string
-		cookie       *http.Cookie
-		want         int
-	}{
-		{"owner updates any group", "PATCH", "/orgs/" + slug + "/groups/eng", rename, owner, http.StatusOK},
-		{"group role updates its own group", "PATCH", "/orgs/" + slug + "/groups/eng", rename, alice, http.StatusOK},
-		{"group role adds a member to its own group", "POST", "/orgs/" + slug + "/groups/eng/members", `{"memberGrn":"` + ada.String() + `"}`, alice, http.StatusNoContent},
-		{"group role stops at the sibling group", "PATCH", "/orgs/" + slug + "/groups/ops", rename, alice, http.StatusForbidden},
-		{"group role stops at the org", "PATCH", "/orgs/" + slug, rename, alice, http.StatusForbidden},
-		{"group role stops at a project", "PATCH", "/orgs/" + slug + "/projects/app", rename, alice, http.StatusForbidden},
-		{"project role updates its own project", "PATCH", "/orgs/" + slug + "/projects/web", rename, alice, http.StatusOK},
-		{"project role stops at the sibling project", "PATCH", "/orgs/" + slug + "/projects/app", rename, alice, http.StatusForbidden},
-		{"org member reads a group", "GET", "/orgs/" + slug + "/groups/eng", "", bob, http.StatusOK},
-		{"org member does not update a group", "PATCH", "/orgs/" + slug + "/groups/eng", rename, bob, http.StatusForbidden},
-		{"org member reads a project", "GET", "/orgs/" + slug + "/projects/web", "", bob, http.StatusOK},
-		{"org member does not update a project", "PATCH", "/orgs/" + slug + "/projects/web", rename, bob, http.StatusForbidden},
-		{"non-member reads nothing", "GET", "/orgs/" + slug + "/groups/eng", "", stranger, http.StatusForbidden},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			rec := f.do(t, c.method, c.path, c.body, c.cookie)
-			assert.Equal(t, c.want, rec.Code)
-		})
-	}
-}
-
-func TestScopedPermissions_GroupWithoutRolesGrantsNothing(t *testing.T) {
-	f := newFixture(t)
-	f.enforce()
-
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
 	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.Org(slug)
-	aliceGRN := grn.New("root", user.ServiceType, "alice-sub")
-	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, aliceGRN, org.RoleMember)))
-
-	// Two groups alice belongs to, differing only in whether the group
-	// carries a role. Reading them together is what separates a group
-	// that grants nothing from a route that grants nothing.
+	aliceGRN := userGRNOf("alice-sub")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), aliceGRN, org.RoleMember)))
 	eng := grn.New(slug, org.ServiceTypeGroup, "eng")
-	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(eng, "eng", orgGRN)))
-	require.NoError(t, f.orgs.AddGroupMember(testCtx(t), eng, aliceGRN))
-	ops := grn.New(slug, org.ServiceTypeGroup, "ops")
-	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(ops, "ops", orgGRN, string(org.RoleAdmin))))
-	require.NoError(t, f.orgs.AddGroupMember(testCtx(t), ops, aliceGRN))
+	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(eng, "eng", orgGRNOf(slug))))
 
-	rec := f.do(t, "GET", "/orgs/"+slug+"/groups/eng", "", alice)
-	assert.Equal(t, http.StatusOK, rec.Code)
-	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/eng", `{"name":"renamed"}`, alice)
+	var asked []policydecision.Question
+	allow := true
+	f.answers(func(q policydecision.Question) (bool, error) {
+		asked = append(asked, q)
+		return allow, nil
+	})
+	want := policydecision.Question{Subject: aliceGRN, Action: org.ActionGroupUpdate, Resource: eng}
+
+	rec := f.do(t, "PATCH", "/orgs/"+slug+"/groups/eng", `{"name":"renamed"}`, alice)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.Equal(t, []policydecision.Question{want}, asked)
+
+	allow, asked = false, nil
+	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/eng", `{"name":"again"}`, alice)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
-	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/ops", `{"name":"renamed"}`, alice)
-	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, []policydecision.Question{want}, asked)
 }
 
-// TestScopedPermissions_RolesAssignedOverHTTP proves the scoped grant
-// is reachable through the API alone: a group created over HTTP with
-// roles grants them to its members.
-func TestScopedPermissions_RolesAssignedOverHTTP(t *testing.T) {
+// TestEnforcement_AServiceThatFailsRefusesAsUnavailable holds that an
+// error of the service is a 503 on enforcement, never an allow and
+// never the 403 of a forbid (ADR-0168 item 7): the retry a caller makes
+// of the one is wrong for the other. The forbid and the allow beside it
+// are the controls, so the 503 is the error and not the route.
+func TestEnforcement_AServiceThatFailsRefusesAsUnavailable(t *testing.T) {
 	f := newFixture(t)
-	f.enforce()
-
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
-	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
 	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.Org(slug)
-	aliceGRN := grn.New("root", user.ServiceType, "alice-sub")
-	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, aliceGRN, org.RoleMember)))
+	eng := grn.New(slug, org.ServiceTypeGroup, "eng")
+	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(eng, "eng", orgGRNOf(slug))))
 
-	rec := f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"eng","roles":["admin"]}`, owner)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	g, err := grn.Parse(decodeBody[apigen.Group](t, rec).Grn)
-	require.NoError(t, err)
-	path := "/orgs/" + slug + "/groups/" + g.Identifier
+	var answer error
+	allow := true
+	f.answers(func(policydecision.Question) (bool, error) { return allow, answer })
+	update := func() int {
+		return f.do(t, "PATCH", "/orgs/"+slug+"/groups/eng", `{"name":"renamed"}`, owner).Code
+	}
 
-	rec = f.do(t, "POST", path+"/members", `{"memberGrn":"`+aliceGRN.String()+`"}`, owner)
-	require.Equal(t, http.StatusNoContent, rec.Code)
-
-	rec = f.do(t, "PATCH", path, `{"name":"platform"}`, alice)
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	// Clearing the roles takes the grant away again.
-	rec = f.do(t, "PATCH", path, `{"roles":[]}`, owner)
-	require.Equal(t, http.StatusOK, rec.Code)
-	rec = f.do(t, "PATCH", path, `{"name":"eng"}`, alice)
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, http.StatusOK, update(), "the service allows")
+	allow = false
+	assert.Equal(t, http.StatusForbidden, update(), "the service forbids")
+	allow, answer = true, errorx.New(errorx.KindUnavailable, "policy service unreachable")
+	rec := f.do(t, "PATCH", "/orgs/"+slug+"/groups/eng", `{"name":"again"}`, owner)
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "an allow beside the error is not read")
+	assert.Equal(t, "unavailable", decodeBody[apigen.Error](t, rec).Kind)
+	assert.NotContains(t, rec.Body.String(), "unreachable", "the error's text is not the caller's")
 }
 
-// TestScopedPermissions_MalformedSlugStopsBeforeStatementCollection
-// pins where a path segment stops being inert: orgScope splices the
-// org identifier into a resource pattern, and '*' and '?' are that
-// pattern's wildcards (ADR-0002). The well-formed slug is the control
-// — it is answered on the same route, so what the rows below refuse is
-// the segment rather than the request.
-func TestScopedPermissions_MalformedSlugStopsBeforeStatementCollection(t *testing.T) {
+// TestEnforcement_AServiceThatFailsRefusesAnyErrorKindAsUnavailable
+// holds that the kind of the error does not choose the status: an error
+// that names a denial is no more a forbid than one that names nothing.
+func TestEnforcement_AServiceThatFailsRefusesAnyErrorKindAsUnavailable(t *testing.T) {
+	for name, err := range map[string]error{
+		"a denial kind":   errorx.New(errorx.KindPermissionDenied, "the service said no"),
+		"an internal one": errorx.New(errorx.KindInternal, "decode"),
+		"a plain error":   assert.AnError,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+			slug := createOrg(t, f, owner, "acme")
+			f.answers(func(policydecision.Question) (bool, error) { return false, err })
+
+			rec := f.do(t, "GET", "/orgs/"+slug, "", owner)
+
+			assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		})
+	}
+}
+
+// TestEnforcement_MalformedSlugStopsBeforeTheService pins where a path
+// segment stops being inert: it is validated before the service is
+// asked, so '*' and '?' never reach a question. The well-formed slug is
+// the control — it is answered on the same route, so what the rows
+// below refuse is the segment rather than the request.
+func TestEnforcement_MalformedSlugStopsBeforeTheService(t *testing.T) {
 	t.Run("a well-formed slug is answered", func(t *testing.T) {
 		f := newFixture(t)
-		f.enforce()
 		owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 		slug := createOrg(t, f, owner, "acme")
+		f.permit(permission{userGRNOf("owner-sub"), org.ActionOrgRead})
 
 		assert.Equal(t, http.StatusOK, f.do(t, "GET", "/orgs/"+slug, "", owner).Code)
 	})
@@ -255,8 +132,8 @@ func TestScopedPermissions_MalformedSlugStopsBeforeStatementCollection(t *testin
 	}
 	for name, slug := range malformed {
 		t.Run(name+" is refused", func(t *testing.T) {
-			// The evaluator carries no expectations, so a request that
-			// reaches statement collection fails the test.
+			// The service carries no expectations, so a request that
+			// asks it fails the test.
 			f := newFixture(t)
 			owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 
@@ -265,33 +142,24 @@ func TestScopedPermissions_MalformedSlugStopsBeforeStatementCollection(t *testin
 	}
 }
 
-// TestScopedPermissions_NoRoleGrantsWatchingAnAgent covers the grant
-// ADR-0022 keeps off the roles. Watching is separate from reading, and
-// a grant arriving with membership is one nobody decided, so an
-// organization that wants it writes a policy. The owner carries the
-// widest vocabulary a role can, and this runs the real evaluator over
-// the statements the server collected, so a refusal here is a refusal
-// for every role and for every wildcard a role grants.
-//
-// The same owner reading the same agent is the control: it is what
-// stops being answered if the refusal comes from the session, the
-// membership, the org or the agent rather than from the action.
-func TestScopedPermissions_NoRoleGrantsWatchingAnAgent(t *testing.T) {
+// TestEnforcement_ANonMemberIsRefusedWithoutAskingTheService holds that
+// membership stays the precondition the platform checks itself: the
+// service is not asked about a user who is not in the org, and the
+// member beside is the control.
+func TestEnforcement_ANonMemberIsRefusedWithoutAskingTheService(t *testing.T) {
 	f := newFixture(t)
-	f.enforce()
-
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
 	slug := createOrg(t, f, owner, "acme")
-	held := seedAgent(t, f, slug)
-	// The stream is held open rather than recorded: a grant reaching
-	// this endpoint answers by streaming, and a recorder would wait on
-	// it instead of reporting the status it was handed.
-	server := httptest.NewServer(f.handler)
-	t.Cleanup(server.Close)
+	asked := map[grn.GRN]bool{}
+	f.answers(func(q policydecision.Question) (bool, error) {
+		asked[q.Subject] = true
+		return true, nil
+	})
 
-	refused, _, _ := open(t, server.URL, "/orgs/"+slug+"/agents/"+held.Identifier+"/watch", owner)
-	assert.Equal(t, http.StatusForbidden, refused.StatusCode)
+	assert.Equal(t, http.StatusOK, f.do(t, "GET", "/orgs/"+slug, "", owner).Code)
+	assert.Equal(t, http.StatusForbidden, f.do(t, "GET", "/orgs/"+slug, "", stranger).Code)
 
-	answered := f.do(t, "GET", "/orgs/"+slug+"/agents/"+held.Identifier, "", owner)
-	assert.Equal(t, http.StatusOK, answered.Code, "the read is refused too, so the refusal above proves nothing")
+	assert.True(t, asked[userGRNOf("owner-sub")], "the member is asked about")
+	assert.False(t, asked[userGRNOf("stranger-sub")], "the stranger is not")
 }

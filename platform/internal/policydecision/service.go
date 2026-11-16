@@ -12,8 +12,8 @@ import (
 // on Resource. Probe states that the caller is deciding what to show,
 // so a denial is not recorded as an attempt (ADR-0148 item 2). Current
 // states that the answer must read the policies and facts as they are
-// now, past the service's cache, which a decision to act on needs and a
-// decision to show does not (ADR-0146 item 12).
+// now, past the service's cache, which ADR-0146 item 12 reserves for
+// the decisions whose earlier allow must not stand in for it.
 type Question struct {
 	Subject  grn.GRN
 	Action   string

@@ -73,8 +73,10 @@ policy of another organization.
 
 The platform's answer for a resource that exists only in the platform
 is the finding: asked about a policy, the service denies for lack of a
-feed, not for lack of a right. Nothing here is fixed, and nothing is
-narrowed out of the matrix.
+feed, not for lack of a right. The matrix still asks the service about
+the policy. The routes no longer do: since ADR-0171 they ask it on the
+policy's organization, as the service decides a write to a policy, so
+the ten differ here and not in what a route answers.
 
 ## Refused
 
@@ -129,9 +131,13 @@ organization and across it.
 
 **How the platform is asked.**
 
-- Users through the real `POST /orgs/{org}/permission-checks`, at
-  most 50 per call. A check across organizations is refused 403 to a
-  non-member; the matrix records it as deny.
+- Users through the real `GET /orgs/{org}/permission-explanation`,
+  one pair per call, because it decides with the platform's engine
+  until round 11 (ADR-0171). `POST /permission-checks` asks the policy
+  service itself since ADR-0171, so comparing the service with it
+  would compare the service with itself. A question across
+  organizations is refused 403 to a non-member; the matrix records it
+  as deny.
 - The operator through the grant's own coverage test, within its
   organization, and deny otherwise.
 - An agent's non-send actions as deny: no route admits one.
@@ -198,6 +204,7 @@ and counts do not change with them.
 
 ## Open questions
 
-- Whether the service should hold an `Iam::Policy` entity, or the
-  platform should ask it nothing about a policy, is not decided here.
-  The matrix reports the difference and decides nothing.
+- Whether the service should hold an `Iam::Policy` entity is not
+  decided here. Until it does, the platform asks about a policy on the
+  policy's organization (ADR-0171 item 7), and the matrix reports the
+  difference of the question on the policy itself.

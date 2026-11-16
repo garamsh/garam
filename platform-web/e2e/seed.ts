@@ -419,11 +419,11 @@ export async function seedMember(seed: Seed): Promise<SeededUser> {
 }
 
 /**
- * Adds a member of the seeded organization whom an active policy denies
- * `iam:operator.read`, and answers that member's session token. Policies
- * are seeded rather than written through the console because the
- * subject is a second identity; the change notification the policy
- * table raises reaches the engine as a console write would.
+ * Adds a member of the seeded organization and denies `operator.read`
+ * with a guardrail the owner writes through the relay and activates, so
+ * the policy service holds the deny it decides from. The guardrail
+ * forbids the member alone, so the owner is not denied. Answers the
+ * member once the deny is delivered.
  */
 export async function seedMemberDeniedOperatorRead(
   seed: Seed,
@@ -436,23 +436,6 @@ export async function seedMemberDeniedOperatorRead(
     nickname: `e2e-member-${suffix}`,
   };
   const orgGrn = `grn:root/iam/org/${seed.orgSlug}`;
-  const policyGrn = formatGrn(
-    seed.orgSlug,
-    "iam",
-    "policy",
-    "deny-operator-read",
-  );
-  const document = {
-    Version: "2026-07-25",
-    Statement: [
-      {
-        Sid: "DenyOperatorRead",
-        Effect: "Deny",
-        Action: ["iam:operator.read"],
-        Resource: [orgGrn, `grn:${seed.orgSlug}/*`],
-      },
-    ],
-  };
   const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
   try {
@@ -463,30 +446,57 @@ export async function seedMemberDeniedOperatorRead(
        VALUES ($1, $2, 'member', now())`,
       [orgGrn, member.userGrn],
     );
-    await client.query(
-      `INSERT INTO policies (grn, org_grn, name, status, default_version, created_at, updated_at)
-       VALUES ($1, $2, 'deny-operator-read', 'active', 1, now(), now())`,
-      [policyGrn, orgGrn],
-    );
-    await client.query(
-      `INSERT INTO policy_versions (policy_grn, version, document, created_by, created_at)
-       VALUES ($1, 1, $2, $3, now())`,
-      [policyGrn, JSON.stringify(document), seed.userGrn],
-    );
-    await client.query(
-      `INSERT INTO policy_attachments (policy_grn, subject_grn, created_at)
-       VALUES ($1, $2, now())`,
-      [policyGrn, member.userGrn],
-    );
     await client.query("COMMIT");
-    await awaitDelivery(client, seed.orgSlug);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
     await client.end();
   }
+  await guardOperatorRead(seed, member);
+  const waiting = new Client({ connectionString: DATABASE_URL });
+  await waiting.connect();
+  try {
+    await awaitDelivery(waiting, seed.orgSlug);
+  } finally {
+    await waiting.end();
+  }
   return member;
+}
+
+/** Writes and activates, as the seeded owner, a guardrail on `member`. */
+async function guardOperatorRead(
+  seed: Seed,
+  member: SeededUser,
+): Promise<void> {
+  const base = process.env.GARAM_API_URL;
+  if (!base) {
+    throw new Error("GARAM_API_URL is unset");
+  }
+  const call = (path: string, body?: unknown): Promise<Response> =>
+    fetch(`${base}/orgs/${seed.orgSlug}/iam-policies${path}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `garam_session=${seed.sessionToken}`,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  const created = await call("", {
+    name: "deny-operator-read",
+    body: {
+      kind: "guardrail",
+      text: `forbid (principal == Iam::User::"${member.userGrn}", action == Iam::Action::"operator.read", resource);`,
+    },
+  });
+  if (created.status !== 201) {
+    throw new Error(`guardrail not created: ${created.status}`);
+  }
+  const { id } = (await created.json()) as { id: string };
+  const activated = await call(`/${id}/activate`);
+  if (activated.status !== 204) {
+    throw new Error(`guardrail not activated: ${activated.status}`);
+  }
 }
 
 /**

@@ -1532,3 +1532,12 @@ ADRs:
   whole, 0158 in part (item 3's condition and item 4) and 0152 in
   part (its gaon-specific deployment clause and one consequence; the
   login mechanism stands)
+- [0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)
+  — the browser listener's enforcement, `checkPermissions` and holders
+  list ask the policy service, one question per pair and per
+  candidate, reading delivered state and not current; a
+  `checkPermissions` pair, a holder candidate and a search kind are
+  probes and the handler's own enforcement an attempt; any error of
+  the service is a 503 `unavailable`; the explanation and the list
+  filter stay on the platform's engine until rounds 10 and 11;
+  accepted, built (#1974); builds ADR-0146

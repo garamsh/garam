@@ -42,6 +42,7 @@ type explainStack struct {
 	orgs                     *orgpg.Store
 	ada, bob, carol          *http.Cookie
 	adaGRN, bobGRN, carolGRN grn.GRN
+	decisions                *currentDecisions
 }
 
 func newExplainStack(t *testing.T) *explainStack {
@@ -63,7 +64,8 @@ func newExplainStack(t *testing.T) *explainStack {
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
-	s := &explainStack{acme: acme, policies: policies, orgs: orgs}
+	decisions := newCurrentDecisions(p)
+	s := &explainStack{acme: acme, policies: policies, orgs: orgs, decisions: decisions}
 	s.ada, s.adaGRN = session("ada", org.RoleOwner)
 	s.bob, s.bobGRN = session("bob", org.RoleMember)
 	s.carol, s.carolGRN = session("carol", org.RoleMember)
@@ -75,7 +77,7 @@ func newExplainStack(t *testing.T) *explainStack {
 
 	srv := api.NewServer(users, orgs, agents, nil, messagepg.New(p), nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, newCurrentDecisions(p)), cli.NewStandaloneService(p, newCurrentDecisions(p)),
+		api.NewGRPCEvaluator(engine), decisions, nil, nil, cli.NewAuthorityService(p, decisions), cli.NewStandaloneService(p, decisions),
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
@@ -174,6 +176,9 @@ func TestExplainPermission_NamesTheDenyAndThePathItReached(t *testing.T) {
 	denied := activePolicy(t, s.policies, s.acme, "deny-register",
 		statementDoc("deny-register", wire.EffectDeny, org.ActionOperatorRegister, s.acme.String()))
 	attachPolicy(t, s.policies, denied, s.eng)
+	// The explanation is the platform engine's until round 11; the
+	// check beside it is the policy service's (ADR-0171).
+	s.decisions.forbid(s.adaGRN, org.ActionOperatorRegister)
 	policy, err := grn.Parse(denied)
 	require.NoError(t, err)
 
@@ -268,17 +273,15 @@ func TestExplainPermission_RefusesAHalfNamedResource(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status, body)
 }
 
-// TestListPermissionHolders_ListsWhomTheEngineAllows asks a member who
+// TestListPermissionHolders_ListsWhomTheServiceAllows asks a member who
 // holds iam:consent.read on acme, two candidates a page. The owner
-// holds it by role; the agent by an Allow attached to it; bob and
+// holds it by role; the agent by a permit of the double; bob and
 // carol, whose member role does not hold it, are the control on both
 // pages. The first page asks ada and bob and points at the second,
 // which asks carol and the agent and is the last.
-func TestListPermissionHolders_ListsWhomTheEngineAllows(t *testing.T) {
+func TestListPermissionHolders_ListsWhomTheServiceAllows(t *testing.T) {
 	s := newExplainStack(t)
-	granted := activePolicy(t, s.policies, s.acme, "agent-consent",
-		statementDoc("agent-consent", wire.EffectAllow, org.ActionConsentRead, s.acme.String()))
-	attachPolicy(t, s.policies, granted, s.agent)
+	s.decisions.permit(s.agent, org.ActionConsentRead)
 
 	status, first, body := s.holders(t, s.bob, org.ActionConsentRead, "2", "")
 	require.Equal(t, http.StatusOK, status, body)
@@ -301,12 +304,8 @@ func TestListPermissionHolders_ListsWhomTheEngineAllows(t *testing.T) {
 // read.
 func TestListPermissionHolders_ListsAgentsOnlyToWhoMayReadThem(t *testing.T) {
 	s := newExplainStack(t)
-	granted := activePolicy(t, s.policies, s.acme, "agent-consent",
-		statementDoc("agent-consent", wire.EffectAllow, org.ActionConsentRead, s.acme.String()))
-	attachPolicy(t, s.policies, granted, s.agent)
-	blind := activePolicy(t, s.policies, s.acme, "no-agents",
-		statementDoc("no-agents", wire.EffectDeny, org.ActionAgentRead, s.acme.String()))
-	attachPolicy(t, s.policies, blind, s.bobGRN)
+	s.decisions.permit(s.agent, org.ActionConsentRead)
+	s.decisions.forbid(s.bobGRN, org.ActionAgentRead)
 
 	status, toCarol, body := s.holders(t, s.carol, org.ActionConsentRead, "", "")
 	require.Equal(t, http.StatusOK, status, body)
@@ -323,9 +322,7 @@ func TestListPermissionHolders_ListsAgentsOnlyToWhoMayReadThem(t *testing.T) {
 // beside a page of fifty.
 func TestListPermissionHolders_Refusals(t *testing.T) {
 	s := newExplainStack(t)
-	unlisted := activePolicy(t, s.policies, s.acme, "no-member-list",
-		statementDoc("no-member-list", wire.EffectDeny, org.ActionOrgMemberList, s.acme.String()))
-	attachPolicy(t, s.policies, unlisted, s.carolGRN)
+	s.decisions.forbid(s.carolGRN, org.ActionOrgMemberList)
 
 	status, _, body := s.holders(t, s.carol, org.ActionConsentRead, "", "")
 	assert.Equal(t, http.StatusForbidden, status, body)

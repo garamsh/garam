@@ -15,6 +15,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/policyrelay"
 	"github.com/garamsh/garam/platform/internal/user"
@@ -48,6 +49,7 @@ type Server struct {
 	attempts    authn.PasswordAttemptStore
 	providers   map[string]authn.Provider
 	evaluator   Evaluator
+	decisions   policydecision.Service
 	policies    PolicyManager
 	authorities AuthorityReader
 	authority   operator.AuthorityService
@@ -80,12 +82,12 @@ var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the API server. providers are keyed by their
 // Name; unknown provider paths 404 without the providers knowing.
-func NewServer(users user.Store, orgs org.Store, agents agent.Store, operators operator.Store, consents message.ConsentStore, watches watch.Service, sessions authn.SessionStore, states authn.OAuthStateStore, credentials authn.PasswordCredentialStore, attempts authn.PasswordAttemptStore, providers []authn.Provider, evaluator Evaluator, policies PolicyManager, authorities AuthorityReader, authority operator.AuthorityService, standalone agent.StandaloneService, cfg Config) *Server {
+func NewServer(users user.Store, orgs org.Store, agents agent.Store, operators operator.Store, consents message.ConsentStore, watches watch.Service, sessions authn.SessionStore, states authn.OAuthStateStore, credentials authn.PasswordCredentialStore, attempts authn.PasswordAttemptStore, providers []authn.Provider, evaluator Evaluator, decisions policydecision.Service, policies PolicyManager, authorities AuthorityReader, authority operator.AuthorityService, standalone agent.StandaloneService, cfg Config) *Server {
 	byName := make(map[string]authn.Provider, len(providers))
 	for _, p := range providers {
 		byName[p.Name()] = p
 	}
-	return &Server{users: users, orgs: orgs, agents: agents, operators: operators, consents: consents, watches: watches, sessions: sessions, states: states, credentials: credentials, attempts: attempts, providers: byName, evaluator: evaluator, policies: policies, authorities: authorities, authority: authority, standalone: standalone, cfg: cfg,
+	return &Server{users: users, orgs: orgs, agents: agents, operators: operators, consents: consents, watches: watches, sessions: sessions, states: states, credentials: credentials, attempts: attempts, providers: byName, evaluator: evaluator, decisions: decisions, policies: policies, authorities: authorities, authority: authority, standalone: standalone, cfg: cfg,
 		keysPerOperator: operator.NewLimiter(operator.LimiterConfig{Limit: operator.KeyIssuancesPerOperator,
 			Window: operator.KeyIssuanceWindow, MaxKeys: operator.TrackedClients}),
 		keysPerProcess: operator.NewLimiter(operator.LimiterConfig{Limit: operator.KeyIssuancesPerProcess,

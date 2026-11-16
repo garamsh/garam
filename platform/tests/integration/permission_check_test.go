@@ -25,7 +25,6 @@ import (
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // checkStack is the browser-facing listener over real Postgres and a
@@ -40,6 +39,7 @@ type checkStack struct {
 	memberGRN grn.GRN
 	outsider  *http.Cookie
 	policies  *authz.PolicyGRPCServer
+	decisions *currentDecisions
 }
 
 func newCheckStack(t *testing.T) *checkStack {
@@ -66,13 +66,14 @@ func newCheckStack(t *testing.T) *checkStack {
 	member, memberGRN := session("bob", org.RoleMember)
 	outsider, _ := session("eve", "")
 
+	decisions := newCurrentDecisions(p)
 	srv := api.NewServer(users, orgs, nil, nil, messagepg.New(p), nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, newCurrentDecisions(p)), nil, api.Config{SessionTTL: time.Hour})
+		api.NewGRPCEvaluator(engine), decisions, nil, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	return &checkStack{url: browser.URL, acme: acme, owner: owner, ownerGRN: ownerGRN, member: member,
-		memberGRN: memberGRN, outsider: outsider, policies: policies}
+		memberGRN: memberGRN, outsider: outsider, policies: policies, decisions: decisions}
 }
 
 // send makes one request as cookie and answers the status and body.
@@ -155,20 +156,22 @@ func TestCheckPermissions_AnswersAsEnforcementDecides(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, memberStatus, "enforcement refuses what the check denied")
 }
 
-// TestCheckPermissions_ReadsAttachedPolicies holds that the answer
-// comes from the engine's policies and not from the role alone: a Deny
-// attached to the owner turns an allow into a deny. The answer before
-// the attachment is the control.
-func TestCheckPermissions_ReadsAttachedPolicies(t *testing.T) {
+// TestCheckPermissions_AsksThePolicyServiceNotTheRoleAlone holds that
+// the answer is the policy service's and not the role's: the service
+// forbidding the owner an action its role carries turns an allow into
+// a deny, and the route refuses it the same way. The answer before the
+// forbid is the control (the guardrail itself is written through the
+// relay and shown against the real service in policy_enforcement_test.go).
+func TestCheckPermissions_AsksThePolicyServiceNotTheRoleAlone(t *testing.T) {
 	s := newCheckStack(t)
 	require.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow}, s.check(t, s.owner, org.ActionOperatorRegister))
 
-	denied := activePolicy(t, s.policies, s.acme, "deny-register",
-		statementDoc("deny-register", wire.EffectDeny, org.ActionOperatorRegister, s.acme.String()))
-	attachPolicy(t, s.policies, denied, s.ownerGRN)
+	s.decisions.forbid(s.ownerGRN, org.ActionOperatorRegister)
 
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny}, s.check(t, s.owner, org.ActionOperatorRegister),
-		"a Deny attached to the owner wins over the owner's role")
+		"a forbid of the service wins over the owner's role")
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow}, s.check(t, s.owner, org.ActionOrgRead),
+		"control: another action is not forbidden")
 }
 
 // TestCheckPermissions_DeniesAnUndefinedAction asks the owner, whose

@@ -22,3 +22,6 @@ packages:
   github.com/garamsh/garam/platform/internal/operator:
     interfaces:
       AuthorityService: {}
+  github.com/garamsh/garam/platform/internal/policydecision:
+    interfaces:
+      Service: {}

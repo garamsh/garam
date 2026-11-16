@@ -25,19 +25,19 @@ import (
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // auditBrowser is a browser-facing listener over the execution stack's
 // database that records credential events and serves their read, as
 // `garam serve api` composes it. The stack's sessions sign in here too.
-func auditBrowser(t *testing.T, s *executionStack, engine grpc.ClientConnInterface) string {
+func auditBrowser(t *testing.T, s *executionStack, engine grpc.ClientConnInterface, decisions policydecision.Service) string {
 	t.Helper()
 	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), operatorpg.New(s.pool),
 		nil, nil, authnpg.NewSessionStore(s.pool), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
+		api.NewGRPCEvaluator(engine), decisions, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithCredentialAudit(auditpg.NewCredentialStore(s.pool))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
@@ -96,7 +96,7 @@ func TestCredentialAudit_RecordsASupervisorsCredentialAndItsAgentsTokens(t *test
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
-	browser := auditBrowser(t, s.executionStack, engine)
+	browser := auditBrowser(t, s.executionStack, engine, newCurrentDecisions(p))
 
 	c, token := supervisedHost(t, s)
 	minted := s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens", operator.TokenContractVersion, token, "", `{}`)
@@ -137,9 +137,10 @@ func TestCredentialAudit_RecordsASupervisorsCredentialAndItsAgentsTokens(t *test
 // with 400; the paging is the shared limit and offset.
 func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	_, engine := policyEngine(t, p)
 	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
-	browser := auditBrowser(t, s.executionStack, engine)
+	decisions := newCurrentDecisions(p)
+	browser := auditBrowser(t, s.executionStack, engine, decisions)
 	c, token := supervisedHost(t, s)
 	require.Equal(t, http.StatusCreated, s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens",
 		operator.TokenContractVersion, token, "", `{}`).status)
@@ -155,7 +156,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 			url.Values{"subject": {subject.String()}}.Encode()+query, s.member, nil)
 	}
 	status, body = read(operatorGRN, "")
-	require.Equal(t, http.StatusOK, status, "control, before the Deny: %s", body)
+	require.Equal(t, http.StatusOK, status, "control, before the forbid: %s", body)
 	status, body = read(c.agent, "&limit=1&offset=1")
 	require.Equal(t, http.StatusOK, status, body)
 	var page []apigen.CredentialEvent
@@ -163,9 +164,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	require.Len(t, page, 1)
 	assert.Equal(t, apigen.EventIssued, page[0].Outcome, "the second newest is the issuance")
 
-	denied := activePolicy(t, policies, s.acme, "no-operator-read",
-		statementDoc("no-operator-read", wire.EffectDeny, org.ActionOperatorRead, s.acme.String()))
-	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, user.ServiceType, "bob"))
+	decisions.forbid(grn.New(grn.RootOwner, user.ServiceType, "bob"), org.ActionOperatorRead)
 
 	status, body = read(operatorGRN, "")
 	assert.Equal(t, http.StatusForbidden, status, body)

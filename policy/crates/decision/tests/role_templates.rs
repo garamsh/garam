@@ -166,10 +166,10 @@ fn the_schema_names_every_action_role_go_defines_and_no_other() {
     let table = RoleTable::read();
 
     let mut expected: BTreeSet<String> = table.actions.values().cloned().collect();
-    // No role.go constant: `iam:message.send` is the platform's own,
-    // `iam:permit.write` is ADR-0144 item 7's, held by owners alone,
-    // `iam:audit.read` is ADR-0148's, held by owners and administrators,
+    // No role.go constant: `iam:message.send` is the platform's own
     // and `iam:agent.activate` is a delegated operation no role holds.
+    // role.go defines `iam:permit.write` and `iam:audit.read`, so the
+    // table already holds them.
     expected.insert("iam:message.send".to_string());
     expected.insert("iam:permit.write".to_string());
     expected.insert("iam:audit.read".to_string());

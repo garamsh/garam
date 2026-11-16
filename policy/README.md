@@ -123,6 +123,10 @@ it through `garam policy-feed` (#1689, #1888).
 - **Removing a `permit` asks `iam:policy.delete`, not
   `iam:permit.write`.** Removal narrows, and an administrator can
   already forbid what a `permit` allows with a guardrail.
+- **A question may leave the `permit`s out.** `without_permits` on
+  `Evaluate`, `Evaluations` or an entry decides it as a `PermitRight`
+  is decided, through `grant::evaluate_without_permits`; the AuthZEN
+  binding does not carry it (ADR-0175).
 - **A write is two steps.** The service evaluates the writer, then
   stores. A writer whose role ended between them completes one write.
 - **An organization's `permit` is written by an owner and scoped to

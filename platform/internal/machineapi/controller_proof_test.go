@@ -64,7 +64,7 @@ const proofRoute = "/operators/grn:acme%2Fiam%2Foperator%2Fcontroller/introspect
 
 func proofListener(t *testing.T, c *recheck, v *shown, p *proofs) (string, *http.Client) {
 	t.Helper()
-	return serveTLS(t, machineapi.NewServer(nil, v, nil, nil, nil, nil, nil, nil, c, p, nil, nil, nil, nil),
+	return serveTLS(t, machineapi.NewServer(nil, v, nil, nil, nil, c, p, nil, nil, nil, nil),
 		grn.New("acme", "operator", "hosted"))
 }
 

@@ -90,7 +90,7 @@ func oauthError(t *testing.T, body string) string {
 // token response, uncached, under machine-token.v2.
 func TestExchangeClientAssertion_AnswersRFC6749sTokenForm(t *testing.T) {
 	operators := &assertionService{}
-	base, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, assertingClient)
+	base, _ := listener(t, &agentService{}, operators, &messageService{}, unwatched(t), &decider{}, &roster{}, assertingClient)
 	form := validForm()
 	form.Set("audience", "grn:acme/iam/operator/control")
 
@@ -119,7 +119,7 @@ func TestExchangeClientAssertion_AnswersRFC6749sTokenForm(t *testing.T) {
 // reaches it, and no refusal quotes the body.
 func TestExchangeClientAssertion_RefusesAFormOutsideTheProfile(t *testing.T) {
 	operators := &assertionService{}
-	base, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, assertingClient)
+	base, _ := listener(t, &agentService{}, operators, &messageService{}, unwatched(t), &decider{}, &roster{}, assertingClient)
 	client := anonymous(t)
 
 	resp, body := exchangeForm(t, client, base, validForm().Encode(), nil)
@@ -189,7 +189,7 @@ func TestExchangeClientAssertion_TranslatesTheDomainsRefusals(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			operators := &assertionService{err: tc.err}
-			base, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, assertingClient)
+			base, _ := listener(t, &agentService{}, operators, &messageService{}, unwatched(t), &decider{}, &roster{}, assertingClient)
 			resp, body := exchangeForm(t, anonymous(t), base, validForm().Encode(), nil)
 			assert.Equal(t, tc.status, resp.StatusCode, body)
 			assert.Equal(t, tc.code, oauthError(t, body))

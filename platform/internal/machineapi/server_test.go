@@ -29,6 +29,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/watch"
 )
 
@@ -93,72 +94,62 @@ func (s *agentService) ReportRuntimeState(_ context.Context, caller, agentGRN gr
 	return s.err
 }
 
-// memberGroups is the machineapi.Groups seam in memory: which groups
-// each identity belongs to, and the answer a store that cannot read
-// them gives.
-type memberGroups struct {
-	byMember map[grn.GRN][]grn.GRN
-	err      error
-	asked    []grn.GRN
+// decider is the policydecision.Service a send is asked through, in
+// memory: the sender and recipient pairs it allows and no other, and
+// the answer a service that cannot decide gives. Evaluate is the whole
+// of what the surface asks; the rest panics through the embedded
+// interface.
+type decider struct {
+	policydecision.Service
+	allowed map[[2]grn.GRN]bool
+	err     error
+	asked   []policydecision.Question
 }
 
-func (m *memberGroups) List(_ context.Context, subject grn.GRN) ([]grn.GRN, error) {
-	m.asked = append(m.asked, subject)
-	if m.err != nil {
-		return nil, m.err
-	}
-	return m.byMember[subject], nil
-}
-
-// consents is the message.ConsentStore the surface reads, in memory:
-// the organization pairs whose relation stands, and the answer a store
-// that cannot read one gives. Stands is the whole of what the surface
-// asks; the rest panics through the embedded interface.
-type consents struct {
-	message.ConsentStore
-	pairs map[string]bool
-	err   error
-	asked [][2]grn.GRN
-}
-
-// consenting builds a consents in which the relation stands between
-// each named pair of organization identifiers and no other.
-func consenting(pairs ...[2]string) *consents {
-	c := &consents{pairs: map[string]bool{}}
+// allowing builds a decider that allows each sender and recipient pair
+// and denies every other.
+func allowing(pairs ...[2]grn.GRN) *decider {
+	d := &decider{allowed: map[[2]grn.GRN]bool{}}
 	for _, p := range pairs {
-		c.stand(p[0], p[1])
+		d.allowed[p] = true
 	}
-	return c
+	return d
 }
 
-// stand moves the pair's relation up, as two grants would.
-func (c *consents) stand(orgA, orgB string) {
-	a, b := organization(orgA).String(), organization(orgB).String()
-	if b < a {
-		a, b = b, a
+func (d *decider) Evaluate(_ context.Context, q policydecision.Question) (policydecision.Decision, error) {
+	d.asked = append(d.asked, q)
+	if d.err != nil {
+		return policydecision.Decision{}, d.err
 	}
-	c.pairs[a+"|"+b] = true
+	return policydecision.Decision{Allowed: d.allowed[[2]grn.GRN{q.Subject, q.Resource}]}, nil
 }
 
-// fall moves the pair's relation down, as a withdraw would.
-func (c *consents) fall(orgA, orgB string) {
-	a, b := organization(orgA).String(), organization(orgB).String()
-	if b < a {
-		a, b = b, a
-	}
-	delete(c.pairs, a+"|"+b)
+// roster is the machineapi.AgentReader seam in memory: the agents
+// garam holds, and the answer a store that cannot read one gives.
+type roster struct {
+	held  map[grn.GRN]bool
+	err   error
+	asked []grn.GRN
 }
 
-func (c *consents) Stands(_ context.Context, a, b grn.GRN) (bool, error) {
-	c.asked = append(c.asked, [2]grn.GRN{a, b})
-	if c.err != nil {
-		return false, c.err
+// holding builds a roster of the agents garam holds.
+func holding(agents ...grn.GRN) *roster {
+	r := &roster{held: map[grn.GRN]bool{}}
+	for _, a := range agents {
+		r.held[a] = true
 	}
-	x, y := a.String(), b.String()
-	if y < x {
-		x, y = y, x
+	return r
+}
+
+func (r *roster) Get(_ context.Context, g grn.GRN) (*agent.Agent, error) {
+	r.asked = append(r.asked, g)
+	if r.err != nil {
+		return nil, r.err
 	}
-	return c.pairs[x+"|"+y], nil
+	if !r.held[g] {
+		return nil, agent.ErrAgentNotFound
+	}
+	return &agent.Agent{}, nil
 }
 
 // organization returns the GRN of the org the identifier names. Orgs
@@ -206,9 +197,10 @@ func (c listenerCertificate) Get() (*tls.Certificate, error) {
 // below the surface is real except the services it answers from: the
 // identity a handler reads is the one the listener resolved the token
 // to.
-func listener(t *testing.T, agents agent.Service, operators operator.Service, messages message.Service, standing message.ConsentStore, watches watch.Service, groups machineapi.Groups, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
+func listener(t *testing.T, agents agent.Service, operators operator.Service, messages message.Service, watches watch.Service, decisions policydecision.Service, held machineapi.AgentReader, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
-	return serveTLS(t, machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine, nil, nil, nil, nil, nil, nil, stubKeyring{}), caller)
+	return serveTLS(t, machineapi.NewServer(agents, operators, messages, watches, nil, nil, nil, nil, nil, nil, stubKeyring{}).
+		WithSendPolicy(decisions, held), caller)
 }
 
 // stubKeyID is the one key stubSigner publishes.
@@ -335,9 +327,9 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	operator := operatorGRN("acme")
 	agents := &agentService{}
 	messages := &messageService{}
-	groups := &memberGroups{}
-	policies := &engine{}
-	url, client := listener(t, agents, nil, messages, consenting(), unwatched(t), groups, policies, operator)
+	held := &roster{}
+	policies := &decider{}
+	url, client := listener(t, agents, nil, messages, unwatched(t), policies, held, operator)
 
 	status, body := do(t, client, http.MethodGet, url+"/identity")
 	require.Equal(t, http.StatusOK, status)
@@ -346,7 +338,8 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	// The same surface served any other way carries no identity, and no
 	// handler invents one.
 	relay := &announced{}
-	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, consenting(), watching(t, relay), groups, policies, nil, nil, nil, nil, nil, nil, nil)))
+	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, watching(t, relay), nil, nil, nil, nil, nil, nil, nil).
+		WithSendPolicy(policies, held)))
 	t.Cleanup(plain.Close)
 	bot := neturl.PathEscape(agentGRN("acme", "0a1b2c3d4e5f6071").String())
 	routes := map[string]struct{ method, path string }{
@@ -366,7 +359,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	}
 	assert.Empty(t, agents.calls, "a request that authenticated nobody reached the service")
 	assert.Empty(t, messages.calls, "a request that authenticated nobody reached the service")
-	assert.Empty(t, groups.asked, "a request that authenticated nobody was looked up in a group")
+	assert.Empty(t, held.asked, "a request that authenticated nobody was looked up as an agent")
 	assert.Empty(t, policies.asked, "a request that authenticated nobody was decided by policy")
 	assert.Empty(t, relay.made(), "a request that authenticated nobody forwarded a turn event")
 }

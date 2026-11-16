@@ -118,7 +118,7 @@ const (
 // No route enrols an operator (ADR-0117).
 func TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches(t *testing.T) {
 	caller := operatorGRN("acme")
-	url, _ := listener(t, &agentService{}, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, caller)
+	url, _ := listener(t, &agentService{}, nil, &messageService{}, unwatched(t), &decider{}, &roster{}, caller)
 	client := anonymous(t)
 
 	// Every operation api/machine.yaml declares, read off the generated

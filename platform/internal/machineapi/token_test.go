@@ -74,8 +74,7 @@ func TestServer_ExchangesASupervisorsCredentialForAToken(t *testing.T) {
 	subject := operatorGRN("acme")
 	supervisor := grn.New("acme", agent.ServiceTypeSupervisor, "host-1")
 	supervisors := &supervisorService{supervisor: supervisor, credential: "garam_sc_held"}
-	url, _ := serveTLS(t, machineapi.NewServer(&agentService{}, nil, &messageService{}, consenting(),
-		unwatched(t), &memberGroups{}, &engine{}, nil, nil, nil, nil, supervisors, nil, stubKeyring{}), subject)
+	url, _ := serveTLS(t, machineapi.NewServer(&agentService{}, nil, &messageService{}, unwatched(t), nil, nil, nil, nil, supervisors, nil, stubKeyring{}), subject)
 	client := anonymous(t)
 
 	status, version, body := exchange(t, client, url, "Garam-Credential garam_sc_held", operator.TokenContractVersion, `{}`)
@@ -190,8 +189,7 @@ func TestServer_MintsAnAgentTokenForTheCallingOperator(t *testing.T) {
 	controller := operatorGRN("acme")
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	agents := &agentService{}
-	srv := machineapi.NewServer(agents, nil, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
+	srv := machineapi.NewServer(agents, nil, &messageService{}, unwatched(t), nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, controller, presentedTokens{"garam_ot_live": controller})
 	client := anonymous(t)
 	path := url + "/agents/" + neturl.PathEscape(bot.String()) + "/tokens"
@@ -234,8 +232,7 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	controller := operatorGRN("acme")
 	messages := &messageService{}
-	srv := machineapi.NewServer(&agentService{}, nil, messages, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
+	srv := machineapi.NewServer(&agentService{}, nil, messages, unwatched(t), nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot, "garam_ot_live": controller})
 	client := anonymous(t)
 	execution, err := agent.NewToken()
@@ -264,8 +261,7 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 // served under v2 and refused under the retired v1, naming v2.
 func TestServer_ADurableSubmissionIsServedUnderV2Alone(t *testing.T) {
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
-	srv := machineapi.NewServer(&agentService{}, nil, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
+	srv := machineapi.NewServer(&agentService{}, nil, &messageService{}, unwatched(t), nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot})
 	client := anonymous(t)
 
@@ -292,8 +288,7 @@ func TestServer_ADurableSubmissionIsServedUnderV2Alone(t *testing.T) {
 func TestServer_ABearerTokenTakesWhatAGaramTokenTakes(t *testing.T) {
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	srv := machineapi.NewServer(&agentService{}, nil, messages, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
+	srv := machineapi.NewServer(&agentService{}, nil, messages, unwatched(t), nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot})
 	client := anonymous(t)
 	execution, err := agent.NewToken()

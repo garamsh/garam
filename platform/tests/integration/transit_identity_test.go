@@ -31,8 +31,8 @@ import (
 
 // jwtAuth is a JWT auth method of the test's own on the dev OpenBao,
 // trusting one key the test holds, with a role that grants a signing
-// key's policy for a short lease. It stands in for gaon's issuer: gaon
-// does not yet serve the discovery document OpenBao would read, so the
+// key's policy for a short lease. It stands in for a workload identity
+// issuer that serves no discovery document OpenBao could read, so the
 // method is given the public key directly (ADR-0152).
 type jwtAuth struct {
 	mount string
@@ -41,7 +41,7 @@ type jwtAuth struct {
 }
 
 const (
-	identityIssuer   = "https://gaon.test"
+	identityIssuer   = "https://issuer.test"
 	identityAudience = "garam-openbao"
 	// leaseSeconds is the role's token lease: short enough that a test
 	// reaches renewal and then the first lease's end in seconds.
@@ -75,14 +75,14 @@ func newJWTAuth(t *testing.T, b *openBao, signing signingKey) jwtAuth {
 }
 
 // identityFile writes an ES256 workload identity token naming audience,
-// owner-only, as gaon's would be written.
+// owner-only, as an issuer's agent would write it.
 func (a jwtAuth) identityFile(t *testing.T, audience string) string {
 	t.Helper()
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.ES256, Key: a.key}, nil)
 	require.NoError(t, err)
 	now := time.Now()
 	claims, err := json.Marshal(map[string]any{
-		"iss": identityIssuer, "sub": "gaon:serviceaccount:garam", "aud": []string{audience},
+		"iss": identityIssuer, "sub": "issuer:serviceaccount:garam", "aud": []string{audience},
 		"iat": now.Unix(), "exp": now.Add(time.Hour).Unix(),
 	})
 	require.NoError(t, err)

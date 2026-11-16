@@ -1,6 +1,8 @@
 # ADR 0154: The gaon operator registers each placement and renders the agent's configuration into its MicroVM
 
-> Status: accepted; built in `gaon-operator/`
+> Status: superseded by
+> [ADR-0170](./0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
+> (`gaon-operator/` is deleted; was accepted, built in it)
 > Date: 2026-11-13
 
 Drafted for #1853. It closes the open dependency

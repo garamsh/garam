@@ -1,4 +1,0 @@
-# A tag in the repository would render name:tag@digest.
-image:
-  server:
-    repository: registry.example/garam/server:v1.2.3

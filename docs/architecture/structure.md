@@ -60,7 +60,7 @@ Beside it:
   its binary. Its image runs in the local stack, the chart deploys it,
   and a release publishes it.
 - **`go.work`** at the root, naming `platform/`, `garam-cli/`,
-  `cowork/`, `gaon-operator/` and each Go library under `lib/`. Every Go
+  `cowork/` and each Go library under `lib/`. Every Go
   entry point in the `Makefile` covers every module it names.
 
 Above the boundaries inside garam sits a coarser unit: the service.
@@ -102,17 +102,6 @@ on are boundaries inside a service.
   publishes**: its API specification, or a library in `lib/`. Reaching
   into another service's `internal/` or its database is a
   defect, even where it builds.
-- **`gaon-operator/`**
-  ([ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)),
-  the operator that runs managed agents as MicroVMs on a gaon cluster:
-  its module, the binary `cmd/gaon-operator` and its documents
-  ([gaon-operator.md](../../gaon-operator/docs/gaon-operator.md)). The
-  reconciler is built; the binary refuses to start until garam's machine
-  client and the control feed client exist, and no release publishes
-  its image or the guest's (ADR-0158). The folder is still in this
-  repository and leaves in a later pull request, after
-  garamsh/garam-agent-operator holds it at a commit passing its own
-  checks.
 - **Dependencies point toward `platform/`**, and none points back.
   `policy/` (ADR-0130, built in part) sits below it: the platform and
   cowork are to call `policy/`, and `policy/` calls no service.

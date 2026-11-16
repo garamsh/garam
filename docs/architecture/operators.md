@@ -92,55 +92,6 @@ registering grants nothing and this withdraws what an operator runs on
 the seams that admit a token, which are the one place either listener
 reads it to decide whether a caller is admitted.
 
-## The gaon operator
-
-garam is to carry no gaon operator
-([ADR-0158](./adr/0158-garam-carries-no-gaon-operator-and-a-release-publishes-six-images.md)):
-the one agent operator, for gaon, is garamsh/garam-agent-operator's.
-Today `gaon-operator/` is still in this repository, and no release
-publishes its image. It leaves in a later pull request, after
-garamsh/garam-agent-operator holds it at a commit passing its own
-checks. The rest of this section describes the code until then.
-
-Decided by [ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md): a second operator, in this
-repository, that runs each managed agent as one MicroVM on a gaon
-cluster. It is an operator in this document's sense, so everything
-above and below holds for it: it holds a garam-issued key, exchanges an
-assertion for a token, calls the machine listener, and garam dials no
-cluster. It is registered as a pair, its own cluster manager and a
-control service whose registration names it, and it reports
-provisioning state from what it observes of the MicroVM.
-To gaon it authenticates with its
-ServiceAccount token once gaon serves one (`garamsh/gaon#161`), and
-with an administrator-issued certificate until then. It renews an
-agent's token by writing it to the MicroVM's `Secret` and restarting
-the MicroVM, until gaon replaces a file in a running MicroVM
-(`garamsh/gaon#162`).
-
-Built: the reconciler that renders an agent into its Secret, Volumes and
-MicroVM and reports what it observes; garam's side over the generated
-machine client (the `private_key_jwt` exchange as an operator,
-`mintAgentToken`, `reportProvisioningState`); the control service's feed
-with its cursor and long poll and the status report; and the binary that
-composes them, with a reconcile loop, a bounded backoff and a health
-listener
-([gaon-operator.md](../../gaon-operator/docs/gaon-operator.md)); and the
-guest, a supervisor and composed image whose MicroVM runs as `0:0` and
-which starts the runtime and the adapter as 65532 with no capability and
-the workspace as root with the runner's five capabilities and executor
-10001, drains in start order, and keeps the store and outbox 0700 and
-the model credential to the runtime alone
-([ADR-0153](./adr/0153-the-gaon-guest-runs-as-root-and-its-supervisor-drops-each-program-to-the-account-it-needs.md)).
-The guest still holds a root workspace beside the store, and what gaon's
-guest kernel admits for the executor is unanswered.
-It registers each agent's first placement with the control service and
-renders the feed's configuration as two inline files and the model key
-as an `env` entry from the organization's labelled model-key Secret
-the agent's `apiKeyRef` names ([ADR-0154](./adr/0154-the-gaon-operator-registers-each-placement-and-renders-the-agents-configuration-into-its-microvm.md)).
-Unbuilt: the `NetworkPolicy`, the token restart,
-a placement's `previous` and so a replaced MicroVM's registration, and
-the agent's instructions and message issuers.
-
 ## An Operator's two identities
 
 An Operator is a cluster manager and at most one control service,

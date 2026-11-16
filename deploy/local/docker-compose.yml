@@ -401,7 +401,7 @@ services:
   # the image runs as. The api trusts that certificate as its CA.
   policy-tls:
     image: alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
-    command: ["sh", "/policy-tls.sh", "policy", "10001"]
+    command: ["sh", "/policy-tls.sh", "policy", "10001", "DNS:localhost", "IP:127.0.0.1"]
     volumes:
       - ./policy-tls.sh:/policy-tls.sh:ro
       - policy-tls:/tls
@@ -419,13 +419,18 @@ services:
       - policy-keys:/keys
     restart: "no"
 
-  # The contract's port is published to nothing. The service is given
-  # the JWKS alone of the keys volume, never the signing key.
+  # The contract's port is published on loopback for the suite on the
+  # host that asks the service (platform's policy-matrix), which dials
+  # localhost: the certificate names it beside `policy`, the name the
+  # stack's own callers use. The service is given the JWKS alone of the
+  # keys volume, never the signing key.
   policy:
     build:
       context: ../..
       dockerfile: deploy/local/Dockerfile.policy
     command: ["serve"]
+    ports:
+      - "127.0.0.1:${GARAM_POLICY_PORT:-28443}:8443"
     environment:
       POLICY_ADDR: 0.0.0.0:8443
       POLICY_HEALTH_ADDR: 0.0.0.0:8091
@@ -456,6 +461,33 @@ services:
       interval: 2s
       timeout: 5s
       retries: 10
+
+  # One-shot: copies the certificate the service serves under and the
+  # key the api signs its tokens with to the directory a suite on the
+  # host reads them from (POLICY_LOCAL_DIR; make creates it at mode
+  # 700, and POLICY_LOCAL_UID is the account that owns the copies).
+  # The key is this stack's alone and is printed nowhere. Run again it
+  # copies again, so the files follow the volumes.
+  policy-host:
+    image: alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+    command:
+      - sh
+      - -c
+      - >-
+        cp /tls/tls.crt /out/ca.pem &&
+        cp /keys/signing.pem /out/signing.pem &&
+        chown ${POLICY_LOCAL_UID:-1000} /out/ca.pem /out/signing.pem &&
+        chmod 644 /out/ca.pem && chmod 600 /out/signing.pem
+    volumes:
+      - policy-tls:/tls:ro
+      - policy-keys:/keys:ro
+      - ${POLICY_LOCAL_DIR:-./policy-local}:/out
+    depends_on:
+      policy-tls:
+        condition: service_completed_successfully
+      policy-keys:
+        condition: service_completed_successfully
+    restart: "no"
 
   # One-shot: turns the feed of the platform's entities on and marks
   # every live one (ADR-0140 item 10), which the api's loop delivers.

@@ -41,9 +41,17 @@ db-prune:
 # stays down. It builds first, migrations included, because compose
 # starts an existing image stale and reports it healthy (#297). The feed
 # is a one-shot, and `up --wait` fails on a container that exits, so it
-# is started apart and its exit status read.
+# is started apart and its exit status read. policy-host is one too: it
+# copies the policy service's certificate and the api's signing key into
+# POLICY_LOCAL_DIR for a suite on the host (see stack.mk), made here at
+# mode 700 so the copies are owned by the caller and not by Docker.
 backend-up:
 	$(COMPOSE_LOCAL) up -d --build --wait api policy
+	@mkdir -p -m 700 '$(POLICY_LOCAL_DIR)'
+	$(COMPOSE_LOCAL) up -d policy-host
+	@$(COMPOSE_LOCAL) wait policy-host >/dev/null 2>&1; \
+		test "$$($(COMPOSE_LOCAL) ps -a --status exited --format '{{.ExitCode}}' policy-host)" = 0 \
+			|| { echo "backend-up: policy-host did not exit 0" >&2; exit 1; }
 	$(COMPOSE_LOCAL) up -d --build policy-feed
 	@$(COMPOSE_LOCAL) wait policy-feed >/dev/null 2>&1; \
 		test "$$($(COMPOSE_LOCAL) ps -a --status exited --format '{{.ExitCode}}' policy-feed)" = 0 \

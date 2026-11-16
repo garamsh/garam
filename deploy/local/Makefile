@@ -176,7 +176,8 @@ minikube-migrate: minikube-context
 # the console and the site, and reports what is running rather than
 # that it finished. Each pod template is stamped with the id of the
 # image it runs, so a rebuilt image is a changed Deployment the apply
-# rolls and an unrebuilt one restarts nothing — which a mutable tag alone cannot tell apart.
+# rolls and an unrebuilt one restarts nothing — which a mutable tag
+# alone cannot tell apart.
 minikube-apps: minikube-context
 	@eval "$$($(MINIKUBE) docker-env --shell bash)"; \
 		id="$$(docker image inspect --format '{{.Id}}' garam:local)" && \

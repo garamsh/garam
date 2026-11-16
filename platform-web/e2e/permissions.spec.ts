@@ -398,6 +398,7 @@ test.describe("permissions", () => {
     await expect(
       page.getByRole("button", { name: "Activate", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("link", { name: "New version" })).toBeVisible();
     await openTab(page, /^Versions/);
     await expect(
       page.getByRole("button", { name: "Delete policy", exact: true }),
@@ -414,6 +415,9 @@ test.describe("permissions", () => {
     await expect(
       page.getByRole("button", { name: "Activate", exact: true }),
     ).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "New version" })).toHaveCount(
+      0,
+    );
     await expect(
       page.getByRole("button", { name: "Delete policy", exact: true }),
     ).toHaveCount(0);

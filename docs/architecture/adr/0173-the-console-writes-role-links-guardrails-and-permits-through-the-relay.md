@@ -73,11 +73,10 @@ CLI. Three questions were left to this round.
   drafts, previews or explains what Cedar would decide.
 - A person sees the service's parse error and nothing the editor knew
   first: no highlighting, no inline marks.
-- Until the platform answers the writes asked on the organization
-  (#1981), a request that asks one it does not answer is refused with a
-  400, every answer is `unknown`, and every control is offered; the
-  service still refuses a caller who may not, with a 403 said at the
-  form.
+- The platform answers every write asked on the organization (#1979,
+  #1981), so a caller denied one is not offered its control; where a
+  check cannot be asked, every control is offered, and the service still
+  refuses a caller who may not, with a 403 said at the form.
 - One fewer client dependency family to keep current, and no browser
   shim in the component tests.
 

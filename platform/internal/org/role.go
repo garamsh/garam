@@ -68,10 +68,9 @@ const (
 	ActionAuditRead = "iam:audit.read"
 
 	// ActionPermitWrite is writing a permit of the organization's
-	// delegated authority (ADR-0145 item 4). Owners alone hold it
-	// through the policy service, and no role here grants it: it is an
-	// action only for checkPermissions, which asks the service
-	// (ADR-0172).
+	// delegated authority (ADR-0145 item 4). The owner alone holds it,
+	// here as in the policy service's schema, and checkPermissions asks
+	// the service (ADR-0172).
 	ActionPermitWrite = "iam:permit.write"
 
 	// Cross-organization consent management (ADR-0035). The org owns
@@ -354,7 +353,7 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
-			ActionAuditRead,
+			ActionAuditRead, ActionPermitWrite,
 		}, machineActionsHeld(false), coworkActions, codehubActionsHeld(false))
 	case RoleAdmin:
 		return slices.Concat([]string{

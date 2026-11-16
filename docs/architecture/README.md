@@ -1545,6 +1545,8 @@ ADRs:
   — the lists and the search filter ask the policy service, one probe
   per object of a page in one `Evaluations` call, an error of the
   service a 503 `unavailable`, a policy asked on its organization;
-  `checkPermissions` answers `iam:permit.write` from the service, which
-  may allow what a permit write refuses where a permit names it;
-  accepted, built (#1979); builds ADR-0146, amends 0115 and 0171 item 6
+  `checkPermissions` answers `iam:permit.write`, which the owner holds
+  and which may allow what a permit write refuses where a permit names
+  it; accepted, built (#1979); builds ADR-0146; supersedes 0115 in part
+  (the engine's `CheckBatch` as the list filter) and 0171 in part
+  (item 6's list filter, item 7's reservation of `iam:permit.write`)

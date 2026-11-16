@@ -571,8 +571,8 @@ func (c *currentDecisions) currentQuestions() []policydecision.Question {
 
 // questions are every question it decided rather than answered as a
 // send: the read-current ones, and those the browser listener's
-// enforcement, its permission checks and its holders list ask of a
-// user.
+// enforcement, its permission checks, its holders list and the probes
+// of a list or the search ask of a user.
 func (c *currentDecisions) questions() []policydecision.Question {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -221,9 +221,11 @@ func TestEnforcement_AFailingServiceIsUnavailableNotAnEmptyList(t *testing.T) {
 		t.Run(k.name, func(t *testing.T) {
 			failing.Store(false)
 			assert.Len(t, s.grns(t, k.path, "", s.owner), 1, "control: the list when the service answers")
+			status, body := s.get(t, "/orgs/acme/search?q=ops", s.owner)
+			assert.Equal(t, http.StatusOK, status, "control: the search when the service answers: %s", body)
 
 			failing.Store(true)
-			status, body := s.get(t, k.path, s.owner)
+			status, body = s.get(t, k.path, s.owner)
 			assert.Equal(t, http.StatusServiceUnavailable, status, body)
 			assert.Contains(t, body, "unavailable")
 			status, body = s.get(t, "/orgs/acme/search?q=ops", s.owner)

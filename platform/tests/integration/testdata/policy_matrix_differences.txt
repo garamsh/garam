@@ -1,9 +1,6 @@
 # Differences between the platform's engine and the policy service,
 # one key per line: subject, action, resource. The platform allows each
-# policy key and the service denies it, because it holds no Iam::Policy
-# entity. The permit.write key is the other way: no role's action list
-# carries it, so the platform's engine denies the owner what the
-# service's owner role link allows.
+# and the service denies it, because it holds no Iam::Policy entity.
 # docs/architecture/policy-matrix.md explains them.
 A.admin iam:policy.attach A.policy
 A.admin iam:policy.delete A.policy
@@ -15,4 +12,3 @@ A.owner iam:policy.delete A.policy
 A.owner iam:policy.detach A.policy
 A.owner iam:policy.read A.policy
 A.owner iam:policy.update A.policy
-A.owner iam:permit.write A.org

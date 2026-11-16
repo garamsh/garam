@@ -2,7 +2,9 @@
 
 > Status: accepted; built in `platform/internal/api`,
 > `platform/internal/cli`, `platform/internal/policydecision/mocks` and
-> `platform/tests/integration` (#1974)
+> `platform/tests/integration` (#1974); superseded in part by
+> [ADR-0172](./0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md)
+> (item 6's list filter, and item 7's reservation of `iam:permit.write`)
 > Date: 2026-11-17
 
 Drafted for #1974, which reserves this number, under #1796. It builds

@@ -18,9 +18,9 @@ authorization question differently, as measured by the suite in
 
 | | Count |
 |---|---|
-| Questions asked | 1749 |
-| Agreeing: both decided, the same answer | 1738 |
-| Differing: both decided, different answers | 11 |
+| Questions asked | 1716 |
+| Agreeing: both decided, the same answer | 1706 |
+| Differing: both decided, different answers | 10 |
 | Refused by the service: no decision | 0 |
 
 The three classes sum to the total. A question agrees when both
@@ -37,9 +37,8 @@ the differing ones and a sample of the rest.
 
 ## Differences
 
-Ten are one case: an organization's owner or admin against a policy
-of the organization, on the five `iam:policy` actions. The eleventh is
-the owner's `iam:permit.write` on the organization, below.
+All ten are one case: an organization's owner or admin against a
+policy of the organization, on the five `iam:policy` actions.
 
 | Question | Platform | Service |
 |---|---|---|
@@ -50,14 +49,7 @@ the owner's `iam:permit.write` on the organization, below.
 | owner, `iam:policy.delete` on the policy | allow | deny |
 | admin, the same five actions | allow | deny |
 
-The eleventh is the other way round: the platform denies the owner
-`iam:permit.write` on the organization and the service allows it. No
-role's action list carries the action (`Role.Actions`,
-`platform/internal/org/role.go`), so the platform's engine finds no
-statement; the service holds it in the owner's role link, and
-`checkPermissions` asks the service (ADR-0172).
-
-The service's reason in each of the ten is `tenant-isolation` with the
+The service's reason in every case is `tenant-isolation` with the
 error "entity `Iam::Policy::"<grn>"` does not exist".
 
 **Which rule explains it.**
@@ -130,9 +122,10 @@ organization and across it.
   a 200 means admitted, a 400 means not.
 - **Inside and across.** Each subject is asked about the resources of
   every one of the three organizations.
-- **Excluded.** `iam:agent.activate` and `iam:permit.write` are not
-  in the organization actions the check route offers, so they are not
-  asked. `iam:message.send` is not asked of the platform: the machine
+- **Excluded.** `iam:agent.activate` is not in the organization
+  actions the check route offers, so it is not asked.
+  `iam:permit.write` is, since ADR-0172, and is asked on the
+  organization. `iam:message.send` is not asked of the platform: the machine
   listener has no platform decision for a send (ADR-0168), so the
   matrix asks the service through the listener instead (§What a send
   is asked). The `cowork` actions are the service's and cowork's.

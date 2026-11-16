@@ -18,8 +18,8 @@ authorization question differently, as measured by the suite in
 
 | | Count |
 |---|---|
-| Questions asked | 1716 |
-| Agreeing: both decided, the same answer | 1706 |
+| Questions asked | 1881 |
+| Agreeing: both decided, the same answer | 1871 |
 | Differing: both decided, different answers | 10 |
 | Refused by the service: no decision | 0 |
 

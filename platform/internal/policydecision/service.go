@@ -22,6 +22,21 @@ type Question struct {
 	Current  bool
 }
 
+type probeKey struct{}
+
+// AsProbe marks ctx as one a caller decides what to show in, so a check
+// that runs beneath it on the way to asking the service asks as a probe
+// (Question.Probe) without every layer between carrying the flag.
+func AsProbe(ctx context.Context) context.Context {
+	return context.WithValue(ctx, probeKey{}, true)
+}
+
+// IsProbe reports whether ctx was marked by AsProbe.
+func IsProbe(ctx context.Context) bool {
+	probe, _ := ctx.Value(probeKey{}).(bool)
+	return probe
+}
+
 // Reason is one ground of a decision. PolicyID is empty when the
 // service refused the question itself, and Error is empty unless a
 // policy failed to evaluate or the question was refused.

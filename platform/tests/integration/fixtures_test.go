@@ -470,19 +470,16 @@ func (s *sendsRefusing) Evaluate(ctx context.Context, q policydecision.Question)
 // policy service this suite does not run. A question that does not ask
 // read-current is a send, answered as sameOrganizationSends answers it.
 //
-// It answers a user by the role the membership holds now and the
-// policies the organization stores, read past any cache, an operator
-// as allowed, which is what the service answers for one holding the
-// operation the platform has checked its grant covers, and either as
-// denied where a test forbids the pair. What the service itself reads,
-// the fed operations, the guardrails and the role links, is held by the
-// suite tagged policymatrix against the real service.
+// It answers as the service does for the state the platform feeds it
+// and nothing more: a user is allowed what the role the membership
+// holds now carries, an operator is allowed what the platform has
+// checked its grant covers, and either is denied where a test forbids
+// the pair; a test can also make it fail or stall. What the service
+// itself reads, the fed operations, the guardrails and the role links,
+// is held by the suite tagged policymatrix against the real service.
 type currentDecisions struct {
 	policydecision.Service
 	orgs org.Store
-	// engine stands in for the policy service's reading of the
-	// organization's stored policies, past any cache.
-	engine *authz.GRPCServer
 
 	mu        sync.Mutex
 	forbidden map[[2]string]bool
@@ -492,10 +489,7 @@ type currentDecisions struct {
 }
 
 func newCurrentDecisions(p *pgxpool.Pool) *currentDecisions {
-	return &currentDecisions{
-		Service: sameOrganizationSends{}, orgs: orgpg.New(p),
-		engine: authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p))),
-	}
+	return &currentDecisions{Service: sameOrganizationSends{}, orgs: orgpg.New(p)}
 }
 
 // forbid makes every question of subject about action a denial.
@@ -562,7 +556,7 @@ func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Questi
 	case forbidden:
 		return policydecision.Decision{}, nil
 	case q.Subject.ServiceType != user.ServiceType:
-		return c.operatorDecision(ctx, q)
+		return policydecision.Decision{Allowed: true}, nil
 	}
 	owning := q.Resource.Organization
 	if q.Resource.ServiceType == "org" {
@@ -575,57 +569,9 @@ func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Questi
 	if err != nil {
 		return policydecision.Decision{}, err
 	}
-	orgGRN := grn.Org(owning)
-	groups, err := c.orgs.ListGroupsByMember(ctx, orgGRN, q.Subject)
-	if err != nil {
-		return policydecision.Decision{}, err
-	}
-	resp, err := c.engine.CheckCurrent(ctx, &authzv1.CheckCurrentRequest{
-		SubjectGrn: q.Subject.String(),
-		ObjectGrn:  q.Resource.String(),
-		Action:     q.Action,
-		Statements: []*authzv1.Statement{{
-			Sid:      "member-roles",
-			Effect:   authzv1.Effect_EFFECT_ALLOW,
-			Action:   m.Role.Actions(),
-			Resource: []string{orgGRN.String(), grn.OrgPattern(orgGRN.Identifier)},
-		}},
-		SubjectGroups: wire.GRNsToProto(groups),
-		SubjectOrg:    orgGRN.String(),
-	})
-	if err != nil {
-		return policydecision.Decision{}, err
-	}
-	return policydecision.Decision{Allowed: resp.GetAllowed()}, nil
-}
-
-// operatorDecision answers an operator the platform has checked holds a
-// grant for the operation: allowed, beside the policies the
-// organization stores for the operator and its groups, where a Deny
-// wins.
-func (c *currentDecisions) operatorDecision(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {
-	orgGRN := grn.Org(q.Subject.Organization)
-	groups, err := c.orgs.ListGroupsByMember(ctx, orgGRN, q.Subject)
-	if err != nil {
-		return policydecision.Decision{}, err
-	}
-	resp, err := c.engine.CheckCurrent(ctx, &authzv1.CheckCurrentRequest{
-		SubjectGrn: q.Subject.String(),
-		ObjectGrn:  q.Resource.String(),
-		Action:     q.Action,
-		Statements: []*authzv1.Statement{{
-			Sid:      "delegation",
-			Effect:   authzv1.Effect_EFFECT_ALLOW,
-			Action:   []string{q.Action},
-			Resource: []string{q.Resource.String()},
-		}},
-		SubjectGroups: wire.GRNsToProto(groups),
-		SubjectOrg:    orgGRN.String(),
-	})
-	if err != nil {
-		return policydecision.Decision{}, err
-	}
-	return policydecision.Decision{Allowed: resp.GetAllowed()}, nil
+	role := authz.Statement{Action: m.Role.Actions(), Resource: []string{
+		grn.Org(owning).String(), grn.OrgPattern(owning)}}
+	return policydecision.Decision{Allowed: role.Matches(q.Action, q.Resource.String())}, nil
 }
 
 // refusalText is the body of the refusal garam stores to a sender whose

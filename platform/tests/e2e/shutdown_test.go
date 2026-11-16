@@ -343,15 +343,26 @@ func waitForProbe(t *testing.T, url string, logs *bytes.Buffer) {
 	}
 }
 
-// apiPolicyEnv is policyEnv for `serve api`, which refuses to start
-// without them too since a user's delegated authority is the policy
-// service's decision (ADR-0146). The root it verifies the service by is
-// a certificate from machineKeyMaterialFiles, which the api never
-// dials.
+// apiPolicyEnv is what `serve api` refuses to start without since a
+// user's delegated authority is the policy service's decision
+// (ADR-0146): the stack's real service, which `make -C platform e2e`
+// names by GARAM_TEST_POLICY_ADDR, the root it verifies it by and the
+// key it trusts. It is the service the api's delivery loop feeds and the
+// one that answers a delegation, a mint and an approval, so what these
+// tests drive through the api is decided by it and by no stand-in.
 func apiPolicyEnv(t *testing.T) []string {
 	t.Helper()
-	_, _, _, rootFile := machineKeyMaterialFiles(t)
-	return policyEnv(t, rootFile)
+	get := func(name string) string {
+		v := os.Getenv(name)
+		require.NotEmpty(t, v, "%s names the stack's policy service; run make -C platform e2e", name)
+		return v
+	}
+	return []string{
+		"GARAM_POLICY_ADDR=" + get("GARAM_TEST_POLICY_ADDR"),
+		"GARAM_POLICY_CA_FILE=" + get("GARAM_TEST_POLICY_CA"),
+		"GARAM_POLICY_SIGNING_KEY_FILE=" + get("GARAM_TEST_POLICY_KEY"),
+		"GARAM_POLICY_TOKEN_ISSUER=https://garam.localhost/api",
+	}
 }
 
 // policyEnv is what `serve machine` and `serve api` refuse to start

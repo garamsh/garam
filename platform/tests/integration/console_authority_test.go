@@ -132,11 +132,11 @@ func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T
 // answers that binding. Each refusal sits beside an accepted call it
 // differs from in one thing:
 //   - another target, or no request target;
-//   - a member a Deny takes iam:operator.read from, beside the owner;
+//   - a member the policy service denies iam:operator.read, beside the owner;
 //   - a grant that no longer lists the operation.
 func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
 	d := s.grant(t, "g-1", nil, "iam:operator.read")
 	orgTarget := s.acme.String()
@@ -160,9 +160,7 @@ func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
 	status, got = s.mintTarget(t, s.member, "iam:operator.read", orgTarget, "operators-4", "")
 	assert.Equal(t, http.StatusBadRequest, status, "the read binds its request target: %s", got)
 
-	denied := activePolicy(t, policies, s.acme, "deny-operator-read",
-		statementDoc("deny-operator-read", wire.EffectDeny, org.ActionOperatorRead, s.acme.String()))
-	attachPolicy(t, policies, denied, s.memberGRN)
+	s.decisions.forbid(s.memberGRN, org.ActionOperatorRead)
 	status, got = s.mintTarget(t, s.member, "iam:operator.read", orgTarget, "operators-5", operators)
 	assert.Equal(t, http.StatusForbidden, status, "a caller without iam:operator.read: %s", got)
 	status, got = s.mintTarget(t, s.owner, "iam:operator.read", orgTarget, "operators-5", operators)
@@ -243,14 +241,14 @@ func TestConsoleAuthority_EachReadNeedsItsOwnDelegation(t *testing.T) {
 // TestConsoleAuthority_RechecksBeforeTheOperatorAnswers holds that a
 // read authority is decided again from current state each time the
 // Operator introspects it, before it may answer: another audience, a
-// removed membership, a policy Deny, an expired delegation and a
+// removed membership, a service denial, an expired delegation and a
 // withdrawn one each refuse. The owner's authority, which the first
 // three do not reach, is the control for them, and each authority
 // answered just before the change that refuses it.
 func TestConsoleAuthority_RechecksBeforeTheOperatorAnswers(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
 	d := s.grant(t, "g-1", nil, consoleOperations...)
 	minted := func(cookie *http.Cookie, requestID string) string {
@@ -275,11 +273,9 @@ func TestConsoleAuthority_RechecksBeforeTheOperatorAnswers(t *testing.T) {
 	status, got = s.introspect(t, s.hostedTLS, byMember)
 	require.Equal(t, http.StatusOK, status, "membership restored, so the refusal above was its: %s", got)
 
-	denied := activePolicy(t, policies, s.acme, "deny-template-read",
-		statementDoc("deny-template-read", wire.EffectDeny, "iam:agent-template.read", s.acme.String()))
-	attachPolicy(t, policies, denied, s.memberGRN)
+	s.decisions.forbid(s.memberGRN, "iam:agent-template.read")
 	status, _ = s.introspect(t, s.hostedTLS, byMember)
-	assert.Equal(t, http.StatusForbidden, status, "a Deny wins over the member default")
+	assert.Equal(t, http.StatusForbidden, status, "the service's denial wins over the member default")
 	status, got = s.introspect(t, s.hostedTLS, byOwner)
 	assert.Equal(t, http.StatusOK, status, "the Deny reaches only the member: %s", got)
 

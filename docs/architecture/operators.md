@@ -43,7 +43,7 @@ tokens, grants and authorities.
 | `AssignmentReader` | answers where an agent runs now |
 | `AuthorityService` | grants and withdraws delegations, sets and clears a hosted operator's control endpoint, mints operation authorities, and introspects and rechecks them for their audience |
 | `ControllerProof` | a positive proof for one decision: the controller, its organization and, where an agent was named, a `ProvenAgent` — that agent and its current assignment's opaque epoch |
-| `AudienceAuthorizer` | decides from current state whether a hosted operator may perform an action, beside the one Allow its grant contributes, refusing whatever it cannot decide |
+| `AudienceAuthorizer` | decides from current state whether a hosted operator may perform an action, from the policy service's decision read current once the platform has found its grant covers the operation, refusing whatever it cannot decide |
 | `ProofService` | proves a controller's current authority to its hosted operator from the current grant, a named agent's current placement and current policy |
 
 The identifier is the caller's rather than garam's, which is what makes

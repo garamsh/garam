@@ -46,6 +46,34 @@ func TestCurrentDecision_AsksTheServiceReadCurrentAndNothingElse(t *testing.T) {
 	}, svc.asked[0])
 }
 
+// TestCurrentDecision_AsksAsAProbeOnlyWhereItsContextSaysSo holds that
+// a decision made to show something is asked as a probe, so the service
+// records no denial, and one made to act is not.
+func TestCurrentDecision_AsksAsAProbeOnlyWhereItsContextSaysSo(t *testing.T) {
+	svc := &answering{decision: policydecision.Decision{Allowed: true}}
+	ada, acme := grn.New("acme", "user", "ada"), grn.New("acme", "project", "p")
+	org := grn.New("acme", "org", "acme")
+
+	require.NoError(t, currentDecision{decisions: svc}.Authorize(
+		policydecision.AsProbe(context.Background()), ada, org, acme, "iam:operator.read"))
+	require.NoError(t, currentDecision{decisions: svc}.Authorize(
+		context.Background(), ada, org, acme, "iam:operator.read"))
+
+	require.Len(t, svc.asked, 2)
+	assert.True(t, svc.asked[0].Probe, "a check asks as a probe")
+	assert.False(t, svc.asked[1].Probe, "an action does not")
+}
+
+// TestCurrentDecision_WithoutAServiceIsUnavailable holds that a decision
+// with no policy service to ask is unavailable, never a panic and never
+// an allowance.
+func TestCurrentDecision_WithoutAServiceIsUnavailable(t *testing.T) {
+	err := currentDecision{}.Authorize(context.Background(),
+		grn.New("acme", "user", "ada"), grn.New("acme", "org", "acme"), grn.New("acme", "project", "p"), "iam:operator.read")
+	require.Error(t, err)
+	assert.Equal(t, errorx.KindUnavailable, errorx.KindOf(err))
+}
+
 // TestCurrentDecision_FailsClosed shows a denial is permission denied
 // and any service failure unavailable, never an allowance. The failure
 // carries a permission-denied kind of its own, which must not be read

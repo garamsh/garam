@@ -24,7 +24,7 @@ func NewStandaloneService(pool *pgxpool.Pool, decisions policydecision.Service) 
 
 // newSupervisorService composes how a standalone host's supervisor
 // enrolls and exchanges its credential over the database and the policy
-// engine, which decides the approving administrator's authority again;
+// service, which decides the approving administrator's authority again;
 // serverRoot is answered beside the credential.
 func newSupervisorService(pool *pgxpool.Pool, decisions policydecision.Service, serverRoot []byte, now func() time.Time) agent.SupervisorService {
 	store := agentpg.New(pool)

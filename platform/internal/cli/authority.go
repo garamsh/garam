@@ -36,13 +36,25 @@ func NewAuthorityService(pool *pgxpool.Pool, decisions policydecision.Service) o
 // delegated operations are the service's own state, and the
 // organization is the one the service reads from the subject.
 //
+// A context marked policydecision.AsProbe asks as a probe, which is how
+// the console's permission check decides what to show without recording
+// a denial (ADR-0148 item 2); an action does not.
+//
 // An error from the service is unavailable, never a denial and never an
 // allow, whatever kind it arrived with.
 type currentDecision struct{ decisions policydecision.Service }
 
+// errNoCurrentPolicy is what a decision answers when no policy service
+// is configured: unavailable, as a send's is.
+var errNoCurrentPolicy = errorx.New(errorx.KindUnavailable, "no policy service is configured to decide this")
+
 func (d currentDecision) Authorize(ctx context.Context, subject, _, object grn.GRN, action string) error {
+	if d.decisions == nil {
+		return errNoCurrentPolicy
+	}
 	decision, err := d.decisions.Evaluate(ctx, policydecision.Question{
 		Subject: subject, Action: action, Resource: object, Current: true,
+		Probe: policydecision.IsProbe(ctx),
 	})
 	if err != nil {
 		return errorx.Wrap(err, "policy decision", errorx.KindUnavailable)

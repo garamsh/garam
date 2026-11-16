@@ -47,6 +47,7 @@ type authorityStack struct {
 	machine    string
 	acme       grn.GRN
 	owner      *http.Cookie
+	ownerGRN   grn.GRN
 	member     *http.Cookie
 	memberGRN  grn.GRN
 	hosted     grn.GRN
@@ -82,7 +83,7 @@ func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
-	owner, _ := session("ada", org.RoleOwner)
+	owner, ownerGRN := session("ada", org.RoleOwner)
 	member, memberGRN := session("bob", org.RoleMember)
 
 	srv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
@@ -97,7 +98,7 @@ func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool
 	machine := machineListenerDeciding(t, p, sealer, nil, decisions)
 	return &authorityStack{
 		pool: p, engine: engine, browser: browser.URL, machine: machine,
-		acme: acme, owner: owner, member: member, memberGRN: memberGRN, hosted: hosted, controller: controller,
+		acme: acme, owner: owner, ownerGRN: ownerGRN, member: member, memberGRN: memberGRN, hosted: hosted, controller: controller,
 		hostedTLS:  operatorClient(t, p, machine, hosted),
 		controlTLS: operatorClient(t, p, machine, controller),
 	}

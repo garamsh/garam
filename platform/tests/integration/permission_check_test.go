@@ -248,42 +248,47 @@ func TestCheckPermissions_AnswersDelegationAsItsWritesDecide(t *testing.T) {
 
 // TestCheckPermissions_AnswersDelegationOnOperatorDelegateAlone holds
 // that what the check and the writes ask for is iam:operator.delegate
-// itself. A policy allows the member that action and nothing else: the
-// check turns from deny to allow and the member sets the endpoint.
-// The answer before the attachment is the control.
+// itself. The policy service denies the owner another action: the
+// check stays allow and the owner sets the endpoint, the control.
+// Denying iam:operator.delegate turns the check to deny and the write
+// to a refusal, and every question asked was about that action.
 func TestCheckPermissions_AnswersDelegationOnOperatorDelegateAlone(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
 	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
-	require.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny},
-		permissionDecisions(t, s.browser, s.member, org.ActionOperatorDelegate))
+	put := func() (int, string) {
+		return call(t, http.DefaultClient, http.MethodPut, endpointPath, s.owner, `{"url":"https://control.example.com/garam"}`)
+	}
 
-	delegator := activePolicy(t, policies, s.acme, "delegate-only",
-		statementDoc("delegate-only", wire.EffectAllow, org.ActionOperatorDelegate, s.acme.String()))
-	attachPolicy(t, policies, delegator, s.memberGRN)
-
+	s.decisions.forbid(s.ownerGRN, org.ActionAgentCreate)
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow},
-		permissionDecisions(t, s.browser, s.member, org.ActionOperatorDelegate))
-	status, got := call(t, http.DefaultClient, http.MethodPut, endpointPath, s.member, `{"url":"https://control.example.com/garam"}`)
-	assert.Equal(t, http.StatusOK, status, "the policy lets the member set the endpoint: %s", got)
+		permissionDecisions(t, s.browser, s.owner, org.ActionOperatorDelegate))
+	status, got := put()
+	assert.Equal(t, http.StatusOK, status, "another action's denial leaves the write: %s", got)
+	for _, q := range s.decisions.currentQuestions() {
+		assert.Equal(t, org.ActionOperatorDelegate, q.Action, "the check and the write ask iam:operator.delegate alone")
+	}
+
+	s.decisions.forbid(s.ownerGRN, org.ActionOperatorDelegate)
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny},
+		permissionDecisions(t, s.browser, s.owner, org.ActionOperatorDelegate))
+	status, got = put()
+	assert.Equal(t, http.StatusForbidden, status, "the denial refuses the write: %s", got)
 }
 
 // TestCheckPermissions_AsksAnAgentActionOnTheAgentNamed holds that an
 // agent-targeted action is asked on the agent the pair names, as its
-// mint decides it. A policy allows the member iam:agent.configure on
-// one agent alone: that agent is answered unknown and minted, and
-// another agent of the same controller, the control, is answered deny
-// and refused.
+// mint decides it. The owner's check on each of two agents of one
+// controller is answered unknown and each is minted, the control; the
+// policy service asked about each agent by name. Denying the owner
+// iam:agent.configure then answers both deny and refuses both mints.
 func TestCheckPermissions_AsksAnAgentActionOnTheAgentNamed(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
 	s.grant(t, "g-1", nil, org.ActionAgentConfigure)
 	allowed, other := s.provisionAgent(t), s.provisionAgent(t)
-	configurer := activePolicy(t, policies, s.acme, "configure-one",
-		statementDoc("configure-one", wire.EffectAllow, org.ActionAgentConfigure, allowed))
-	attachPolicy(t, policies, configurer, s.memberGRN)
 	on := func(agent string) apigen.PermissionCheck {
 		g, err := grn.Parse(agent)
 		require.NoError(t, err)
@@ -291,12 +296,22 @@ func TestCheckPermissions_AsksAnAgentActionOnTheAgentNamed(t *testing.T) {
 			Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypeAgent, Id: g.Identifier}}
 	}
 
-	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionUnknown, apigen.DecisionDeny},
-		checkedDecisions(t, s.browser, s.member, on(allowed), on(other)))
-	status, got := s.mint(t, s.member, org.ActionAgentConfigure, allowed, "configure-allowed")
-	assert.Equal(t, http.StatusCreated, status, "the agent the policy names: %s", got)
-	status, got = s.mint(t, s.member, org.ActionAgentConfigure, other, "configure-other")
-	assert.Equal(t, http.StatusForbidden, status, "another agent: %s", got)
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionUnknown, apigen.DecisionUnknown},
+		checkedDecisions(t, s.browser, s.owner, on(allowed), on(other)))
+	status, got := s.mint(t, s.owner, org.ActionAgentConfigure, allowed, "configure-allowed")
+	assert.Equal(t, http.StatusCreated, status, "the first agent: %s", got)
+	var asked []string
+	for _, q := range s.decisions.currentQuestions() {
+		asked = append(asked, q.Resource.String())
+	}
+	assert.Contains(t, asked, allowed, "the service was asked about the agent named")
+	assert.Contains(t, asked, other, "and about the other agent")
+
+	s.decisions.forbid(s.ownerGRN, org.ActionAgentConfigure)
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionDeny},
+		checkedDecisions(t, s.browser, s.owner, on(allowed), on(other)))
+	status, got = s.mint(t, s.owner, org.ActionAgentConfigure, other, "configure-other")
+	assert.Equal(t, http.StatusForbidden, status, "the denial refuses the mint: %s", got)
 }
 
 // TestCheckPermissions_DeniesAGrantActionItsMintDenies holds the check
@@ -329,4 +344,45 @@ func TestCheckPermissions_DeniesAGrantActionItsMintDenies(t *testing.T) {
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionUnknown},
 		permissionDecisions(t, s.browser, s.owner, org.ActionAgentTemplatePublish))
 	assert.Equal(t, http.StatusCreated, publish(s.owner, "pub-owner"), "the grant the check did not read allows the owner")
+}
+
+// TestCheckPermissions_AsksTheServiceAsAProbeAndAnActionDoesNot holds
+// that a console check, which only shows what the person may do, asks
+// the policy service as a probe so no denial is recorded for it
+// (ADR-0148), while the write or the mint it describes asks as an
+// action.
+func TestCheckPermissions_AsksTheServiceAsAProbeAndAnActionDoesNot(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newAuthorityStack(t, engine, p)
+	counts := func() (probes, actions int) {
+		for _, q := range s.decisions.currentQuestions() {
+			if q.Probe {
+				probes++
+			} else {
+				actions++
+			}
+		}
+		return probes, actions
+	}
+
+	permissionDecisions(t, s.browser, s.owner, org.ActionOperatorDelegate)
+	probes, actions := counts()
+	assert.Equal(t, 1, probes, "the delegation check asks as a probe")
+	assert.Zero(t, actions, "and asks nothing as an action")
+
+	s.grant(t, "g-1", nil, org.ActionAgentCreate)
+	_, written := counts()
+	assert.Positive(t, written, "writing the grant asks as an action")
+
+	permissionDecisions(t, s.browser, s.member, org.ActionAgentCreate)
+	probes, actions = counts()
+	assert.Equal(t, 2, probes, "the mint check asks as a probe")
+	assert.Equal(t, written, actions, "and adds no action")
+
+	status, got := s.mint(t, s.member, org.ActionAgentCreate, s.controller.String(), "create-member")
+	require.Equal(t, http.StatusCreated, status, got)
+	probes, actions = counts()
+	assert.Equal(t, 2, probes, "the mint adds no probe")
+	assert.Greater(t, actions, written, "the mint asks as an action")
 }

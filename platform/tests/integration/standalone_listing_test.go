@@ -14,7 +14,6 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/user"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // enrollmentsListed lists acme's approvals as cookie, at query.
@@ -122,14 +121,14 @@ func TestStandaloneListing_ListsSupervisorsActiveAndRevoked(t *testing.T) {
 	assert.NotContains(t, raw, "CERTIFICATE")
 }
 
-// TestStandaloneListing_IsReadOnAgentRead attaches a Deny of
-// iam:agent.read to the member: both lists refuse it with 403. The
-// member before the Deny is the control, so what refuses is the Deny on
+// TestStandaloneListing_IsReadOnAgentRead has the policy service deny
+// the member iam:agent.read: both lists refuse it with 403. The member
+// before the denial is the control, so what refuses is the denial of
 // iam:agent.read and not a gate that refuses members; the owner after
-// it is the control that the Deny reached the member alone.
+// it is the control that the denial reached the member alone.
 func TestStandaloneListing_IsReadOnAgentRead(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	s.standaloneOf(t)
 	paths := []string{"/orgs/acme/agent-enrollments", "/orgs/acme/agent-supervisors"}
@@ -138,9 +137,7 @@ func TestStandaloneListing_IsReadOnAgentRead(t *testing.T) {
 		require.Equal(t, http.StatusOK, status, "the control, before the Deny: %s %s", path, body)
 	}
 
-	denied := activePolicy(t, policies, s.acme, "no-agent-read",
-		statementDoc("no-agent-read", wire.EffectDeny, org.ActionAgentRead, s.acme.String()))
-	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, user.ServiceType, "bob"))
+	s.decisions.forbid(grn.New(grn.RootOwner, user.ServiceType, "bob"), org.ActionAgentRead)
 
 	for _, path := range paths {
 		status, body := s.browse(t, http.MethodGet, path, s.member, "")

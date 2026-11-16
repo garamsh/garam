@@ -61,9 +61,12 @@ the service refuses as `INVALID_ARGUMENT` with the reason
 hosted operator asked an `iam` action it holds no route to is denied.
 Every other refusal, an unknown action, a resource of the wrong kind
 and a context the schema does not name among them, stays an error. It
-decides one thing: `serve machine` asks it every message send
-([ADR-0168](./adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)).
-`serve api` does not call it.
+decides what both listeners ask it: `serve machine` every message send
+([ADR-0168](./adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)),
+and each listener a user's delegated operation authority and a hosted
+operator's controller proof, read current. `serve api` does not start
+without it. Policies attached through the engine no longer reach those
+decisions, though their endpoints remain.
 [policy-matrix.md](./policy-matrix.md) reports where the two engines
 differ.
 

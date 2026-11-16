@@ -406,12 +406,12 @@ and not in the same place on every surface.
 - **Watching an agent is its own grant**, separate from reading one
   ([ADR-0022](./adr/0022-watching-an-agent.md)).
 - **Delegated operation authority is decided from current state on both
-  listeners**: membership, roles and groups as read for the call, and
-  the organization's persisted policies past the engine's cache, so an
-  allow recorded earlier is never what a later check reads and a
-  decision that cannot be made refuses. A controller proof is decided
-  the same way for the hosted operator, on its groups and current
-  policy beside the Allow its grant contributes
+  listeners**: the policy service is asked the actor, the action and the
+  object read current, so an allow recorded earlier is never what a
+  later check reads and a decision that cannot be made refuses. Policies
+  attached through the engine no longer reach it. A controller proof is
+  decided the same way for the hosted operator, once the platform has
+  found its grant covers the operation
   ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
 - **A read describing a write is decided on that write's action.**
   `getOrgDeletionPreview` answers what deleting an organization would
@@ -522,7 +522,7 @@ and not in the same place on every surface.
     `AuthorizeDelegation`), and that check is all of their authority.
   - **allow or deny** for `iam:agent.enroll`. It is put to the check
     every approval, withdrawal and revoke of a standalone host runs, on
-    current policy past the engine's cache, through the one function
+    the policy service's current decision, through the one function
     they all call (`platform/internal/agent/standalone_service.go`,
     `AuthorizeEnroll`), and that check is all of their authority. A new
     host is asked on the organization, and an approval, withdrawal or

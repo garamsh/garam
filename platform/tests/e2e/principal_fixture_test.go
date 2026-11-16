@@ -95,6 +95,35 @@ func prepareDatabase(t *testing.T, bin string) prepared {
 	return p
 }
 
+// startPolicyFeed turns the feed of the database on with the built
+// `garam policy-feed start`, so the api's delivery loop sends what it
+// writes to the policy service (ADR-0140): the organizations, members
+// and grants a delegated decision reads there are the ones the test
+// creates through the api.
+func startPolicyFeed(t *testing.T, bin, databaseURL string) {
+	t.Helper()
+	cmd := exec.Command(bin, "policy-feed", "start")
+	cmd.Env = []string{"GARAM_DATABASE_URL=" + databaseURL}
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "policy-feed start: %s", out)
+}
+
+// awaitDelivery waits until the api's delivery loop has sent everything
+// marked so far to the policy service, which is when a decision there
+// reads what the test just wrote through the api.
+func awaitDelivery(t *testing.T, databaseURL string) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, databaseURL)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close(ctx) }()
+	require.Eventually(t, func() bool {
+		var marked int
+		require.NoError(t, conn.QueryRow(ctx, `SELECT count(*) FROM policy_outbox`).Scan(&marked))
+		return marked == 0
+	}, 30*time.Second, 200*time.Millisecond, "the api did not deliver what it wrote to the policy service")
+}
+
 // serve starts one serve process once its probe answers ok, and
 // answers stop: SIGTERM, wait for the exit, then the logs. Logs are
 // read only after the exit, when nothing writes them any more. Cleanup
@@ -227,6 +256,7 @@ func TestPrincipalFixture_DrivesDelegationThroughThePublicAPI(t *testing.T) {
 	assert.True(t, p.ExpiresAt.After(time.Now()), "the session expires in the future")
 	assert.True(t, p.ExpiresAt.Before(time.Now().Add(2*time.Hour)), "and soon: the default lifetime is an hour")
 
+	startPolicyFeed(t, garam, p.DatabaseURL)
 	grpcAddr, metricsAddr, httpAddr := freeAddr(t), freeAddr(t), freeAddr(t)
 	serve(t, garam, "authz", []string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_GRPC_ADDR=" + grpcAddr, "GARAM_METRICS_ADDR=" + metricsAddr,
@@ -251,13 +281,15 @@ func TestPrincipalFixture_DrivesDelegationThroughThePublicAPI(t *testing.T) {
 	status, body = c.do(http.MethodPost, "/orgs/"+acme+"/invitations", owner, `{"role":"member"}`)
 	require.Equal(t, http.StatusCreated, status, body)
 	member := c.register(field(t, body, "token"), "bob")
+	awaitDelivery(t, p.DatabaseURL)
 
 	status, body = c.delegate(member, acme)
 	assert.Equal(t, http.StatusForbidden, status, "a member does not delegate: %s", body)
 	for _, slug := range []string{acme, globex} {
 		status, body = c.delegate(owner, slug)
-		require.Equal(t, http.StatusCreated, status, body)
+		require.Equal(t, http.StatusCreated, status, "%s: %s", slug, body)
 	}
+	awaitDelivery(t, p.DatabaseURL)
 
 	status, body = c.mint("", acme, "req-0")
 	assert.Equal(t, http.StatusUnauthorized, status, "no session: %s", body)

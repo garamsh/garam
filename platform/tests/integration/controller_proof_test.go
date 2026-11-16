@@ -25,15 +25,12 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/authz"
-	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
 	"github.com/garamsh/garam/platform/internal/cli"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/policydecision"
-	"github.com/garamsh/garam/platform/internal/wire"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // heldClock is the time the machine listener measures tokens and
@@ -402,60 +399,37 @@ func TestControllerProof_ReadsTheTimeOnEveryDecision(t *testing.T) {
 	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, fresh, ""), http.StatusForbidden, "caller token expired")
 }
 
-// TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow holds that
-// the proof is decided on the hosted operator's groups as they are now
-// and on persisted policy past the engine's cache. A Deny attached to a
-// group the operator is not in leaves the proof answering, which is the
-// control for adding it to that group; a Deny another process writes
-// refuses while the ordinary Check still answers its cached allow; and
-// a Deny on one agent refuses that agent's proof and not the session.
-func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
-	ctx := context.Background()
+// TestControllerProof_AsksTheServiceOnEveryProof holds that the proof is
+// decided by the policy service's answer read now, not by one kept from
+// an earlier proof: each proof on an open connection is a question to
+// it, and an answer that turns to a denial refuses the next, for the
+// session and for an agent. What the service decides from what it holds
+// is the policymatrix suite's.
+func TestControllerProof_AsksTheServiceOnEveryProof(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
-	s := newProofStack(t, engine, p, policies)
-	orgs := orgpg.New(p)
+	decisions := newCurrentDecisions(p)
+	s := newProofStackDeciding(t, engine, p, policies, decisions)
 	controllerTLS := s.operatorTLS(t, s.controller)
 	placed, _ := s.provision(t, controllerTLS)
 
-	team := scopedGRN("acme", org.ServiceTypeGroup, "controllers")
-	require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(team, "controllers", s.acme)))
-	denied := activePolicy(t, policies, s.acme, "deny-activate",
-		statementDoc("deny-activate", wire.EffectDeny, "iam:agent.activate", s.acme.String()))
-	attachPolicy(t, policies, denied, team)
-	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
-	require.Equal(t, http.StatusOK, got.status, "not in the denied group: %s", got.body)
-	require.NoError(t, orgs.AddGroupMember(ctx, team, s.hosted))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusForbidden, "added to the denied group")
-	require.NoError(t, orgs.RemoveGroupMember(ctx, team, s.hosted))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "removed again")
-
-	check := &authzv1.CheckRequest{
-		SubjectGrn: s.hosted.String(), ObjectGrn: s.acme.String(), Action: "iam:agent.activate",
-		Statements: []*authzv1.Statement{{Sid: "delegation", Effect: authzv1.Effect_EFFECT_ALLOW,
-			Action: []string{"iam:agent.activate"}, Resource: []string{s.acme.String()}}},
-		SubjectOrg: s.acme.String(),
+	// A proof opens the hosted client's connection, so that the two
+	// counted ones are each asked on an open one.
+	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "").status)
+	before := len(decisions.currentQuestions())
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "the first proof")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "the second, on the same connection")
+	asked := decisions.currentQuestions()[before:]
+	require.Len(t, asked, 2, "one question for each proof, none answered from the one before")
+	for _, q := range asked {
+		assert.Equal(t, policydecision.Question{
+			Subject: s.hosted, Action: "iam:agent.activate", Resource: s.acme, Current: true,
+		}, q)
 	}
-	client := authzv1.NewAuthzServiceClient(engine)
-	cached, err := client.Check(ctx, check)
-	require.NoError(t, err)
-	require.True(t, cached.GetAllowed())
-	// Another process's write: it drops its own cache, not the engine's.
-	store := authzpg.New(p)
-	elsewhere := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
-	attachPolicy(t, elsewhere, activePolicy(t, elsewhere, s.acme, "deny-agent",
-		statementDoc("deny-agent", wire.EffectDeny, "iam:agent.activate", placed)), s.hosted)
-	stale, err := client.Check(ctx, &authzv1.CheckRequest{
-		SubjectGrn: s.hosted.String(), ObjectGrn: placed, Action: "iam:agent.activate",
-		Statements: []*authzv1.Statement{{Sid: "delegation", Effect: authzv1.Effect_EFFECT_ALLOW,
-			Action: []string{"iam:agent.activate"}, Resource: []string{placed}}},
-		SubjectOrg: s.acme.String(),
-	})
-	require.NoError(t, err)
-	require.True(t, stale.GetAllowed(), "the control: the ordinary check still answers its cached allow")
 
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, placed), http.StatusForbidden, "a Deny on the agent")
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "the session, which the Deny does not name")
+	decisions.forbid(s.hosted, "iam:agent.activate")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusForbidden, "the service now denies it")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, placed), http.StatusForbidden, "and denies it for an agent")
 }
 
 // TestControllerProof_UnknownFreshnessRefusesAsUnavailable holds that

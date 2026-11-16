@@ -10,6 +10,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
 // maxPermissionChecks bounds one request, so a page asking what it
@@ -220,7 +221,7 @@ func (s *Server) decideAsMint(r *http.Request, c *caller, target grn.GRN, action
 	if err != nil {
 		return "", err
 	}
-	err = s.authority.AuthorizeOperation(r.Context(), c.user.GRN, c.org, target, op)
+	err = s.authority.AuthorizeOperation(policydecision.AsProbe(r.Context()), c.user.GRN, c.org, target, op)
 	switch {
 	case err == nil:
 		return apigen.DecisionUnknown, nil
@@ -234,7 +235,7 @@ func (s *Server) decideAsMint(r *http.Request, c *caller, target grn.GRN, action
 // write of a delegation runs, for the same actor and organization. That
 // check is all of their authority, so it answers allow or deny.
 func (s *Server) decideAsDelegation(r *http.Request, c *caller) (apigen.PermissionDecision, error) {
-	err := s.authority.AuthorizeDelegation(r.Context(), c.user.GRN, c.org)
+	err := s.authority.AuthorizeDelegation(policydecision.AsProbe(r.Context()), c.user.GRN, c.org)
 	switch {
 	case err == nil:
 		return apigen.DecisionAllow, nil
@@ -249,7 +250,7 @@ func (s *Server) decideAsDelegation(r *http.Request, c *caller) (apigen.Permissi
 // same actor and object. That check is all of their authority, so it
 // answers allow or deny.
 func (s *Server) decideAsEnroll(r *http.Request, c *caller, target grn.GRN) (apigen.PermissionDecision, error) {
-	err := s.standalone.AuthorizeEnroll(r.Context(), c.user.GRN, c.org, target)
+	err := s.standalone.AuthorizeEnroll(policydecision.AsProbe(r.Context()), c.user.GRN, c.org, target)
 	switch {
 	case err == nil:
 		return apigen.DecisionAllow, nil

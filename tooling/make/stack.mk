@@ -40,6 +40,18 @@ DB_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port postgres 5432 2>/dev/null | sed 's/
 # root token the dev server generated.
 OPENBAO_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port openbao 8200 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
 OPENBAO_CONTAINER = $(shell $(COMPOSE_LOCAL) ps -q openbao 2>/dev/null)
+# The policy service backend-up publishes on loopback, as compose
+# reports it (127.0.0.1, which its certificate names beside `policy`
+# and localhost); GARAM_POLICY_PORT moves it. POLICY_LOCAL_DIR is where the stack's
+# policy-host one-shot leaves the certificate (ca.pem) a suite on the
+# host trusts and the key (signing.pem) the platform signs its calls
+# with, owned by POLICY_LOCAL_UID, the account running make. The
+# directory is made at mode 700 by backend-up and is the stack's own
+# throwaway material; nothing prints or commits it.
+POLICY_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port policy 8443 2>/dev/null)
+POLICY_LOCAL_DIR ?= $(STACK_ROOT)/deploy/local/policy-local
+POLICY_LOCAL_UID := $(shell id -u)
+export POLICY_LOCAL_DIR POLICY_LOCAL_UID
 # The RustFS cowork's blob store is tested against, and the keys
 # deploy/local/docker-compose.yml gives it.
 COWORK_S3_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port rustfs 9000 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')

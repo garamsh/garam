@@ -21,7 +21,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -64,9 +63,6 @@ const (
 	matrixIssuerEnv = "POLICY_MATRIX_ISSUER"
 	// matrixReportEnv names a file the whole table is written to.
 	matrixReportEnv = "POLICY_MATRIX_REPORT"
-	// matrixAuthority is the name the stack's certificate holds; the
-	// address is the container's, which the certificate does not name.
-	matrixAuthority = "policy"
 	// matrixBatch is below the 1000 evaluations one request may hold.
 	matrixBatch = 500
 	// matrixDifferences lists, one key per line, the questions the two
@@ -188,7 +184,7 @@ func TestPolicyMatrix(t *testing.T) {
 
 	key, err := signer.LoadKey(keyFile)
 	require.NoError(t, err)
-	conn, err := feedgrpc.Dial(addr, caFile, issuer, key, grpc.WithAuthority(matrixAuthority))
+	conn, err := feedgrpc.Dial(addr, caFile, issuer, key)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 	client := policyv1.NewPolicyServiceClient(conn)

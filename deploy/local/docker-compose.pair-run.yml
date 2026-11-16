@@ -9,7 +9,7 @@
 #   publishes a free loopback port; the default's issuer, policy
 #   signing key and service keys file stay on it;
 # - api: publishes a free loopback port and names the listener's token
-#   URL, and postgres and authz publish none.
+#   URL, and postgres, authz and the policy service publish none.
 # The default file's cowork is not part of this run: the profile that
 # starts it is not given, and cowork would trust `machine-material`'s
 # certificate, which this run's listener does not serve.
@@ -36,6 +36,9 @@ services:
       - "127.0.0.1::8080"
     environment:
       GARAM_MACHINE_TOKEN_URL: https://machine:8443/oauth/token
+
+  policy:
+    ports: !reset []
 
   # Copies what the script made on the host into the volume the machine
   # listener reads, owned by the account it runs as (ADR-0017): the

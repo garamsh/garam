@@ -190,7 +190,11 @@ agent's control is answered 201.
 backend first. The forge runs it in `make -C platform suites`. The
 suite fails when a difference appears that
 `platform/tests/integration/testdata/policy_matrix_differences.txt`
-does not list, and when a listed one is gone.
+does not list, and when a listed one is gone. The same target runs the
+cases of `delegated_authority_policy_test.go`, which put the platform's
+read-current questions for a member's delegated authority and for a
+hosted operator's controller proof to this service: the matrix's rows
+and counts do not change with them.
 
 ## Open questions
 

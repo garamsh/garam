@@ -7,6 +7,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
@@ -318,9 +319,64 @@ func (s *Server) authorizedCaller(r *http.Request, orgGRN, target grn.GRN, u *us
 		return nil, err
 	}
 	if !allowed {
-		return nil, errorx.New(errorx.KindPermissionDenied, "insufficient role")
+		return nil, s.denial(r, c, orgGRN, target, action)
 	}
 	return c, nil
+}
+
+// denial is the error a denied question answers. A resource of the
+// organization that does not exist answers not found when the service
+// allows the caller the action on the organization, and permission
+// denied otherwise, so a caller who may act on every resource of its
+// organization is told a missing one is missing and not refused; a
+// resource that exists keeps the service's refusal (ADR-0171 item 8).
+// Whether the resource exists is read only after a denial.
+func (s *Server) denial(r *http.Request, c *caller, orgGRN, target grn.GRN, action string) error {
+	denied := errorx.New(errorx.KindPermissionDenied, "insufficient role")
+	found, err := s.resourceExists(r.Context(), orgGRN, target)
+	if err != nil {
+		return err
+	}
+	if found {
+		return denied
+	}
+	onOrg, err := s.allows(r, c, orgGRN, action)
+	if err != nil {
+		return err
+	}
+	if !onOrg {
+		return denied
+	}
+	return errorx.New(errorx.KindNotFound, "resource not found")
+}
+
+// resourceExists reports whether target, a resource of orgGRN, is
+// stored. It is the one place that names how each kind of resource an
+// enforcement call site asks about is looked up. The organization
+// itself is held by the caller's membership; a policy is asked on its
+// organization (askedOn), so its denial is the organization's and a
+// missing policy is not told apart here.
+func (s *Server) resourceExists(ctx context.Context, orgGRN, target grn.GRN) (bool, error) {
+	if target == orgGRN {
+		return true, nil
+	}
+	var err error
+	switch target.ServiceType {
+	case org.ServiceTypeGroup:
+		_, err = s.orgs.GetGroup(ctx, target)
+	case org.ServiceTypeProject:
+		_, err = s.orgs.GetProject(ctx, target)
+	case agent.ServiceType:
+		_, err = s.agents.Get(ctx, target)
+	case serviceTypePolicy:
+		return true, nil
+	default:
+		return false, errorx.New(errorx.KindInternal, "no lookup for resource kind "+target.ServiceType)
+	}
+	if errorx.IsKind(err, errorx.KindNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // caller is what every check of one user inside one org shares: the

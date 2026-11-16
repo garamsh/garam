@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -205,4 +206,42 @@ func TestEnforcement_AQuestionOnAPolicyIsAskedOnItsOrganization(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status, "an owner reads the policy's versions: %s", body)
 	status, body = s.get(t, versions, s.member)
 	assert.Equal(t, http.StatusForbidden, status, "a member does not: %s", body)
+}
+
+// TestEnforcement_AMissingResourceIsNotFoundOnlyToACallerTheServiceAllowsOnTheOrganization
+// reads a group that is not there. The owner, whom the service allows
+// iam:group.read on the organization, is told it is missing (404); a
+// member refused iam:group.update on the organization is refused (403)
+// without being told whether it exists; and a group that exists, which
+// a guardrail forbids the owner, keeps the service's refusal (403)
+// (ADR-0171 item 8).
+func TestEnforcement_AMissingResourceIsNotFoundOnlyToACallerTheServiceAllowsOnTheOrganization(t *testing.T) {
+	s := newEnforcementStack(t, realDecisions)
+
+	status, body := s.get(t, "/orgs/acme/groups/no-such-team", s.owner)
+	assert.Equal(t, http.StatusNotFound, status, "the owner is told a missing group is missing: %s", body)
+
+	status, body = browse(t, http.MethodPatch, s.url+"/orgs/acme/groups/no-such-team", s.member, `{"name":"x"}`)
+	assert.Equal(t, http.StatusForbidden, status, "a member denied the action on the organization is refused: %s", body)
+
+	status, body = browse(t, http.MethodPost, s.url+"/orgs/acme/groups", s.owner, `{"name":"held"}`)
+	require.Equal(t, http.StatusCreated, status, body)
+	var made apigen.Group
+	require.NoError(t, json.Unmarshal([]byte(body), &made))
+	group, err := grn.Parse(made.Grn)
+	require.NoError(t, err)
+	s.rp.deliver(t)
+	status, body = s.get(t, "/orgs/acme/groups/"+group.Identifier, s.owner)
+	require.Equal(t, http.StatusOK, status, "control: the owner reads the group before the guardrail: %s", body)
+
+	// The guardrail names the group alone, so the same action on the
+	// organization stays allowed to the owner.
+	forbidRead := textBody("guardrail", `forbid (principal, action == Iam::Action::"group.read", resource == Iam::Team::"`+group.String()+`");`)
+	status, body = browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies", s.owner, `{"name":"`+guardrailName+`","body":`+forbidRead+`}`)
+	require.Equal(t, http.StatusCreated, status, body)
+	status, body = browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies/"+policyID(t, body)+"/activate", s.owner, "")
+	require.Equal(t, http.StatusNoContent, status, body)
+
+	status, body = s.get(t, "/orgs/acme/groups/"+group.Identifier, s.owner)
+	assert.Equal(t, http.StatusForbidden, status, "a group that exists keeps the service's refusal: %s", body)
 }

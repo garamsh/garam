@@ -83,9 +83,23 @@ and permits (ADR-0169). Three questions were left to this round.
    `Iam::Org` for a policy GRN and the resource itself otherwise.
    `checkPermissions`, `authorizePolicy` (every
    `/orgs/{org}/policies/{policy}*` route) and the explanation's read
-   of a deciding policy all take it. A client's question names the policy, as the console's page
-   does, and is answered as the service decides it. `iam:permit.write`
-   stays round 10's.
+   of a deciding policy all take it. A client's question names the
+   policy, as the console's page does, and is answered as the service
+   decides it. `iam:permit.write` stays round 10's.
+8. **A missing resource is not found to a caller the service allows on
+   the organization, and refused to anyone else.** The service holds
+   no entity for a resource that does not exist, so it denies even an
+   owner a read of one, where the platform's engine matched the
+   organization's pattern and the handler's lookup answered 404.
+   `authorizedCaller` keeps that answer in one place: after a denial
+   only, `resourceExists` looks the resource up by kind (a group, a
+   project, an agent; the organization itself is the caller's
+   membership, and a policy is asked on its organization by item 7),
+   and a missing one answers 404 when the service allows the same
+   action on the organization and 403 otherwise. A resource that
+   exists keeps the service's refusal. A kind with no lookup is an
+   internal error, so a new kind of resource cannot enforce without
+   naming how it is found.
 
 ## Consequences
 

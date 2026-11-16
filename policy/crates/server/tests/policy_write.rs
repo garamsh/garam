@@ -28,6 +28,7 @@ use server::proto::{
 use server::{Verifier, serve_recording};
 use sqlx::PgPool;
 use sqlx::migrate::Migrator;
+use sqlx::postgres::PgPoolOptions;
 use tonic::transport::Channel;
 use tonic::{Code, Request};
 

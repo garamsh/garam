@@ -147,6 +147,10 @@ async fn a_denial_is_recorded_naming_its_policies_and_an_allow_or_a_probe_leaves
 /// of twelve entries (24 s) still fails the test.
 const HUNG_AFTER: Duration = Duration::from_secs(10);
 
+/// The connections the batch's service holds open: the blocker, the
+/// record worker and the evaluation, with one to spare.
+const OWN_CONNECTIONS: u32 = 4;
+
 /// Ends a run whose recorder never settles; not an assertion.
 const SETTLES_BEFORE: Duration = Duration::from_secs(120);
 
@@ -158,8 +162,25 @@ const RECORD_BOUND: Duration = Duration::from_secs(300);
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn a_batch_of_denied_entries_is_answered_while_the_record_s_store_is_blocked(pool: PgPool) {
     seed(&pool).await;
-    let recorder = Recorder::new(pool.clone()).bounded(RECORD_BOUND);
-    let mut service = recording_as(pool.clone(), PLATFORM, recorder.clone()).await;
+    // The test's pool draws its connections from one budget every test of
+    // the binary shares, and a connection the service opens inside the
+    // answer's bound waits there for its turn: the bound is for the
+    // answer and not for that queue. The service gets a pool of its own
+    // on the same database, opened before the bound with every
+    // connection the batch, the record worker and the blocker take.
+    let own = PgPoolOptions::new()
+        .min_connections(OWN_CONNECTIONS)
+        .max_connections(OWN_CONNECTIONS)
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        own.num_idle(),
+        OWN_CONNECTIONS as usize,
+        "every connection the batch needs is open before its bound starts"
+    );
+    let recorder = Recorder::new(own.clone()).bounded(RECORD_BOUND);
+    let mut service = recording_as(own.clone(), PLATFORM, recorder.clone()).await;
     let strangers: Vec<String> = (0..12)
         .map(|n| format!("grn:globex/iam/user/stranger-{n}"))
         .collect();
@@ -191,7 +212,7 @@ async fn a_batch_of_denied_entries_is_answered_while_the_record_s_store_is_block
         probe: false,
     };
     // The lock every new denial of the organization takes, held.
-    let mut blocker = pool.begin().await.unwrap();
+    let mut blocker = own.begin().await.unwrap();
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(ACME)
         .execute(&mut *blocker)
@@ -225,6 +246,9 @@ async fn a_batch_of_denied_entries_is_answered_while_the_record_s_store_is_block
         .filter(|r| strangers.contains(&r.subject))
         .count();
     assert_eq!(named, strangers.len(), "each denial is recorded in the end");
+    // The database is dropped when the test ends, which waits on any
+    // connection still open to it.
+    own.close().await;
 }
 
 #[sqlx::test(migrator = "MIGRATIONS")]

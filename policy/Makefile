@@ -105,9 +105,20 @@ $(CVC5):
 
 suites: integration
 
+# `#[sqlx::test]` draws every test's connections from one budget per
+# test binary: the master pool holds 20 (sqlx-postgres 0.9.0
+# src/testing/mod.rs line 101) and each test's pool is its child, at
+# most 5 (lines 176-179). A test that cannot get a connection within
+# its pool's acquire timeout fails with `PoolTimedOut` before its body
+# runs, so the tests running at once must not ask for more than 20:
+# 20 / 5 = 4 threads (#1937). Every binary with a `#[sqlx::test]` has
+# its own budget, so the flag, which applies per binary, is the same 4
+# for all.
+TEST_THREADS := 4
+
 integration: $(CVC5)
 	@test -n '$(POLICY_TEST_SERVER_URL)' || { echo "integration: no postgres published on this host — run make -C policy stack-up" >&2; exit 1; }
 	@n="$$(cargo test --workspace --locked -- --list --ignored | grep -c ': test$$' || true)"; \
 		echo "integration: $$n tests, listed by cargo test --workspace -- --list --ignored, against the postgres at $(POLICY_TEST_SERVER_URL) and cvc5 $(CVC5_VERSION)"; \
 		test "$$n" -gt 0 || { echo 'integration: nothing to run — the listing above held no test'; exit 1; }
-	DATABASE_URL='$(POLICY_TEST_SERVER_URL)' CVC5='$(CVC5)' cargo test --workspace --locked -- --ignored
+	DATABASE_URL='$(POLICY_TEST_SERVER_URL)' CVC5='$(CVC5)' cargo test --workspace --locked -- --ignored --test-threads=$(TEST_THREADS)

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use cedar_policy::{
     Authorizer, Context, Effect, Entities, EntityId, EntityTypeName, EntityUid, EvalResult, Policy,
-    PolicyId, PolicySet, Request, Schema, ValidationMode, Validator,
+    PolicyId, PolicySet, Request, RequestValidationError, Schema, ValidationMode, Validator,
 };
 use manifest::Manifests;
 
@@ -99,8 +99,14 @@ impl Engine {
             .map_err(|error| refused(error.into()))?;
         let context = Context::from_json_value(evaluation.context.clone(), None)
             .map_err(|error| refused(error.into()))?;
-        Request::new(principal, action, resource, context, Some(&self.schema))
-            .map_err(|error| refused(error.into()))
+        Request::new(principal, action, resource, context, Some(&self.schema)).map_err(|error| {
+            match error {
+                RequestValidationError::InvalidPrincipalType(_) => {
+                    Error::PrincipalNotApplicable(error.into())
+                }
+                _ => refused(error.into()),
+            }
+        })
     }
 
     /// Parses entities from Cedar's JSON format, refusing a type, an

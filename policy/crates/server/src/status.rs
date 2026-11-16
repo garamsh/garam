@@ -90,7 +90,9 @@ impl ServiceError {
             self,
             Self::Missing(_)
                 | Self::Grounds(_)
-                | Self::Decision(Error::Evaluation(_) | Error::Entities(_))
+                | Self::Decision(
+                    Error::Evaluation(_) | Error::PrincipalNotApplicable(_) | Error::Entities(_)
+                )
         )
     }
 }
@@ -127,6 +129,10 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
             tracing::info!(error = ?error, "refused a caller");
             Status::unauthenticated(error.to_string())
         }
+        ServiceError::Decision(Error::PrincipalNotApplicable(_)) => {
+            tracing::info!(error = ?error, "refused a question: the action does not apply to the principal");
+            principal_not_applicable(error)
+        }
         ServiceError::Missing(_)
         | ServiceError::Malformed(_)
         | ServiceError::Grounds(_)
@@ -156,6 +162,58 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
             Status::internal("the policy service could not decide")
         }
     }
+}
+
+/// The reason of the `google.rpc.ErrorInfo` a refusal for a principal
+/// the action does not apply to carries (ADR-0167).
+pub(crate) const PRINCIPAL_NOT_APPLICABLE: &str = "PRINCIPAL_NOT_APPLICABLE";
+
+/// The domain of that `ErrorInfo`: whose reason it is.
+pub(crate) const REASON_DOMAIN: &str = "garam.policy.v1";
+
+/// `google.rpc.Status`, the message `grpc-status-details-bin` holds.
+#[derive(Clone, PartialEq, prost::Message)]
+struct RpcStatus {
+    #[prost(int32, tag = "1")]
+    code: i32,
+    #[prost(string, tag = "2")]
+    message: String,
+    #[prost(message, repeated, tag = "3")]
+    details: Vec<prost_types::Any>,
+}
+
+/// `google.rpc.ErrorInfo`: a stable reason and the domain it belongs to.
+#[derive(Clone, PartialEq, prost::Message)]
+struct ErrorInfo {
+    #[prost(string, tag = "1")]
+    reason: String,
+    #[prost(string, tag = "2")]
+    domain: String,
+}
+
+/// `INVALID_ARGUMENT`, as every refused question is, with the cause
+/// named in an `ErrorInfo` detail so a client reads it without reading
+/// the message (ADR-0167).
+fn principal_not_applicable(error: &ServiceError) -> Status {
+    use prost::Message;
+    let message = error.to_string();
+    let info = ErrorInfo {
+        reason: PRINCIPAL_NOT_APPLICABLE.to_owned(),
+        domain: REASON_DOMAIN.to_owned(),
+    };
+    let details = RpcStatus {
+        code: tonic::Code::InvalidArgument as i32,
+        message: message.clone(),
+        details: vec![prost_types::Any {
+            type_url: "type.googleapis.com/google.rpc.ErrorInfo".to_owned(),
+            value: info.encode_to_vec(),
+        }],
+    };
+    Status::with_details(
+        tonic::Code::InvalidArgument,
+        message,
+        details.encode_to_vec().into(),
+    )
 }
 
 /// What a refusal or failure of the policy store is on the wire: the
@@ -198,6 +256,60 @@ fn policy_status(error: &ServiceError, inner: &grant::Error) -> Status {
         G::PermitEvaluation(_) | G::StoredBody { .. } | G::Store(_) | G::Record(_) => {
             tracing::error!(error = ?error, "a policy could not be written or read");
             Status::unavailable("the policy service could not read or write its policies")
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use prost::Message;
+
+    use super::*;
+
+    fn cause() -> decision::Cause {
+        "the cause".into()
+    }
+
+    fn infos(status: &Status) -> Vec<ErrorInfo> {
+        RpcStatus::decode(status.details())
+            .expect("the details are a google.rpc.Status")
+            .details
+            .iter()
+            .map(|any| {
+                assert_eq!(any.type_url, "type.googleapis.com/google.rpc.ErrorInfo");
+                ErrorInfo::decode(any.value.as_slice()).expect("the detail is an ErrorInfo")
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_principal_the_action_does_not_apply_to_is_named_in_an_error_info() {
+        let error = ServiceError::Decision(Error::PrincipalNotApplicable(cause()));
+
+        let status = to_status(&error);
+
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert_eq!(
+            infos(&status),
+            vec![ErrorInfo {
+                reason: "PRINCIPAL_NOT_APPLICABLE".into(),
+                domain: "garam.policy.v1".into(),
+            }]
+        );
+        assert!(error.is_the_questions());
+    }
+
+    #[test]
+    fn every_other_refusal_of_a_question_names_no_cause() {
+        for error in [
+            ServiceError::Decision(Error::Evaluation(cause())),
+            ServiceError::Decision(Error::Entities(cause())),
+            ServiceError::Missing("the subject"),
+        ] {
+            let status = to_status(&error);
+
+            assert_eq!(status.code(), tonic::Code::InvalidArgument, "{error:?}");
+            assert!(status.details().is_empty(), "{error:?}");
         }
     }
 }

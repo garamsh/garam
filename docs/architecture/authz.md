@@ -52,8 +52,16 @@ The platform has a client that asks the policy service for a decision
 (`platform/internal/policydecision`, #1915): `Evaluate` and
 `Evaluations` as the caller `platform`, `probe` where its caller says
 so, the reasons returned as a set, and a service that cannot be
-reached answered with an error a caller reads as a denial. It decides
-nothing yet: neither `serve api` nor `serve machine` calls it.
+reached answered with an error a caller reads as a denial. It reads
+one refusal of the service as a denial itself
+([ADR-0167](./adr/0167-the-policy-service-names-a-refusal-for-a-principal-the-action-does-not-apply-to-and-the-client-reads-it-as-a-denial.md)):
+a question whose principal type the action does not apply to, which
+the service refuses as `INVALID_ARGUMENT` with the reason
+`PRINCIPAL_NOT_APPLICABLE` in a `google.rpc.ErrorInfo` detail, so a
+hosted operator asked an `iam` action it holds no route to is denied.
+Every other refusal, an unknown action, a resource of the wrong kind
+and a context the schema does not name among them, stays an error. It
+decides nothing yet: neither `serve api` nor `serve machine` calls it.
 [policy-matrix.md](./policy-matrix.md) reports where the two engines
 differ.
 

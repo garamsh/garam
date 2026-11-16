@@ -19,20 +19,21 @@ authorization question differently, as measured by the suite in
 | | Count |
 |---|---|
 | Questions asked | 1723 |
-| Agreeing: both decided, the same answer | 1584 |
+| Agreeing: both decided, the same answer | 1713 |
 | Differing: both decided, different answers | 10 |
-| Refused by the service: no decision | 129 |
+| Refused by the service: no decision | 0 |
 
 The three classes sum to the total. A question agrees when both
 engines answer allow or both answer deny. The platform's `unknown`
 answer (24 questions) is read as the allow the check returns for it;
 the service allowed each of them. A refused question is in neither of
 the other classes, whatever the platform answered: a refusal is not a
-decision.
+decision. The 129 questions that were refused until #1933 are agreeing
+now (§Refused).
 
-The 195 questions asked again one at a time with `Evaluate`, as
+The 72 questions asked again one at a time with `Evaluate`, as
 `probe` true and as `probe` false, answered as they did in the batch:
-the differing ones, the refused ones and a sample of the rest.
+the differing ones and a sample of the rest.
 
 ## Differences
 
@@ -77,10 +78,15 @@ narrowed out of the matrix.
 
 ## Refused
 
-All 129 are of one subject, the operator, asked an action the
-service's schema does not apply to an operator. The service answers
-`INVALID_ARGUMENT`, "the evaluation does not fit the schema", to the
-batch entry and to the same question asked alone.
+No question is refused now. Until #1933, 129 were, all of one
+subject, the operator, asked an action the service's schema does not
+apply to an operator. The service still refuses each: the batch entry
+answers `INVALID_ARGUMENT`, "the evaluation does not fit the schema",
+and the same question asked alone answers that status with a
+`google.rpc.ErrorInfo` of reason `PRINCIPAL_NOT_APPLICABLE`, which
+[ADR-0167](./adr/0167-the-policy-service-names-a-refusal-for-a-principal-the-action-does-not-apply-to-and-the-client-reads-it-as-a-denial.md)
+gives that case alone. The decision client reads that cause as a
+denial, and asks a refused batch entry again alone to find it.
 
 - **Subject.** The hosted operator of the first organization.
 - **Actions.** Every `iam` action the matrix asks except
@@ -91,12 +97,14 @@ batch entry and to the same question asked alone.
   `Operator` a principal of a few actions only (ADR-0146), so Cedar
   cannot evaluate the others for it.
 - **Rule of the platform.** No route admits an operator to them, and
-  the matrix records deny.
+  the matrix records deny, which the client's reading of the cause now
+  matches.
 
-The questions are listed in
-`platform/tests/integration/testdata/policy_matrix_refused.txt`. The
-suite fails when a question is refused that the list does not hold,
-and when a listed one is decided or no longer asked.
+`platform/tests/integration/testdata/policy_matrix_refused.txt` lists
+the questions refused, and holds none. The suite fails when a question
+is refused that the list does not hold, which is where a refusal for
+any other reason would show, and when a listed one is decided or no
+longer asked.
 
 ## What the matrix asks
 
@@ -169,10 +177,6 @@ does not list, and when a listed one is gone.
 
 ## Open questions
 
-- What an operator's decision is on the refused class is open. The
-  platform denies it and the service refuses it, which no caller of
-  the client can read as a denial without a rule saying so. That is
-  needed before any operator decision moves to the service.
 - Whether the service should hold an `Iam::Policy` entity, or the
   platform should ask it nothing about a policy, is not decided here.
   The matrix reports the difference and decides nothing.

@@ -1502,3 +1502,11 @@ ADRs:
   through a page's sync connection do not wait, since the service
   holds nothing they change; accepted, built (#1919); applies 0165 to
   cowork, narrowed to creates and a page's delete
+- [0167](./adr/0167-the-policy-service-names-a-refusal-for-a-principal-the-action-does-not-apply-to-and-the-client-reads-it-as-a-denial.md)
+  — a question whose principal type the action does not apply to is
+  refused with its own cause, `PRINCIPAL_NOT_APPLICABLE` in a
+  `google.rpc.ErrorInfo` on the `INVALID_ARGUMENT` status, apart from
+  every other schema refusal, and the platform's decision client reads
+  that one cause as a denial, a refused batch entry by asking it again
+  alone; the schema and ADR-0146's delegable set do not change;
+  accepted, built (#1933)

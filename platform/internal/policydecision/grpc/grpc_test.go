@@ -23,9 +23,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -45,6 +48,9 @@ type fakeService struct {
 	evals   []*policyv1.EvaluateRequest
 	batches []*policyv1.EvaluationsRequest
 	tokens  []string
+	// refuse, when set, answers Evaluate with the error it returns for
+	// a request, as the service refuses a question.
+	refuse func(*policyv1.EvaluateRequest) error
 }
 
 func (f *fakeService) note(ctx context.Context) {
@@ -59,6 +65,11 @@ func (f *fakeService) Evaluate(
 	defer f.mu.Unlock()
 	f.note(ctx)
 	f.evals = append(f.evals, req)
+	if f.refuse != nil {
+		if err := f.refuse(req); err != nil {
+			return nil, err
+		}
+	}
 	return f.answers[0], nil
 }
 
@@ -295,4 +306,99 @@ func TestClient_AnswerOfTheWrongLengthIsAnError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInternal))
+}
+
+// refusal is how the service refuses a question: INVALID_ARGUMENT, with
+// an ErrorInfo naming reason when it names a cause.
+func refusal(t *testing.T, reason string) error {
+	t.Helper()
+	st := status.New(codes.InvalidArgument, "the evaluation does not fit the schema")
+	if reason == "" {
+		return st.Err()
+	}
+	st, err := st.WithDetails(&errdetails.ErrorInfo{Reason: reason, Domain: "garam.policy.v1"})
+	require.NoError(t, err)
+	return st.Err()
+}
+
+func TestClient_ReadsAPrincipalTheActionDoesNotApplyToAsADenial(t *testing.T) {
+	q := policydecision.Question{Subject: ada, Action: "iam:agent.read", Resource: acme}
+	refused := &policyv1.EvaluateResponse{Context: &policyv1.DecisionContext{Reasons: []*policyv1.Reason{
+		{Error: "the evaluation does not fit the schema"}}}}
+	f := &fakeService{
+		answers: []*policyv1.EvaluateResponse{refused},
+		refuse:  func(*policyv1.EvaluateRequest) error { return refusal(t, "PRINCIPAL_NOT_APPLICABLE") },
+	}
+	c := start(t, f)
+
+	one, err := c.Evaluate(context.Background(), q)
+	require.NoError(t, err)
+	assert.False(t, one.Allowed)
+	assert.NotNil(t, one.Reasons)
+	assert.Empty(t, one.Reasons)
+
+	probe := q
+	probe.Probe = true
+	many, err := c.Evaluations(context.Background(), []policydecision.Question{probe})
+	require.NoError(t, err)
+	require.Len(t, many, 1)
+	assert.False(t, many[0].Allowed)
+	assert.NotNil(t, many[0].Reasons)
+	assert.Empty(t, many[0].Reasons, "the refusal is read as a denial, not kept as a reason")
+	require.Len(t, f.evals, 2, "the refused entry was asked again alone")
+	assert.True(t, f.evals[1].GetProbe(), "the question was asked again as its caller stated it")
+}
+
+func TestClient_AnyOtherRefusalStaysAnError(t *testing.T) {
+	q := policydecision.Question{Subject: ada, Action: "iam:org.rename", Resource: acme}
+	for name, reason := range map[string]string{
+		"no cause named": "",
+		"another cause":  "SOMETHING_ELSE",
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := &fakeService{
+				answers: []*policyv1.EvaluateResponse{{}},
+				refuse:  func(*policyv1.EvaluateRequest) error { return refusal(t, reason) },
+			}
+			c := start(t, f)
+
+			_, err := c.Evaluate(context.Background(), q)
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), err.Error())
+		})
+	}
+}
+
+func TestClient_AnEntryRefusedForAnotherCauseKeepsItsReason(t *testing.T) {
+	text := "the evaluation does not fit the schema"
+	f := &fakeService{
+		answers: []*policyv1.EvaluateResponse{{Context: &policyv1.DecisionContext{
+			Reasons: []*policyv1.Reason{{Error: text}}}}},
+		refuse: func(*policyv1.EvaluateRequest) error { return refusal(t, "") },
+	}
+	c := start(t, f)
+
+	got, err := c.Evaluations(context.Background(), []policydecision.Question{
+		{Subject: ada, Action: "iam:org.rename", Resource: acme}})
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.False(t, got[0].Allowed)
+	assert.Equal(t, policydecision.Reasons{{Error: text}: {}}, got[0].Reasons)
+}
+
+func TestClient_AnEntryAskedAgainWhoseServiceFailsFailsTheCall(t *testing.T) {
+	f := &fakeService{
+		answers: []*policyv1.EvaluateResponse{{Context: &policyv1.DecisionContext{
+			Reasons: []*policyv1.Reason{{Error: "refused"}}}}},
+		refuse: func(*policyv1.EvaluateRequest) error { return status.Error(codes.Unavailable, "down") },
+	}
+	c := start(t, f)
+
+	got, err := c.Evaluations(context.Background(), []policydecision.Question{
+		{Subject: ada, Action: "iam:agent.read", Resource: acme}})
+
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), err.Error())
+	assert.Empty(t, got)
 }

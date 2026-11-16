@@ -108,6 +108,23 @@ spec:
             - name: GARAM_MACHINE_ISSUER
               value: {{ required "machine.issuer is required" .Values.machine.issuer | quote }}
 {{- include "garam.machineTokenUrlEnv" . }}
+{{- $policy := .Values.api.policy }}
+            # Every send is the policy service's decision (ADR-0168),
+            # so the listener refuses to start without it. It reaches
+            # the service as the api does, by the values the api
+            # takes, so the issuer the service trusts, the address and
+            # the root are one value each for both callers. Only the
+            # path of the signing key is its own: the file is written
+            # in this pod by what the deployment runs, as the api's is
+            # in its.
+            - name: GARAM_POLICY_ADDR
+              value: {{ default (printf "%s:8443" (include "garam.name" (dict "root" $ "word" "policy"))) $policy.address | quote }}
+            - name: GARAM_POLICY_CA_FILE
+              value: {{ printf "/etc/garam/policy/%s" (required "api.policy.caKey is required" $policy.caKey) | quote }}
+            - name: GARAM_POLICY_SIGNING_KEY_FILE
+              value: {{ required "machine.policy.signingKeyFile is required: it names the file the token signing key is read from in the machine container" .Values.machine.policy.signingKeyFile | quote }}
+            - name: GARAM_POLICY_TOKEN_ISSUER
+              value: {{ required "api.policy.tokenIssuer is required: it is the issuer the policy service trusts" $policy.tokenIssuer | quote }}
 {{- $transit := .Values.machine.transit }}
 {{- if $transit.address }}
             # The message signing keys are held in Transit (ADR-0104).
@@ -143,6 +160,9 @@ spec:
           volumeMounts:
             - name: key-material
               mountPath: /run/garam/key-material
+              readOnly: true
+            - name: policy-ca
+              mountPath: /etc/garam/policy
               readOnly: true
 {{- if $transit.address }}
             - name: transit-ca
@@ -189,6 +209,14 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
+        # The root the policy service is verified against. It is public,
+        # so it is projected as it is.
+        - name: policy-ca
+          secret:
+            secretName: {{ required "api.policy.caSecretName is required: it names the Secret holding the root the policy service's certificate is verified against" $policy.caSecretName }}
+            items:
+              - key: {{ $policy.caKey }}
+                path: {{ $policy.caKey }}
 {{- if $transit.address }}
         # The root OpenBao is verified against. It is public, so it is
         # projected as it is rather than copied to an owner-only file.

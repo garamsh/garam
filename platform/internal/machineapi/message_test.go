@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,104 +20,8 @@ import (
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
-	"github.com/garamsh/garam/platform/internal/wire"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
-
-// engine answers the Evaluator seam by evaluating the statements the
-// surface collected with the engine's semantics (ADR-0002), so what
-// these tests exercise is the collection rather than a stubbed verdict.
-// The evaluation is reproduced here because the machineapi package
-// never imports the engine (ADR-0003). attached stands in for the
-// policies an organization attached to a subject: the engine unions
-// them with what the surface supplies, and a Deny from either wins
-// (ADR-0007, ADR-0008).
-//
-// A subject here is what an attachment may name — the caller, and each
-// group the request reports it belongs to — which is how the engine
-// itself reads its attachments (authz.md §Policy attachment).
-type engine struct {
-	attached map[grn.GRN][]machineapi.Statement
-	err      error
-	asked    []machineapi.EvalInput
-}
-
-func (e *engine) Evaluate(_ context.Context, in machineapi.EvalInput) (bool, error) {
-	e.asked = append(e.asked, in)
-	if e.err != nil {
-		return false, e.err
-	}
-	var statements []machineapi.Statement
-	for _, subject := range append([]grn.GRN{in.Subject}, in.SubjectGroups...) {
-		statements = append(statements, e.attached[subject]...)
-	}
-	statements = append(statements, in.Statements...)
-	allow := false
-	for _, s := range statements {
-		if !matches(s, in.Action, in.Object.String()) {
-			continue
-		}
-		if s.Effect == wire.EffectDeny {
-			return false, nil
-		}
-		allow = true
-	}
-	return allow, nil
-}
-
-// matches reports whether the statement applies to an action on a
-// resource: one action pattern and one resource pattern must match.
-func matches(s machineapi.Statement, action, resource string) bool {
-	return matchAny(s.Action, action) && matchAny(s.Resource, resource)
-}
-
-func matchAny(patterns []string, value string) bool {
-	for _, p := range patterns {
-		if matchPattern(p, value) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchPattern applies the pattern language ADR-0002 gives a
-// statement's actions and resources: '*' matches any run of
-// characters, '?' exactly one, anything else matches literally.
-func matchPattern(pattern, value string) bool {
-	px, vx := 0, 0
-	star, starV := -1, 0
-	for vx < len(value) {
-		switch {
-		case px < len(pattern) && (pattern[px] == '?' || pattern[px] == value[vx]):
-			px++
-			vx++
-		case px < len(pattern) && pattern[px] == '*':
-			star = px
-			starV = vx
-			px++
-		case star != -1:
-			px = star + 1
-			starV++
-			vx = starV
-		default:
-			return false
-		}
-	}
-	for px < len(pattern) && pattern[px] == '*' {
-		px++
-	}
-	return px == len(pattern)
-}
-
-// denySending is one attached policy statement refusing what the
-// recipient pattern names.
-func denySending(sid, resource string) machineapi.Statement {
-	return machineapi.Statement{
-		Sid:      sid,
-		Effect:   wire.EffectDeny,
-		Action:   []string{message.ActionSend},
-		Resource: []string{resource},
-	}
-}
 
 // submission is the body a sender posts to address recipient.
 func submission(recipient grn.GRN, key string) string {
@@ -277,7 +182,7 @@ func TestServer_PostsUnderTheSenderTheCertificateNames(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	recipient := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), &decider{}, &roster{}, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", `{
 		"recipient": "`+recipient.String()+`",
@@ -318,7 +223,7 @@ func TestServer_PostsUnderTheSenderTheCertificateNames(t *testing.T) {
 func TestServer_ActsOnTheQueueThePathNames(t *testing.T) {
 	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, caller)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), &decider{}, &roster{}, caller)
 	claims := url + "/agents/" + neturl.PathEscape(caller.String()) + "/claims"
 
 	// A poll that found nothing is the ordinary empty answer rather
@@ -360,317 +265,217 @@ func TestServer_ActsOnTheQueueThePathNames(t *testing.T) {
 	assert.Len(t, messages.calls, before, "an unparsed recipient reached the service")
 }
 
-// TestServer_SendsWhereTheSendersOwnOrganizationReaches covers what an
-// agent nobody has written a policy for may send. The refusal sits
-// beside the accepted message: both are the same call by the same
-// sender with nothing attached to it and no consent standing anywhere,
-// so what discriminates is the recipient's organization rather than a
-// surface that refuses whoever asks.
-//
-// The engine is never asked about the recipient of another
-// organization. That is the property rather than an optimisation: no
-// answer it could give would be trusted, because a policy of the
-// recipient's own organization can allow every sender at once
-// (ADR-0024). What decides instead is the consent relation (ADR-0035),
-// and where it does not stand the post is not a 4xx: the refusal
-// returns to the sender as an ordinary inbound message (ADR-0013),
-// which is what the 201 answers.
-func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
-	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
-	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
-	stranger := agentGRN("globex", "0a1b2c3d4e5f6071")
-	messages := &messageService{}
-	policies := &engine{}
-	standing := consenting()
-	url, client := listener(t, &agentService{}, nil, messages, standing, unwatched(t), &memberGroups{}, policies, sender)
-
-	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
-	require.Equal(t, http.StatusCreated, status, body)
-
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(stranger, "key-2"))
-	require.Equal(t, http.StatusCreated, status, body)
-	// The answer carries what was stored: the refusal, addressed to the
-	// sender and written under the intended recipient's identity, which
-	// is how the caller tells an accepted message from a refused one.
-	assert.Contains(t, body, `"recipient":"`+sender.String()+`"`)
-	assert.Contains(t, body, `"sender":"`+stranger.String()+`"`)
-
-	assert.Equal(t, []messageCall{
-		posted(sender, sibling, "key-1"),
-		{
-			method:    "post",
-			caller:    stranger,
-			recipient: sender,
-			key:       "consent-refused:" + sender.String() + ":key-2",
-			body:      "garam could not deliver your message to " + stranger.String() + ": the organizations acme and globex do not both consent to cross-organization messages",
-			author:    message.AuthorGaram,
-		},
-	}, messages.calls, "the sibling's message was stored and the stranger's came back to the sender")
-
-	// The engine answered the one same-organization question and was
-	// never asked the other; the consent relation was asked instead,
-	// keyed by the two organizations' GRNs.
-	ownOrg := []machineapi.Statement{{
-		Sid:      "machine-own-org",
-		Effect:   wire.EffectAllow,
-		Action:   []string{message.ActionSend},
-		Resource: []string{"grn:acme/*"},
-	}}
-	assert.Equal(t, []machineapi.EvalInput{
-		{Subject: sender, Object: sibling, Action: message.ActionSend, Statements: ownOrg, SubjectOrg: organization("acme")},
-	}, policies.asked)
-	assert.Equal(t, [][2]grn.GRN{{organization("acme"), organization("globex")}}, standing.asked)
+// refusalBody is what garam stores in answer to a send it will not
+// route: the same words whichever question refused it, naming neither
+// consent nor the recipient's absence (ADR-0168).
+func refusalBody(recipient grn.GRN) string {
+	return "garam could not deliver your message to " + recipient.String() +
+		": a message to this recipient is not permitted"
 }
 
-// TestServer_AConsentRelationCarriesAMessageAcrossTheBoundary covers
-// the relation doing what no policy can (ADR-0035): with both halves
-// standing, the same call the boundary refused above is stored for the
-// foreign recipient, and the engine is still never asked — the
-// relation, not a statement, is what carries the message across.
-//
-// Two controls sit beside the crossing: a relation between two other
-// organizations does not admit this pair, and the same call once
-// either half is withdrawn is refused again, back to the sender as an
-// inbound message rather than a 4xx.
-func TestServer_AConsentRelationCarriesAMessageAcrossTheBoundary(t *testing.T) {
+// refused is the call the surface makes to the queue to store the
+// refusal of sender's post to recipient.
+func refused(sender, recipient grn.GRN, key string) messageCall {
+	return messageCall{
+		method:    "post",
+		caller:    recipient,
+		recipient: sender,
+		key:       "crossing-refused:" + sender.String() + ":" + key,
+		body:      refusalBody(recipient),
+		author:    message.AuthorGaram,
+	}
+}
+
+// TestServer_AdmitsARecipientNoAgentAnswersToWithoutAskingTheService
+// covers the recipients inside the sender's organization the policy
+// service is never asked about (ADR-0168): an agent id garam holds no
+// row for and a GRN of another type, each stored as ADR-0013's routing
+// failure. The agent garam holds is the control: it is asked, so the
+// silence is the recipient's and not the surface's.
+func TestServer_AdmitsARecipientNoAgentAnswersToWithoutAskingTheService(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
+	ghost := agentGRN("acme", "deadbeefdeadbeef")
+	group := groupGRN("acme", "engineering")
+	messages := &messageService{}
+	decisions := allowing([2]grn.GRN{sender, sibling})
+	held := holding(sibling)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), decisions, held, sender)
+
+	for i, recipient := range []grn.GRN{sibling, ghost, group} {
+		status, body := send(t, client, http.MethodPost, url+"/messages", submission(recipient, "key-"+strconv.Itoa(i)))
+		require.Equal(t, http.StatusCreated, status, body)
+		assert.Contains(t, body, `"recipient":"`+recipient.String()+`"`, "the message itself was stored")
+	}
+
+	assert.Equal(t, []messageCall{
+		posted(sender, sibling, "key-0"),
+		posted(sender, ghost, "key-1"),
+		posted(sender, group, "key-2"),
+	}, messages.calls)
+	assert.Equal(t, []policydecision.Question{
+		{Subject: sender, Action: message.ActionSend, Resource: sibling},
+	}, decisions.asked, "the service was asked about a recipient no agent answers to")
+	assert.Equal(t, []grn.GRN{sibling, ghost}, held.asked,
+		"a recipient of another type needs no read of the agents")
+}
+
+// TestServer_RefusesAcrossTheBoundaryARecipientThatIsNoAgentUnasked
+// covers the recipients the service cannot be asked about across the
+// boundary (ADR-0168): an organization and a group of another
+// organization. Each is answered 201 with garam's refusal stored. The
+// allowed agent is the control, so the refusal is the recipient's type
+// and not a surface that refuses every crossing.
+func TestServer_RefusesAcrossTheBoundaryARecipientThatIsNoAgentUnasked(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	foreign := agentGRN("globex", "0a1b2c3d4e5f6071")
-	bystander := agentGRN("initech", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	policies := &engine{}
-	// The pair the sender needs, and one between two organizations it
-	// is not a side of.
-	standing := consenting([2]string{"acme", "globex"}, [2]string{"globex", "initech"})
-	url, client := listener(t, &agentService{}, nil, messages, standing, unwatched(t), &memberGroups{}, policies, sender)
+	decisions := allowing([2]grn.GRN{sender, foreign})
+	held := holding()
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), decisions, held, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(foreign, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
-	assert.Contains(t, body, `"recipient":"`+foreign.String()+`"`, "the message itself was stored, not a refusal")
-
-	// The relation between globex and initech admits nothing between
-	// acme and initech: consent is a property of the pair, not of an
-	// organization.
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(bystander, "key-2"))
-	require.Equal(t, http.StatusCreated, status, body)
-	assert.Contains(t, body, `"recipient":"`+sender.String()+`"`, "a relation the sender's org is not a side of admits nothing")
-
-	// Withdrawn, the pair is the boundary again: the same call comes
-	// back to the sender.
-	standing.fall("acme", "globex")
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(foreign, "key-3"))
-	require.Equal(t, http.StatusCreated, status, body)
-	assert.Contains(t, body, `"recipient":"`+sender.String()+`"`, "the withdrawn relation refuses as an inbound message")
+	for i, recipient := range []grn.GRN{organization("globex"), groupGRN("globex", "engineering")} {
+		status, body = send(t, client, http.MethodPost, url+"/messages", submission(recipient, "key-"+strconv.Itoa(i+2)))
+		require.Equal(t, http.StatusCreated, status, body)
+		assert.Contains(t, body, `"recipient":"`+sender.String()+`"`, "the refusal came back to the sender")
+	}
 
 	assert.Equal(t, []messageCall{
 		posted(sender, foreign, "key-1"),
-		{
-			method:    "post",
-			caller:    bystander,
-			recipient: sender,
-			key:       "consent-refused:" + sender.String() + ":key-2",
-			body:      "garam could not deliver your message to " + bystander.String() + ": the organizations acme and initech do not both consent to cross-organization messages",
-			author:    message.AuthorGaram,
-		},
-		{
-			method:    "post",
-			caller:    foreign,
-			recipient: sender,
-			key:       "consent-refused:" + sender.String() + ":key-3",
-			body:      "garam could not deliver your message to " + foreign.String() + ": the organizations acme and globex do not both consent to cross-organization messages",
-			author:    message.AuthorGaram,
-		},
-	}, messages.calls, "exactly the consenting pair's message crossed")
-	assert.Empty(t, policies.asked, "the engine was never asked a cross-organization question")
+		refused(sender, organization("globex"), "key-2"),
+		refused(sender, groupGRN("globex", "engineering"), "key-3"),
+	}, messages.calls)
+	assert.Equal(t, []policydecision.Question{
+		{Subject: sender, Action: message.ActionSend, Resource: foreign},
+	}, decisions.asked, "the service was asked about a recipient it can only refuse")
+	assert.Empty(t, held.asked, "the agents of another organization were read")
 }
 
-// TestServer_AnAttachedPolicyDecidesWhatAnAgentSends is the whole of
-// what an attachment buys: the same sender making the same call is
-// refused with the policy attached and answered without it, and the
-// agent beside it that holds no policy is answered throughout.
-//
-// Three controls sit against the one refusal, because a 403 holds as
-// readily for a surface that refuses everything: the same sender
-// reaching a recipient the Deny does not name, another sender reaching
-// the one it does, and the same call once the attachment is gone.
-func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
+// TestServer_TheServiceDecidesASendAcrossTheBoundary covers every agent
+// recipient of another organization: the service's allow is stored,
+// its deny is answered 201 with garam's refusal, and an agent garam
+// holds no row for is that deny too, in the same words, so the sender
+// learns nothing of the other organization (ADR-0168). The agents of
+// the other organization are not read.
+func TestServer_TheServiceDecidesASendAcrossTheBoundary(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
-	refused := agentGRN("acme", "deadbeefdeadbeef")
-	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
+	consenting := agentGRN("globex", "0a1b2c3d4e5f6071")
+	refusing := agentGRN("globex", "1122334455667788")
+	ghost := agentGRN("initech", "deadbeefdeadbeef")
 	messages := &messageService{}
-	policies := &engine{attached: map[grn.GRN][]machineapi.Statement{
-		sender: {denySending("no-talking", refused.String())},
-	}}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, policies, sender)
+	decisions := allowing([2]grn.GRN{sender, consenting})
+	held := holding()
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), decisions, held, sender)
 
-	status, body := send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-1"))
-	require.Equal(t, http.StatusForbidden, status, body)
-	// A policy refused this one, and the recipient's organization
-	// refused the one in TestServer_SendsWhereTheSendersOwnOrganizationReaches.
-	// Both are 403 and they are not the same answer: one is an
-	// organization's own rule and the other is a boundary no policy
-	// reaches, so a caller reading the body can tell them apart.
-	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, body)
-
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
-	require.Equal(t, http.StatusCreated, status, body)
-
-	// The attachment names one subject, so the agent beside it reaches
-	// the recipient this one may not.
-	other := agentGRN("acme", "1122334455667788")
-	otherURL, otherClient := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, policies, other)
-	status, body = send(t, otherClient, http.MethodPost, otherURL+"/messages", submission(refused, "key-3"))
-	require.Equal(t, http.StatusCreated, status, body)
-
-	// The policy out of every check is what puts the refused recipient
-	// back in reach — over the lifecycle that is a delete, a last
-	// detach being refused — so the refusal above was the policy and
-	// nothing else.
-	delete(policies.attached, sender)
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-4"))
-	require.Equal(t, http.StatusCreated, status, body)
+	for i, recipient := range []grn.GRN{consenting, refusing, ghost} {
+		status, body := send(t, client, http.MethodPost, url+"/messages", submission(recipient, "key-"+strconv.Itoa(i)))
+		require.Equal(t, http.StatusCreated, status, body)
+	}
 
 	assert.Equal(t, []messageCall{
-		posted(sender, sibling, "key-2"),
-		posted(other, refused, "key-3"),
-		posted(sender, refused, "key-4"),
-	}, messages.calls, "the refused message reached the queue")
+		posted(sender, consenting, "key-0"),
+		refused(sender, refusing, "key-1"),
+		refused(sender, ghost, "key-2"),
+	}, messages.calls, "exactly the allowed pair's message crossed")
+	assert.NotContains(t, refusalBody(ghost), "consent")
+	assert.Equal(t, []policydecision.Question{
+		{Subject: sender, Action: message.ActionSend, Resource: consenting},
+		{Subject: sender, Action: message.ActionSend, Resource: refusing},
+		{Subject: sender, Action: message.ActionSend, Resource: ghost},
+	}, decisions.asked)
+	assert.Empty(t, held.asked, "the agents of another organization were read")
 }
 
-// TestServer_RecordsAPolicyDenialBeforeAnsweringIt holds the refusal
-// to the record of it: the send a policy denies reaches the queue as a
-// refused send and nothing else (ADR-0106). The admitted send beside
+// TestServer_RecordsASameOrganizationDenialBeforeAnsweringIt holds the
+// service's denial of a send inside the organization to the record of
+// it: the send reaches the queue as a refused send and nothing else
+// (ADR-0106), and is answered 403 (ADR-0168). The admitted send beside
 // it records no refusal, so the record is the denial's. A record that
 // cannot be written is the answer, so no refusal goes unrecorded.
-func TestServer_RecordsAPolicyDenialBeforeAnsweringIt(t *testing.T) {
+func TestServer_RecordsASameOrganizationDenialBeforeAnsweringIt(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
-	refused := agentGRN("acme", "deadbeefdeadbeef")
+	denied := agentGRN("acme", "deadbeefdeadbeef")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	policies := &engine{attached: map[grn.GRN][]machineapi.Statement{
-		sender: {denySending("no-talking", refused.String())},
-	}}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, policies, sender)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t),
+		allowing([2]grn.GRN{sender, sibling}), holding(denied, sibling), sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
 	assert.Empty(t, messages.refusals, "an admitted send was recorded as refused")
 
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-2"))
+	status, body = send(t, client, http.MethodPost, url+"/messages", submission(denied, "key-2"))
 	require.Equal(t, http.StatusForbidden, status, body)
-	assert.Equal(t, []messageCall{{method: "refuse", caller: sender, recipient: refused}}, messages.refusals)
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, body)
+	assert.Equal(t, []messageCall{{method: "refuse", caller: sender, recipient: denied}}, messages.refusals)
 
 	messages.refuseErr = errorx.New(errorx.KindUnavailable, "postgres is not accepting connections")
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-3"))
+	status, body = send(t, client, http.MethodPost, url+"/messages", submission(denied, "key-3"))
 	assert.Equal(t, http.StatusServiceUnavailable, status, body)
 	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
 		"a denied message reached the queue")
 }
 
-// TestServer_AGroupAttachedPolicyDecidesWhatItsMembersSend moves one
-// document between attachment targets and asserts the call ends the
-// same way both times: attached to the group the sender belongs to and
-// attached to the sender itself. An attachment that decides nothing
-// reads as a control that is not there (ADR-0008), and a group holding
-// agents is a target an administrator can pick.
-//
-// Three controls sit against the refusal: the agent in no group making
-// the same call, the same sender reaching a recipient the Deny does not
-// name, and the same call once nothing is attached anywhere.
-func TestServer_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing.T) {
+// TestServer_StoresNothingWhenThePolicyServiceCannotDecide keeps the
+// surface closed on a service that is not there, for the question
+// inside the organization and the one across it, and on a surface
+// holding no service at all (ADR-0168). The accepted message sits
+// beside each, because a surface that stored nothing at all would pass
+// the refusal alone.
+func TestServer_StoresNothingWhenThePolicyServiceCannotDecide(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
-	outsider := agentGRN("acme", "1122334455667788")
-	refused := agentGRN("acme", "deadbeefdeadbeef")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
-	engineering := groupGRN("acme", "engineering")
-	noTalking := denySending("no-talking", refused.String())
-
+	foreign := agentGRN("globex", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	groups := &memberGroups{byMember: map[grn.GRN][]grn.GRN{sender: {engineering}}}
-	policies := &engine{attached: map[grn.GRN][]machineapi.Statement{engineering: {noTalking}}}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), groups, policies, sender)
-	outsiderURL, outsiderClient := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), groups, policies, outsider)
+	decisions := allowing([2]grn.GRN{sender, sibling}, [2]grn.GRN{sender, foreign})
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), decisions, holding(sibling), sender)
 
-	status, body := send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-1"))
-	require.Equal(t, http.StatusForbidden, status, body)
-	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, body)
-	assert.Equal(t, []grn.GRN{sender}, groups.asked,
-		"the groups asked for are the ones the certificate's identity belongs to")
-	require.Len(t, policies.asked, 1)
-	assert.Equal(t, []grn.GRN{engineering}, policies.asked[0].SubjectGroups,
-		"the check carried the group the sender belongs to")
+	for _, recipient := range []grn.GRN{sibling, foreign} {
+		status, body := send(t, client, http.MethodPost, url+"/messages", submission(recipient, "ok-"+recipient.Organization))
+		require.Equal(t, http.StatusCreated, status, body)
+	}
 
-	// The Deny names one recipient, so the member reaches the agent
-	// beside it.
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
-	require.Equal(t, http.StatusCreated, status, body)
+	decisions.err = errorx.New(errorx.KindUnavailable, "policy channel is TRANSIENT_FAILURE")
+	for _, recipient := range []grn.GRN{sibling, foreign} {
+		status, body := send(t, client, http.MethodPost, url+"/messages", submission(recipient, "down-"+recipient.Organization))
+		assert.Equal(t, http.StatusServiceUnavailable, status, body)
+	}
 
-	// The agent that is in no group is answered under the same policy.
-	status, body = send(t, outsiderClient, http.MethodPost, outsiderURL+"/messages", submission(refused, "key-3"))
-	require.Equal(t, http.StatusCreated, status, body)
-
-	// The same document attached to the sender itself refuses the same
-	// call. This is the control the failure turned on: the two
-	// attachments answered differently while a group reached nothing.
-	policies.attached = map[grn.GRN][]machineapi.Statement{sender: {noTalking}}
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-4"))
-	require.Equal(t, http.StatusForbidden, status, body)
-
-	// Attached to neither, the call goes through, so both refusals were
-	// the attachment and not the recipient.
-	policies.attached = nil
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-5"))
-	require.Equal(t, http.StatusCreated, status, body)
+	bare, bareClient := listener(t, &agentService{}, nil, messages, unwatched(t), nil, holding(sibling), sender)
+	for _, recipient := range []grn.GRN{sibling, foreign} {
+		status, body := send(t, bareClient, http.MethodPost, bare+"/messages", submission(recipient, "bare-"+recipient.Organization))
+		assert.Equal(t, http.StatusServiceUnavailable, status, body)
+	}
 
 	assert.Equal(t, []messageCall{
-		posted(sender, sibling, "key-2"),
-		posted(outsider, refused, "key-3"),
-		posted(sender, refused, "key-5"),
-	}, messages.calls, "a refused message reached the queue")
+		posted(sender, sibling, "ok-acme"),
+		posted(sender, foreign, "ok-globex"),
+	}, messages.calls, "a message nothing decided reached the queue")
 }
 
-// TestServer_StoresNothingWhenThePolicyEngineCannotAnswer keeps the
-// surface closed on an engine that is not there. The accepted message
-// sits beside it, because a surface that stored nothing at all would
-// pass the refusal alone.
-func TestServer_StoresNothingWhenThePolicyEngineCannotAnswer(t *testing.T) {
+// TestServer_StoresNothingWhenTheSendersAgentsCannotBeRead keeps the
+// surface closed on the question that chooses the question. An agent
+// that cannot be read is not an agent that is absent: absent is
+// admitted as a routing failure, and an unreadable one is not known to
+// be absent. The accepted message sits beside it.
+func TestServer_StoresNothingWhenTheSendersAgentsCannotBeRead(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	policies := &engine{}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, policies, sender)
+	held := holding(sibling)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t),
+		allowing([2]grn.GRN{sender, sibling}), held, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
 
-	policies.err = errorx.New(errorx.KindUnavailable, "authz channel is TRANSIENT_FAILURE")
+	held.err = errorx.New(errorx.KindUnavailable, "postgres is not accepting connections")
 	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
 	assert.Equal(t, http.StatusServiceUnavailable, status, body)
 	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
-		"a message nothing decided reached the queue")
-}
-
-// TestServer_StoresNothingWhenGroupMembershipCannotBeRead keeps the
-// surface closed on the other half of the question. Membership that
-// cannot be read is not membership that is empty: the difference is
-// every Deny an organization attached to a group, so the message is
-// refused rather than decided without them. The accepted message sits
-// beside it, because a surface that stored nothing at all would pass
-// the refusal alone.
-func TestServer_StoresNothingWhenGroupMembershipCannotBeRead(t *testing.T) {
-	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
-	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
-	messages := &messageService{}
-	groups := &memberGroups{}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), groups, &engine{}, sender)
-
-	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
-	require.Equal(t, http.StatusCreated, status, body)
-
-	groups.err = errorx.New(errorx.KindUnavailable, "postgres is not accepting connections")
-	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
-	assert.Equal(t, http.StatusServiceUnavailable, status, body)
-	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
-		"a message decided without the sender's groups reached the queue")
+		"a message decided without reading the recipient reached the queue")
 }
 
 // TestServer_ReadsAMessageStatusUnderTheSenderTheCertificateNames pins
@@ -682,7 +487,7 @@ func TestServer_StoresNothingWhenGroupMembershipCannotBeRead(t *testing.T) {
 func TestServer_ReadsAMessageStatusUnderTheSenderTheCertificateNames(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), &decider{}, &roster{}, sender)
 
 	status, body := send(t, client, http.MethodGet, url+"/messages/0a1b2c3d", "")
 	require.Equal(t, http.StatusOK, status, body)
@@ -708,7 +513,7 @@ func TestServer_ReadsAMessageStatusUnderTheSenderTheCertificateNames(t *testing.
 func TestServer_AnswersAMessageItHasNoneOfAsNotFound(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), &decider{}, &roster{}, sender)
 
 	status, body := send(t, client, http.MethodGet, url+"/messages/0a1b2c3d", "")
 	require.Equal(t, http.StatusOK, status, body)
@@ -736,13 +541,13 @@ func TestServer_ReadsAnEmptyPollFromTheKindNotTheSentinel(t *testing.T) {
 	claims := "/agents/" + neturl.PathEscape(caller.String()) + "/claims"
 
 	empty := &messageService{err: errorx.New(errorx.KindNotFound, "no message ready")}
-	url, client := listener(t, nil, nil, empty, nil, nil, nil, nil, caller)
+	url, client := listener(t, nil, nil, empty, nil, nil, nil, caller)
 	status, body := send(t, client, http.MethodPost, url+claims, "")
 	assert.Equal(t, http.StatusNoContent, status)
 	assert.Empty(t, body)
 
 	unreachable := &messageService{err: errorx.New(errorx.KindUnavailable, "queue unreachable")}
-	url, client = listener(t, nil, nil, unreachable, nil, nil, nil, nil, caller)
+	url, client = listener(t, nil, nil, unreachable, nil, nil, nil, caller)
 	status, body = send(t, client, http.MethodPost, url+claims, "")
 	assert.Equal(t, http.StatusServiceUnavailable, status, "the control: another kind is not an empty poll")
 	assert.Contains(t, body, `"kind":"unavailable"`)
@@ -786,7 +591,7 @@ func TestServer_RefusesAnOutboxMessageBeforeTheQueueWithoutItsContractOrCreation
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	recipient := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), &decider{}, &roster{}, sender)
 	const v2 = message.TokenDeliveryContractVersion
 
 	status, version, body := outboxSend(t, client, url, v2, outboxEntry(recipient, "entry-1", "2026-10-04T18:07:52.1Z"))
@@ -846,7 +651,7 @@ func TestServer_AnswersEachBudgetRefusalWithItsOwnStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			messages := &messageService{err: tt.err}
-			url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+			url, client := listener(t, &agentService{}, nil, messages, unwatched(t), &decider{}, &roster{}, sender)
 			status, version, body := outboxSend(t, client, url, message.TokenDeliveryContractVersion, outboxEntry(recipient, "entry-1", "2026-10-04T18:07:52Z"))
 			assert.Equal(t, tt.status, status, body)
 			assert.Equal(t, message.TokenDeliveryContractVersion, version)
@@ -861,13 +666,14 @@ func TestServer_AnswersEachBudgetRefusalWithItsOwnStatus(t *testing.T) {
 // holds that the cross-organization refusal of an outbox entry is
 // written through the same budgeted write, carrying the entry's
 // creation instant, so an expired entry stores no refusal either. The
-// consenting pair is the control: its entry is stored as submitted.
+// allowed pair is the control: its entry is stored as submitted.
 func TestServer_RefusesAnOutboxMessageAcrossTheBoundaryUnderItsBudget(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	foreign := agentGRN("globex", "0a1b2c3d4e5f6071")
 	stranger := agentGRN("initech", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, nil, messages, consenting([2]string{"acme", "globex"}), unwatched(t), &memberGroups{}, &engine{}, sender)
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t),
+		allowing([2]grn.GRN{sender, foreign}), holding(), sender)
 	created := time.Date(2026, time.October, 4, 18, 7, 52, 0, time.UTC)
 
 	status, _, body := outboxSend(t, client, url, message.TokenDeliveryContractVersion, outboxEntry(foreign, "entry-1", created.Format(time.RFC3339)))
@@ -881,8 +687,8 @@ func TestServer_RefusesAnOutboxMessageAcrossTheBoundaryUnderItsBudget(t *testing
 		{method: "post within budget", caller: sender, recipient: foreign, key: "entry-1", body: "hello", author: message.AuthorSender, created: created},
 		{
 			method: "post within budget", caller: stranger, recipient: sender,
-			key:     "consent-refused:" + sender.String() + ":entry-2",
-			body:    "garam could not deliver your message to " + stranger.String() + ": the organizations acme and initech do not both consent to cross-organization messages",
+			key:     "crossing-refused:" + sender.String() + ":entry-2",
+			body:    refusalBody(stranger),
 			author:  message.AuthorGaram,
 			created: created,
 		},
@@ -908,15 +714,15 @@ func TestServer_AClaimGaramCannotSignSpendsNoAttempt(t *testing.T) {
 	claims := "/agents/" + neturl.PathEscape(caller.String()) + "/claims"
 
 	unsigned := &messageService{}
-	url, client := serveTLS(t, machineapi.NewServer(&agentService{}, nil, unsigned, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, unopenableKeyring{}), caller)
+	url, client := serveTLS(t, machineapi.NewServer(&agentService{}, nil, unsigned, unwatched(t),
+		nil, nil, nil, nil, nil, nil, unopenableKeyring{}), caller)
 	status, body := send(t, client, http.MethodPost, url+claims, "")
 	assert.Equal(t, http.StatusInternalServerError, status, body)
 	assert.Empty(t, unsigned.calls, "the queue was asked for a claim garam could not sign")
 
 	signed := &messageService{}
-	url, client = serveTLS(t, machineapi.NewServer(&agentService{}, nil, signed, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{}), caller)
+	url, client = serveTLS(t, machineapi.NewServer(&agentService{}, nil, signed, unwatched(t),
+		nil, nil, nil, nil, nil, nil, stubKeyring{}), caller)
 	status, body = send(t, client, http.MethodPost, url+claims, "")
 	assert.Equal(t, http.StatusNoContent, status, body)
 	assert.Equal(t, []messageCall{{method: "claim", caller: caller, recipient: caller}}, signed.calls)

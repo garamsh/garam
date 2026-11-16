@@ -25,9 +25,9 @@ func TestServer_ReportsTheStateTheBodyNamesAndParsesItFirst(t *testing.T) {
 	operator := operatorGRN("acme")
 	held := agentGRN("acme", "0a1b2c3d4e5f6071")
 	agents := &agentService{}
-	url, client := listener(t, agents, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, operator)
+	url, client := listener(t, agents, nil, &messageService{}, unwatched(t), &decider{}, &roster{}, operator)
 	// The agent reports its own runtime state, presenting its own token.
-	agentURL, self := listener(t, agents, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, held)
+	agentURL, self := listener(t, agents, nil, &messageService{}, unwatched(t), &decider{}, &roster{}, held)
 	provisioning := url + "/agents/" + neturl.PathEscape(held.String()) + "/provisioning-state"
 	runtime := agentURL + "/agents/" + neturl.PathEscape(held.String()) + "/runtime-state"
 

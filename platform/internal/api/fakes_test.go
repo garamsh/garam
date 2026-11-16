@@ -952,16 +952,6 @@ func (s *fakeConsentStore) Withdraw(_ context.Context, orgGRN, other grn.GRN) er
 	return nil
 }
 
-func (s *fakeConsentStore) Stands(_ context.Context, a, b grn.GRN) (bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.err != nil {
-		return false, s.err
-	}
-	halves, ok := s.grants[consentPairKey(a, b)]
-	return ok && halves[a.String()] && halves[b.String()], nil
-}
-
 func (s *fakeConsentStore) List(_ context.Context, orgGRN grn.GRN) ([]*message.Consent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

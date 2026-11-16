@@ -573,10 +573,17 @@ services:
       GARAM_MACHINE_ISSUER: https://machine:8443
       GARAM_MACHINE_TOKEN_URL: https://machine:8443/oauth/token
       GARAM_IDENTITY_ISSUER: *identity-issuer
+      # The policy service decides every send (ADR-0168), reached as
+      # the api reaches it: the certificate policy-tls wrote verifies
+      # it, and the key policy-keys made signs each call.
+      GARAM_POLICY_ADDR: policy:8443
+      GARAM_POLICY_CA_FILE: /policy-tls/tls.crt
       GARAM_POLICY_SIGNING_KEY_FILE: /policy-keys/signing.pem
+      GARAM_POLICY_TOKEN_ISSUER: *identity-issuer
       GARAM_IDENTITY_SERVICE_KEYS_FILE: /cowork-keys/service-keys.json
     volumes:
       - machine-material:/machine-material:ro
+      - policy-tls:/policy-tls:ro
       - policy-keys:/policy-keys:ro
       - type: volume
         source: cowork-keys
@@ -591,8 +598,12 @@ services:
         condition: service_healthy
       machine-material:
         condition: service_completed_successfully
+      policy-tls:
+        condition: service_completed_successfully
       policy-keys:
         condition: service_completed_successfully
+      policy:
+        condition: service_healthy
       cowork-keys:
         condition: service_completed_successfully
     # /readyz on the listener's own health port, through the binary's

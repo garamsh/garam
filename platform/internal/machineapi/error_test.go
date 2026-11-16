@@ -18,27 +18,29 @@ import (
 	"github.com/garamsh/garam/platform/internal/pgxerr"
 )
 
-// engineWords is what the engine's own error says. A caller must not
-// read it back on a 5xx, and every status below one carries it.
-const engineWords = "authz channel is TRANSIENT_FAILURE"
+// serviceWords is what the policy service's own error says. A caller
+// must not read it back on a 5xx.
+const serviceWords = "policy channel is TRANSIENT_FAILURE"
 
-// TestServer_TellsAnEngineThatIsNotThereFromAPolicyThatRefused is the
+// queueWords is what an error of the queue says, which every status
+// below 500 carries.
+const queueWords = "queue refused the write"
+
+// TestServer_TellsAServiceThatIsNotThereFromAPolicyThatRefused is the
 // pair an adapter holding a durable outbound queue has to separate: a
-// policy refusal is permanent and retrying it is a defect, an engine
+// policy refusal is permanent and retrying it is a defect, a service
 // that cannot answer is transient and retrying it is the point. Both
 // store nothing, so the status line is what separates them.
 //
 // The accepted send sits with them as the control, because a 403 beside
 // a 503 holds as readily for a surface that refuses everything.
-func TestServer_TellsAnEngineThatIsNotThereFromAPolicyThatRefused(t *testing.T) {
+func TestServer_TellsAServiceThatIsNotThereFromAPolicyThatRefused(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	refused := agentGRN("acme", "deadbeefdeadbeef")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	policies := &engine{attached: map[grn.GRN][]machineapi.Statement{
-		sender: {denySending("no-talking", refused.String())},
-	}}
-	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, policies, sender)
+	policies := allowing([2]grn.GRN{sender, sibling})
+	url, client := listener(t, &agentService{}, nil, messages, unwatched(t), policies, holding(refused, sibling), sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -47,9 +49,10 @@ func TestServer_TellsAnEngineThatIsNotThereFromAPolicyThatRefused(t *testing.T) 
 	require.Equal(t, http.StatusForbidden, status, body)
 	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, body)
 
-	policies.err = errorx.New(errorx.KindUnavailable, engineWords)
+	policies.err = errorx.New(errorx.KindPermissionDenied, serviceWords)
 	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-3"))
-	require.Equal(t, http.StatusServiceUnavailable, status, body)
+	require.Equal(t, http.StatusServiceUnavailable, status, body,
+		"a service that failed is unavailable whatever status it failed with")
 	assert.JSONEq(t, `{"kind":"unavailable","message":"internal error"}`, body)
 
 	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
@@ -62,18 +65,18 @@ func TestServer_TellsAnEngineThatIsNotThereFromAPolicyThatRefused(t *testing.T) 
 // the rows are read against each other: a surface answering one status
 // for everything fails all but one of them.
 //
-// The engine is a fake and each row sets the kind on it, so a row
-// proves the mapping renders that kind and never that a real engine
+// The queue is a fake and each row sets the kind on it, so a row
+// proves the mapping renders that kind and never that a real queue
 // produces it.
 //
 // The message is the second half of each row. Internals stay out of a
 // 5xx body whatever the kind, and every status below one carries the
-// error the engine produced.
+// error the queue produced.
 func TestServer_AnswersEachErrorKindWithItsOwnStatus(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
-	policies := &engine{}
-	url, client := listener(t, &agentService{}, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, policies, sender)
+	queue := &messageService{}
+	url, client := listener(t, &agentService{}, nil, queue, unwatched(t), allowing([2]grn.GRN{sender, sibling}), holding(sibling), sender)
 
 	tests := []struct {
 		kind    errorx.Kind
@@ -83,23 +86,23 @@ func TestServer_AnswersEachErrorKindWithItsOwnStatus(t *testing.T) {
 		{errorx.KindUnknown, http.StatusInternalServerError, "internal error"},
 		{errorx.KindInternal, http.StatusInternalServerError, "internal error"},
 		{errorx.KindCanceled, http.StatusServiceUnavailable, "internal error"},
-		{errorx.KindInvalidArgument, http.StatusBadRequest, engineWords},
+		{errorx.KindInvalidArgument, http.StatusBadRequest, queueWords},
 		{errorx.KindDeadlineExceeded, http.StatusGatewayTimeout, "internal error"},
-		{errorx.KindNotFound, http.StatusNotFound, engineWords},
-		{errorx.KindAlreadyExists, http.StatusConflict, engineWords},
-		{errorx.KindPermissionDenied, http.StatusForbidden, engineWords},
-		{errorx.KindResourceExhausted, http.StatusTooManyRequests, engineWords},
-		{errorx.KindFailedPrecondition, http.StatusConflict, engineWords},
-		{errorx.KindAborted, http.StatusConflict, engineWords},
-		{errorx.KindOutOfRange, http.StatusBadRequest, engineWords},
+		{errorx.KindNotFound, http.StatusNotFound, queueWords},
+		{errorx.KindAlreadyExists, http.StatusConflict, queueWords},
+		{errorx.KindPermissionDenied, http.StatusForbidden, queueWords},
+		{errorx.KindResourceExhausted, http.StatusTooManyRequests, queueWords},
+		{errorx.KindFailedPrecondition, http.StatusConflict, queueWords},
+		{errorx.KindAborted, http.StatusConflict, queueWords},
+		{errorx.KindOutOfRange, http.StatusBadRequest, queueWords},
 		{errorx.KindUnimplemented, http.StatusNotImplemented, "internal error"},
 		{errorx.KindUnavailable, http.StatusServiceUnavailable, "internal error"},
 		{errorx.KindDataLoss, http.StatusInternalServerError, "internal error"},
-		{errorx.KindUnauthenticated, http.StatusUnauthorized, engineWords},
+		{errorx.KindUnauthenticated, http.StatusUnauthorized, queueWords},
 	}
 	for _, tc := range tests {
 		t.Run(tc.kind.String(), func(t *testing.T) {
-			policies.err = errorx.New(tc.kind, engineWords)
+			queue.err = errorx.New(tc.kind, queueWords)
 			status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, tc.kind.String()))
 			require.Equal(t, tc.status, status, body)
 			assert.JSONEq(t, `{"kind":"`+tc.kind.String()+`","message":"`+tc.message+`"}`, body)
@@ -115,10 +118,10 @@ func TestServer_AnswersEachErrorKindWithItsOwnStatus(t *testing.T) {
 func TestServer_AConflictCarriesNoneOfTheDriversText(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
-	policies := &engine{}
-	url, client := listener(t, &agentService{}, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, policies, sender)
+	queue := &messageService{}
+	url, client := listener(t, &agentService{}, nil, queue, unwatched(t), allowing([2]grn.GRN{sender, sibling}), holding(sibling), sender)
 
-	policies.err = pgxerr.Classify(&pgconn.PgError{
+	queue.err = pgxerr.Classify(&pgconn.PgError{
 		Severity:       "ERROR",
 		Code:           "23505",
 		Message:        `duplicate key value violates unique constraint "messages_sender_grn_idempotency_key_key"`,

@@ -29,6 +29,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -256,6 +257,15 @@ func (s *stack) startMachine(authz string) {
 	s.rootFile = filepath.Join(s.dir, "server-root.pem")
 	require.NoError(s.t, os.WriteFile(s.rootFile, rootPEM, 0o600))
 	kek := hex.EncodeToString(randomBytes(32))
+	// The listener refuses to start without a policy service to decide
+	// a send (ADR-0168). The connection is made lazily and nothing here
+	// sends, so the address names no service: what it needs is a root
+	// to verify by and a key to sign with.
+	policyKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(s.t, err)
+	policyKeyDER, err := x509.MarshalPKCS8PrivateKey(policyKey)
+	require.NoError(s.t, err)
+	policyKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: policyKeyDER})
 
 	name := s.prefix + "machine"
 	s.mustDocker("create", "--name", name, "--network", s.network, "-p", "127.0.0.1::8443",
@@ -263,6 +273,9 @@ func (s *stack) startMachine(authz string) {
 		"-e", "GARAM_MACHINE_TLS_CERT_FILE=/etc/garam/tls.crt", "-e", "GARAM_MACHINE_TLS_KEY_FILE=/etc/garam/tls.key",
 		"-e", "GARAM_MACHINE_SERVER_ROOT_FILE=/etc/garam/server-root.pem", "-e", "GARAM_CA_KEY_FILE=/etc/garam/kek",
 		"-e", "GARAM_MACHINE_ISSUER=https://garam.test",
+		"-e", "GARAM_POLICY_ADDR=policy.invalid:8443", "-e", "GARAM_POLICY_CA_FILE=/etc/garam/server-root.pem",
+		"-e", "GARAM_POLICY_SIGNING_KEY_FILE=/etc/garam/policy-signing.pem",
+		"-e", "GARAM_POLICY_TOKEN_ISSUER=https://garam.test",
 		s.garam, "serve", "machine")
 	s.mustDocker("network", "connect", "bridge", name)
 	place := func(ips ...net.IP) {
@@ -274,6 +287,7 @@ func (s *stack) startMachine(authz string) {
 			{Path: "garam", Mode: 0o700, Dir: true, UID: 10001, GID: 10001},
 			own("garam/tls.crt", certPEM), own("garam/tls.key", keyPEM),
 			own("garam/server-root.pem", rootPEM), own("garam/kek", []byte(kek)),
+			own("garam/policy-signing.pem", policyKeyPEM),
 		}))
 	}
 	place(net.IPv4(127, 0, 0, 1))

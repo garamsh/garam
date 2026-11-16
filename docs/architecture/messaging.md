@@ -7,15 +7,15 @@ Implemented by `platform/internal/message`, which persists through
 `platform/internal/message/postgres` (ADR-0069).
 
 **garam announces nothing to a sender, and one of the two reports it
-owes is built.** It answers a post no consent relation carries across
-its boundary with the refusal message below, and announces nothing
-else: a message no agent claims, or one that spends its attempts, sits
-until the thirty-day sweep deletes it and nobody is told. The
-announcement at exhaustion is garam's own obligation, taken because the
-platform makes no such report itself (ADR-0018), and it is unbuilt —
-[overview.md](./overview.md) §Out of scope (today) records it. What a
-sender can do instead is ask, which it could not before: it reads the
-state of a message it sent, described below (ADR-0055).
+owes is built.** It answers a post the policy service does not allow
+across its boundary with the refusal message below, and announces
+nothing else: a message no agent claims, or one that spends its
+attempts, sits until the thirty-day sweep deletes it and nobody is
+told. The announcement at exhaustion is garam's own obligation, taken
+because the platform makes no such report itself (ADR-0018), and it is
+unbuilt — [overview.md](./overview.md) §Out of scope (today) records
+it. What a sender can do instead is ask, which it could not before: it
+reads the state of a message it sent, described below (ADR-0055).
 
 | Type | Responsibility |
 |------|----------------|
@@ -26,7 +26,7 @@ state of a message it sent, described below (ADR-0055).
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
 | `Fence` | what an agent's call presents to the agent execution fence: the agent, the serial and dates of the token its request presented, and its execution token's hash (ADR-0080, ADR-0100) |
 | `Service` | what a machine identity does to its own queue: post, post a durable reply within its budget, record a post a policy denied, claim, renew, complete, and read the state of what it sent |
-| `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
+| `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, which the platform feeds to the policy service, the one that asks whether both halves stand (ADR-0147, ADR-0168) |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 | `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v2` (ADR-0083) |
 | `Author` | who wrote a message: its sender, or garam for the refusal it writes itself — what a signature names as the sender garam vouches for (ADR-0101) |
@@ -61,19 +61,40 @@ forget, and an organization that is deleted takes its halves with it.
 Granting and withdrawing is the browser-facing listener's surface, under
 the org's path; this domain owns the relation itself.
 
-**Decided; built in the policy service, and the platform feeds `consents`.** [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
-moves the decision of a cross-organization send into the policy
-service: each organization's half becomes an attribute of its `Org`
-the platform feeds, tenant isolation gains one exception for
-`message.send` between agents where both halves stand, both
-organizations' guardrails are read, and the check before the engine
-goes. The policy service holds its half (#1805): `Org`'s `consents`,
-the exception and the sender's guardrails. The platform feeds
-`consents` from a grant or a withdrawal, as
-[authz.md](./authz.md#consents) states. The send path does not yet
-ask the service about a cross-organization recipient, so the check
-before the engine stays, the relation stays this domain's fact, and
-the text above holds until it does.
+**The policy service decides a send, consent included.**
+[ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
+made each organization's half an attribute of its `Org` the platform
+feeds, and tenant isolation gains one exception for `message.send`
+between agents where both halves stand, as
+[authz.md](./authz.md#consents) states.
+[ADR-0168](./adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)
+makes the machine listener ask the service about a send and nothing
+else, so the platform no longer reads the relation on the send path:
+the relation stays this domain's fact and its feed to the service is
+what the decision reads. The listener keeps three things the service
+does not decide, below.
+
+**What the listener decides before it asks.** A recipient inside the
+sender's organization that names no agent garam holds is admitted
+without a question and stored as the routing failure ADR-0013 keeps
+storable. A recipient across the boundary that is not an agent, such as
+a user, an operator or an organization, is refused without a question.
+Every other recipient is the service's decision: an agent of the
+sender's organization that garam holds, and every agent GRN across the
+boundary whether or not it exists. What garam reads to choose between
+asking and not asking is the sender's own organization's agents and no
+other's, so a send learns nothing about another organization from the
+answer.
+
+**What a denial becomes.** Across the boundary a denial is the refusal
+message below, written back to the sender as a 201 and carrying one
+text that names neither consent nor absence, so a missing consent, a
+withdrawn one and an agent the service does not know read alike.
+Inside the organization a denial records the refused send and answers
+403 `permission_denied` (ADR-0106). A service that cannot be reached
+stores nothing and answers 503, so an adapter retries it, and a
+deployment with no service address fails at start rather than
+deciding some other way.
 
 The queue is a table and never a connection, so any garam instance can
 hand any recipient's message to a reader and no process holds anything
@@ -99,7 +120,9 @@ key — garam answers a sender once the message is stored and reports a
 routing failure back as a message rather than rejecting one, so a
 message it cannot yet route has to be storable. `Service` keeps that
 rule where a caller meets it: posting checks that the recipient is a
-GRN and never that it names an agent garam knows. A recipient that is
+GRN and never that it names an agent garam knows; the listener reads
+that for a recipient in the sender's own organization, only to choose
+whether to ask the policy service. A recipient that is
 not a GRN is refused, which is where the line falls: ADR-0013 rejects
 nothing because a refusal leaves the sender's reply in an outbox
 nobody drains, and that argument is about a reply garam could have
@@ -157,8 +180,9 @@ recipient refuses another organization's agent by the same line, and no
 path reaches a message around it. The read is bounded from the other
 side by the same kind of comparison: the caller is the sender the row
 is matched on, so an identifier alone reaches nothing. Whom a sender
-may post to is not decided here — it is a policy question the machine
-listener asks (ADR-0024). What this domain owns of it is the action
+may post to is not decided here — it is a question the machine
+listener asks the policy service (ADR-0024, ADR-0168). What this
+domain owns of it is the action
 constant a policy names, because it is the domain that defines sending.
 A claim waits for a message rather than answering
 an empty queue at once, and it waits by re-reading the queue: a
@@ -174,9 +198,10 @@ The store writes the send's event through the audit domain's writer
 inside the transaction that writes the outcome, so a message write
 runs in a transaction whether or not a fence admits it: an authorized
 post's event names the message its key stores, a retry included; a
-crossing no consent carries records a refused send with no message,
-beside the refusal garam writes back; and a post the policy denies,
-which stores nothing, records its refused send alone, after the fence.
+crossing the policy service does not allow records a refused send with
+no message, beside the refusal garam writes back; and a post the policy
+denies, which stores nothing, records its refused send alone, after the
+fence.
 A durable submission the budget refuses, or whose key holds another
 message, records nothing, and its sweep still commits. The record is
 the audit domain's and outlives this one's retention
@@ -254,10 +279,10 @@ Today no message reaches a queue from cowork.
 - **The author is cowork's claim.** cowork names the person or agent
   who wrote the message, and its address in cowork, in the body. garam
   stores the body as any other and reads nothing in it.
-- **Its own organization's agents only.** A recipient that is not an
-  agent of the principal's organization is refused before the engine
-  is asked, and the consent relation does not carry the principal
-  across a boundary.
+- **The policy service decides its sends.** The listener asks it about
+  this principal as about any sender (ADR-0168), and the platform no
+  longer refuses a recipient outside the principal's organization
+  before the question is asked.
 - **No queue of its own.** The principal posts and reads the state of
   what it sent; it claims, renews and completes nothing.
 

@@ -6,7 +6,8 @@
 #   (codehub's public key, not cowork's) come from the `codehub-keys`
 #   volume, and the machine listener's certificate, key and
 #   key-encryption key too, in place of `machine-material` and
-#   `cowork-keys`;
+#   `cowork-keys`; the machine listener keeps the default's policy
+#   service address and CA, and signs with the issuer's key;
 # - policy: trusts the issuer's own keys, fetched from the running api,
 #   in place of the key `policy-keys` made;
 # - ports: the api, the machine listener and the policy service each

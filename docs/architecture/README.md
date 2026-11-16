@@ -1510,3 +1510,14 @@ ADRs:
   that one cause as a denial, a refused batch entry by asking it again
   alone; the schema and ADR-0146's delegable set do not change;
   accepted, built (#1933)
+- [0168](./adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)
+  — the machine listener asks the policy service for every send and
+  reads neither the consent relation nor the engine; a recipient
+  naming no agent garam holds inside the sender's organization is
+  stored as a routing failure without asking, a non-agent across the
+  boundary is refused without asking, and every other recipient is the
+  service's answer, a cross-boundary denial being garam's refusal in
+  one text naming neither consent nor absence and a same-organization
+  denial a 403; a service that cannot be reached fails the send
+  closed, and `serve machine` with no `GARAM_POLICY_ADDR` fails at
+  start; accepted, built (#1941); takes ADR-0147's owed round

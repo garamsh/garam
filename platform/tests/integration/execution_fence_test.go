@@ -127,7 +127,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 		pool: p, browser: browser.URL,
 		config: cli.MachineConfig{
 			Sealer: sealer, Issuer: testIssuer, Certificate: presented, ServerRoot: certificatePEM(presented),
-			Delivery: briefDelivery(), Engine: engine,
+			Delivery: briefDelivery(), Engine: engine, Decisions: sameOrganizationSends{},
 			Logger:   slog.New(slog.NewJSONHandler(io.Discard, nil)),
 			TokenURL: testTokenURL,
 		},

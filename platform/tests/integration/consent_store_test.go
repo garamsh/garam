@@ -36,25 +36,27 @@ func TestConsentStore_RoundTrip(t *testing.T) {
 	}
 
 	// Nothing stands where nothing was granted.
-	stands, err := s.Stands(ctx, acme, globex)
+	listed, err := s.List(ctx, acme)
 	require.NoError(t, err)
-	assert.False(t, stands)
+	assert.Empty(t, listed)
 
 	// One half does not carry the relation, whichever side grants it.
 	first, err := s.Grant(ctx, acme, globex)
 	require.NoError(t, err)
 	assert.False(t, first.Stands())
-	stands, err = s.Stands(ctx, globex, acme)
+	listed, err = s.List(ctx, globex)
 	require.NoError(t, err)
-	assert.False(t, stands, "the direction asked does not matter — it is one row")
+	require.Len(t, listed, 1, "the side asked does not matter — it is one row")
+	assert.False(t, listed[0].Stands())
 
 	// The second half is what stands the relation.
 	second, err := s.Grant(ctx, globex, acme)
 	require.NoError(t, err)
 	assert.True(t, second.Stands())
-	stands, err = s.Stands(ctx, acme, globex)
+	listed, err = s.List(ctx, acme)
 	require.NoError(t, err)
-	assert.True(t, stands)
+	require.Len(t, listed, 1)
+	assert.True(t, listed[0].Stands())
 
 	// A relation between two other organizations admits nothing for
 	// this pair.
@@ -62,12 +64,12 @@ func TestConsentStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.Grant(ctx, initech, globex)
 	require.NoError(t, err)
-	stands, err = s.Stands(ctx, acme, initech)
+	listed, err = s.List(ctx, acme)
 	require.NoError(t, err)
-	assert.False(t, stands, "globex consenting with both does not join acme to initech")
+	assert.Len(t, listed, 1, "globex consenting with both does not join acme to initech")
 
 	// Listing reads an org's relations from whichever side it holds.
-	listed, err := s.List(ctx, globex)
+	listed, err = s.List(ctx, globex)
 	require.NoError(t, err)
 	require.Len(t, listed, 2, "the pair with acme and the pair with initech")
 	listed, err = s.List(ctx, acme)
@@ -79,9 +81,10 @@ func TestConsentStore_RoundTrip(t *testing.T) {
 	// other's standing: the relation falls, and the row lives on one
 	// half.
 	require.NoError(t, s.Withdraw(ctx, acme, globex))
-	stands, err = s.Stands(ctx, acme, globex)
+	listed, err = s.List(ctx, acme)
 	require.NoError(t, err)
-	assert.False(t, stands)
+	require.Len(t, listed, 1)
+	assert.False(t, listed[0].Stands())
 	listed, err = s.List(ctx, globex)
 	require.NoError(t, err)
 	require.Len(t, listed, 2, "globex's half keeps the row")

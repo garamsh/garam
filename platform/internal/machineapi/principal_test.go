@@ -75,7 +75,7 @@ func principalListener(t *testing.T, private *rsa.PrivateKey, issuerOn bool) (st
 		issuer, err = identity.NewIssuer(principalIssuer, key, noSessions{}, nil)
 		require.NoError(t, err)
 	}
-	srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).WithIdentity(issuer, principals)
+	srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).WithIdentity(issuer, principals)
 	base, _ := serveTLS(t, srv, assertingClient)
 	return base, anonymous(t), store, key
 }

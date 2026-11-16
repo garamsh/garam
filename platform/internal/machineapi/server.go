@@ -10,15 +10,10 @@
 // to decide; this package reads the caller off the request, parses what
 // the path names, and renders the answer.
 //
-// What a caller may send is decided here instead, because it is a
-// policy question: the answer comes from the authz engine over a seam
-// this package declares, and a boundary this one composes may not reach
-// past it to another process. That question carries the groups the
-// caller belongs to, read over a seam of the same shape, because a
-// policy attached to a group decides what its members send (ADR-0008).
-// It is never asked across an organization boundary: there the consent
-// relation decides alone (ADR-0035), read from the message domain that
-// owns it.
+// What a caller may send is the policy service's decision, consent
+// included. This package asks it over a seam of policydecision's, and
+// only for a recipient the service could hold the question about:
+// which those are is send.go's (ADR-0168).
 package machineapi
 
 import (
@@ -33,6 +28,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/watch"
 )
@@ -42,10 +38,7 @@ type Server struct {
 	agents    agent.Service
 	operators operator.Service
 	messages  message.Service
-	consents  message.ConsentStore
 	watches   watch.Service
-	groups    Groups
-	evaluator Evaluator
 	authority operator.AuthorityService
 	// recheck reads the caller's token dates and registration again on
 	// a decision.
@@ -63,6 +56,11 @@ type Server struct {
 	// keys signs each message handed out and publishes the keys it
 	// signs with (ADR-0101).
 	keys message.Keyring
+	// decisions decides every send, and held reads the sender's own
+	// organization's agents for it (ADR-0168); nil answers a send as
+	// unavailable.
+	decisions policydecision.Service
+	held      AgentReader
 	// feed holds the answer of a route that creates an agent until the
 	// policy service holds its entity (ADR-0165); nil waits for nothing.
 	feed policyfeed.Gate
@@ -88,18 +86,17 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the machine API server over the services it
 // answers from: what an operator does to its agents, how an operator
-// exchanges its key, what a machine identity does to its own queue, the
-// consent relation that lets a message cross an organization boundary,
-// who is watching one work and what it is saying, which groups a
-// caller belongs to, what decides whom it may send to, what a hosted
-// operator reads its delegated operations back through, what rechecks
-// a caller on a decision, what proves a controller's current authority
-// to that operator, what activates, inspects and recovers an agent's
+// exchanges its key, what a machine identity does to its own queue, who
+// is watching one work and what it is saying, what a hosted operator
+// reads its delegated operations back through, what rechecks a caller
+// on a decision, what proves a controller's current authority to that
+// operator, what activates, inspects and recovers an agent's
 // execution, how a standalone host's supervisor enrolls, what prepares
 // and admits an agent-enrollment.v1 approval, and what signs each
-// message handed out.
-func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, recheck Rechecker, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService, admissions agent.AdmissionService, keys message.Keyring) *Server {
-	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority,
+// message handed out. What decides a send is attached with
+// [Server.WithSendPolicy].
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, watches watch.Service, authority operator.AuthorityService, recheck Rechecker, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService, admissions agent.AdmissionService, keys message.Keyring) *Server {
+	return &Server{agents: agents, operators: operators, messages: messages, watches: watches, authority: authority,
 		rechecker: recheck, proofs: proofs, executions: executions, supervisors: supervisors, admissions: admissions, keys: keys}
 }
 

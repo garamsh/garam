@@ -132,31 +132,6 @@ func (q *Queries) CompleteMessage(ctx context.Context, arg CompleteMessageParams
 	return result.RowsAffected(), nil
 }
 
-const consentStands = `-- name: ConsentStands :one
-SELECT EXISTS (
-    SELECT 1 FROM message_consents
-    WHERE org_a = least($1, $2)
-      AND org_b = greatest($1, $2)
-      AND a_consented_at IS NOT NULL
-      AND b_consented_at IS NOT NULL
-) AS stands
-`
-
-type ConsentStandsParams struct {
-	Org   string
-	Other string
-}
-
-// ConsentStands answers the send path's one question: whether both
-// halves of the pair stand right now (ADR-0035). A missing row and a
-// half-withdrawn row are the same answer.
-func (q *Queries) ConsentStands(ctx context.Context, arg ConsentStandsParams) (bool, error) {
-	row := q.db.QueryRow(ctx, consentStands, arg.Org, arg.Other)
-	var stands bool
-	err := row.Scan(&stands)
-	return stands, err
-}
-
 const countConsentsByOrg = `-- name: CountConsentsByOrg :one
 SELECT count(*) FROM message_consents
 WHERE org_a = $1 OR org_b = $1

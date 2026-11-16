@@ -61,7 +61,9 @@ the service refuses as `INVALID_ARGUMENT` with the reason
 hosted operator asked an `iam` action it holds no route to is denied.
 Every other refusal, an unknown action, a resource of the wrong kind
 and a context the schema does not name among them, stays an error. It
-decides nothing yet: neither `serve api` nor `serve machine` calls it.
+decides one thing: `serve machine` asks it every message send
+([ADR-0168](./adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)).
+`serve api` does not call it.
 [policy-matrix.md](./policy-matrix.md) reports where the two engines
 differ.
 
@@ -280,9 +282,9 @@ it, the isolation `forbid` gains one `unless` branch for `message.send`
 between agents where each organization's `consents` holds the other,
 and both organizations' guardrails are read for such a send. The
 policy service holds all of this (#1805) and the platform feeds
-`consents` (§Consents under Delivery); the send path's refusal before
-the engine, as [messaging.md](./messaging.md), stands until its own
-round removes it. The sender's
+`consents` (§Consents under Delivery); the send path asks the service
+and no longer refuses before it, as [messaging.md](./messaging.md)
+states (ADR-0168). The sender's
 guardrails are read as `forbid`s alone and under ids prefixed by its
 organization, and the exception is read by no other action, since
 an `unless` branch names `message.send` and two agents.
@@ -701,9 +703,9 @@ alone. The wait is on the entity's mark and does not read which write
 raised it, so a later write that marks the same organization, such as
 another consent, keeps it waiting until the pass that delivers it.
 
-The send path still asks the platform's relation before the engine
-(`consentStands`, `platform/internal/machineapi/message.go`) and does
-not read the attribute; its own round removes the check.
+The send path no longer reads the platform's relation: the machine
+listener asks the policy service, which reads the attribute
+(ADR-0168).
 
 #### Operator operations
 
@@ -979,6 +981,10 @@ difference is every Deny attached to one. The listener also sends
 already names — so the engine's scope check (ADR-0038) reads the
 boundary the same way it reads any other subject's.
 
+A send is the exception: the listener asks the policy service about
+the sender and the recipient and sends neither statements nor groups,
+since the service reads memberships and ancestors itself (ADR-0168).
+
 ## Policy persistence
 
 Policies are org-managed data in Postgres (ADR-0002): `policies`
@@ -1112,8 +1118,8 @@ object's organization before asking, sends that organization as
 when the field is unset or does not match
 ([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
 `platform/internal/api` populates it from the org whose member it
-fetched; the machine listener populates it from the sender's own GRN,
-after the consent relation has decided the same-organization half. A
+fetched; the machine listener's send is asked of the policy service
+instead and populates nothing (ADR-0168). A
 caller that hands the engine a subject from another organization is
 refused at the engine — the boundary has moved, and the engine is where
 the obligation now lives. The groups a caller sends are subjects too,
@@ -1159,7 +1165,7 @@ stays inside the policy's org, enforced by a schema trigger; a
 root-owned identity such as a user cannot name an org in its GRN, so
 org membership is established by the api server populating `subject_org`
 before asking. An agent names its org in its own GRN, so the
-machine listener reads it directly.
+machine listener reads it directly where it still asks the engine.
 Attachment writes announce the org on `garam_policy_change` like any
 other policy write.
 
@@ -1282,15 +1288,18 @@ the subject's organization refuses the call. An org-gated list asks it
 once per page to drop the objects the caller may not read
 ([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)).
 The machine listener reaches the same engine the same way, over a seam
-of its own, and supplies the identity-derived ones. Delegated operation
+of its own, and supplies the identity-derived ones, except for a
+message send, which it asks of the policy service (ADR-0168). Delegated
+operation
 authority on both reaches `CheckCurrent` (§Policy persistence) through
 one adapter, `platform/internal/cli/authority.go`, which reads the
 membership, the user's own roles and its groups for each call and sends
 the org-scoped statement those roles grant; neither operation targets a
-group or project, so no scoped role is collected. Each listener's
-`Evaluator` seam has one non-test implementation, the gRPC client, and
-that is what both composition roots wire
-(`platform/internal/cli/serve.go`, `platform/internal/cli/machine.go`).
+group or project, so no scoped role is collected. The
+browser listener's `Evaluator` seam has one non-test implementation,
+the gRPC client, wired by `platform/internal/cli/serve.go`; the machine
+listener has none, and wires the policy decision client for sends in
+`platform/internal/cli/machine.go` (ADR-0168).
 The in-process evaluator is the engine's own rather than a test
 substitute: `StatementEvaluator` is what `Check` runs on every request
 (`platform/internal/authz/server.go`).

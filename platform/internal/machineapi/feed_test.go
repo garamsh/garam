@@ -129,40 +129,35 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 			body:    `{"requestId":"r-1","operationRef":"ref-1"}`,
 			headers: map[string]string{"Garam-Contract-Version": agent.TokenEnrollmentContractVersion},
 			build: func(created bool) *machineapi.Server {
-				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &recheck{}, nil,
-					&creating{creation: creation, created: created}, nil, nil, nil)
+				return machineapi.NewServer(nil, nil, nil, nil, nil, &recheck{}, nil, &creating{creation: creation, created: created}, nil, nil, nil)
 			}},
 		{name: "admitAgentEnrollment new agent", marks: []policyfeed.Entity{agentMark}, status: http.StatusCreated,
 			path: "/agent-enrollment-approvals/" + approval + "/admission", body: binding,
 			headers: map[string]string{"Garam-Contract-Version": agent.AdmissionContractVersion},
 			build: func(created bool) *machineapi.Server {
-				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &recheck{}, nil, nil, nil,
-					&admitting{approval: admitted(nil), created: created}, nil)
+				return machineapi.NewServer(nil, nil, nil, nil, nil, &recheck{}, nil, nil, nil, &admitting{approval: admitted(nil), created: created}, nil)
 			}},
 		{name: "admitAgentEnrollment replacement of an operator", marks: nil, status: http.StatusCreated,
 			path: "/agent-enrollment-approvals/" + approval + "/admission", body: replacing,
 			headers: map[string]string{"Garam-Contract-Version": agent.AdmissionContractVersion},
 			build: func(created bool) *machineapi.Server {
-				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &recheck{}, nil, nil, nil,
-					&admitting{approval: admitted(&agent.Replacement{Agent: newAgent, Assignee: controller, Epoch: 1}),
-						created: created}, nil)
+				return machineapi.NewServer(nil, nil, nil, nil, nil, &recheck{}, nil, nil, nil, &admitting{approval: admitted(&agent.Replacement{Agent: newAgent, Assignee: controller, Epoch: 1}),
+					created: created}, nil)
 			}},
 		{name: "admitAgentEnrollment replacement of a supervisor", marks: []policyfeed.Entity{supervisorMark},
 			status: http.StatusCreated,
 			path:   "/agent-enrollment-approvals/" + approval + "/admission", body: replacing,
 			headers: map[string]string{"Garam-Contract-Version": agent.AdmissionContractVersion},
 			build: func(created bool) *machineapi.Server {
-				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &recheck{}, nil, nil, nil,
-					&admitting{approval: admitted(&agent.Replacement{Agent: newAgent, Assignee: supervisor, Epoch: 1}),
-						created: created}, nil)
+				return machineapi.NewServer(nil, nil, nil, nil, nil, &recheck{}, nil, nil, nil, &admitting{approval: admitted(&agent.Replacement{Agent: newAgent, Assignee: supervisor, Epoch: 1}),
+					created: created}, nil)
 			}},
 		{name: "enrollStandaloneAgent new agent", marks: []policyfeed.Entity{supervisorMark, agentMark}, status: http.StatusCreated,
 			path: "/agent-enrollments", body: `{"requestId":"r-1"}`,
 			headers: map[string]string{"Garam-Contract-Version": agent.CredentialStandaloneContractVersion,
 				"Authorization": "Garam-Bootstrap secret"},
 			build: func(created bool) *machineapi.Server {
-				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-					&enrolling{result: enrollment, created: created}, nil, nil)
+				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &enrolling{result: enrollment, created: created}, nil, nil)
 			}},
 		{name: "enrollStandaloneAgent replacement", marks: []policyfeed.Entity{supervisorMark}, status: http.StatusCreated,
 			path: "/agent-enrollments", body: `{"requestId":"r-1"}`,
@@ -171,8 +166,7 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 			build: func(created bool) *machineapi.Server {
 				moved := enrollment
 				moved.Replaced, moved.ReplacesActivation = true, &replaced
-				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-					&enrolling{result: moved, created: created}, nil, nil)
+				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &enrolling{result: moved, created: created}, nil, nil)
 			}},
 		// An agent never activated has no activation to name, so the
 		// answer's ReplacesActivation is nil as a new agent's is: the
@@ -186,8 +180,7 @@ func TestAgentCreatingRoutes_AnswerAfterThePolicyServiceHoldsTheAgent(t *testing
 			build: func(created bool) *machineapi.Server {
 				moved := enrollment
 				moved.Replaced = true
-				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-					&enrolling{result: moved, created: created}, nil, nil)
+				return machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &enrolling{result: moved, created: created}, nil, nil)
 			}},
 	}
 	for _, r := range table {
@@ -252,8 +245,7 @@ func TestEnrollStandaloneAgent_WaitsOnTheMarksTheEnrollmentRaised(t *testing.T) 
 	for _, c := range table {
 		t.Run(c.name, func(t *testing.T) {
 			gate := &markGate{}
-			srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-				&enrolling{result: c.result, created: c.created}, nil, nil).WithFeed(gate)
+			srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, &enrolling{result: c.result, created: c.created}, nil, nil).WithFeed(gate)
 			url, client := serveTLS(t, srv, controller)
 			status := post(t, client, url+"/agent-enrollments", `{"requestId":"r-1"}`,
 				map[string]string{"Garam-Contract-Version": agent.CredentialStandaloneContractVersion,

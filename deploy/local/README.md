@@ -266,6 +266,17 @@ with the key `policy-keys` made, and checks a service's assertion
 against the service keys file `cowork-keys` wrote, whose one entry is
 cowork's public key (ADR-0129).
 
+The policy service decides every send the listener takes (ADR-0168), so
+the listener reaches it as the api does: at `policy:8443`, trusting the
+certificate `policy-tls` made, signing each call with the key
+`policy-keys` made under the issuer `https://garam.localhost/api`
+(`GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
+`GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER`). It
+refuses to start without `GARAM_POLICY_ADDR`, so unlike the api it
+waits for a healthy `policy`. The run files that swap its keys
+(`codehub-e2e`, `pair-run`) leave the address and the certificate as
+they are.
+
 Both scripts run on first start and generate what they hold:
 `machine-material.sh` an EC P-256 certificate and key and 32 random
 bytes in hex, `cowork-keys.sh` an RSA 2048 key and the JWKS holding its
@@ -351,9 +362,9 @@ grant the garam CLI uses, approved with the owner's session.
 `migrate` runs once against a healthy Postgres and exits; `authz` and
 `api` wait for it to have exited successfully. `api` additionally waits
 for `authz`, `policy-tls` and `policy-keys`, and `web` and `site` for
-`api`. `machine` waits for `migrate`, a healthy `authz`, and the three
-one-shots that write its files, `machine-material`, `policy-keys` and
-`cowork-keys`. `cowork-migrate` waits for `cowork-db`, `cowork` for it,
+`api`. `machine` waits for `migrate`, a healthy `authz` and a healthy
+`policy`, and the four one-shots that write its files,
+`machine-material`, `policy-tls`, `policy-keys` and `cowork-keys`. `cowork-migrate` waits for `cowork-db`, `cowork` for it,
 `rustfs`, `api`, `cowork-keys`, a healthy `machine` and a healthy
 `policy`, `cowork-web` for `cowork`, and `cowork-gateway` for
 `cowork-web`. `policy-migrate` waits

@@ -112,6 +112,8 @@ machine:
     kekKey: ca-kek.hex
     kekSecretName: garam-machine-ca-kek
   issuer: https://machine.garam.example
+  policy:
+    signingKeyFile: /vault/secrets/policy-signing-key
   # The operator exchange turned on, rendered on api and machine alike.
   # The minimal file leaves it unset, so the env renders on both sides.
   tokenUrl: https://machine.garam.example/oauth/token

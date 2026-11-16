@@ -24,7 +24,6 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/ca"
 	"github.com/garamsh/garam/platform/internal/health"
-	"github.com/garamsh/garam/platform/internal/machineapi"
 )
 
 func machineGRN(org, id string) grn.GRN {
@@ -203,7 +202,7 @@ func TestMachineServer_RefusesARequestBodyPastTheBound(t *testing.T) {
 	sender := machineGRN("acme", "bot-1")
 	recipient := machineGRN("acme", "bot-2")
 	url, client := machineListenerServing(t, recordingObservability(&lines{}), sender,
-		machineapi.NewServer(nil, nil, refusalRecord{}, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil, nil, nil, nil, nil))
+		sendServer(refusalRecord{}, deniedService{}))
 
 	status, body := postSubmission(t, client, url, submission(recipient, 1024))
 	require.Equal(t, http.StatusForbidden, status, "the control: refused for whom it names")

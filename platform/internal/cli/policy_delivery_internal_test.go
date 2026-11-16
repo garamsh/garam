@@ -60,3 +60,26 @@ func TestReadPolicyDeliveryConfig_AnAddressRequiresTheRest(t *testing.T) {
 		}, cfg)
 	})
 }
+
+func TestDialPolicyDecisions_RefusesToStartWithoutAnAddress(t *testing.T) {
+	setPolicyEnv(t, "", "/ca.pem", "/key.pem", "iss")
+
+	decisions, closeDecisions, err := dialPolicyDecisions()
+
+	require.Error(t, err)
+	assert.Nil(t, decisions)
+	assert.Nil(t, closeDecisions)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+	assert.Contains(t, err.Error(), "GARAM_POLICY_ADDR",
+		"a deployment without the service must be told which variable to set")
+
+	t.Run("control: an address alone is refused for what is missing after it", func(t *testing.T) {
+		setPolicyEnv(t, "policy:8443", "/ca.pem", "", "iss")
+
+		_, _, err := dialPolicyDecisions()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "GARAM_POLICY_SIGNING_KEY_FILE")
+		assert.NotContains(t, err.Error(), "decides every send")
+	})
+}

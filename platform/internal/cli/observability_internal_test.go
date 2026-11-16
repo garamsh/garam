@@ -47,6 +47,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
@@ -252,7 +253,7 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 	t.Helper()
 	// The identity endpoint answers out of the request alone, so the
 	// listener is assembled with no service behind it.
-	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
+	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
 }
 
 // machineListenerServing is machineListener for a test that needs a
@@ -458,23 +459,55 @@ func TestLogRPCs_NamesAMachineSubjectAsOne(t *testing.T) {
 	assert.NotContains(t, personLine, fieldMachineID)
 }
 
-// noGroups is the machineapi.Groups of a caller no group holds.
-type noGroups struct{}
+// everyoneHeld is the machineapi.AgentReader of a roster that holds
+// every agent asked for, so a send reaches the policy service.
+type everyoneHeld struct{}
 
-func (noGroups) List(context.Context, grn.GRN) ([]grn.GRN, error) { return nil, nil }
-
-// unreachableEngine is a machineapi.Evaluator that cannot answer: the
-// failure #255 could not read out of the machine listener's logs.
-type unreachableEngine struct{ err error }
-
-func (e unreachableEngine) Evaluate(context.Context, machineapi.EvalInput) (bool, error) {
-	return false, e.err
+func (everyoneHeld) Get(context.Context, grn.GRN) (*agent.Agent, error) {
+	return &agent.Agent{}, nil
 }
 
-// deniedEngine is a machineapi.Evaluator answering a refusal.
-type deniedEngine struct{}
+// unreachableService is a policydecision.Service that cannot answer:
+// the failure #255 could not read out of the machine listener's logs.
+type unreachableService struct {
+	policydecision.Service
+	err error
+}
 
-func (deniedEngine) Evaluate(context.Context, machineapi.EvalInput) (bool, error) { return false, nil }
+func (s unreachableService) Evaluate(context.Context, policydecision.Question) (policydecision.Decision, error) {
+	return policydecision.Decision{}, s.err
+}
+
+// deniedService is a policydecision.Service answering a refusal.
+type deniedService struct{ policydecision.Service }
+
+func (deniedService) Evaluate(context.Context, policydecision.Question) (policydecision.Decision, error) {
+	return policydecision.Decision{}, nil
+}
+
+// sendServer is a machine listener's server whose sends are decided by
+// decisions over a roster that holds every agent.
+func sendServer(messages message.Service, decisions policydecision.Service) *machineapi.Server {
+	return machineapi.NewServer(nil, nil, messages, nil, nil, nil, nil, nil, nil, nil, nil).
+		WithSendPolicy(decisions, everyoneHeld{})
+}
+
+// allowedService is a policydecision.Service that allows every send.
+type allowedService struct{ policydecision.Service }
+
+func (allowedService) Evaluate(context.Context, policydecision.Question) (policydecision.Decision, error) {
+	return policydecision.Decision{Allowed: true}, nil
+}
+
+// failingQueue is a message.Service whose post fails with err.
+type failingQueue struct {
+	message.Service
+	err error
+}
+
+func (q failingQueue) Post(context.Context, grn.GRN, grn.GRN, string, string, message.Author, *message.Fence) (*message.Message, error) {
+	return nil, q.err
+}
 
 // refusalRecord is a message.Service that records a denied send and
 // serves nothing else: the listener records a denial before it answers
@@ -499,26 +532,26 @@ func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
 
 	var out lines
 	url, client := machineListenerServing(t, recordingObservability(&out), sender,
-		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, unreachableEngine{err: cause}, nil, nil, nil, nil, nil, nil, nil))
+		sendServer(nil, unreachableService{err: cause}))
 
 	resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
-	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	assert.JSONEq(t, `{"kind":"internal","message":"internal error"}`, string(body),
+	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.JSONEq(t, `{"kind":"unavailable","message":"internal error"}`, string(body),
 		"the client body still withholds the cause")
 
 	line := decodeLine(t, &out)
-	assert.Equal(t, "authz engine: dial tcp: connection refused", line["error"],
+	assert.Equal(t, "policy service: authz engine: dial tcp: connection refused", line["error"],
 		"the line carries the whole chain")
-	assert.Equal(t, float64(http.StatusInternalServerError), line["status"])
+	assert.Equal(t, float64(http.StatusServiceUnavailable), line["status"])
 	assert.NotEmpty(t, line["trace_id"])
 
 	var refusedOut lines
 	url, client = machineListenerServing(t, recordingObservability(&refusedOut), sender,
-		machineapi.NewServer(nil, nil, refusalRecord{}, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil, nil, nil, nil, nil))
+		sendServer(refusalRecord{}, deniedService{}))
 	resp, err = client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
@@ -680,21 +713,24 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		engine machineapi.Evaluator
+		queue  message.Service
+		engine policydecision.Service
 		status int
 		body   string
 		cause  string
 	}{
 		{
 			name:   "a conflict the driver raised",
-			engine: unreachableEngine{err: driverConflict("delete session")},
+			queue:  failingQueue{err: driverConflict("delete session")},
+			engine: allowedService{},
 			status: http.StatusConflict,
 			body:   `{"kind":"already_exists","message":"already exists"}`,
 			cause:  driverConflictText,
 		},
 		{
 			name:   "a refusal this project wrote",
-			engine: deniedEngine{},
+			queue:  refusalRecord{},
+			engine: deniedService{},
 			status: http.StatusForbidden,
 			body:   `{"kind":"permission_denied","message":"sender may not send to this recipient"}`,
 		},
@@ -703,7 +739,7 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out lines
 			url, client := machineListenerServing(t, recordingObservability(&out), sender,
-				machineapi.NewServer(nil, nil, refusalRecord{}, nil, nil, noGroups{}, tt.engine, nil, nil, nil, nil, nil, nil, nil))
+				sendServer(tt.queue, tt.engine))
 
 			resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 			require.NoError(t, err)

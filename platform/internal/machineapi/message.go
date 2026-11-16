@@ -1,7 +1,6 @@
 package machineapi
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -14,7 +13,6 @@ import (
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/message"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // PostMessage stores a message the caller is sending. The sender is
@@ -120,116 +118,6 @@ func parseCreatedAt(s string) (time.Time, error) {
 		return time.Time{}, errorx.New(errorx.KindInvalidArgument, "createdAt is not an RFC 3339 instant")
 	}
 	return created, nil
-}
-
-// crossingRefusal is what a post no consent relation carries across its
-// boundary stores instead. garam cannot route the message, so the
-// answer is not a status: the refusal returns to the sender as an
-// ordinary inbound message (ADR-0013, ADR-0035), and the post is
-// answered once that is stored, as for any other. It is sent under the
-// intended recipient's identity because garam holds none of its own
-// (ADR-0024); the body says garam refused, and the key derives from the
-// sender's so a retried post is answered with the refusal already
-// stored rather than piling up one per retry. garam is its author, so
-// its signature names garam as the sender it vouches for (ADR-0101).
-func crossingRefusal(sender, recipient grn.GRN, key string) (from, to grn.GRN, refusalKey, body string, author message.Author) {
-	body = "garam could not deliver your message to " + recipient.String() +
-		": the organizations " + sender.Organization + " and " + recipient.Organization +
-		" do not both consent to cross-organization messages"
-	return recipient, sender, "consent-refused:" + sender.String() + ":" + key, body, message.AuthorGaram
-}
-
-// authorizeSend reports whether sender may post to recipient. A
-// recipient of the sender's own organization is admitted on the policy
-// engine's answer; one across the organization boundary is admitted on
-// the consent relation alone. A cross-boundary recipient no standing
-// consent covers is not an error: admitted is false, and PostMessage
-// answers the post with the refusal message ADR-0013 asks for. A
-// policy's denial is the error, and it is recorded as a refused send
-// before it is answered (ADR-0106); the post's own write records the
-// other outcomes.
-//
-// Both GRNs are validated here because sendingStatements splices the
-// organization identifier into a resource pattern, where a wildcard
-// would widen the statement past the organization it was scoped to.
-func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN, fence *message.Fence) (bool, error) {
-	if err := sender.Validate(); err != nil {
-		return false, err
-	}
-	if err := recipient.Validate(); err != nil {
-		return false, err
-	}
-	if sender.Organization != recipient.Organization {
-		return s.consentStands(ctx, sender, recipient)
-	}
-	admitted, err := s.policyAdmits(ctx, sender, recipient)
-	if errors.Is(err, errSendDenied) {
-		if refused := s.messages.Refuse(ctx, sender, recipient, fence); refused != nil {
-			return false, refused
-		}
-	}
-	return admitted, err
-}
-
-// errSendDenied is a policy's denial of one send, which is a refusal
-// garam records rather than a failure to decide.
-var errSendDenied = errorx.New(errorx.KindPermissionDenied, "sender may not send to this recipient")
-
-// consentStands reports whether both organizations still hold the
-// consent a message crossing between them needs (ADR-0035). The engine
-// is not asked: an active policy with no attachment applies to every
-// subject of the check, so one unattached Allow in the recipient's
-// organization would admit every sender anywhere (ADR-0024).
-func (s *Server) consentStands(ctx context.Context, sender, recipient grn.GRN) (bool, error) {
-	// The relation is keyed by the organizations' GRNs, which are
-	// root-owned (ADR-0001).
-	return s.consents.Stands(ctx,
-		grn.Org(sender.Organization), grn.Org(recipient.Organization))
-}
-
-// policyAdmits asks the engine whether sender may post to a recipient
-// of its own organization, unioning what the sender's identity grants
-// with the policies attached to it and to its groups, deny-overrides
-// across all three (ADR-0007, ADR-0008). Sender and recipient share an
-// organization by here, which is what the engine is owed (ADR-0025).
-func (s *Server) policyAdmits(ctx context.Context, sender, recipient grn.GRN) (bool, error) {
-	groups, err := s.groups.List(ctx, sender)
-	if err != nil {
-		return false, err
-	}
-	allowed, err := s.evaluator.Evaluate(ctx, EvalInput{
-		Subject:       sender,
-		Object:        recipient,
-		Action:        message.ActionSend,
-		SubjectGroups: groups,
-		Statements:    sendingStatements(sender),
-		// A machine identity is not an org member, so the engine's
-		// half of membership is the org the sender's GRN names
-		// (ADR-0038).
-		SubjectOrg: grn.Org(sender.Organization),
-	})
-	if err != nil {
-		return false, err
-	}
-	if !allowed {
-		return false, errSendDenied
-	}
-	return true, nil
-}
-
-// sendingStatements is what a machine identity's own GRN grants it
-// before any policy: sending inside its own organization, which is why
-// an agent nobody has written a policy for still sends (ADR-0007). A
-// policy narrows it with a Deny. The organization segment in the
-// pattern is defence in depth and not the boundary, which is the
-// consent relation's (ADR-0035).
-func sendingStatements(sender grn.GRN) []Statement {
-	return []Statement{{
-		Sid:      "machine-own-org",
-		Effect:   wire.EffectAllow,
-		Action:   []string{message.ActionSend},
-		Resource: []string{grn.OrgPattern(sender.Organization)},
-	}}
 }
 
 // GetMessageStatus answers how far a message the caller sent has got.

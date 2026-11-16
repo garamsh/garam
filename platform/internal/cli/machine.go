@@ -35,7 +35,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
-	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	policyfeedpg "github.com/garamsh/garam/platform/internal/policyfeed/postgres"
 	"github.com/garamsh/garam/platform/internal/watch"
@@ -49,7 +49,8 @@ import (
 // process of its own so the browser-facing one never holds the key
 // the message signing keys are sealed under (ADR-0017). Like the
 // browser-facing one it reaches the policy engine over gRPC, which is
-// what decides the messages it accepts.
+// what decides the rest, while the policy service decides the messages
+// it accepts.
 func newServeMachineCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "machine",
@@ -112,8 +113,17 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
-	// Whom an agent may send to is decided by the policy engine, which
-	// runs as a process of its own and is reached over gRPC (ADR-0003).
+	// Whom an agent may send to is decided by the policy service,
+	// consent included, and a process with none to ask serves no send
+	// (ADR-0168).
+	decisions, closeDecisions, err := dialPolicyDecisions()
+	if err != nil {
+		return err
+	}
+	defer closeDecisions()
+
+	// What else this surface decides is the policy engine's, which runs
+	// as a process of its own and is reached over gRPC (ADR-0003).
 	conn, err := dialAuthz()
 	if err != nil {
 		return err
@@ -135,6 +145,7 @@ func serveMachine(cmd *cobra.Command) error {
 		Identity:           idIssuer,
 		ServiceKeys:        idKeys,
 		Engine:             conn,
+		Decisions:          decisions,
 		Feed:               policyfeed.NewObservingGate(policyfeedpg.NewStore(pool), policyfeed.Bound),
 		Logger:             obs.logger,
 		Metrics:            obs.registry,
@@ -185,10 +196,13 @@ type MachineConfig struct {
 	ServerRoot []byte
 	// Delivery governs the message queue (ADR-0018).
 	Delivery message.Config
-	// Engine is the policy engine, which decides the messages the
-	// listener accepts and, from current state, the operations a hosted
-	// operator reads back (ADR-0078).
+	// Engine is the policy engine, which decides, from current state,
+	// the operations a hosted operator reads back (ADR-0078).
 	Engine grpc.ClientConnInterface
+	// Decisions is the policy service, which decides every message
+	// the listener accepts, consent included (ADR-0168). Nil answers
+	// each send as unavailable.
+	Decisions policydecision.Service
 	// Logger takes one line per served request and every recovered
 	// panic.
 	Logger *slog.Logger
@@ -267,11 +281,6 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	if err != nil {
 		return nil, err
 	}
-	// The consent a cross-organization post needs is the message
-	// domain's relation (ADR-0035); this process reads it and `serve
-	// api` is where an organization grants and withdraws its half.
-	consents := messagepg.New(pool)
-
 	// Whether anyone is watching is read from the rows `serve api` writes
 	// while it holds a stream, and a forwarded event is announced for
 	// that process to deliver: garam cannot dial an adapter, so the
@@ -321,13 +330,13 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// server serves.
 	authority := NewAuthorityService(pool, cfg.Engine)
 	handler := machinegen.HandlerWithOptions(
-		machineapi.NewServer(agents, operators, messages, consents, watches,
-			memberGroups{store: orgpg.New(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
+		machineapi.NewServer(agents, operators, messages, watches,
 			authority, recheck, newProofService(pool, cfg.Engine, cfg.Now),
 			newExecutionService(pool, cfg.Engine, authority, cfg.Now),
 			newSupervisorService(pool, cfg.Engine, cfg.ServerRoot, cfg.Now),
 			newAdmissionService(pool, authority, cfg.Now), keyring).
 			WithCredentialAudit(auditpg.NewCredentialStore(pool)).
+			WithSendPolicy(cfg.Decisions, agentStore).
 			WithFeed(cfg.Feed).
 			WithIdentity(cfg.Identity, principals),
 		machinegen.StdHTTPServerOptions{
@@ -469,9 +478,9 @@ func transitCustodian() (message.Custodian, error) {
 	return custodian, nil
 }
 
-// memberGroups reads the groups a machine identity belongs to
-// (machineapi.Groups), which decide whether a policy attached to a
-// group reaches what it sends. Organizations are root-owned, so the
+// memberGroups reads the groups an identity belongs to, which decide
+// whether a policy attached to a group reaches what a hosted operator
+// may do (audienceAuthorization). Organizations are root-owned, so the
 // organization segment of the identity's own GRN names the one whose
 // groups can hold it (ADR-0001, ADR-0014).
 type memberGroups struct{ store org.Store }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -15,14 +14,13 @@ import (
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
-	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
 // newExecutionService composes what a lifecycle authority does to an
-// agent's execution (ADR-0078) over the database, the policy engine and
+// agent's execution (ADR-0078) over the database, the policy service and
 // the delegated operation authority.
-func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, authority operator.AuthorityService,
+func newExecutionService(pool *pgxpool.Pool, decisions policydecision.Service, authority operator.AuthorityService,
 	now func() time.Time,
 ) agent.ExecutionService {
 	if now == nil {
@@ -33,9 +31,8 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 		lifecycleAuthorization{
 			grants:      operatorpg.New(pool),
 			supervisors: agentpg.New(pool),
-			policy: audienceAuthorization{groups: memberGroups{store: orgpg.New(pool)},
-				engine: authzv1.NewAuthzServiceClient(engine)},
-			now: now,
+			policy:      currentDecision{decisions: decisions},
+			now:         now,
 		},
 		operationAuthorities{service: authority},
 		agents)
@@ -59,7 +56,7 @@ func newAdmissionService(pool *pgxpool.Pool, authority operator.AuthorityService
 type lifecycleAuthorization struct {
 	grants      operator.GrantStore
 	supervisors agent.StandaloneStore
-	policy      audienceAuthorization
+	policy      currentDecision
 	now         func() time.Time
 }
 

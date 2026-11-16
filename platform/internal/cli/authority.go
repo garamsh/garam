@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -13,71 +12,43 @@ import (
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
-	"github.com/garamsh/garam/platform/internal/org"
-	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
 // NewAuthorityService composes delegated operation authority (ADR-0078)
-// over the database and the policy engine: grants and authorities in
-// Postgres, a user's authority decided from current state, and where an
-// agent runs read from its assignment. Both listeners serve it, so it
-// is composed here once.
-func NewAuthorityService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) operator.AuthorityService {
+// over the database and the policy service: grants and authorities in
+// Postgres, a user's authority decided by the service from current
+// state, and where an agent runs read from its assignment. Both
+// listeners serve it, so it is composed here once.
+func NewAuthorityService(pool *pgxpool.Pool, decisions policydecision.Service) operator.AuthorityService {
 	delegations := operatorpg.New(pool)
 	return operator.NewAuthorityService(delegations, delegations, operatorpg.New(pool),
 		agentPlacements{store: agentpg.New(pool)},
-		currentAuthorization{orgs: orgpg.New(pool), engine: authzv1.NewAuthzServiceClient(engine)},
+		currentDecision{decisions: decisions},
 		operator.Config{})
 }
 
-// currentAuthorization decides a user's authority from current state
-// (operator.Authorizer): the membership and the groups the user
-// belongs to, read for this call, and the organization's persisted
-// policies read past the engine's cache by CheckCurrent. An engine that
-// does not serve CheckCurrent answers UNIMPLEMENTED, which refuses
-// rather than falling back to Check.
+// currentDecision is the policy service's decision, read current
+// (ADR-0146 items 12, 14 and 15): it satisfies operator.Authorizer for
+// a user's authority and operator.AudienceAuthorizer for a hosted
+// operator's. The call carries the subject, the action and the object
+// and nothing else: the roles, the groups and a hosted operator's
+// delegated operations are the service's own state, and the
+// organization is the one the service reads from the subject.
 //
-// The roles grant what they grant everywhere: on the organization and
-// on everything it owns (authz.md §Statement collection). Neither
-// operation an authority is minted for targets a group or a project, so
-// no scoped role is collected.
-type currentAuthorization struct {
-	orgs   org.Store
-	engine authzv1.AuthzServiceClient
-}
+// An error from the service is unavailable, never a denial and never an
+// allow, whatever kind it arrived with.
+type currentDecision struct{ decisions policydecision.Service }
 
-func (a currentAuthorization) Authorize(ctx context.Context, actor, orgGRN, object grn.GRN, action string) error {
-	m, err := a.orgs.GetMember(ctx, orgGRN, actor)
-	if errorx.IsKind(err, errorx.KindNotFound) {
-		return errorx.New(errorx.KindPermissionDenied, "not a member of this org")
-	}
-	if err != nil {
-		return err
-	}
-	groups, err := a.orgs.ListGroupsByMember(ctx, orgGRN, actor)
-	if err != nil {
-		return err
-	}
-	resp, err := a.engine.CheckCurrent(ctx, &authzv1.CheckCurrentRequest{
-		SubjectGrn: actor.String(),
-		ObjectGrn:  object.String(),
-		Action:     action,
-		Statements: []*authzv1.Statement{{
-			Sid:      "member-roles",
-			Effect:   authzv1.Effect_EFFECT_ALLOW,
-			Action:   m.Role.Actions(),
-			Resource: []string{orgGRN.String(), grn.OrgPattern(orgGRN.Identifier)},
-		}},
-		SubjectGroups: wire.GRNsToProto(groups),
-		SubjectOrg:    orgGRN.String(),
+func (d currentDecision) Authorize(ctx context.Context, subject, _, object grn.GRN, action string) error {
+	decision, err := d.decisions.Evaluate(ctx, policydecision.Question{
+		Subject: subject, Action: action, Resource: object, Current: true,
 	})
 	if err != nil {
-		return wire.ErrorOf(err)
+		return errorx.Wrap(err, "policy decision", errorx.KindUnavailable)
 	}
-	if !resp.GetAllowed() {
-		return errorx.New(errorx.KindPermissionDenied, "insufficient role")
+	if !decision.Allowed {
+		return errorx.New(errorx.KindPermissionDenied, "current policy denies "+action)
 	}
 	return nil
 }

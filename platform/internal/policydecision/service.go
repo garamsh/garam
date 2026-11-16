@@ -1,5 +1,5 @@
 // Package policydecision asks the policy service for a decision
-// (ADR-0146). Nothing in serve api or serve machine calls it yet.
+// (ADR-0146). Both serve api and serve machine call it.
 package policydecision
 
 import (
@@ -10,12 +10,16 @@ import (
 
 // Question is one thing the platform asks: may Subject perform Action
 // on Resource. Probe states that the caller is deciding what to show,
-// so a denial is not recorded as an attempt (ADR-0148 item 2).
+// so a denial is not recorded as an attempt (ADR-0148 item 2). Current
+// states that the answer must read the policies and facts as they are
+// now, past the service's cache, which a decision to act on needs and a
+// decision to show does not (ADR-0146 item 12).
 type Question struct {
 	Subject  grn.GRN
 	Action   string
 	Resource grn.GRN
 	Probe    bool
+	Current  bool
 }
 
 // Reason is one ground of a decision. PolicyID is empty when the

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"crypto/x509"
 	"log/slog"
 	"net/http"
@@ -12,10 +11,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/errorx"
-	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
@@ -34,7 +31,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/message/transit"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
-	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	policyfeedpg "github.com/garamsh/garam/platform/internal/policyfeed/postgres"
@@ -144,7 +140,6 @@ func serveMachine(cmd *cobra.Command) error {
 		TokenURL:           tokenURL,
 		Identity:           idIssuer,
 		ServiceKeys:        idKeys,
-		Engine:             conn,
 		Decisions:          decisions,
 		Feed:               policyfeed.NewObservingGate(policyfeedpg.NewStore(pool), policyfeed.Bound),
 		Logger:             obs.logger,
@@ -196,12 +191,11 @@ type MachineConfig struct {
 	ServerRoot []byte
 	// Delivery governs the message queue (ADR-0018).
 	Delivery message.Config
-	// Engine is the policy engine, which decides, from current state,
-	// the operations a hosted operator reads back (ADR-0078).
-	Engine grpc.ClientConnInterface
 	// Decisions is the policy service, which decides every message
-	// the listener accepts, consent included (ADR-0168). Nil answers
-	// each send as unavailable.
+	// the listener accepts, consent included (ADR-0168), and, read
+	// current, the operations a hosted operator reads back and the
+	// authority a user delegates (ADR-0146). Nil answers each as
+	// unavailable.
 	Decisions policydecision.Service
 	// Logger takes one line per served request and every recovered
 	// panic.
@@ -328,12 +322,12 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// reaches the spec
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
-	authority := NewAuthorityService(pool, cfg.Engine)
+	authority := NewAuthorityService(pool, cfg.Decisions)
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, watches,
-			authority, recheck, newProofService(pool, cfg.Engine, cfg.Now),
-			newExecutionService(pool, cfg.Engine, authority, cfg.Now),
-			newSupervisorService(pool, cfg.Engine, cfg.ServerRoot, cfg.Now),
+			authority, recheck, newProofService(pool, cfg.Decisions, cfg.Now),
+			newExecutionService(pool, cfg.Decisions, authority, cfg.Now),
+			newSupervisorService(pool, cfg.Decisions, cfg.ServerRoot, cfg.Now),
 			newAdmissionService(pool, authority, cfg.Now), keyring).
 			WithCredentialAudit(auditpg.NewCredentialStore(pool)).
 			WithSendPolicy(cfg.Decisions, agentStore).
@@ -476,17 +470,6 @@ func transitCustodian() (message.Custodian, error) {
 		return nil, errorx.Wrap(err, "GARAM_TRANSIT_*")
 	}
 	return custodian, nil
-}
-
-// memberGroups reads the groups an identity belongs to, which decide
-// whether a policy attached to a group reaches what a hosted operator
-// may do (audienceAuthorization). Organizations are root-owned, so the
-// organization segment of the identity's own GRN names the one whose
-// groups can hold it (ADR-0001, ADR-0014).
-type memberGroups struct{ store org.Store }
-
-func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, error) {
-	return m.store.ListGroupsByMember(ctx, grn.Org(subject.Organization), subject)
 }
 
 // tokenBackdate is how far garam backdates an agent token's issue

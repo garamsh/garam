@@ -1,7 +1,8 @@
 # ADR 0168: The machine listener's send is the policy service's decision, consent included
 
 > Status: accepted; built in `platform/internal/machineapi`,
-> `platform/internal/cli` and `platform/tests/integration` (#1941)
+> `platform/internal/cli`, `platform/tests/integration`,
+> `deploy/local` and `deploy/charts/garam` (#1941)
 > Date: 2026-11-16
 
 Drafted for #1941, which reserves this number, under #1796. It takes
@@ -108,8 +109,11 @@ do not bind.
   its suites; the listener's tests hold what the listener does with an
   allow, a denial and an error.
 - **A deployment without a policy service address cannot start `serve
-  machine`.** The local stack configures one, and the chart is not
-  changed by this decision.
+  machine`.** The local stack and `deploy/charts/garam` wire the
+  listener to the service, with the address, root, issuer and signing
+  key the api uses. `deploy/charts/garam-gaon` does not yet (#1943),
+  nor does the minikube manifest (#1944), so a listener deployed from
+  either fails at start until they do.
 
 ## Signs the decision was wrong
 

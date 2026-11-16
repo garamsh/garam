@@ -211,10 +211,9 @@ func TestLists_ADenyOnOneObjectHidesThatObjectAlone(t *testing.T) {
 			deny := activePolicy(t, s.policies, s.acme, "deny-one",
 				statementDoc("deny-one", wire.EffectDeny, k.action, hidden.String()))
 			attachPolicy(t, s.policies, deny, s.adaGRN)
-			// The list is the platform engine's until round 10,
-			// which the attached Deny narrows; the read is the
-			// policy service's (ADR-0171), which a guardrail on
-			// the pair would refuse.
+			// The list and the read are the policy service's
+			// (ADR-0172), which a guardrail on the pair would
+			// refuse.
 			if !k.readsOnOrg {
 				s.decisions.forbidOn(s.adaGRN, k.action, hidden)
 			}
@@ -222,6 +221,12 @@ func TestLists_ADenyOnOneObjectHidesThatObjectAlone(t *testing.T) {
 			control := s.listed(t, k.path, k.query, s.dan)
 			require.Contains(t, control, hidden.String(), "the Deny does not reach dan")
 			want := slices.DeleteFunc(slices.Clone(control), func(g string) bool { return g == hidden.String() })
+			if k.readsOnOrg {
+				// The service decides a policy's read on the
+				// organization (ADR-0171 item 7): the attached
+				// Deny names one policy and cannot hide it alone.
+				want = control
+			}
 			assert.Equal(t, want, s.listed(t, k.path, k.query, s.ada), "ada's list is dan's without the denied object")
 
 			if k.readsOnOrg {
@@ -249,6 +254,7 @@ func TestLists_AFilteredPageCanBeShortWithMoreAfterIt(t *testing.T) {
 	deny := activePolicy(t, s.policies, s.acme, "deny-one",
 		statementDoc("deny-one", wire.EffectDeny, org.ActionGroupRead, hidden.String()))
 	attachPolicy(t, s.policies, deny, s.adaGRN)
+	s.decisions.forbidOn(s.adaGRN, org.ActionGroupRead, hidden)
 
 	assert.Equal(t, []string{first.String()}, s.listed(t, "/orgs/acme/groups", page, s.ada), "a short first page")
 	page.Set("offset", "2")

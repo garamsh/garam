@@ -67,6 +67,13 @@ const (
 	// `iam:policy.*`.
 	ActionAuditRead = "iam:audit.read"
 
+	// ActionPermitWrite is writing a permit of the organization's
+	// delegated authority (ADR-0145 item 4). Owners alone hold it
+	// through the policy service, and no role here grants it: it is an
+	// action only for checkPermissions, which asks the service
+	// (ADR-0172).
+	ActionPermitWrite = "iam:permit.write"
+
 	// Cross-organization consent management (ADR-0035). The org owns
 	// the constants for the reason it owns the policy ones: the
 	// relation is org-managed data the api server enforces over,
@@ -219,7 +226,7 @@ var actions = []string{
 	ActionProjectCreate, ActionProjectRead, ActionProjectUpdate, ActionProjectDelete,
 	ActionProjectMemberList, ActionProjectMemberAdd, ActionProjectMemberRemove,
 	ActionPolicyCreate, ActionPolicyRead, ActionPolicyUpdate, ActionPolicyAttach, ActionPolicyDetach, ActionPolicyDelete,
-	ActionAuditRead,
+	ActionAuditRead, ActionPermitWrite,
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,

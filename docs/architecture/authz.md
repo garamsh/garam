@@ -81,9 +81,15 @@ asked as probes, and the handler's enforcement and the holders list's
 `iam:org.member-list` check are attempts. Any error of the service is a
 503 `unavailable`, never an allow; a forbid is a 403. Membership of the
 organization is checked by the platform before the service is asked.
-The explanation (`permission_explanation.go`) and the list filter
-(`list_visibility.go`) are the only callers of the platform's engine
-left on this listener, until rounds 10 and 11.
+A list and the search ask it too
+([ADR-0172](./adr/0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md)):
+`list_visibility.go` puts one probe on each object of a page, on the
+object's own read and through `askedOn`, in one `Evaluations` call (as
+many as it takes past the service's 1000), and keeps those allowed; an
+error of the service is a 503 `unavailable`. `checkPermissions` answers
+`iam:permit.write` on the organization the same way. The explanation
+(`permission_explanation.go`) is the only caller of the platform's
+engine left on this listener, until round 11.
 [policy-matrix.md](./policy-matrix.md) reports where the two engines
 differ.
 
@@ -1332,7 +1338,9 @@ through it alone, and the persisted statements are read once for the
 call. Each object is decided as `Check` would decide it, and one outside
 the subject's organization refuses the call. An org-gated list asks it
 once per page to drop the objects the caller may not read
-([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)).
+([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)),
+which the browser listener no longer does: its lists ask the policy
+service (ADR-0172).
 The machine listener reaches the same engine the same way, over a seam
 of its own, and supplies the identity-derived ones, except for a
 message send, which it asks of the policy service (ADR-0168). Delegated
@@ -1341,11 +1349,11 @@ policy service's decision too, asked read current through one adapter,
 `currentDecision` in `platform/internal/cli/authority.go`, which sends
 the actor, the action and the object and nothing else (ADR-0146 items
 14 and 15). The
-browser listener's `Evaluator` seam, now asked by the explanation and
-the list filter alone, has one non-test implementation,
+browser listener's `Evaluator` seam, now asked by the explanation
+alone, has one non-test implementation,
 the gRPC client, wired by `platform/internal/cli/serve.go`, which also
-wires the policy decision client that enforcement, `checkPermissions`
-and the holders list ask; the machine listener has no engine
+wires the policy decision client that enforcement, `checkPermissions`,
+the holders list and the lists ask; the machine listener has no engine
 seam, and wires the policy decision client in
 `platform/internal/cli/machine.go` (ADR-0168).
 The in-process evaluator is the engine's own rather than a test

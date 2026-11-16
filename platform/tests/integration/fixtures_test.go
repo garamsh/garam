@@ -579,6 +579,20 @@ func (c *currentDecisions) questions() []policydecision.Question {
 	return append([]policydecision.Question(nil), c.enforced...)
 }
 
+// Evaluations answers each question as Evaluate does, and fails whole
+// on the first that errs, as the service's client does.
+func (c *currentDecisions) Evaluations(ctx context.Context, qs []policydecision.Question) ([]policydecision.Decision, error) {
+	out := make([]policydecision.Decision, len(qs))
+	for i, q := range qs {
+		d, err := c.Evaluate(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = d
+	}
+	return out, nil
+}
+
 func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {
 	c.mu.Lock()
 	key := [2]string{q.Subject.String(), q.Action}

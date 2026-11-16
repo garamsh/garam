@@ -101,6 +101,7 @@ var actionRules = map[string]actionRule{
 	org.ActionPolicyDetach: {on: []apigen.PermissionResourceType{kindPolicy}},
 	org.ActionPolicyDelete: {on: []apigen.PermissionResourceType{kindPolicy}},
 	org.ActionAuditRead:    {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionPermitWrite:  {on: []apigen.PermissionResourceType{onOrg}},
 
 	org.ActionConsentRead:     {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionConsentGrant:    {on: []apigen.PermissionResourceType{onOrg}},

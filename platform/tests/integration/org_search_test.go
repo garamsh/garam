@@ -209,7 +209,9 @@ func TestSearch_LikeWildcardsMatchOnlyThemselves(t *testing.T) {
 // three matching objects of each kind filtered per object and denies
 // ada the middle one's read. dan, whom the Deny does not reach, is the
 // control: ada's answer is his without that object, and the count past
-// a limit of one counts only what she may read.
+// a limit of one counts only what she may read. A policy is not among
+// them: the service decides its read on the organization, so no policy
+// is refused alone (ADR-0171 item 7).
 func TestSearch_ADenyOnOneObjectHidesItFromTheSearchAndItsCount(t *testing.T) {
 	kinds := []struct {
 		kind, action string
@@ -217,7 +219,6 @@ func TestSearch_ADenyOnOneObjectHidesItFromTheSearchAndItsCount(t *testing.T) {
 	}{
 		{"agent", org.ActionAgentRead, seedAgentAt},
 		{"team", org.ActionGroupRead, seedNamedGroup},
-		{"policy", org.ActionPolicyRead, seedNamedPolicy},
 		{"project", org.ActionProjectRead, seedNamedProject},
 	}
 	for _, k := range kinds {
@@ -230,6 +231,7 @@ func TestSearch_ADenyOnOneObjectHidesItFromTheSearchAndItsCount(t *testing.T) {
 			deny := activePolicy(t, s.policies, s.acme, "deny-one",
 				statementDoc("deny-one", wire.EffectDeny, k.action, hidden.String()))
 			attachPolicy(t, s.policies, deny, s.adaGRN)
+			s.decisions.forbidOn(s.adaGRN, k.action, hidden)
 
 			control := s.search(t, "ops", nil, s.dan)[k.kind].grns
 			require.Contains(t, control, hidden.String(), "the Deny does not reach dan")
@@ -264,8 +266,7 @@ func TestSearch_LeavesOutAKindTheCallerMayNotList(t *testing.T) {
 			deny := activePolicy(t, s.policies, s.acme, "deny-list",
 				statementDoc("deny-list", wire.EffectDeny, k.action, s.acme.String()))
 			attachPolicy(t, s.policies, deny, s.adaGRN)
-			// The kind's gate is the policy service's probe (ADR-0171);
-			// the Deny narrows what the platform engine still filters.
+			// The kind's gate is the policy service's probe (ADR-0171).
 			s.decisions.forbidOn(s.adaGRN, k.action, s.acme)
 
 			require.Contains(t, s.search(t, "ops", nil, s.dan), k.kind, "control: dan may list it")

@@ -18,9 +18,9 @@ authorization question differently, as measured by the suite in
 
 | | Count |
 |---|---|
-| Questions asked | 1716 |
-| Agreeing: both decided, the same answer | 1706 |
-| Differing: both decided, different answers | 10 |
+| Questions asked | 1749 |
+| Agreeing: both decided, the same answer | 1738 |
+| Differing: both decided, different answers | 11 |
 | Refused by the service: no decision | 0 |
 
 The three classes sum to the total. A question agrees when both
@@ -37,8 +37,9 @@ the differing ones and a sample of the rest.
 
 ## Differences
 
-All ten are one case: an organization's owner or admin against a
-policy of the organization, on the five `iam:policy` actions.
+Ten are one case: an organization's owner or admin against a policy
+of the organization, on the five `iam:policy` actions. The eleventh is
+the owner's `iam:permit.write` on the organization, below.
 
 | Question | Platform | Service |
 |---|---|---|
@@ -49,7 +50,14 @@ policy of the organization, on the five `iam:policy` actions.
 | owner, `iam:policy.delete` on the policy | allow | deny |
 | admin, the same five actions | allow | deny |
 
-The service's reason in every case is `tenant-isolation` with the
+The eleventh is the other way round: the platform denies the owner
+`iam:permit.write` on the organization and the service allows it. No
+role's action list carries the action (`Role.Actions`,
+`platform/internal/org/role.go`), so the platform's engine finds no
+statement; the service holds it in the owner's role link, and
+`checkPermissions` asks the service (ADR-0172).
+
+The service's reason in each of the ten is `tenant-isolation` with the
 error "entity `Iam::Policy::"<grn>"` does not exist".
 
 **Which rule explains it.**

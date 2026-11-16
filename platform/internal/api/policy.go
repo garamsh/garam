@@ -66,7 +66,7 @@ func (s *Server) ListPolicies(w http.ResponseWriter, r *http.Request, orgSlug ap
 		writeError(w, err)
 		return
 	}
-	policies, err = visible(s, r, c, org.ActionPolicyRead, policies, func(p *Policy) BatchObject { return onItself(p.GRN) })
+	policies, err = visible(s, r, c, org.ActionPolicyRead, policies, func(p *Policy) grn.GRN { return p.GRN })
 	if err != nil {
 		writeError(w, err)
 		return

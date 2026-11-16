@@ -35,7 +35,7 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apig
 		writeError(w, err)
 		return
 	}
-	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a *agent.Agent) BatchObject { return onItself(a.GRN) })
+	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a *agent.Agent) grn.GRN { return a.GRN })
 	if err != nil {
 		writeError(w, err)
 		return

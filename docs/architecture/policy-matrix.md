@@ -18,8 +18,8 @@ authorization question differently, as measured by the suite in
 
 | | Count |
 |---|---|
-| Questions asked | 1716 |
-| Agreeing: both decided, the same answer | 1706 |
+| Questions asked | 1881 |
+| Agreeing: both decided, the same answer | 1871 |
 | Differing: both decided, different answers | 10 |
 | Refused by the service: no decision | 0 |
 
@@ -122,9 +122,10 @@ organization and across it.
   a 200 means admitted, a 400 means not.
 - **Inside and across.** Each subject is asked about the resources of
   every one of the three organizations.
-- **Excluded.** `iam:agent.activate` and `iam:permit.write` are not
-  in the organization actions the check route offers, so they are not
-  asked. `iam:message.send` is not asked of the platform: the machine
+- **Excluded.** `iam:agent.activate` is not in the organization
+  actions the check route offers, so it is not asked.
+  `iam:permit.write` is, since ADR-0172, and is asked on the
+  organization. `iam:message.send` is not asked of the platform: the machine
   listener has no platform decision for a send (ADR-0168), so the
   matrix asks the service through the listener instead (§What a send
   is asked). The `cowork` actions are the service's and cowork's.

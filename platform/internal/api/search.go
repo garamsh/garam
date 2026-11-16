@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"slices"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -132,9 +131,7 @@ func (s *Server) searchAgents(r *http.Request, c *caller, n listfilter.Needle) (
 	if err != nil {
 		return nil, err
 	}
-	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a *agent.Agent) BatchObject {
-		return onItself(a.GRN)
-	})
+	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a *agent.Agent) grn.GRN { return a.GRN })
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +154,7 @@ func (s *Server) searchTeams(r *http.Request, c *caller, n listfilter.Needle) ([
 	if err != nil {
 		return nil, err
 	}
-	groups, err = visible(s, r, c, org.ActionGroupRead, groups, func(gr *org.Group) BatchObject {
-		return BatchObject{Object: gr.GRN, Statements: groupRoleStatements(gr, slices.Contains(c.groups, gr.GRN))}
-	})
+	groups, err = visible(s, r, c, org.ActionGroupRead, groups, func(gr *org.Group) grn.GRN { return gr.GRN })
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +173,7 @@ func (s *Server) searchPolicies(r *http.Request, c *caller, n listfilter.Needle)
 	if err != nil {
 		return nil, err
 	}
-	policies, err = visible(s, r, c, org.ActionPolicyRead, policies, func(p *Policy) BatchObject { return onItself(p.GRN) })
+	policies, err = visible(s, r, c, org.ActionPolicyRead, policies, func(p *Policy) grn.GRN { return p.GRN })
 	if err != nil {
 		return nil, err
 	}
@@ -197,13 +192,7 @@ func (s *Server) searchProjects(r *http.Request, c *caller, n listfilter.Needle)
 	if err != nil {
 		return nil, err
 	}
-	mine, err := s.orgs.ListProjectsByMember(r.Context(), c.org, c.user.GRN)
-	if err != nil {
-		return nil, err
-	}
-	projects, err = visible(s, r, c, org.ActionProjectRead, projects, func(p *org.Project) BatchObject {
-		return BatchObject{Object: p.GRN, Statements: projectRoleStatements(p, slices.Contains(mine, p.GRN))}
-	})
+	projects, err = visible(s, r, c, org.ActionProjectRead, projects, func(p *org.Project) grn.GRN { return p.GRN })
 	if err != nil {
 		return nil, err
 	}

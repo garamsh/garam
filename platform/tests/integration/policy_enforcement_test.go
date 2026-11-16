@@ -18,6 +18,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	policyv1 "github.com/garamsh/garam/lib/policy-sdk-go/gen/garam/policy/v1"
 	apigen "github.com/garamsh/garam/platform/api"
+	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
@@ -46,10 +47,13 @@ const enforcementGuardrail = `forbid (principal, action == Iam::Action::"org.inv
 type enforcementStack struct {
 	url                 string
 	rp                  *realPolicy
-	owner, member       *http.Cookie
+	owner, admin        *http.Cookie
+	member              *http.Cookie
 	ownerGRN, memberGRN grn.GRN
 	acme                grn.GRN
 	policies            *authz.PolicyGRPCServer
+	orgs                *orgpg.Store
+	agents              *agentpg.Store
 }
 
 // newEnforcementStack composes the listener with decisions as the
@@ -72,8 +76,9 @@ func newEnforcementStack(t *testing.T, decide func(*realPolicy) policydecision.S
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
-	s := &enforcementStack{rp: rp, acme: acme}
+	s := &enforcementStack{rp: rp, acme: acme, orgs: orgs, agents: agentpg.New(p)}
 	s.owner, s.ownerGRN = session("ada", org.RoleOwner)
+	s.admin, _ = session("bea", org.RoleAdmin)
 	s.member, s.memberGRN = session("bob", org.RoleMember)
 	rp.deliver(t)
 	// The service outlives the test: a guardrail an earlier run left
@@ -96,7 +101,7 @@ func newEnforcementStack(t *testing.T, decide func(*realPolicy) policydecision.S
 
 	policies, engine := policyEngine(t, p)
 	s.policies = policies
-	srv := api.NewServer(users, orgs, nil, nil, nil, nil, authnpg.NewSessionStore(p),
+	srv := api.NewServer(users, orgs, s.agents, nil, nil, nil, authnpg.NewSessionStore(p),
 		nil, nil, nil, nil, api.NewGRPCEvaluator(engine), decide(rp), api.NewGRPCPolicyManager(policyService(t, policies)),
 		nil, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithPolicyRelay(relaygrpc.New(rp.client))

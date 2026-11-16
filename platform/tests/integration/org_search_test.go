@@ -206,10 +206,13 @@ func TestSearch_LikeWildcardsMatchOnlyThemselves(t *testing.T) {
 }
 
 // TestSearch_ADenyOnOneObjectHidesItFromTheSearchAndItsCount seeds
-// three matching objects of each kind filtered per object and denies
-// ada the middle one's read. dan, whom the Deny does not reach, is the
+// three matching objects of each kind filtered per object and has the
+// policy service refuse ada the middle one's read. dan, whom the
+// refusal does not reach, is the
 // control: ada's answer is his without that object, and the count past
-// a limit of one counts only what she may read.
+// a limit of one counts only what she may read. A policy is not among
+// them: the service decides its read on the organization, so no policy
+// is refused alone (ADR-0171 item 7).
 func TestSearch_ADenyOnOneObjectHidesItFromTheSearchAndItsCount(t *testing.T) {
 	kinds := []struct {
 		kind, action string
@@ -217,7 +220,6 @@ func TestSearch_ADenyOnOneObjectHidesItFromTheSearchAndItsCount(t *testing.T) {
 	}{
 		{"agent", org.ActionAgentRead, seedAgentAt},
 		{"team", org.ActionGroupRead, seedNamedGroup},
-		{"policy", org.ActionPolicyRead, seedNamedPolicy},
 		{"project", org.ActionProjectRead, seedNamedProject},
 	}
 	for _, k := range kinds {
@@ -225,16 +227,14 @@ func TestSearch_ADenyOnOneObjectHidesItFromTheSearchAndItsCount(t *testing.T) {
 			s := newListStack(t)
 			first, hidden, last := k.seed(t, s, "ops-a", "ops a"), k.seed(t, s, "ops-b", "ops b"), k.seed(t, s, "ops-c", "ops c")
 			require.ElementsMatch(t, []string{first.String(), hidden.String(), last.String()},
-				s.search(t, "ops", nil, s.ada)[k.kind].grns, "control, before the Deny")
+				s.search(t, "ops", nil, s.ada)[k.kind].grns, "control, before the refusal")
 
-			deny := activePolicy(t, s.policies, s.acme, "deny-one",
-				statementDoc("deny-one", wire.EffectDeny, k.action, hidden.String()))
-			attachPolicy(t, s.policies, deny, s.adaGRN)
+			s.decisions.forbidOn(s.adaGRN, k.action, hidden)
 
 			control := s.search(t, "ops", nil, s.dan)[k.kind].grns
-			require.Contains(t, control, hidden.String(), "the Deny does not reach dan")
+			require.Contains(t, control, hidden.String(), "the refusal does not reach dan")
 			want := slices.DeleteFunc(slices.Clone(control), func(g string) bool { return g == hidden.String() })
-			assert.Equal(t, want, s.search(t, "ops", nil, s.ada)[k.kind].grns, "ada's answer is dan's without the denied object")
+			assert.Equal(t, want, s.search(t, "ops", nil, s.ada)[k.kind].grns, "ada's answer is dan's without the refused object")
 
 			one := url.Values{"limit": {"1"}}
 			assert.Equal(t, 2, s.search(t, "ops", one, s.dan)[k.kind].more, "control: dan counts both others")
@@ -261,11 +261,7 @@ func TestSearch_LeavesOutAKindTheCallerMayNotList(t *testing.T) {
 		t.Run(k.kind, func(t *testing.T) {
 			s := newListStack(t)
 			k.seed(t, s, "ops-1", "ops one")
-			deny := activePolicy(t, s.policies, s.acme, "deny-list",
-				statementDoc("deny-list", wire.EffectDeny, k.action, s.acme.String()))
-			attachPolicy(t, s.policies, deny, s.adaGRN)
-			// The kind's gate is the policy service's probe (ADR-0171);
-			// the Deny narrows what the platform engine still filters.
+			// The kind's gate is the policy service's probe (ADR-0171).
 			s.decisions.forbidOn(s.adaGRN, k.action, s.acme)
 
 			require.Contains(t, s.search(t, "ops", nil, s.dan), k.kind, "control: dan may list it")

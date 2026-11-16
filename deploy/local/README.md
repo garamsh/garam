@@ -236,9 +236,9 @@ key `policy-keys` made, under the issuer `https://garam.localhost/api`
 A user's and an operator's delegated operation authority and the
 controller proof are the service's decision too, read current, so the
 api refuses to start without `GARAM_POLICY_ADDR` and waits for a
-healthy `policy`. The same name is `GARAM_IDENTITY_ISSUER` on the api and on the machine
-listener, so the identity issuer is on in both, signing with the same
-key.
+healthy `policy`. The same name is `GARAM_IDENTITY_ISSUER` on the api
+and on the machine listener, so the identity issuer is on in both,
+signing with the same key.
 `policy-feed` turns the feed on once `migrate` has applied the api's
 schema and the service is healthy, and backfills the outbox, so what the
 api wrote before is delivered as well. Running it again changes nothing

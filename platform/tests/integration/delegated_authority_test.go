@@ -28,6 +28,7 @@ import (
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
 )
@@ -56,6 +57,17 @@ type authorityStack struct {
 
 func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *authorityStack {
 	t.Helper()
+	decisions := newCurrentDecisions(p)
+	s := newAuthorityStackDeciding(t, engine, p, decisions)
+	s.decisions = decisions
+	return s
+}
+
+// newAuthorityStackDeciding is newAuthorityStack where decisions is
+// the policy service both listeners ask, which the suite tagged
+// policymatrix gives the real one.
+func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, decisions policydecision.Service) *authorityStack {
+	t.Helper()
 	ctx := context.Background()
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
@@ -73,7 +85,6 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 	owner, _ := session("ada", org.RoleOwner)
 	member, memberGRN := session("bob", org.RoleMember)
 
-	decisions := newCurrentDecisions(p)
 	srv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
@@ -85,7 +96,7 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 	controller := scopedGRN("acme", operator.ServiceType, "controller")
 	machine := machineListenerDeciding(t, p, sealer, nil, decisions)
 	return &authorityStack{
-		pool: p, engine: engine, decisions: decisions, browser: browser.URL, machine: machine,
+		pool: p, engine: engine, browser: browser.URL, machine: machine,
 		acme: acme, owner: owner, member: member, memberGRN: memberGRN, hosted: hosted, controller: controller,
 		hostedTLS:  operatorClient(t, p, machine, hosted),
 		controlTLS: operatorClient(t, p, machine, controller),

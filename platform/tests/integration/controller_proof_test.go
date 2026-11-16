@@ -20,8 +20,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/authz"
@@ -31,6 +31,7 @@ import (
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/wire"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
@@ -111,6 +112,14 @@ func (b *syncBuffer) String() string {
 
 func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, policies *authz.PolicyGRPCServer) *proofStack {
 	t.Helper()
+	return newProofStackDeciding(t, engine, p, policies, newCurrentDecisions(p))
+}
+
+// newProofStackDeciding is newProofStack where decisions is the policy
+// service the listener asks, which the suite tagged policymatrix gives
+// the real one.
+func newProofStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, policies *authz.PolicyGRPCServer, decisions policydecision.Service) *proofStack {
+	t.Helper()
 	ctx := context.Background()
 	orgs := orgpg.New(p)
 	acme := orgRootGRN("acme")
@@ -127,7 +136,7 @@ func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, polic
 		Certificate: presented,
 		ServerRoot:  certificatePEM(presented),
 		Delivery:    briefDelivery(),
-		Decisions:   newCurrentDecisions(p),
+		Decisions:   decisions,
 		Logger:      slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		Now:         clock.now,
 		TokenURL:    testTokenURL,
@@ -450,61 +459,26 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 }
 
 // TestControllerProof_UnknownFreshnessRefusesAsUnavailable holds that
-// authority garam cannot read as current is 503 naming no cause: an
-// engine predating CheckCurrent, and a database that stops answering
+// authority garam cannot read as current is 503 naming no cause: a
+// policy service that fails, and a database that stops answering
 // under an open connection. The proof each refuses after is the
 // control, on the same connection.
 func TestControllerProof_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 	p := pool(t)
-	srv := grpc.NewServer()
-	current := authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p)))
-	gate := &engineGate{current: current}
-	authzv1.RegisterAuthzServiceServer(srv, gate)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(srv.Stop)
-	engine, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = engine.Close() })
-	s := newProofStack(t, engine, p, nil)
+	_, engine := policyEngine(t, p)
+	decisions := newCurrentDecisions(p)
+	s := newProofStackDeciding(t, engine, p, nil, decisions)
 
 	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "").status)
-	gate.checkOnly()
+	decisions.failWith(errorx.New(errorx.KindInternal, "the policy service is down"))
 	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
-	onOpenConnection(t, got, http.StatusServiceUnavailable, "an engine without CheckCurrent")
+	onOpenConnection(t, got, http.StatusServiceUnavailable, "a policy service that fails")
 	assert.Contains(t, got.body, `"message":"internal error"`)
 
-	gate.restore()
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "the engine restored")
+	decisions.failWith(nil)
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "the service restored")
 	p.Close()
 	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	onOpenConnection(t, got, http.StatusServiceUnavailable, "a database that stopped answering")
 	assert.Contains(t, got.body, `"message":"internal error"`)
-}
-
-// engineGate serves the current engine until checkOnly, after which it
-// answers as an engine predating CheckCurrent does: UNIMPLEMENTED.
-type engineGate struct {
-	authzv1.UnimplementedAuthzServiceServer
-	mu      sync.Mutex
-	old     bool
-	current authzv1.AuthzServiceServer
-}
-
-func (g *engineGate) checkOnly() { g.mu.Lock(); g.old = true; g.mu.Unlock() }
-func (g *engineGate) restore()   { g.mu.Lock(); g.old = false; g.mu.Unlock() }
-
-func (g *engineGate) Check(ctx context.Context, r *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
-	return g.current.Check(ctx, r)
-}
-
-func (g *engineGate) CheckCurrent(ctx context.Context, r *authzv1.CheckCurrentRequest) (*authzv1.CheckCurrentResponse, error) {
-	g.mu.Lock()
-	old := g.old
-	g.mu.Unlock()
-	if old {
-		return g.UnimplementedAuthzServiceServer.CheckCurrent(ctx, r)
-	}
-	return g.current.CheckCurrent(ctx, r)
 }

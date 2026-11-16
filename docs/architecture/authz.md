@@ -766,10 +766,11 @@ id answers as it did. The other writes of an operator (its details and
 its control endpoint) do not wait. A later write that marks the same
 operator keeps a wait going until the pass that delivers it.
 
-Who decides an operator's authority is unchanged: the `CheckCurrent`
-consumers, the minting of an operation authority and the controller
-proof read the platform's grant, not the attribute. Their own round
-removes that.
+An operator's authority is decided from that attribute: the minting of
+an operation authority and the controller proof ask the policy service
+read current, and the platform refuses an ended or expired grant before
+it asks ([operators.md](./operators.md) §Delegated operation
+authority).
 
 #### Supervisors
 
@@ -1031,10 +1032,11 @@ which cannot.
 **`CheckCurrent` is that refusal**, for the privileged actions that
 must be checked against current authority
 ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
-Its callers are delegated operation authority on both listeners and
-the controller proof on the machine listener
-([operators.md](./operators.md) §Delegated operation authority,
-`operators.md` §Controller proof).
+Nothing on the platform's paths calls it now: delegated operation
+authority and the controller proof are the policy service's decision,
+asked read current ([operators.md](./operators.md) §Delegated
+operation authority, `operators.md` §Controller proof). The RPC stays
+on the engine.
 It decides as
 `Check` does, except that the org's active policies and their
 attachments are read from storage on every call: it neither reads nor
@@ -1268,7 +1270,7 @@ identifier and organization, and none of them changes there.
 | `Policy` / `PolicyVersion` | stored policy and its revisions | — |
 | `PolicyAttachment` | binds a policy to a subject (ADR-0008) | — |
 | `Store` | policy and attachment persistence, implemented by `platform/internal/authz/postgres` (ADR-0069) | `platform/migrations/` |
-| `PolicyCache` | per-org parsed policies and their attachments, and the uncached read `CheckCurrent` uses | `Store` |
+| `PolicyCache` | per-org parsed policies and their attachments, and the uncached read `CheckCurrent` uses (the platform no longer calls it) | `Store` |
 | `ListenPolicyChanges` (`platform/internal/authz/postgres`) | drops a `PolicyCache` entry as `garam_policy_change` announces the write | `PolicyCache` |
 | `GRPCServer` | `Check` / `CheckBatch` / `CheckCurrent` / `Explain` RPCs | `PolicyCache` |
 | `PolicyGRPCServer` | policy lifecycle RPCs | `Store`, `PolicyCache` |
@@ -1290,15 +1292,15 @@ once per page to drop the objects the caller may not read
 The machine listener reaches the same engine the same way, over a seam
 of its own, and supplies the identity-derived ones, except for a
 message send, which it asks of the policy service (ADR-0168). Delegated
-operation
-authority on both reaches `CheckCurrent` (§Policy persistence) through
-one adapter, `platform/internal/cli/authority.go`, which reads the
-membership, the user's own roles and its groups for each call and sends
-the org-scoped statement those roles grant; neither operation targets a
-group or project, so no scoped role is collected. The
+operation authority and the controller proof on both listeners are the
+policy service's decision too, asked read current through one adapter,
+`currentDecision` in `platform/internal/cli/authority.go`, which sends
+the actor, the action and the object and nothing else (ADR-0146 items
+14 and 15). The
 browser listener's `Evaluator` seam has one non-test implementation,
-the gRPC client, wired by `platform/internal/cli/serve.go`; the machine
-listener has none, and wires the policy decision client for sends in
+the gRPC client, wired by `platform/internal/cli/serve.go`, which also
+wires the policy decision client; the machine listener has no engine
+seam, and wires the policy decision client in
 `platform/internal/cli/machine.go` (ADR-0168).
 The in-process evaluator is the engine's own rather than a test
 substitute: `StatementEvaluator` is what `Check` runs on every request

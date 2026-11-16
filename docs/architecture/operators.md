@@ -366,6 +366,22 @@ is retried. Anything else under that request identifier — another
 digest, a replaced grant, a moved agent — is refused, and a newly
 authorized operation takes a new one.
 
+**The policy service decides whether the member may, read current.**
+Minting and each read back ask the policy service whether the actor
+may take the operation on its object, with `READ_CURRENT`
+([ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)
+inventory item 14): the platform supplies no statement, group or
+organization, and the service resolves the member's roles and groups
+itself. A hosted operator's half is the same question about the
+operator (item 15), which holds only the operations its grants list,
+fed as `Iam::Operator.operations`, and which a guardrail of the
+organization can still forbid. The grant's dates stay the platform's:
+an ended or expired grant is refused before the service is asked. A
+service that cannot be reached, or answers with an error, makes the
+operation unavailable and is never read as an allowance or a denial.
+The engine's `CheckCurrent` is not called on these paths, and both
+listeners refuse to start without `GARAM_POLICY_ADDR`.
+
 **Every read back is decided again.** Introspection answers the audience
 alone, and an unknown, expired or other audience's token is one
 not-found. It, and the reference check an Operator makes before
@@ -410,10 +426,12 @@ on the request:
   controller;
 - a named agent belongs to the organization and is currently assigned
   to that controller, and the proof carries the assignment's epoch;
-- current policy for the caller and the groups it belongs to now,
-  beside an Allow of `iam:agent.activate` that the grant contributes —
-  on the organization for a session, on the agent for that agent's
-  lifecycle — does not deny it, and an explicit Deny wins.
+- the policy service, asked read current whether the caller may take
+  `iam:agent.activate` — on the organization for a session, on the
+  agent for that agent's lifecycle — allows it: the caller holds the
+  operation among those fed from its grants, and a guardrail of the
+  organization that forbids it denies it. The service being
+  unreachable is unavailable, never an allowance.
 
 The caller's identity is `platform/internal/machine`'s to read again
 ([machine-identity.md](./machine-identity.md)) and a controller's token

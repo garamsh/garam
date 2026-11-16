@@ -483,6 +483,7 @@ type currentDecisions struct {
 	mu        sync.Mutex
 	forbidden map[[2]string]bool
 	failure   error
+	held      chan struct{}
 	asked     []policydecision.Question
 }
 
@@ -507,6 +508,24 @@ func (c *currentDecisions) failWith(err error) {
 	c.failure = err
 }
 
+// stall makes every read-current question wait, answering nothing,
+// until the function it returns is called or the caller gives up.
+func (c *currentDecisions) stall() func() {
+	held := make(chan struct{})
+	c.mu.Lock()
+	c.held = held
+	c.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			c.mu.Lock()
+			c.held = nil
+			c.mu.Unlock()
+			close(held)
+		})
+	}
+}
+
 // currentQuestions are the read-current questions asked so far.
 func (c *currentDecisions) currentQuestions() []policydecision.Question {
 	c.mu.Lock()
@@ -521,7 +540,15 @@ func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Questi
 	c.mu.Lock()
 	c.asked = append(c.asked, q)
 	failure, forbidden := c.failure, c.forbidden[[2]string{q.Subject.String(), q.Action}]
+	held := c.held
 	c.mu.Unlock()
+	if held != nil {
+		select {
+		case <-held:
+		case <-ctx.Done():
+			return policydecision.Decision{}, ctx.Err()
+		}
+	}
 	switch {
 	case failure != nil:
 		return policydecision.Decision{}, failure
@@ -530,7 +557,11 @@ func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Questi
 	case q.Subject.ServiceType != user.ServiceType:
 		return policydecision.Decision{Allowed: true}, nil
 	}
-	m, err := c.orgs.GetMember(ctx, grn.Org(q.Resource.Organization), q.Subject)
+	owning := q.Resource.Organization
+	if q.Resource.ServiceType == "org" {
+		owning = q.Resource.Identifier
+	}
+	m, err := c.orgs.GetMember(ctx, grn.Org(owning), q.Subject)
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return policydecision.Decision{}, nil
 	}

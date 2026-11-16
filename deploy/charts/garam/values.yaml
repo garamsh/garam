@@ -229,6 +229,15 @@ machine:
   # https URL with a host and no user information, query or fragment.
   # No private key passes through this value or any other here.
   tokenUrl: ""
+  # Every send is the policy service's decision (ADR-0168), so this
+  # listener reaches it as `serve api` does, by `api.policy`'s address,
+  # issuer and root. Only the signing key's path is its own: where in
+  # the machine container the RSA key is read from, written there by
+  # something the deployment runs (`machine.podAnnotations` asks an
+  # injector for it). Required; the listener refuses to start without
+  # it.
+  policy:
+    signingKeyFile: ""
   # Runs the copy that gives the process a file it owns, here and in
   # the policy service's pod. The garam image is scratch and carries no
   # shell. Pinned by digest, the reference

@@ -7,7 +7,8 @@
 # - machine: the certificate, key and key-encryption key come from the
 #   `machine-keys` volume, in place of `machine-material`, and it
 #   publishes a free loopback port; the default's issuer, policy
-#   signing key and service keys file stay on it;
+#   service address, CA and signing key, and service keys file stay
+#   on it;
 # - api: publishes a free loopback port and names the listener's token
 #   URL, and postgres, authz and the policy service publish none.
 # The default file's cowork is not part of this run: the profile that

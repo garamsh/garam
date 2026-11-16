@@ -28,6 +28,8 @@ api:
     caSecretName: garam-policy-ca
     signingKeyFile: /vault/secrets/policy-signing-key
 machine:
+  policy:
+    signingKeyFile: /vault/secrets/policy-signing-key
   keyMaterial:
     secretName: garam-machine-key-material
   issuer: https://garam-machine.example

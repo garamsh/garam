@@ -1,0 +1,7 @@
+# No signing key path for the machine listener. The render must refuse
+# and name machine.policy.signingKeyFile: every send is the policy
+# service's decision (ADR-0168), and the listener refuses to start
+# without the key it signs the call with.
+machine:
+  policy:
+    signingKeyFile: ""

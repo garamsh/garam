@@ -214,6 +214,12 @@ fails without them:
   `api.policy.tokenIssuer` is also what `policy serve` trusts as
   `POLICY_TOKEN_ISSUER`: one value renders both sides, so they cannot
   disagree.
+- `machine.policy.signingKeyFile` — where in the machine container the
+  token signing key is read from. The listener asks the policy service
+  to decide every send
+  ([ADR-0168](../../../docs/architecture/adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)),
+  so it renders the `api.policy` address, issuer and root and refuses
+  to start without this path (§Delivering the policy feed).
 - `machine.keyMaterial.secretName` — the Secret each of the machine
   listener's four key-material files is read from, less whichever of
   them names a Secret of its own (§Key material and secrets).
@@ -545,6 +551,14 @@ to start holding part of the setting.
   other bit. `api.podAnnotations` is how a writer that injects itself
   into the pod is asked for; the chart renders no writer and no volume
   for one.
+
+`serve machine` delivers nothing, but it asks the same service to
+decide every send, with the same address, root and issuer, which it
+reads from `api.policy` so that the two callers and the service cannot
+disagree. Its signing key is the same key at a path of its own,
+`machine.policy.signingKeyFile`, written in the machine pod by what the
+deployment runs (`machine.podAnnotations`) and held to the same arrival
+rule. The render refuses without it, naming it.
 
 ## Pinning a version
 

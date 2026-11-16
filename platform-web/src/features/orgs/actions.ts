@@ -16,10 +16,6 @@ export {
   type AddMembersToTeamState,
 } from "./api/add-members-to-team";
 export {
-  addPolicyVersion,
-  type AddPolicyVersionState,
-} from "./api/add-policy-version";
-export {
   addProjectMember,
   type AddProjectMemberState,
 } from "./api/add-project-member";
@@ -27,11 +23,6 @@ export {
   approveAgentEnrollment,
   type ApproveAgentEnrollmentState,
 } from "./api/approve-agent-enrollment";
-export { attachPolicy, type AttachPolicyState } from "./api/attach-policy";
-export {
-  attachPolicyToMembers,
-  type AttachPolicyToMembersState,
-} from "./api/attach-policy-to-members";
 export {
   saveControlEndpoint,
   type ControlEndpointState,
@@ -42,13 +33,11 @@ export {
   type CreateInvitationState,
 } from "./api/create-invitation";
 export { createOrg, type CreateOrgState } from "./api/create-org";
-export { createPolicy, type CreatePolicyState } from "./api/create-policy";
 export { createProject, type CreateProjectState } from "./api/create-project";
 export { deleteGroup, type DeleteGroupState } from "./api/delete-group";
 export { deleteOrg, type DeleteOrgState } from "./api/delete-org";
 export { grantDelegation, type DelegationState } from "./api/grant-delegation";
 export { withdrawDelegation } from "./api/withdraw-delegation";
-export { detachPolicy, type DetachPolicyState } from "./api/detach-policy";
 export {
   deleteOperator,
   type DeleteOperatorState,
@@ -64,10 +53,6 @@ export {
   type IssueOperatorKeyState,
 } from "./api/issue-operator-key";
 export { mintOperationAuthority } from "./api/mint-operation-authority";
-export {
-  publishPolicyVersion,
-  type PublishPolicyVersionState,
-} from "./api/publish-policy-version";
 export {
   registerOperator,
   type RegisterOperatorState,

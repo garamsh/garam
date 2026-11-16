@@ -8,11 +8,14 @@ import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
 import {
   API_URL,
+  DENY_DELETES_ID,
+  ENGINEERING_ADMINS_ID,
   answerPermissionChecks,
-  baselineRead,
   denyDeletes,
+  engineeringAdmins,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import type { IamPolicyDetail } from "@/features/orgs";
 
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -21,15 +24,30 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
-  usePathname: () => "/console/orgs/acme/permissions/d1e2f3a4b5c6d7e8",
+  usePathname: () => `/console/orgs/acme/permissions/${DENY_DELETES_ID}`,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const POLICIES = `${API_URL}/orgs/acme/policies`;
-const DENY = `${POLICIES}/d1e2f3a4b5c6d7e8`;
+const POLICIES = `${API_URL}/orgs/acme/iam-policies`;
+const DENY = `${POLICIES}/${DENY_DELETES_ID}`;
+
+/** The guardrail as a draft, which is where Activate is offered. */
+const draftGuardrail: IamPolicyDetail = {
+  ...denyDeletes,
+  policy: { ...denyDeletes.policy, status: "draft" },
+};
+
+/** The same guardrail written as a permit, asked as one. */
+const permit: IamPolicyDetail = {
+  policy: { ...denyDeletes.policy, kind: "permit" },
+  versions: denyDeletes.versions.map((version) => ({
+    ...version,
+    body: { kind: "permit", text: "permit (principal, action, resource);" },
+  })),
+};
 
 // The console layout mounts the provider a `<Time>` needs.
-function renderPolicy(policy = "d1e2f3a4b5c6d7e8") {
+function renderPolicy(policy: string = DENY_DELETES_ID) {
   return renderServerComponent(
     PolicyPage({ params: Promise.resolve({ org: "acme", policy }) }),
     { wrapper: TooltipProvider },
@@ -54,160 +72,204 @@ async function openTab(name: RegExp) {
   return panelOf(name);
 }
 
+/** Answers `detail` for the policy at `id`, and the list with it. */
+function serve(detail: IamPolicyDetail) {
+  server.use(
+    http.get(`${POLICIES}/${detail.policy.id}`, () =>
+      HttpResponse.json(detail),
+    ),
+  );
+}
+
 describe("policy page", () => {
-  it("heads the page with the name, status and identifier, and opens on the document", async () => {
-    const { container } = await renderPolicy();
+  it("heads the page with the name, status, kind and identifier, and opens on the Cedar text", async () => {
+    await renderPolicy();
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.getByText("Guardrail")).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Identifier" })).toHaveTextContent(
-      "d1e2f3a4b5c6d7e8",
+      DENY_DELETES_ID,
     );
-    // The status is the header's; the document says whom it reaches.
-    const document = panelOf(/^Document/);
+    // The default version is v1, whose text names iam:project.delete.
     expect(
-      document.getByText("Applies to Engineering (Team)."),
-    ).toBeInTheDocument();
-    expect(document.queryByText(/^Active/)).not.toBeInTheDocument();
-    // The editor opens on the default version, v1, and nothing to
-    // publish.
-    expect(
-      document.getByRole("textbox", { name: "Statement 1 action 1" }),
-    ).toHaveValue("iam:project.delete");
-    expect(document.getByRole("button", { name: "Publish v3" })).toBeDisabled();
-    // Deleting is in the danger zone, at the end of the last tab.
-    expect(container.textContent).not.toContain("grn:acme:default:group");
+      panelOf(/^Definition/).getByLabelText("Cedar text"),
+    ).toHaveTextContent(
+      'forbid (principal, action == Action::"iam:project.delete", resource);',
+    );
+    // Cedar text is read, not edited.
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("lists the versions with the default marked, and whom it is attached to", async () => {
+  it("shows a role link's role, scope, principal and resource", async () => {
+    await renderPolicy(ENGINEERING_ADMINS_ID);
+
+    expect(screen.getByText("Draft")).toBeInTheDocument();
+    expect(screen.getByText("Role link")).toBeInTheDocument();
+    const definition = panelOf(/^Definition/);
+    expect(definition.getByText("admin")).toBeInTheDocument();
+    expect(definition.getByText("Team or project")).toBeInTheDocument();
+    expect(definition.getByText("grn:acme/iam/group/eng")).toBeInTheDocument();
+    expect(
+      definition.getByText("grn:acme/iam/project/frontend"),
+    ).toBeInTheDocument();
+  });
+
+  it("lists the versions newest first with the default marked", async () => {
     await renderPolicy();
 
     // Presence: a tab's name carries its count.
     const versions = await openTab(/^Versions/);
-    const current = versions.getByRole("row", { name: /^v1/ });
-    expect(within(current).getByText("In use")).toBeInTheDocument();
-    const newer = versions.getByRole("row", { name: /^v2/ });
-    expect(
-      within(newer).getByRole("button", { name: "Make v2 default" }),
-    ).toBeInTheDocument();
-
-    const attachments = await openTab(/^Attachments/);
+    const rows = versions.getAllByRole("row").slice(1);
     // Presence: a row's accessible name is all of its cells.
-    const row = attachments.getByRole("row", { name: /Engineering/ });
-    expect(within(row).getByText("Team")).toBeInTheDocument();
+    expect(rows[0]).toHaveAccessibleName(/^v2/);
+    expect(rows[1]).toHaveAccessibleName(/^v1/);
+    expect(within(rows[1]!).getByText("In use")).toBeInTheDocument();
     expect(
-      within(row).getByRole("button", {
-        name: "Detach Deny project deletion from Engineering",
-      }),
+      within(rows[0]!).getByRole("button", { name: "Make v2 default" }),
     ).toBeInTheDocument();
     expect(
-      attachments.getByRole("button", { name: "Delete policy" }),
-    ).toBeInTheDocument();
+      within(rows[1]!).queryByRole("button", { name: /default$/ }),
+    ).not.toBeInTheDocument();
   });
 
-  it("says a draft grants nothing, whom it would reach once active, and offers activation", async () => {
-    server.use(
-      http.get(POLICIES, () =>
-        HttpResponse.json([{ ...denyDeletes, status: "draft" }]),
-      ),
-      http.get(`${DENY}/attachments`, () => HttpResponse.json([])),
-    );
-
+  it("offers deletion in the danger zone, and no attach or edit control", async () => {
     await renderPolicy();
 
-    expect(screen.getByText("Draft")).toBeInTheDocument();
     expect(
-      panelOf(/^Document/).getByText(
-        "Once active: Applies to everyone: it has no attachments.",
-      ),
+      screen.getByRole("button", { name: "Delete policy" }),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Attachments/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Publish/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers Activate on a draft and not on an active policy", async () => {
+    serve(draftGuardrail);
+    const draft = await renderPolicy();
+    expect(screen.getByText("Draft")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Activate" }),
     ).toBeInTheDocument();
-  });
+    draft.unmount();
 
-  it("warns that an active policy with no attachment reaches everyone", async () => {
-    server.use(http.get(POLICIES, () => HttpResponse.json([baselineRead])));
-
-    await renderPolicy("0a1b2c3d4e5f6071");
-
-    const warning = panelOf(/^Document/)
-      .getByText("Applies to everyone: it has no attachments.")
-      .closest("[data-tone]");
-    expect(warning).toHaveAttribute("data-tone", "warn");
-  });
-
-  it("does not call refused attachments no attachments", async () => {
-    // The control: listed as empty, the policy says it has none.
-    server.use(http.get(`${DENY}/attachments`, () => HttpResponse.json([])));
-    const listed = await renderPolicy();
-    expect(
-      (await openTab(/^Attachments/)).getByText("Applies to everyone."),
-    ).toBeInTheDocument();
-    listed.unmount();
-
-    server.use(
-      http.get(`${DENY}/attachments`, () =>
-        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
-      ),
-    );
-
+    // The control: the same policy, active, offers none.
+    serve(denyDeletes);
     await renderPolicy();
     expect(
-      panelOf(/^Document/).getByText(
-        "May apply to everyone: its attachments are not listed to you.",
-      ),
-    ).toBeInTheDocument();
-    const attachments = await openTab(/^Attachments/);
-
-    expect(
-      attachments.getByText("You can't view this policy's attachments"),
-    ).toBeInTheDocument();
-    expect(
-      attachments.queryByText("Applies to everyone."),
+      screen.queryByRole("button", { name: "Activate" }),
     ).not.toBeInTheDocument();
   });
 
-  it("withdraws only the writes the server denies, and keeps the document readable", async () => {
+  it("offers a member no write, asking each action on the policy", async () => {
+    // The control: the owner, whom the platform allows, is offered both
+    // the write and the removal. The mock refuses, as the platform
+    // does, a policy's action asked on no policy, which would leave
+    // every control offered.
+    serve(draftGuardrail);
+    server.use(answerPermissionChecks(() => "allow"));
+    const owner = await renderPolicy();
+    expect(
+      screen.getByRole("button", { name: "Activate" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete policy" }),
+    ).toBeInTheDocument();
+    owner.unmount();
+
+    const asked: string[] = [];
     server.use(
-      answerPermissionChecks((action) =>
-        action === "iam:policy.attach" ? "allow" : "deny",
-      ),
+      answerPermissionChecks((action) => {
+        asked.push(action);
+        return "deny";
+      }),
     );
+    serve(draftGuardrail);
 
     await renderPolicy();
 
-    // Denied a change, the document is shown and not offered for edit.
-    const document = panelOf(/^Document/);
+    // The page reads, with every write withdrawn.
     expect(
-      document.queryByRole("button", { name: /^Publish/ }),
+      screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Activate" }),
     ).not.toBeInTheDocument();
-    expect(document.getByText("Read-only for you.")).toBeInTheDocument();
     expect(
-      document.getByRole("textbox", { name: "Statement 1 action 1" }),
-    ).toHaveAttribute("readonly");
-
+      screen.queryByRole("button", { name: "Delete policy" }),
+    ).not.toBeInTheDocument();
     const versions = await openTab(/^Versions/);
     expect(
       versions.queryByRole("button", { name: "Make v2 default" }),
     ).not.toBeInTheDocument();
-
-    const attachments = await openTab(/^Attachments/);
-    expect(
-      attachments.queryByRole("button", { name: /^Detach/ }),
-    ).not.toBeInTheDocument();
-    expect(
-      attachments.queryByRole("button", { name: "Delete policy" }),
-    ).not.toBeInTheDocument();
-    // The control: attaching, allowed, is still offered.
-    expect(
-      attachments.getByRole("combobox", { name: "Attach to" }),
-    ).toBeInTheDocument();
+    expect(asked).toEqual(
+      expect.arrayContaining([
+        "iam:policy.attach",
+        "iam:policy.detach",
+        "iam:policy.update",
+        "iam:policy.delete",
+      ]),
+    );
   });
 
+  it.each([
+    {
+      detail: draftGuardrail,
+      write: "iam:policy.update",
+      remove: "iam:policy.delete",
+    },
+    {
+      detail: { ...engineeringAdmins },
+      write: "iam:policy.attach",
+      remove: "iam:policy.detach",
+    },
+    {
+      detail: { ...permit, policy: { ...permit.policy, status: "draft" } },
+      write: "iam:policy.update",
+      remove: "iam:policy.delete",
+    },
+  ] as const)(
+    "decides a $detail.policy.kind by $write to write and $remove to remove",
+    async ({ detail, write, remove }) => {
+      serve(detail as IamPolicyDetail);
+      // Every other action is allowed, so only the named one can
+      // withdraw a control.
+      server.use(
+        answerPermissionChecks((action) =>
+          action === write ? "deny" : "allow",
+        ),
+      );
+      const writeDenied = await renderPolicy(detail.policy.id);
+      expect(
+        screen.queryByRole("button", { name: "Activate" }),
+      ).not.toBeInTheDocument();
+      // The control: the removal is still offered.
+      expect(
+        screen.getByRole("button", { name: "Delete policy" }),
+      ).toBeInTheDocument();
+      writeDenied.unmount();
+
+      server.use(
+        answerPermissionChecks((action) =>
+          action === remove ? "deny" : "allow",
+        ),
+      );
+      await renderPolicy(detail.policy.id);
+      expect(
+        screen.queryByRole("button", { name: "Delete policy" }),
+      ).not.toBeInTheDocument();
+      // The control: the write is still offered.
+      expect(
+        screen.getByRole("button", { name: "Activate" }),
+      ).toBeInTheDocument();
+    },
+  );
+
   it("offers every write when the check could not be asked", async () => {
+    serve(draftGuardrail);
     server.use(
       http.post(`${API_URL}/orgs/acme/permission-checks`, () =>
         HttpResponse.error(),
@@ -217,67 +279,124 @@ describe("policy page", () => {
     await renderPolicy();
 
     expect(
-      panelOf(/^Document/).getByRole("button", { name: "Publish v3" }),
+      screen.getByRole("button", { name: "Activate" }),
     ).toBeInTheDocument();
     expect(
-      (await openTab(/^Attachments/)).getByRole("button", {
-        name: "Detach Deny project deletion from Engineering",
-      }),
+      screen.getByRole("button", { name: "Delete policy" }),
     ).toBeInTheDocument();
   });
 
-  it("renders not-found for a policy the organization's list does not hold", async () => {
-    // The control: a policy the list holds renders under its name.
+  it("renders not-found for a policy the service does not hold", async () => {
+    // The control: a policy it holds renders under its name.
     const listed = await renderPolicy();
     expect(
       screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
     ).toBeInTheDocument();
     listed.unmount();
 
-    // garam answers an empty list of versions and attachments for any
-    // identifier, so only the policy list can say it does not exist.
     server.use(
-      http.get(`${POLICIES}/nope/versions`, () => HttpResponse.json([])),
-      http.get(`${POLICIES}/nope/attachments`, () => HttpResponse.json([])),
-    );
-
-    await expect(renderPolicy("nope")).rejects.toThrow("NEXT_NOT_FOUND");
-  });
-
-  it("withdraws Activate where the server denies changing the policy", async () => {
-    server.use(
-      http.get(POLICIES, () =>
-        HttpResponse.json([{ ...denyDeletes, status: "draft" }]),
+      http.get(`${POLICIES}/p-missing`, () =>
+        HttpResponse.json(
+          { kind: "not_found", message: "no such policy" },
+          { status: 404 },
+        ),
       ),
     );
-    // The control: allowed, a draft offers Activate.
+
+    await expect(renderPolicy("p-missing")).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("says the policy is refused rather than empty when garam answers 403", async () => {
+    // The control: answered, the same page shows the policy's name, so
+    // its absence below is the refusal's.
     const allowed = await renderPolicy();
     expect(
-      screen.getByRole("button", { name: "Activate" }),
+      screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
     ).toBeInTheDocument();
     allowed.unmount();
 
     server.use(
-      answerPermissionChecks((action) =>
-        action === "iam:policy.update" ? "deny" : "allow",
+      http.get(DENY, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "no" },
+          { status: 403 },
+        ),
       ),
     );
+
+    await renderPolicy();
+
+    expect(screen.getByText("You can't view this policy")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        level: 1,
+        name: "Deny project deletion",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says the API is unreachable rather than showing a policy", async () => {
+    server.use(http.get(DENY, () => HttpResponse.error()));
+
     await renderPolicy();
 
     expect(
-      screen.queryByRole("button", { name: "Activate" }),
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+  });
+
+  it("refuses a version whose body lacks what its kind holds", async () => {
+    // The control: a body that holds its kind's text renders.
+    const held = await renderPolicy();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+    held.unmount();
+
+    server.use(
+      http.get(DENY, () =>
+        HttpResponse.json({
+          ...denyDeletes,
+          versions: [
+            { ...denyDeletes.versions[0], body: { kind: "guardrail" } },
+          ],
+        }),
+      ),
+    );
+
+    await expect(renderPolicy()).rejects.toThrow("outside its specification");
+  });
+
+  it("says the same when the policy service times out, not an error page", async () => {
+    server.use(
+      http.get(DENY, () =>
+        HttpResponse.json(
+          { kind: "deadline_exceeded", message: "no answer in time" },
+          { status: 504 },
+        ),
+      ),
+    );
+
+    await renderPolicy();
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        level: 1,
+        name: "Deny project deletion",
+      }),
     ).not.toBeInTheDocument();
-    // The page still reads: the draft's state and reach are said.
-    expect(screen.getByText("Draft")).toBeInTheDocument();
-    expect(panelOf(/^Document/).getByText(/^Once active:/)).toBeInTheDocument();
   });
 
   it("says an activation landed beside the header once its button is gone", async () => {
+    serve(draftGuardrail);
     server.use(
-      http.get(POLICIES, () =>
-        HttpResponse.json([{ ...denyDeletes, status: "draft" }]),
+      http.post(
+        `${DENY}/activate`,
+        () => new HttpResponse(null, { status: 204 }),
       ),
-      http.post(`${DENY}/activate`, () => HttpResponse.json(denyDeletes)),
     );
     const user = userEvent.setup();
     await renderPolicy();

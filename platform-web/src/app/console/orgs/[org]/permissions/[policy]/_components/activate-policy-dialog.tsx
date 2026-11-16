@@ -7,78 +7,44 @@ import {
 } from "@/features/orgs/actions";
 
 import { ActionDialog } from "../../../../../_components/action-dialog";
-import { ConditionNotice } from "../../_components/condition-notice";
-import {
-  OrgWideConfirmation,
-  ScopeConfirmationNotice,
-} from "../../_components/org-wide-confirmation";
 
 const initialState: ActivatePolicyState = { status: "idle" };
 
-/** Whether an answer asks for the organization-wide confirmation. */
-function asksForEveryone(state: ActivatePolicyState): boolean {
-  return (
-    state.status === "confirm-org-wide" ||
-    state.status === "confirm-unknown-scope"
-  );
-}
-
 /**
- * Activates a draft policy from a dialog stating the
- * version it will evaluate and whom it reaches. Where that is the whole
- * organization, the dialog carries a checkbox the form is not sent
- * without; garam finding no attachment when the page showed some asks
- * for the same.
+ * Activates a draft policy from a dialog stating the version it will
+ * decide by. The policy service refuses a caller who may not, and its
+ * answer stays in the dialog.
  */
 export function ActivatePolicyDialog({
   org,
   policy,
   policyName,
   version,
-  reach,
-  orgWide,
-  conditioned,
 }: {
   org: string;
   policy: string;
   policyName: string;
   version: number;
-  /** The sentence stating whom the policy reaches once active. */
-  reach: string;
-  /** Whether that may be everyone in this organization. */
-  orgWide: boolean;
-  /** Whether the version it would evaluate carries a Condition. */
-  conditioned: boolean;
 }) {
-  const everyone = (state: ActivatePolicyState) =>
-    orgWide || asksForEveryone(state);
   return (
     <ActionDialog
       trigger={<Button type="button">Activate</Button>}
       title={`Activate ${policyName}?`}
-      description={<p>{reach}</p>}
+      description={
+        <p>{`v${version} decides for this organization from now on.`}</p>
+      }
       action={activatePolicy}
       initialState={initialState}
       fields={{ org, policy }}
       command={{
         label: "Activate policy",
-        consequence: `v${version} applies from now on.`,
+        consequence: `v${version} decides from now on.`,
       }}
-      confirmLabel={(state) =>
-        everyone(state) ? "Activate for everyone" : "Activate policy"
-      }
+      confirmLabel="Activate policy"
       pendingLabel="Activating…"
       done={(state) => state.status === "idle"}
       outcome={() => `Activated v${version}`}
       area="lifecycle"
-    >
-      {(state) => (
-        <>
-          {conditioned && <ConditionNotice />}
-          <ScopeConfirmationNotice state={state} />
-          {everyone(state) && <OrgWideConfirmation id="activate-org-wide" />}
-        </>
-      )}
-    </ActionDialog>
+    />
   );
 }

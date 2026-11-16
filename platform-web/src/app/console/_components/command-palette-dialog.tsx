@@ -8,7 +8,6 @@ import {
   Moon,
   Plus,
   Search,
-  ShieldCheck,
   Sun,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -55,11 +54,6 @@ const OBJECT_KIND: Record<
     list: "agents",
   },
   team: { heading: "Teams", open: (id) => `teams/${id}`, list: "teams" },
-  policy: {
-    heading: "Policies",
-    open: (id) => `permissions/${id}`,
-    list: "permissions",
-  },
   project: {
     heading: "Projects",
     open: (id) => `projects/${id}`,
@@ -111,8 +105,6 @@ function ObjectMark({
   object: FoundObject;
 }) {
   switch (kind) {
-    case "policy":
-      return <ShieldCheck />;
     case "project":
       return <FolderGit2 />;
     default:
@@ -208,7 +200,7 @@ export function CommandPaletteDialog({
           <DialogPrimitive.Description className="sr-only">
             {actionsOnly
               ? "Choose what to do here; each says what follows from it."
-              : "Find a person, agent, team, policy or project, go to a section, act on this page, switch organization, or change the theme."}
+              : "Find a person, agent, team or project, go to a section, act on this page, switch organization, or change the theme."}
           </DialogPrimitive.Description>
           <Command filter={paletteFilter} className="rounded-none! p-0">
             <div className="flex items-center gap-2 border-b px-4">
@@ -219,7 +211,7 @@ export function CommandPaletteDialog({
                 placeholder={
                   actionsOnly
                     ? "Actions on this page…"
-                    : "Find a person, agent, team or policy…"
+                    : "Find a person, agent or team…"
                 }
                 className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
               />

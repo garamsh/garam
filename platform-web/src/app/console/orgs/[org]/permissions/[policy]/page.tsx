@@ -1,52 +1,19 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 
-import { Banner } from "@garam/design/components/banner";
-import {
-  KIND_LABEL,
-  getOrg,
-  listPolicies,
-  listPolicyAttachments,
-  listPolicyVersions,
-  lookupAgents,
-  lookupGroups,
-  lookupOrgMembers,
-  slugFromGrn,
-} from "@/features/orgs";
-import { formatPolicyDocument, hasCondition } from "@/lib/policy-document";
+import { getIamPolicy, getOrg, type IamPolicyKind } from "@/features/orgs";
+import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../_components/item-crumb";
+import { Outcome, OutcomeProvider } from "../../../../_components/outcome";
 import { PageHeader } from "../../../../_components/page-header";
 import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
-import {
-  YourAccess,
-  accessDecisions,
-  readAccess,
-} from "../../../../_components/your-access";
-import { AttachPolicyForm } from "../_components/attach-policy-form";
+import { POLICY_KIND_LABEL } from "../_components/policy-kind";
 import { PolicyStatus } from "../_components/policy-status";
-import {
-  KIND_PLURAL,
-  describeSubject,
-  listSubjects,
-  reachOf,
-  reachSentence,
-  refusedKinds,
-  subjectChoices,
-  subjectLabel,
-  type AttachedSubject,
-  type Catalogs,
-} from "../_components/subjects";
-import { Outcome, OutcomeProvider } from "../../../../_components/outcome";
 import { ActivatePolicyDialog } from "./_components/activate-policy-dialog";
 import { DeletePolicyDialog } from "./_components/delete-policy-dialog";
-import {
-  AttachmentTable,
-  type AttachmentRow,
-} from "./_components/attachment-table";
-import { DocumentPanel } from "./_components/document-panel";
+import { PolicyBody } from "./_components/policy-body";
 import { VersionTable } from "./_components/version-table";
 
 /** Head metadata for a policy's route; Next.js reads it by name. */
@@ -54,24 +21,31 @@ export const metadata: Metadata = { title: "Policy — garam" };
 
 type Params = { params: Promise<{ org: string; policy: string }> };
 
-/** An attachment's subject as its row shows it. */
-function attachmentRow(subject: AttachedSubject): AttachmentRow {
-  return {
-    grn: subject.grn,
-    label: subject.label,
-    identifier: subject.identifier,
-    kind: KIND_LABEL[subject.kind],
-    sentenceLabel: subjectLabel(subject),
-    note:
-      subject.lookup === "missing"
-        ? { tone: "danger", text: "Not found" }
-        : subject.lookup === "refused" && subject.kind !== "unknown"
-          ? {
-              tone: "muted",
-              text: "Not checked",
-            }
-          : null,
-  };
+/**
+ * The action a write on each kind is taken as: `write` for activating
+ * a policy or moving its default version, `remove` for deleting it.
+ * The platform answers these four, and only on the policy itself. A
+ * permit is asked as a guardrail is until `checkPermissions` answers
+ * `iam:permit.write`; the policy service refuses a caller who may not,
+ * and that refusal is shown.
+ */
+const WRITE_ACTION: Record<IamPolicyKind, { write: string; remove: string }> = {
+  "role-link": { write: "iam:policy.attach", remove: "iam:policy.detach" },
+  guardrail: { write: "iam:policy.update", remove: "iam:policy.delete" },
+  permit: { write: "iam:policy.update", remove: "iam:policy.delete" },
+};
+
+/** The actions `WRITE_ACTION` names, each once, on the policy. */
+function askedOn(policy: string) {
+  const actions = new Set(
+    Object.values(WRITE_ACTION).flatMap(({ write, remove }) => [write, remove]),
+  );
+  return Object.fromEntries(
+    [...actions].map((action) => [
+      action,
+      { action, resource: { type: "policy", id: policy } as const },
+    ]),
+  );
 }
 
 /** The page's header where no policy could be shown. */
@@ -85,137 +59,46 @@ function Unshown({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * One policy, on the Detail template: its document and editor, its
- * versions, and whom it is attached to, with deleting in the danger
- * zone (ADR-0103, ADR-0117).
+ * One policy, on the Detail template: its default version's body, its
+ * versions, and deleting it in the danger zone (ADR-0169). A guardrail
+ * or a permit shows its Cedar text read-only, and a role link its role,
+ * scope, principal and resource.
  *
- * garam has no read of one policy, so the page finds it in the
- * organization's list, and one the list does not hold is not found;
- * its versions and attachments answer an empty list for any
- * identifier. The organization's teams, people and agents are read
- * beside it so each attachment, a bare GRN, is shown by name and type
- * (ADR-0073). The server is asked once which of the writes the page
- * offers the caller may take, and only an explicit deny withdraws one.
+ * The kind decides which action each write is taken as, so the server
+ * is asked once for them all, on the policy, beside the read, and only
+ * an explicit deny withdraws a control (ADR-0103). The policy service
+ * enforces every write either way.
  */
 export default async function PolicyPage({ params }: Params) {
   const { org, policy: slug } = await params;
-  const resource = { type: "policy", id: slug } as const;
-  // Started before the page's own reads, so it runs beside them.
-  const access = readAccess(org, [
-    {
-      key: "update",
-      label: "Edit it",
-      check: {
-        action: "iam:policy.update",
-        resource,
-      },
-    },
-    {
-      key: "attach",
-      label: "Attach it",
-      check: {
-        action: "iam:policy.attach",
-        resource,
-      },
-    },
-    {
-      key: "detach",
-      label: "Detach it",
-      check: {
-        action: "iam:policy.detach",
-        resource,
-      },
-    },
-    {
-      key: "delete",
-      label: "Delete it",
-      check: {
-        action: "iam:policy.delete",
-        resource,
-      },
-    },
-  ]);
-  const [
-    organization,
-    policies,
-    versions,
-    attachments,
-    teams,
-    people,
-    agents,
-    readings,
-  ] = await Promise.all([
+  const [organization, read, permissions] = await Promise.all([
     getOrg(org),
-    listPolicies(org),
-    listPolicyVersions(org, slug),
-    listPolicyAttachments(org, slug),
-    lookupGroups(org),
-    lookupOrgMembers(org),
-    lookupAgents(org),
-    access,
+    getIamPolicy(org, slug),
+    checkPermissions(org, askedOn(slug)),
   ]);
-  const permissions = accessDecisions(readings);
 
-  if (
-    organization.status === "unreachable" ||
-    policies.status === "unreachable" ||
-    versions.status === "unreachable" ||
-    attachments.status === "unreachable" ||
-    teams.status === "unreachable" ||
-    people.status === "unreachable" ||
-    agents.status === "unreachable"
-  ) {
+  if (organization.status === "unreachable" || read.status === "unreachable") {
     return (
       <Unshown>
         <ApiUnreachable subject="this policy" />
       </Unshown>
     );
   }
-  if (policies.status === "forbidden") {
+  if (read.status === "forbidden") {
     return (
       <Unshown>
-        <RefusedRead subject="this organization's policies" />
+        <RefusedRead subject="this policy" />
       </Unshown>
     );
   }
-  const policy = policies.data.find(
-    (candidate) => slugFromGrn(candidate.grn) === slug,
-  );
-  if (policy === undefined) notFound();
 
-  const canUpdate = permissions.get("update") !== "denied";
-  const canAttach = permissions.get("attach") !== "denied";
-  const canDetach = permissions.get("detach") !== "denied";
-  const canDelete = permissions.get("delete") !== "denied";
-  const catalogs: Catalogs = { teams, people, agents };
-  const reach = reachOf(attachments, catalogs);
-  const sentence = reachSentence(reach);
-  const orgWide = reach.kind !== "attached";
+  const { policy, versions } = read.data;
+  const actions = WRITE_ACTION[policy.kind];
+  const canWrite = permissions.get(actions.write) !== "denied";
+  const canRemove = permissions.get(actions.remove) !== "denied";
   const active = policy.status === "active";
-  const stored = versions.status === "ok" ? versions.data : null;
-  const defaultDocument = stored?.find(
+  const defaultVersion = versions.find(
     (version) => version.version === policy.defaultVersion,
-  )?.document;
-  const defaultText =
-    defaultDocument === undefined
-      ? null
-      : formatPolicyDocument(defaultDocument);
-  const attached = new Set(
-    attachments.status === "ok"
-      ? attachments.data.map((attachment) => attachment.subjectGrn)
-      : [],
-  );
-  const candidates = listSubjects(catalogs).filter(
-    (subject) => !attached.has(subject.grn),
-  );
-  const refused = refusedKinds(catalogs);
-
-  // The header shows the status; the banner says whom it reaches.
-  const overview = (
-    <Banner
-      tone={active && reach.kind !== "attached" ? "warn" : "info"}
-      title={active ? sentence : `Once active: ${sentence}`}
-    />
   );
 
   return (
@@ -224,170 +107,80 @@ export default async function PolicyPage({ params }: Params) {
       <DetailPage
         name={policy.name}
         idLabel="Identifier"
-        id={slug}
+        id={policy.id}
         status={<PolicyStatus status={policy.status} />}
+        facts={[
+          { term: "Kind", description: POLICY_KIND_LABEL[policy.kind] },
+          {
+            term: "Default version",
+            description: (
+              <span className="font-mono tabular-nums">
+                v{policy.defaultVersion}
+              </span>
+            ),
+          },
+        ]}
         actions={
           <>
             <Outcome area="lifecycle" />
-            {!active && canUpdate && (
+            {!active && canWrite && (
               <ActivatePolicyDialog
                 org={org}
-                policy={slug}
+                policy={policy.id}
                 policyName={policy.name}
                 version={policy.defaultVersion}
-                reach={sentence}
-                orgWide={orgWide}
-                conditioned={
-                  defaultDocument !== undefined && hasCondition(defaultDocument)
-                }
               />
             )}
           </>
         }
         tabs={[
           {
-            value: "document",
-            label: "Document",
-            content: (
-              <>
-                {overview}
-                <DocumentPanel
-                  org={org}
-                  policy={slug}
-                  policyName={policy.name}
-                  active={active}
-                  defaultVersion={policy.defaultVersion}
-                  nextVersion={
-                    stored === null
-                      ? null
-                      : Math.max(
-                          0,
-                          ...stored.map((version) => version.version),
-                        ) + 1
-                  }
-                  defaultText={defaultText}
-                  reach={sentence}
-                  orgWide={orgWide}
-                  canUpdate={canUpdate}
-                />
-              </>
-            ),
-          },
-          {
-            value: "versions",
-            label: stored === null ? "Versions" : `Versions (${stored.length})`,
+            value: "definition",
+            label: "Definition",
             content:
-              stored === null ? (
-                <RefusedRead subject="this policy's versions" />
+              defaultVersion === undefined ? (
+                <p className="text-muted-foreground">
+                  Its default version, v{policy.defaultVersion}, is not among
+                  the versions it holds.
+                </p>
               ) : (
-                <>
-                  <Outcome area="versions" />
-                  <VersionTable
-                    rows={stored.map((version) => {
-                      const author = describeSubject(
-                        version.createdBy,
-                        catalogs,
-                      );
-                      return {
-                        version: version.version,
-                        text: formatPolicyDocument(version.document),
-                        savedAt: version.createdAt,
-                        author: author.label ?? "someone not listed to you",
-                        conditioned: hasCondition(version.document),
-                      };
-                    })}
-                    context={{
-                      org,
-                      policy: slug,
-                      defaultVersion: policy.defaultVersion,
-                      defaultText,
-                      active,
-                      reach: sentence,
-                      orgWide,
-                      canUpdate,
-                    }}
-                  />
-                </>
+                <PolicyBody body={defaultVersion.body} />
               ),
           },
           {
-            value: "attachments",
-            label:
-              reach.kind === "attached"
-                ? `Attachments (${reach.subjects.length})`
-                : "Attachments",
+            value: "versions",
+            label: `Versions (${versions.length})`,
             content: (
               <>
-                <Outcome area="attachments" />
-                {attachments.status === "forbidden" ? (
-                  <RefusedRead subject="this policy's attachments">
-                    It may apply to everyone.
-                  </RefusedRead>
-                ) : (
-                  <AttachmentTable
-                    org={org}
-                    policy={slug}
-                    policyName={policy.name}
-                    subjects={
-                      reach.kind === "attached"
-                        ? reach.subjects.map(attachmentRow)
-                        : []
-                    }
-                    canDetach={canDetach}
-                    empty={
-                      active
-                        ? "Applies to everyone."
-                        : "Would apply to everyone once active."
-                    }
-                  />
-                )}
-                {canAttach && (
-                  <section
-                    aria-labelledby="attach-title"
-                    className="flex flex-col gap-3 rounded-xl border bg-card p-4"
-                  >
-                    <h2 id="attach-title" className="text-base">
-                      Attach
-                    </h2>
-                    {refused.length > 0 && (
-                      <p className="text-muted-foreground">
-                        Not listed to you:{" "}
-                        {refused.map((kind) => KIND_PLURAL[kind]).join(" and ")}
-                        .
-                      </p>
-                    )}
-                    <AttachPolicyForm
-                      org={org}
-                      fixed={{
-                        name: "policy",
-                        value: slug,
-                        label: policy.name,
-                      }}
-                      choose={{
-                        label: "Attach to",
-                        placeholder: "Choose",
-                        groups: subjectChoices(
-                          candidates,
-                          (subject) => subject.grn,
-                        ),
-                      }}
-                      empty="Nothing left to attach."
-                    />
-                  </section>
-                )}
+                <Outcome area="versions" />
+                <VersionTable
+                  rows={versions.map((version) => ({
+                    version: version.version,
+                    body: version.body,
+                    author: version.createdBy,
+                  }))}
+                  context={{
+                    org,
+                    policy: policy.id,
+                    defaultVersion: policy.defaultVersion,
+                    defaultBody: defaultVersion?.body,
+                    active,
+                    canWrite,
+                  }}
+                />
               </>
             ),
           },
         ]}
         dangerZone={
-          canDelete
+          canRemove
             ? [
                 {
                   title: "Delete this policy",
                   control: (
                     <DeletePolicyDialog
                       org={org}
-                      policy={slug}
+                      policy={policy.id}
                       policyName={policy.name}
                     />
                   ),
@@ -396,7 +189,6 @@ export default async function PolicyPage({ params }: Params) {
             : undefined
         }
       />
-      <YourAccess readings={readings} />
     </OutcomeProvider>
   );
 }

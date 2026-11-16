@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ControlNotice, NO_FIX } from "@/components/control-notice";
@@ -211,23 +210,14 @@ export default async function AgentPage({ params }: Params) {
           </span>
         }
         actions={
-          <>
-            <ReplaceHost
-              org={org}
-              agentGrn={agentGrn}
-              agentName={name}
-              holder={holder}
-              assigneeGrn={reported.assignment?.assigneeGrn}
-              denied={decisions.get("enroll") === "denied"}
-            />
-            <Button asChild variant="outline">
-              <Link
-                href={`${orgHref(org, "permissions")}/attachments?subject=${encodeURIComponent(`agent:${agent}`)}`}
-              >
-                Manage policies
-              </Link>
-            </Button>
-          </>
+          <ReplaceHost
+            org={org}
+            agentGrn={agentGrn}
+            agentName={name}
+            holder={holder}
+            assigneeGrn={reported.assignment?.assigneeGrn}
+            denied={decisions.get("enroll") === "denied"}
+          />
         }
         tabs={tabs}
       />

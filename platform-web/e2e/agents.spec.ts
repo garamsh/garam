@@ -80,7 +80,7 @@ test.describe("an agent's name", () => {
 });
 
 test.describe("an agent as a member", () => {
-  test("a team and a policy take an agent by its identifier", async ({
+  test("a team takes an agent by its identifier", async ({
     page,
     signedIn,
   }) => {
@@ -109,18 +109,6 @@ test.describe("an agent as a member", () => {
     await expect(
       page.getByRole("row", { name: new RegExp(identifier) }),
     ).toContainText("Agent");
-
-    // A policy can be given to it the same way.
-    await page.goto(
-      `/console/orgs/${signedIn.orgSlug}/permissions/attachments?subject=${encodeURIComponent(`agent:${identifier}`)}`,
-    );
-    await expect(
-      page.getByRole("heading", {
-        level: 2,
-        name: `${identifier} · Agent`,
-        exact: true,
-      }),
-    ).toBeVisible();
   });
 });
 

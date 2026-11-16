@@ -1094,15 +1094,16 @@ reading a policy is an admin action. The addressed policy's GRN is the
 object of the check, and its organization segment is the org in the
 path, so a policy of another org is not addressable.
 
-The console calls these operations and no others
-([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)),
-and nothing in it changes what one means: the org-wide reach of an
-unattached active policy, Deny-overrides, the unread `Condition` and
-the last-attachment refusal stay the engine's, and
-[web-app.md](./web-app.md) §What it serves states how the console
-presents each. No operation answers the policies naming one subject,
-so the console assembles that from each policy's attachments and each
-team's members, and what it shows is what is stored, not a decision.
+The console does not call these operations. Since
+[ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md)
+and #1975 it reads and manages an organization's policies through the
+relay to the policy service, and manages no attachment and creates no
+old-engine document
+([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)
+is superseded in part). What these operations mean stays the engine's,
+and [web-app.md](./web-app.md) §What it serves states what the console
+presents instead. No operation answers the policies naming one subject,
+and the console no longer assembles that from attachments.
 
 ## Policy attachment
 

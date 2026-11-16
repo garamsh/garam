@@ -27,9 +27,7 @@ import {
 } from "@garam/design/ui/select";
 import {
   addMembersToTeam,
-  attachPolicyToMembers,
   type AddMembersToTeamState,
-  type AttachPolicyToMembersState,
 } from "@/features/orgs/actions";
 
 import { ActionDialog } from "./action-dialog";
@@ -71,7 +69,7 @@ const ANY = "any";
 
 function columns(
   kind: MemberRow["kind"],
-  act: (dialog: "team" | "policy", rows: MemberRow[]) => void,
+  addToTeam: (rows: MemberRow[]) => void,
 ): ColumnDef<MemberRow, unknown>[] {
   const name: ColumnDef<MemberRow, unknown> = {
     id: "member",
@@ -150,11 +148,8 @@ function columns(
           <DropdownMenuItem asChild>
             <Link href={row.href}>Open</Link>
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => act("team", [row])}>
+          <DropdownMenuItem onSelect={() => addToTeam([row])}>
             Add to a team…
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => act("policy", [row])}>
-            Attach a policy…
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -235,9 +230,9 @@ function Refused({
 
 /**
  * The organization's people, or its agents, as a table (ADR-0116), with
- * filters kept in the URL so a filtered list can be shared, and the two
- * writes that act on members: adding them to a team and attaching a
- * policy, for the rows chosen or from one row's menu.
+ * filters kept in the URL so a filtered list can be shared, and the
+ * write that acts on members: adding them to a team, for the rows
+ * chosen or from one row's menu.
  */
 export function MemberList({
   org,
@@ -245,7 +240,6 @@ export function MemberList({
   rows,
   filters,
   teamChoices,
-  policyChoices,
   empty,
 }: {
   org: string;
@@ -254,16 +248,12 @@ export function MemberList({
   filters: MemberFilters;
   /** The teams the server does not deny the caller adding to. */
   teamChoices: Choice[];
-  /** The policies the server does not deny the caller attaching. */
-  policyChoices: Choice[];
   empty: React.ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [dialog, setDialog] = useState<{
-    kind: "team" | "policy";
-    rows: MemberRow[];
-  } | null>(null);
+  // The rows the team dialog is open for; null while it is closed.
+  const [adding, setAdding] = useState<MemberRow[] | null>(null);
 
   function setFilter(name: "team" | "runs", value: string) {
     const next = new URLSearchParams();
@@ -276,8 +266,8 @@ export function MemberList({
   }
 
   const bulk = (selected: MemberRow[], clear: () => void) => {
-    const open = (kind: "team" | "policy") => {
-      setDialog({ kind, rows: selected });
+    const open = () => {
+      setAdding(selected);
       clear();
     };
     return (
@@ -292,31 +282,16 @@ export function MemberList({
             variant="outline"
             size="sm"
             disabled={selected.length === 0}
-            onClick={() => open("team")}
+            onClick={open}
           >
             Add to team
-          </Button>
-        )}
-        {policyChoices.length === 0 ? (
-          <InactiveButton reason="No policy you may attach.">
-            Attach policy
-          </InactiveButton>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={selected.length === 0}
-            onClick={() => open("policy")}
-          >
-            Attach policy
           </Button>
         )}
       </>
     );
   };
 
-  const target = dialog?.rows ?? [];
+  const target = adding ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -338,9 +313,7 @@ export function MemberList({
       </div>
       <DataTable
         label={kind === "person" ? "People" : "Agents"}
-        columns={columns(kind, (dialog, chosen) =>
-          setDialog({ kind: dialog, rows: chosen }),
-        )}
+        columns={columns(kind, setAdding)}
         data={rows}
         getRowId={(row) => row.grn}
         empty={empty}
@@ -348,8 +321,8 @@ export function MemberList({
         selection={{ name: (row) => `Select ${row.name}`, actions: bulk }}
       />
       <ActionDialog<AddMembersToTeamState>
-        open={dialog?.kind === "team"}
-        onOpenChange={(open) => !open && setDialog(null)}
+        open={adding !== null}
+        onOpenChange={(open) => !open && setAdding(null)}
         title={`Add ${whom(target, kind)} to a team?`}
         description={<p>Each gains what the team&apos;s policies grant.</p>}
         action={addMembersToTeam}
@@ -367,38 +340,6 @@ export function MemberList({
         {(state) => (
           <>
             <ChoiceField name="team" label="Team" choices={teamChoices} />
-            <MemberFields rows={target} />
-            {state.status === "done" && (
-              <Refused rows={target} refused={state.refused} />
-            )}
-          </>
-        )}
-      </ActionDialog>
-      <ActionDialog<AttachPolicyToMembersState>
-        open={dialog?.kind === "policy"}
-        onOpenChange={(open) => !open && setDialog(null)}
-        title={`Attach a policy to ${whom(target, kind)}?`}
-        description={
-          <p>
-            A policy attached to no one applies to everyone, so a first
-            attachment narrows it.
-          </p>
-        }
-        action={attachPolicyToMembers}
-        initialState={{ status: "idle" }}
-        fields={{ org }}
-        confirmLabel="Attach policy"
-        pendingLabel="Attaching…"
-        done={(state) => state.status === "done" && state.refused.length === 0}
-        outcome={(state) =>
-          state.status === "done"
-            ? `Attached to ${state.attached === 1 ? "1 member" : `${state.attached} members`}`
-            : null
-        }
-      >
-        {(state) => (
-          <>
-            <ChoiceField name="policy" label="Policy" choices={policyChoices} />
             <MemberFields rows={target} />
             {state.status === "done" && (
               <Refused rows={target} refused={state.refused} />

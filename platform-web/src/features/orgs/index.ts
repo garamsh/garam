@@ -84,13 +84,14 @@ export {
   type OperatorKey,
 } from "./api/operator-keys";
 export {
-  listPolicies,
-  listPolicyAttachments,
-  listPolicyVersions,
-  type Policy,
-  type PolicyAttachment,
+  getIamPolicy,
+  listIamPolicies,
+  type IamPolicy,
+  type IamPolicyBody,
+  type IamPolicyDetail,
+  type IamPolicyKind,
+  type IamRoleLink,
   type PolicyStatus,
-  type PolicyVersion,
 } from "./api/policies";
 export { parseGrn, slugFromGrn } from "@/lib/grn";
 export {

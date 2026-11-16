@@ -91,13 +91,16 @@ Nothing here is published to the host. The Services are cluster-internal
 and there is no ingress, so `make -C deploy/local minikube-forward` is
 the only way in: it forwards the web app to `http://localhost:3000`.
 
-`/login` takes Google, which needs real credentials this deployment
-sets none of, or a username and a password, which `/register` mints
-only from an invitation an org admin issued
-([ADR-0041](../../../docs/architecture/adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
-The database this stack starts with holds no admin, so reaching the
-console means writing user and session rows against it directly, as
-`platform-web/e2e/seed.ts` does for the browser suite.
+Signing in is the site's handoff (ADR-0131): the web app sends `/login`
+and `/register` to `GARAM_SITE_URL`, and a visitor without a session
+cookie goes to the handoff the site starts. This deployment does not run
+the site, so a browser cannot sign in to the console here; running it is
+tracked in [#1967](https://github.com/garamsh/garam/issues/1967).
+
+Until then, a console page opens only to a browser already holding the
+host-only `garam_session` cookie of a session row written against the
+database directly. `platform-web/e2e/seed.ts` writes the rows and
+`platform-web/e2e/fixtures.ts` plants the cookie by URL, with no domain.
 
 To reach anything else — the api, the authz engine's metrics, the
 machine process's probes — forward its Service the same way.

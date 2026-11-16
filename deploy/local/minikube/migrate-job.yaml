@@ -5,9 +5,9 @@
 # the schema.
 #
 # A Job's pod template is immutable, so the bring-up deletes this one
-# before applying it rather than updating it. golang-migrate records what
-# it has applied, so the rerun that follows a second bring-up succeeds
-# having changed nothing.
+# before applying it rather than updating it. Each migrator records what
+# it has applied, so a rerun applies no migration twice; `policy-feed
+# start` marks every live entity again on each run.
 apiVersion: batch/v1
 kind: Job
 metadata:

@@ -68,7 +68,8 @@ make -C deploy/local minikube-down      # removes the namespace, its volume and 
 `make -C deploy/local minikube-up` starts the cluster if it is not
 already running, so it works from nothing. Rerunning it is safe: the key
 material is kept rather than regenerated, and the migration Job runs
-again against an already-migrated database and applies nothing.
+again: it applies no migration twice, and `policy-feed start` marks
+every live entity again.
 
 `make -C deploy/local minikube-rebuild` is what a code change needs, and
 it is the whole of `minikube-up` past the cluster and the database. The
@@ -141,7 +142,17 @@ the JWKS the service trusts for it. The service is given the
 certificate, its key and the JWKS, and never the signing key. The pair
 is kept whole when it exists, because the service holds the JWKS it
 started with and a new key beside it would be refused until the service
-restarted.
+restarted. Each pod mounts only the Secret keys it copies.
+
+The certificate is valid for 30 days and is kept across runs, so a
+cluster older than that refuses the connection. To recover, delete the
+Secret and restart the three consumers:
+
+```sh
+kubectl --context minikube -n garam-local delete secret policy-throwaway-key-material
+make -C deploy/local minikube-secret
+kubectl --context minikube -n garam-local rollout restart deploy/policy deploy/api deploy/machine
+```
 
 Key material reaches the process as a file readable only by its owner,
 with the process running as that owner
@@ -237,9 +248,10 @@ to prevent.
 
 The operator generates the database role's password and publishes it,
 with a ready-made connection URI, in a Secret it maintains
-(CloudNativePG 1.30.0). Every process reads `GARAM_DATABASE_URL` from
-that Secret, so no file under `deploy/local/minikube/` holds a database
-credential.
+(CloudNativePG 1.30.0). The garam processes read `GARAM_DATABASE_URL`
+from that Secret and the policy service builds `POLICY_DATABASE_URL`
+from its `host`, `username` and `password`, so no file under
+`deploy/local/minikube/` holds a database credential.
 
 ## What this proves and what it does not
 

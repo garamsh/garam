@@ -99,11 +99,12 @@ CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg
 
 minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild
 
-# minikube-rebuild is everything a code change touches: the images, the
+# minikube-rebuild is everything a code change touches: the key
+# material the processes mount (kept when present), the images, the
 # migrations the new code expects, and the processes that run it. The
 # bring-up above composes it rather than restating its steps, so the two
 # cannot come apart.
-minikube-rebuild: minikube-images minikube-migrate minikube-apps
+minikube-rebuild: minikube-secret minikube-images minikube-migrate minikube-apps
 
 # Every kubectl recipe needs the apiserver reachable through the project
 # kubeconfig, and `minikube status` does not answer that: a cluster
@@ -156,8 +157,11 @@ minikube-secret: minikube-context
 
 # minikube-migrate applies pending migrations and waits for them. A
 # Job's pod template is immutable, so the finished one is deleted rather
-# than updated.
+# than updated. postgres.yaml is applied again first: it holds the
+# databases the migrations run against, so a cluster brought up before
+# one was added gets it here.
 minikube-migrate: minikube-context
+	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/postgres.yaml
 	$(KUBECTL_LOCAL) delete job migrate --ignore-not-found
 	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/migrate-job.yaml
 	$(KUBECTL_LOCAL) wait --for=condition=complete job/migrate --timeout=300s

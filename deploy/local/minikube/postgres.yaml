@@ -2,9 +2,11 @@
 # minikube-start` installs.
 #
 # The operator generates the role's password and publishes it, with a
-# ready-made connection URI, in a Secret it names `postgres-app`. Every
-# process here reads `GARAM_DATABASE_URL` from that key, so no file in
-# this stack holds a database credential.
+# ready-made connection URI, in a Secret it names `postgres-app`. The
+# garam processes read `GARAM_DATABASE_URL` from that key; the policy
+# service builds `POLICY_DATABASE_URL` from the Secret's `host`,
+# `username` and `password`. So no file in this stack holds a database
+# credential.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:

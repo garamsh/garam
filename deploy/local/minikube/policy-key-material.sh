@@ -40,10 +40,12 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
 
 # The kid is the key's RFC 7638 thumbprint, which is the name the api
 # gives its tokens' key. The modulus is the 256 bytes before the
-# 5-byte public exponent that close a 2048-bit key's DER public key.
+# 3-byte public exponent (the INTEGER's 5 bytes with its tag and
+# length) that close a 2048-bit key's DER public key.
 b64u() { openssl base64 -A | tr '+/' '-_' | tr -d =; }
 n=$(openssl pkey -in "$dir/signing.pem" -pubout -outform DER 2>/dev/null |
   tail -c 261 | head -c 256 | b64u)
+[ -n "$n" ] || { echo "policy-key-material: empty modulus" >&2; exit 1; }
 kid=$(printf '{"e":"AQAB","kty":"RSA","n":"%s"}' "$n" |
   openssl dgst -sha256 -binary | b64u)
 printf '{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":"%s","n":"%s","e":"AQAB"}]}\n' \

@@ -1513,6 +1513,15 @@ ADRs:
   denial a 403; a service that cannot be reached fails the send
   closed, and `serve machine` with no `GARAM_POLICY_ADDR` fails at
   start; accepted, built (#1941); takes ADR-0147's owed round
+- [0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md)
+  — the browser API creates, versions, activates, rolls back, deletes,
+  reads and lists an organization's role links, guardrails and permits
+  under `/orgs/{org}/iam-policies`, the kind in the body, each relayed
+  to the policy service with the caller as writer and none of the body
+  stored; the platform names the policy, answers the service's refusal,
+  and refuses a role link it derives from a membership; the old
+  `/policies*` routes remain until round 11; accepted, built (#1969);
+  builds ADR-0146 item 3
 - [0170](./adr/0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
   — garam carries no gaon integration: `gaon-operator/`,
   `deploy/charts/garam-gaon/`, the pair-run harness and the documents

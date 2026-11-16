@@ -17,6 +17,10 @@ import (
 // operation raises no mark.
 const waitsForDelivery = "waits"
 
+// relayed says why a relayed policy write raises no mark: the policy
+// service stores it in the call that decides it.
+const relayed = "relayed to the policy service, which stores it in the call"
+
 // feedClassification is every operation that writes, by operationId:
 // the two API specs' POST, PUT, PATCH and DELETE operations and the
 // sign-in callback, which creates a user. It is the check that a route
@@ -57,6 +61,10 @@ var feedClassification = map[string]string{
 	"deletePolicy": "the policy store is not fed by the outbox", "rollbackPolicy": "the policy store is not fed by the outbox",
 	"attachPolicy": "the policy store is not fed by the outbox", "detachPolicy": "the policy store is not fed by the outbox",
 	"createInvitation": "writes invitations", "revokeInvitation": "writes invitations",
+	// The relayed writes (ADR-0169): the service stores in the call.
+	"createIamPolicy": relayed, "createIamPolicyVersion": relayed,
+	"activateIamPolicy": relayed, "rollbackIamPolicy": relayed,
+	"deleteIamPolicy": relayed,
 	// api/machine.yaml, what waits.
 	"createManagedAgent": waitsForDelivery, "admitAgentEnrollment": waitsForDelivery + " when it admits a new agent or replaces a supervisor's",
 	"enrollStandaloneAgent": waitsForDelivery,

@@ -420,6 +420,45 @@ func (e FoundKindKind) Valid() bool {
 	}
 }
 
+// Defines values for IamPolicyKind.
+const (
+	Guardrail IamPolicyKind = "guardrail"
+	Permit    IamPolicyKind = "permit"
+	RoleLink  IamPolicyKind = "role-link"
+)
+
+// Valid indicates whether the value is a known member of the IamPolicyKind enum.
+func (e IamPolicyKind) Valid() bool {
+	switch e {
+	case Guardrail:
+		return true
+	case Permit:
+		return true
+	case RoleLink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IamRoleLinkScope.
+const (
+	IamRoleLinkScopeOrganization  IamRoleLinkScope = "organization"
+	IamRoleLinkScopeTeamOrProject IamRoleLinkScope = "team-or-project"
+)
+
+// Valid indicates whether the value is a known member of the IamRoleLinkScope enum.
+func (e IamRoleLinkScope) Valid() bool {
+	switch e {
+	case IamRoleLinkScopeOrganization:
+		return true
+	case IamRoleLinkScopeTeamOrProject:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationCreateRole.
 const (
 	InvitationCreateRoleAdmin  InvitationCreateRole = "admin"
@@ -1334,6 +1373,75 @@ type GroupPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
+// IamPolicy defines model for IamPolicy.
+type IamPolicy struct {
+	DefaultVersion int32         `json:"defaultVersion"`
+	Id             string        `json:"id"`
+	Kind           IamPolicyKind `json:"kind"`
+	Name           string        `json:"name"`
+
+	// Status A policy's lifecycle state. Only an `active` policy contributes statements to a check.
+	Status PolicyStatus `json:"status"`
+}
+
+// IamPolicyBody What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
+type IamPolicyBody struct {
+	Kind     IamPolicyKind `json:"kind"`
+	RoleLink *IamRoleLink  `json:"roleLink,omitempty"`
+	Text     *string       `json:"text,omitempty"`
+}
+
+// IamPolicyCreate defines model for IamPolicyCreate.
+type IamPolicyCreate struct {
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
+	Body IamPolicyBody `json:"body"`
+	Name string        `json:"name"`
+}
+
+// IamPolicyDetail defines model for IamPolicyDetail.
+type IamPolicyDetail struct {
+	Policy IamPolicy `json:"policy"`
+
+	// Versions Oldest first.
+	Versions []IamPolicyVersion `json:"versions"`
+}
+
+// IamPolicyKind defines model for IamPolicyKind.
+type IamPolicyKind string
+
+// IamPolicyVersion defines model for IamPolicyVersion.
+type IamPolicyVersion struct {
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
+	Body      IamPolicyBody `json:"body"`
+	CreatedBy string        `json:"createdBy"`
+	Version   int32         `json:"version"`
+}
+
+// IamPolicyVersionCreate defines model for IamPolicyVersionCreate.
+type IamPolicyVersionCreate struct {
+	// Body What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership.
+	Body IamPolicyBody `json:"body"`
+}
+
+// IamPolicyVersionNumber defines model for IamPolicyVersionNumber.
+type IamPolicyVersionNumber struct {
+	Version int32 `json:"version"`
+}
+
+// IamRoleLink defines model for IamRoleLink.
+type IamRoleLink struct {
+	// Principal GRN of the user, agent, team or project linked.
+	Principal string `json:"principal"`
+
+	// Resource GRN of the organization, team or project linked to.
+	Resource string           `json:"resource"`
+	Role     Role             `json:"role"`
+	Scope    IamRoleLinkScope `json:"scope"`
+}
+
+// IamRoleLinkScope defines model for IamRoleLink.Scope.
+type IamRoleLinkScope string
+
 // Invitation defines model for Invitation.
 type Invitation struct {
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -2064,6 +2172,9 @@ type ContractVersion = string
 // GroupSlug defines model for group.
 type GroupSlug = string
 
+// IamPolicyId defines model for iamPolicy.
+type IamPolicyId = string
+
 // KeyID defines model for kid.
 type KeyID = string
 
@@ -2303,6 +2414,15 @@ type UpdateGroupJSONRequestBody = GroupPatch
 
 // AddGroupMemberJSONRequestBody defines body for AddGroupMember for application/json ContentType.
 type AddGroupMemberJSONRequestBody = MemberRef
+
+// CreateIamPolicyJSONRequestBody defines body for CreateIamPolicy for application/json ContentType.
+type CreateIamPolicyJSONRequestBody = IamPolicyCreate
+
+// RollbackIamPolicyJSONRequestBody defines body for RollbackIamPolicy for application/json ContentType.
+type RollbackIamPolicyJSONRequestBody = PolicyRollback
+
+// CreateIamPolicyVersionJSONRequestBody defines body for CreateIamPolicyVersion for application/json ContentType.
+type CreateIamPolicyVersionJSONRequestBody = IamPolicyVersionCreate
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreate
@@ -2937,6 +3057,82 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /orgs/{org}/groups/{group}/members/{member} (the `RemoveGroupMember` operationId).
 	RemoveGroupMember(ctx context.Context, org Org, groupSlug GroupSlug, memberGrn MemberGrn, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListIamPolicies List an organization's role links, guardrails and permits.
+	//
+	// Read from the policy service as the caller, which answers whoever holds `iam:policy.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/iam-policies (the `ListIamPolicies` operationId).
+	ListIamPolicies(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateIamPolicyWithBody Write an organization's role link, guardrail or permit.
+	//
+	// Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies (the `CreateIamPolicy` operationId).
+	CreateIamPolicyWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateIamPolicy Write an organization's role link, guardrail or permit.
+	//
+	// Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies (the `CreateIamPolicy` operationId).
+	CreateIamPolicy(ctx context.Context, org Org, body CreateIamPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteIamPolicy Delete a role link, guardrail or permit.
+	//
+	// Relayed to the policy service as the caller. The service refuses a writer who may not delete this kind of policy.
+	//
+	// Corresponds with DELETE /orgs/{org}/iam-policies/{iamPolicy} (the `DeleteIamPolicy` operationId).
+	DeleteIamPolicy(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetIamPolicy Read a role link, guardrail or permit with its versions.
+	//
+	// Corresponds with GET /orgs/{org}/iam-policies/{iamPolicy} (the `GetIamPolicy` operationId).
+	GetIamPolicy(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ActivateIamPolicy Activate a role link, guardrail or permit.
+	//
+	// An active policy contributes its default version to decisions.
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/activate (the `ActivateIamPolicy` operationId).
+	ActivateIamPolicy(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RollbackIamPolicyWithBody Point a role link, guardrail or permit at a stored version.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/rollback (the `RollbackIamPolicy` operationId).
+	RollbackIamPolicyWithBody(ctx context.Context, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RollbackIamPolicy Point a role link, guardrail or permit at a stored version.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/rollback (the `RollbackIamPolicy` operationId).
+	RollbackIamPolicy(ctx context.Context, org Org, iamPolicyId IamPolicyId, body RollbackIamPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateIamPolicyVersionWithBody Append a version to a role link, guardrail or permit.
+	//
+	// The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
+	CreateIamPolicyVersionWithBody(ctx context.Context, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateIamPolicyVersion Append a version to a role link, guardrail or permit.
+	//
+	// The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
+	CreateIamPolicyVersion(ctx context.Context, org Org, iamPolicyId IamPolicyId, body CreateIamPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListInvitations List the invitations that can still be accepted. Requires `iam:org.invite`.
 	//
@@ -4591,6 +4787,182 @@ func (c *Client) AddGroupMember(ctx context.Context, org Org, groupSlug GroupSlu
 // Corresponds with DELETE /orgs/{org}/groups/{group}/members/{member} (the `RemoveGroupMember` operationId).
 func (c *Client) RemoveGroupMember(ctx context.Context, org Org, groupSlug GroupSlug, memberGrn MemberGrn, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRemoveGroupMemberRequest(c.Server, org, groupSlug, memberGrn)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListIamPolicies List an organization's role links, guardrails and permits.
+//
+// Read from the policy service as the caller, which answers whoever holds `iam:policy.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/iam-policies (the `ListIamPolicies` operationId).
+func (c *Client) ListIamPolicies(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListIamPoliciesRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateIamPolicyWithBody Write an organization's role link, guardrail or permit.
+//
+// Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/iam-policies (the `CreateIamPolicy` operationId).
+func (c *Client) CreateIamPolicyWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateIamPolicyRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateIamPolicy Write an organization's role link, guardrail or permit.
+//
+// Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/iam-policies (the `CreateIamPolicy` operationId).
+func (c *Client) CreateIamPolicy(ctx context.Context, org Org, body CreateIamPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateIamPolicyRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteIamPolicy Delete a role link, guardrail or permit.
+//
+// Relayed to the policy service as the caller. The service refuses a writer who may not delete this kind of policy.
+//
+// Corresponds with DELETE /orgs/{org}/iam-policies/{iamPolicy} (the `DeleteIamPolicy` operationId).
+func (c *Client) DeleteIamPolicy(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteIamPolicyRequest(c.Server, org, iamPolicyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetIamPolicy Read a role link, guardrail or permit with its versions.
+//
+// Corresponds with GET /orgs/{org}/iam-policies/{iamPolicy} (the `GetIamPolicy` operationId).
+func (c *Client) GetIamPolicy(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetIamPolicyRequest(c.Server, org, iamPolicyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ActivateIamPolicy Activate a role link, guardrail or permit.
+//
+// An active policy contributes its default version to decisions.
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/activate (the `ActivateIamPolicy` operationId).
+func (c *Client) ActivateIamPolicy(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewActivateIamPolicyRequest(c.Server, org, iamPolicyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RollbackIamPolicyWithBody Point a role link, guardrail or permit at a stored version.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/rollback (the `RollbackIamPolicy` operationId).
+func (c *Client) RollbackIamPolicyWithBody(ctx context.Context, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRollbackIamPolicyRequestWithBody(c.Server, org, iamPolicyId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RollbackIamPolicy Point a role link, guardrail or permit at a stored version.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/rollback (the `RollbackIamPolicy` operationId).
+func (c *Client) RollbackIamPolicy(ctx context.Context, org Org, iamPolicyId IamPolicyId, body RollbackIamPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRollbackIamPolicyRequest(c.Server, org, iamPolicyId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateIamPolicyVersionWithBody Append a version to a role link, guardrail or permit.
+//
+// The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
+func (c *Client) CreateIamPolicyVersionWithBody(ctx context.Context, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateIamPolicyVersionRequestWithBody(c.Server, org, iamPolicyId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateIamPolicyVersion Append a version to a role link, guardrail or permit.
+//
+// The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
+func (c *Client) CreateIamPolicyVersion(ctx context.Context, org Org, iamPolicyId IamPolicyId, body CreateIamPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateIamPolicyVersionRequest(c.Server, org, iamPolicyId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7801,6 +8173,318 @@ func NewRemoveGroupMemberRequest(server string, org Org, groupSlug GroupSlug, me
 	return req, nil
 }
 
+// NewListIamPoliciesRequest constructs an http.Request for the ListIamPolicies method
+func NewListIamPoliciesRequest(server string, org Org) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/iam-policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateIamPolicyRequest calls the generic CreateIamPolicy builder with application/json body
+func NewCreateIamPolicyRequest(server string, org Org, body CreateIamPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateIamPolicyRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateIamPolicyRequestWithBody constructs an http.Request for the CreateIamPolicy method, with any body, and a specified content type
+func NewCreateIamPolicyRequestWithBody(server string, org Org, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/iam-policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteIamPolicyRequest constructs an http.Request for the DeleteIamPolicy method
+func NewDeleteIamPolicyRequest(server string, org Org, iamPolicyId IamPolicyId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "iamPolicy", iamPolicyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/iam-policies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetIamPolicyRequest constructs an http.Request for the GetIamPolicy method
+func NewGetIamPolicyRequest(server string, org Org, iamPolicyId IamPolicyId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "iamPolicy", iamPolicyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/iam-policies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewActivateIamPolicyRequest constructs an http.Request for the ActivateIamPolicy method
+func NewActivateIamPolicyRequest(server string, org Org, iamPolicyId IamPolicyId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "iamPolicy", iamPolicyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/iam-policies/%s/activate", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRollbackIamPolicyRequest calls the generic RollbackIamPolicy builder with application/json body
+func NewRollbackIamPolicyRequest(server string, org Org, iamPolicyId IamPolicyId, body RollbackIamPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRollbackIamPolicyRequestWithBody(server, org, iamPolicyId, "application/json", bodyReader)
+}
+
+// NewRollbackIamPolicyRequestWithBody constructs an http.Request for the RollbackIamPolicy method, with any body, and a specified content type
+func NewRollbackIamPolicyRequestWithBody(server string, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "iamPolicy", iamPolicyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/iam-policies/%s/rollback", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateIamPolicyVersionRequest calls the generic CreateIamPolicyVersion builder with application/json body
+func NewCreateIamPolicyVersionRequest(server string, org Org, iamPolicyId IamPolicyId, body CreateIamPolicyVersionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateIamPolicyVersionRequestWithBody(server, org, iamPolicyId, "application/json", bodyReader)
+}
+
+// NewCreateIamPolicyVersionRequestWithBody constructs an http.Request for the CreateIamPolicyVersion method, with any body, and a specified content type
+func NewCreateIamPolicyVersionRequestWithBody(server string, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "iamPolicy", iamPolicyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/iam-policies/%s/versions", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListInvitationsRequest constructs an http.Request for the ListInvitations method
 func NewListInvitationsRequest(server string, org Org, params *ListInvitationsParams) (*http.Request, error) {
 	var err error
@@ -10626,6 +11310,90 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /orgs/{org}/groups/{group}/members/{member} (the `RemoveGroupMember` operationId).
 	RemoveGroupMemberWithResponse(ctx context.Context, org Org, groupSlug GroupSlug, memberGrn MemberGrn, reqEditors ...RequestEditorFn) (*RemoveGroupMemberResponse, error)
+
+	// ListIamPoliciesWithResponse List an organization's role links, guardrails and permits.
+	//
+	// Read from the policy service as the caller, which answers whoever holds `iam:policy.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/iam-policies (the `ListIamPolicies` operationId).
+	ListIamPoliciesWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListIamPoliciesResponse, error)
+
+	// CreateIamPolicyWithBodyWithResponse Write an organization's role link, guardrail or permit.
+	//
+	// Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies (the `CreateIamPolicy` operationId).
+	CreateIamPolicyWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIamPolicyResponse, error)
+
+	// CreateIamPolicyWithResponse Write an organization's role link, guardrail or permit.
+	//
+	// Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies (the `CreateIamPolicy` operationId).
+	CreateIamPolicyWithResponse(ctx context.Context, org Org, body CreateIamPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateIamPolicyResponse, error)
+
+	// DeleteIamPolicyWithResponse Delete a role link, guardrail or permit.
+	//
+	// Relayed to the policy service as the caller. The service refuses a writer who may not delete this kind of policy.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/iam-policies/{iamPolicy} (the `DeleteIamPolicy` operationId).
+	DeleteIamPolicyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*DeleteIamPolicyResponse, error)
+
+	// GetIamPolicyWithResponse Read a role link, guardrail or permit with its versions.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/iam-policies/{iamPolicy} (the `GetIamPolicy` operationId).
+	GetIamPolicyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*GetIamPolicyResponse, error)
+
+	// ActivateIamPolicyWithResponse Activate a role link, guardrail or permit.
+	//
+	// An active policy contributes its default version to decisions.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/activate (the `ActivateIamPolicy` operationId).
+	ActivateIamPolicyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*ActivateIamPolicyResponse, error)
+
+	// RollbackIamPolicyWithBodyWithResponse Point a role link, guardrail or permit at a stored version.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/rollback (the `RollbackIamPolicy` operationId).
+	RollbackIamPolicyWithBodyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RollbackIamPolicyResponse, error)
+
+	// RollbackIamPolicyWithResponse Point a role link, guardrail or permit at a stored version.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/rollback (the `RollbackIamPolicy` operationId).
+	RollbackIamPolicyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, body RollbackIamPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*RollbackIamPolicyResponse, error)
+
+	// CreateIamPolicyVersionWithBodyWithResponse Append a version to a role link, guardrail or permit.
+	//
+	// The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
+	CreateIamPolicyVersionWithBodyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIamPolicyVersionResponse, error)
+
+	// CreateIamPolicyVersionWithResponse Append a version to a role link, guardrail or permit.
+	//
+	// The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
+	CreateIamPolicyVersionWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, body CreateIamPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateIamPolicyVersionResponse, error)
 
 	// ListInvitationsWithResponse List the invitations that can still be accepted. Requires `iam:org.invite`.
 	//
@@ -13964,6 +14732,566 @@ func (r RemoveGroupMemberResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RemoveGroupMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListIamPoliciesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]IamPolicy
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListIamPoliciesResponse) GetJSON200() *[]IamPolicy {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListIamPoliciesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListIamPoliciesResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListIamPoliciesResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListIamPoliciesResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r ListIamPoliciesResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r ListIamPoliciesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListIamPoliciesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListIamPoliciesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListIamPoliciesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateIamPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *IamPolicy
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON201() *IamPolicy {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r CreateIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateIamPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateIamPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateIamPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateIamPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteIamPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteIamPolicyResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteIamPolicyResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteIamPolicyResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DeleteIamPolicyResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r DeleteIamPolicyResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r DeleteIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteIamPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteIamPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteIamPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteIamPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetIamPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IamPolicyDetail
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetIamPolicyResponse) GetJSON200() *IamPolicyDetail {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetIamPolicyResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetIamPolicyResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetIamPolicyResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetIamPolicyResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r GetIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r GetIamPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetIamPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetIamPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetIamPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ActivateIamPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ActivateIamPolicyResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ActivateIamPolicyResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ActivateIamPolicyResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ActivateIamPolicyResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ActivateIamPolicyResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r ActivateIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r ActivateIamPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ActivateIamPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ActivateIamPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ActivateIamPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RollbackIamPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r RollbackIamPolicyResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r RollbackIamPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RollbackIamPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RollbackIamPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RollbackIamPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateIamPolicyVersionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *IamPolicyVersionNumber
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON201() *IamPolicyVersionNumber {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r CreateIamPolicyVersionResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateIamPolicyVersionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateIamPolicyVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateIamPolicyVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateIamPolicyVersionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17984,6 +19312,150 @@ func (c *ClientWithResponses) RemoveGroupMemberWithResponse(ctx context.Context,
 	return ParseRemoveGroupMemberResponse(rsp)
 }
 
+// ListIamPoliciesWithResponse List an organization's role links, guardrails and permits.
+//
+// Read from the policy service as the caller, which answers whoever holds `iam:policy.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/iam-policies (the `ListIamPolicies` operationId).
+func (c *ClientWithResponses) ListIamPoliciesWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListIamPoliciesResponse, error) {
+	rsp, err := c.ListIamPolicies(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListIamPoliciesResponse(rsp)
+}
+
+// CreateIamPolicyWithBodyWithResponse Write an organization's role link, guardrail or permit.
+//
+// Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/iam-policies (the `CreateIamPolicy` operationId).
+func (c *ClientWithResponses) CreateIamPolicyWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIamPolicyResponse, error) {
+	rsp, err := c.CreateIamPolicyWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateIamPolicyResponse(rsp)
+}
+
+// CreateIamPolicyWithResponse Write an organization's role link, guardrail or permit.
+//
+// Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/iam-policies (the `CreateIamPolicy` operationId).
+func (c *ClientWithResponses) CreateIamPolicyWithResponse(ctx context.Context, org Org, body CreateIamPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateIamPolicyResponse, error) {
+	rsp, err := c.CreateIamPolicy(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateIamPolicyResponse(rsp)
+}
+
+// DeleteIamPolicyWithResponse Delete a role link, guardrail or permit.
+//
+// Relayed to the policy service as the caller. The service refuses a writer who may not delete this kind of policy.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/iam-policies/{iamPolicy} (the `DeleteIamPolicy` operationId).
+func (c *ClientWithResponses) DeleteIamPolicyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*DeleteIamPolicyResponse, error) {
+	rsp, err := c.DeleteIamPolicy(ctx, org, iamPolicyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteIamPolicyResponse(rsp)
+}
+
+// GetIamPolicyWithResponse Read a role link, guardrail or permit with its versions.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/iam-policies/{iamPolicy} (the `GetIamPolicy` operationId).
+func (c *ClientWithResponses) GetIamPolicyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*GetIamPolicyResponse, error) {
+	rsp, err := c.GetIamPolicy(ctx, org, iamPolicyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetIamPolicyResponse(rsp)
+}
+
+// ActivateIamPolicyWithResponse Activate a role link, guardrail or permit.
+//
+// An active policy contributes its default version to decisions.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/activate (the `ActivateIamPolicy` operationId).
+func (c *ClientWithResponses) ActivateIamPolicyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, reqEditors ...RequestEditorFn) (*ActivateIamPolicyResponse, error) {
+	rsp, err := c.ActivateIamPolicy(ctx, org, iamPolicyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseActivateIamPolicyResponse(rsp)
+}
+
+// RollbackIamPolicyWithBodyWithResponse Point a role link, guardrail or permit at a stored version.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/rollback (the `RollbackIamPolicy` operationId).
+func (c *ClientWithResponses) RollbackIamPolicyWithBodyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RollbackIamPolicyResponse, error) {
+	rsp, err := c.RollbackIamPolicyWithBody(ctx, org, iamPolicyId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRollbackIamPolicyResponse(rsp)
+}
+
+// RollbackIamPolicyWithResponse Point a role link, guardrail or permit at a stored version.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/rollback (the `RollbackIamPolicy` operationId).
+func (c *ClientWithResponses) RollbackIamPolicyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, body RollbackIamPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*RollbackIamPolicyResponse, error) {
+	rsp, err := c.RollbackIamPolicy(ctx, org, iamPolicyId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRollbackIamPolicyResponse(rsp)
+}
+
+// CreateIamPolicyVersionWithBodyWithResponse Append a version to a role link, guardrail or permit.
+//
+// The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
+func (c *ClientWithResponses) CreateIamPolicyVersionWithBodyWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIamPolicyVersionResponse, error) {
+	rsp, err := c.CreateIamPolicyVersionWithBody(ctx, org, iamPolicyId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateIamPolicyVersionResponse(rsp)
+}
+
+// CreateIamPolicyVersionWithResponse Append a version to a role link, guardrail or permit.
+//
+// The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
+func (c *ClientWithResponses) CreateIamPolicyVersionWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, body CreateIamPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateIamPolicyVersionResponse, error) {
+	rsp, err := c.CreateIamPolicyVersion(ctx, org, iamPolicyId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateIamPolicyVersionResponse(rsp)
+}
+
 // ListInvitationsWithResponse List the invitations that can still be accepted. Requires `iam:org.invite`.
 //
 // Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
@@ -21062,6 +22534,470 @@ func ParseRemoveGroupMemberResponse(rsp *http.Response) (*RemoveGroupMemberRespo
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListIamPoliciesResponse parses an HTTP response from a ListIamPoliciesWithResponse call
+func ParseListIamPoliciesResponse(rsp *http.Response) (*ListIamPoliciesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListIamPoliciesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []IamPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateIamPolicyResponse parses an HTTP response from a CreateIamPolicyWithResponse call
+func ParseCreateIamPolicyResponse(rsp *http.Response) (*CreateIamPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateIamPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest IamPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteIamPolicyResponse parses an HTTP response from a DeleteIamPolicyWithResponse call
+func ParseDeleteIamPolicyResponse(rsp *http.Response) (*DeleteIamPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteIamPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetIamPolicyResponse parses an HTTP response from a GetIamPolicyWithResponse call
+func ParseGetIamPolicyResponse(rsp *http.Response) (*GetIamPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetIamPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IamPolicyDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseActivateIamPolicyResponse parses an HTTP response from a ActivateIamPolicyWithResponse call
+func ParseActivateIamPolicyResponse(rsp *http.Response) (*ActivateIamPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ActivateIamPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRollbackIamPolicyResponse parses an HTTP response from a RollbackIamPolicyWithResponse call
+func ParseRollbackIamPolicyResponse(rsp *http.Response) (*RollbackIamPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RollbackIamPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateIamPolicyVersionResponse parses an HTTP response from a CreateIamPolicyVersionWithResponse call
+func ParseCreateIamPolicyVersionResponse(rsp *http.Response) (*CreateIamPolicyVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateIamPolicyVersionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest IamPolicyVersionNumber
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 

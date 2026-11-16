@@ -81,6 +81,13 @@ pending:
   - listPolicyAttachments
   - attachPolicy
   - detachPolicy
+  - createIamPolicy
+  - listIamPolicies
+  - getIamPolicy
+  - deleteIamPolicy
+  - createIamPolicyVersion
+  - activateIamPolicy
+  - rollbackIamPolicy
   - listOrgConsents
   - grantOrgConsent
   - withdrawOrgConsent

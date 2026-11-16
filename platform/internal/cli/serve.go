@@ -80,11 +80,11 @@ func serveAPI(cmd *cobra.Command) error {
 
 	// A user's delegated authority is the policy service's decision
 	// (ADR-0146), so a process without one does not start.
-	decisions, closeDecisions, err := dialPolicyDecisions()
+	decisions, relay, closePolicy, err := dialPolicyClients()
 	if err != nil {
 		return err
 	}
-	defer closeDecisions()
+	defer closePolicy()
 
 	ttl, err := time.ParseDuration(envOr(envSessionTTL, "168h"))
 	if err != nil {
@@ -150,7 +150,8 @@ func serveAPI(cmd *cobra.Command) error {
 		},
 	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
-		WithIdentity(issuer)
+		WithIdentity(issuer).
+		WithPolicyRelay(relay)
 
 	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger, obs.registry)
 	if err != nil {

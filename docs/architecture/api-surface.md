@@ -442,6 +442,22 @@ and not in the same place on every surface.
   organization's owners and administrators from a read on the policy
   service's contract ([audit.md](./audit.md) §The policy service's
   record).
+- **An organization's role links, guardrails and permits are relayed
+  to the policy service.** `/orgs/{org}/iam-policies` serves
+  `createIamPolicy`, `listIamPolicies`, `getIamPolicy`,
+  `deleteIamPolicy`, `createIamPolicyVersion`, `activateIamPolicy` and
+  `rollbackIamPolicy`, the kind (`role-link`, `guardrail`, `permit`)
+  in the body. The platform names the signed-in user as the writer and
+  stores none of the body, so the service's answer is the response:
+  403 for a writer it refuses (only an owner writes a permit), 400 for
+  an invalid body, 404 and 409 as it made them, 503 when it cannot be
+  reached, 504 when the call times out, and a write refused stores
+  nothing. The platform answers 400 itself for a role link it
+  derives from a membership. `listIamPolicies` is the service's read,
+  not filtered here. The `/orgs/{org}/policies*` operations remain
+  until round 11 of #1796
+  ([ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md),
+  [authz.md](./authz.md) §Managing policies over HTTP).
 - **A list answers only the objects its caller may read.**
   `listGroups`, `listProjects`, `listAgents` and `listPolicies` are
   authorized on their read action on the organization, and then drop

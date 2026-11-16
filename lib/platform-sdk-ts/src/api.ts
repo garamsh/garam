@@ -1117,6 +1117,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/iam-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List an organization's role links, guardrails and permits.
+         * @description Read from the policy service as the caller, which answers whoever holds `iam:policy.read` on the organization.
+         */
+        get: operations["listIamPolicies"];
+        put?: never;
+        /**
+         * Write an organization's role link, guardrail or permit.
+         * @description Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
+         */
+        post: operations["createIamPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/iam-policies/{iamPolicy}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a role link, guardrail or permit with its versions. */
+        get: operations["getIamPolicy"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a role link, guardrail or permit.
+         * @description Relayed to the policy service as the caller. The service refuses a writer who may not delete this kind of policy.
+         */
+        delete: operations["deleteIamPolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/iam-policies/{iamPolicy}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append a version to a role link, guardrail or permit.
+         * @description The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
+         */
+        post: operations["createIamPolicyVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/iam-policies/{iamPolicy}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate a role link, guardrail or permit.
+         * @description An active policy contributes its default version to decisions.
+         */
+        post: operations["activateIamPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/iam-policies/{iamPolicy}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Point a role link, guardrail or permit at a stored version. */
+        post: operations["rollbackIamPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/policies": {
         parameters: {
             query?: never;
@@ -1957,6 +2059,53 @@ export interface components {
              */
             version: number;
         };
+        /** @enum {string} */
+        IamPolicyKind: "role-link" | "guardrail" | "permit";
+        IamRoleLink: {
+            role: components["schemas"]["Role"];
+            /** @enum {string} */
+            scope: "organization" | "team-or-project";
+            /** @description GRN of the user, agent, team or project linked. */
+            principal: string;
+            /** @description GRN of the organization, team or project linked to. */
+            resource: string;
+        };
+        /** @description What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership. */
+        IamPolicyBody: {
+            kind: components["schemas"]["IamPolicyKind"];
+            text?: string;
+            roleLink?: components["schemas"]["IamRoleLink"];
+        };
+        IamPolicyCreate: {
+            name: string;
+            body: components["schemas"]["IamPolicyBody"];
+        };
+        IamPolicyVersionCreate: {
+            body: components["schemas"]["IamPolicyBody"];
+        };
+        IamPolicyVersionNumber: {
+            /** Format: int32 */
+            version: number;
+        };
+        IamPolicy: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["IamPolicyKind"];
+            status: components["schemas"]["PolicyStatus"];
+            /** Format: int32 */
+            defaultVersion: number;
+        };
+        IamPolicyVersion: {
+            /** Format: int32 */
+            version: number;
+            body: components["schemas"]["IamPolicyBody"];
+            createdBy: string;
+        };
+        IamPolicyDetail: {
+            policy: components["schemas"]["IamPolicy"];
+            /** @description Oldest first. */
+            versions: components["schemas"]["IamPolicyVersion"][];
+        };
         PolicyAttachment: {
             policyGrn: string;
             /** @example grn:acme/iam/group/eng */
@@ -2374,6 +2523,8 @@ export interface components {
         member: string;
         /** @description Policy identifier (the last GRN segment). */
         policy: string;
+        /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+        iamPolicy: string;
         /** @description Agent identifier (the last GRN segment). */
         agent: string;
         /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
@@ -4496,6 +4647,225 @@ export interface operations {
             403: components["responses"]["ContractError"];
             404: components["responses"]["ContractError"];
             409: components["responses"]["ContractError"];
+        };
+    };
+    listIamPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's policies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IamPolicy"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    createIamPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IamPolicyCreate"];
+            };
+        };
+        responses: {
+            /** @description Policy created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IamPolicy"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    getIamPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy and its versions, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IamPolicyDetail"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    deleteIamPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    createIamPolicyVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IamPolicyVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description The version stored. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IamPolicyVersionNumber"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    activateIamPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy activated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    rollbackIamPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRollback"];
+            };
+        };
+        responses: {
+            /** @description Policy at its new default version. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     listPolicies: {

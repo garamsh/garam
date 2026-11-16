@@ -2482,6 +2482,217 @@ paths:
           $ref: '#/components/responses/ContractError'
         '409':
           $ref: '#/components/responses/ContractError'
+  /orgs/{org}/iam-policies:
+    post:
+      operationId: createIamPolicy
+      tags: [policy]
+      summary: Write an organization's role link, guardrail or permit.
+      description: >-
+        Relayed to the policy service as the caller, which stores the
+        first version as a draft and decides, read current, whether the
+        caller may (ADR-0146 item 3). The platform stores none of the
+        body. The identifier is the platform's. A permit is written by
+        an owner alone. A role link the platform derives from a
+        membership is refused with 400.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IamPolicyCreate'
+      responses:
+        '201':
+          description: Policy created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IamPolicy'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listIamPolicies
+      tags: [policy]
+      summary: List an organization's role links, guardrails and permits.
+      description: >-
+        Read from the policy service as the caller, which answers
+        whoever holds `iam:policy.read` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization's policies.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IamPolicy'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/iam-policies/{iamPolicy}:
+    get:
+      operationId: getIamPolicy
+      tags: [policy]
+      summary: Read a role link, guardrail or permit with its versions.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/iamPolicy'
+      responses:
+        '200':
+          description: The policy and its versions, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IamPolicyDetail'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteIamPolicy
+      tags: [policy]
+      summary: Delete a role link, guardrail or permit.
+      description: >-
+        Relayed to the policy service as the caller. The service
+        refuses a writer who may not delete this kind of policy.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/iamPolicy'
+      responses:
+        '204':
+          description: Policy deleted.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/iam-policies/{iamPolicy}/versions:
+    post:
+      operationId: createIamPolicyVersion
+      tags: [policy]
+      summary: Append a version to a role link, guardrail or permit.
+      description: >-
+        The body must be of the kind the policy's first version was.
+        A new version is stored and not yet the default.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/iamPolicy'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IamPolicyVersionCreate'
+      responses:
+        '201':
+          description: The version stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IamPolicyVersionNumber'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/iam-policies/{iamPolicy}/activate:
+    post:
+      operationId: activateIamPolicy
+      tags: [policy]
+      summary: Activate a role link, guardrail or permit.
+      description: >-
+        An active policy contributes its default version to decisions.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/iamPolicy'
+      responses:
+        '204':
+          description: Policy activated.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/iam-policies/{iamPolicy}/rollback:
+    post:
+      operationId: rollbackIamPolicy
+      tags: [policy]
+      summary: Point a role link, guardrail or permit at a stored version.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/iamPolicy'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyRollback'
+      responses:
+        '204':
+          description: Policy at its new default version.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/policies:
     post:
       operationId: createPolicy
@@ -3053,6 +3264,16 @@ components:
       required: true
       description: Policy identifier (the last GRN segment).
       x-go-name: PolicySlug
+      schema:
+        type: string
+    iamPolicy:
+      name: iamPolicy
+      in: path
+      required: true
+      description: >-
+        Identifier of a role link, guardrail or permit of the policy
+        service (the last GRN segment).
+      x-go-name: IamPolicyId
       schema:
         type: string
     agent:
@@ -4165,6 +4386,97 @@ components:
           description: >-
             A stored version of the policy, older or newer than its
             current default.
+    IamPolicyKind:
+      type: string
+      enum: [role-link, guardrail, permit]
+    IamRoleLink:
+      type: object
+      required: [role, scope, principal, resource]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+        scope:
+          type: string
+          enum: [organization, team-or-project]
+        principal:
+          type: string
+          description: GRN of the user, agent, team or project linked.
+        resource:
+          type: string
+          description: GRN of the organization, team or project linked to.
+    IamPolicyBody:
+      type: object
+      required: [kind]
+      description: >-
+        What one version says: `text` for a guardrail (one Cedar
+        `forbid`) or a permit (one Cedar `permit`), `roleLink` for a
+        role link. The service validates the Cedar text; the platform
+        refuses only the role links it derives from a membership.
+      properties:
+        kind:
+          $ref: '#/components/schemas/IamPolicyKind'
+        text:
+          type: string
+        roleLink:
+          $ref: '#/components/schemas/IamRoleLink'
+    IamPolicyCreate:
+      type: object
+      required: [name, body]
+      properties:
+        name:
+          type: string
+        body:
+          $ref: '#/components/schemas/IamPolicyBody'
+    IamPolicyVersionCreate:
+      type: object
+      required: [body]
+      properties:
+        body:
+          $ref: '#/components/schemas/IamPolicyBody'
+    IamPolicyVersionNumber:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+          format: int32
+    IamPolicy:
+      type: object
+      required: [id, name, kind, status, defaultVersion]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/IamPolicyKind'
+        status:
+          $ref: '#/components/schemas/PolicyStatus'
+        defaultVersion:
+          type: integer
+          format: int32
+    IamPolicyVersion:
+      type: object
+      required: [version, body, createdBy]
+      properties:
+        version:
+          type: integer
+          format: int32
+        body:
+          $ref: '#/components/schemas/IamPolicyBody'
+        createdBy:
+          type: string
+    IamPolicyDetail:
+      type: object
+      required: [policy, versions]
+      properties:
+        policy:
+          $ref: '#/components/schemas/IamPolicy'
+        versions:
+          type: array
+          description: Oldest first.
+          items:
+            $ref: '#/components/schemas/IamPolicyVersion'
     PolicyAttachment:
       type: object
       required: [policyGrn, subjectGrn, createdAt]

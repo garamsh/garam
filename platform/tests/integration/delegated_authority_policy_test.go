@@ -116,12 +116,14 @@ func TestDelegatedAuthorityPolicy_TheMemberHalfIsTheServicesDecision(t *testing.
 	_, engine := policyEngine(t, p)
 	rp := startRealPolicy(t, p)
 	s := newAuthorityStackDeciding(t, engine, p, rp.asked)
+	rp.deliver(t)
 	rp.deliverWhileRunning(t)
 	d := s.grant(t, "g-1", nil, "iam:agent.create", "iam:agent.configure")
 	agentGRN := s.provisionAgent(t)
 	require.Eventually(t, func() bool { return len(outboxMarks(t, p)) == 0 }, 10*time.Second, 50*time.Millisecond,
 		"the service holds the organization, its members, the grant and the agent")
 
+	before := len(rp.asked.questions())
 	status, body := s.mint(t, s.member, "iam:agent.create", s.controller.String(), "req-1")
 	assert.Equal(t, http.StatusCreated, status, "a member's role carries agent.create: %s", body)
 	status, body = s.mint(t, s.member, "iam:agent.configure", agentGRN, "req-2")
@@ -129,7 +131,7 @@ func TestDelegatedAuthorityPolicy_TheMemberHalfIsTheServicesDecision(t *testing.
 	status, body = s.mint(t, s.owner, "iam:agent.configure", agentGRN, "req-2")
 	assert.Equal(t, http.StatusCreated, status, "the owner's does: %s", body)
 
-	asked := rp.asked.questions()
+	asked := rp.asked.questions()[before:]
 	require.Len(t, asked, 3, "one question for each mint")
 	for _, q := range asked {
 		assert.True(t, q.Current, "asked read current: %+v", q)
@@ -137,9 +139,10 @@ func TestDelegatedAuthorityPolicy_TheMemberHalfIsTheServicesDecision(t *testing.
 
 	status, body = call(t, http.DefaultClient, http.MethodDelete, s.delegationPath(), s.owner, `{"grantId":"`+d.GrantId+`"}`)
 	require.Equal(t, http.StatusNoContent, status, body)
+	ended := len(rp.asked.questions())
 	status, body = s.mint(t, s.owner, "iam:agent.create", s.controller.String(), "req-3")
 	assert.Equal(t, http.StatusForbidden, status, "the grant ended: %s", body)
-	assert.Len(t, rp.asked.questions(), len(asked), "the platform refused an ended grant before it asked")
+	assert.Len(t, rp.asked.questions(), ended, "the platform refused an ended grant before it asked")
 }
 
 // TestDelegatedAuthorityPolicy_TheOperatorHalfIsTheServicesDecision
@@ -159,6 +162,15 @@ func TestDelegatedAuthorityPolicy_TheOperatorHalfIsTheServicesDecision(t *testin
 	require.NoError(t, userpg.New(p).Create(ctx, user.New(owner, "ada")))
 	require.NoError(t, orgpg.New(p).AddMember(ctx, org.NewMembership(s.acme, owner, org.RoleOwner)))
 	rp.deliver(t)
+	writer := &policyv1.Subject{Type: "Iam::User", Id: owner.String()}
+	policy := "grn:" + s.acme.Identifier + "/iam/policy/no-activation"
+	// The service outlives the test: a guardrail left in it would deny
+	// the next run's control, so none is left before or after.
+	dropGuardrail := func() {
+		_, _ = rp.client.DeletePolicy(ctx, &policyv1.DeletePolicyRequest{Writer: writer, Org: s.acme.String(), Policy: policy})
+	}
+	dropGuardrail()
+	t.Cleanup(dropGuardrail)
 
 	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	require.Equal(t, http.StatusOK, got.status, "the hosted operator holds agent.activate: %s", got.body)
@@ -190,8 +202,6 @@ func TestDelegatedAuthorityPolicy_TheOperatorHalfIsTheServicesDecision(t *testin
 	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	require.Equal(t, http.StatusOK, got.status, "granted again: %s", got.body)
 
-	writer := &policyv1.Subject{Type: "Iam::User", Id: owner.String()}
-	policy := "grn:" + s.acme.Identifier + "/iam/policy/no-activation"
 	_, err = rp.client.CreatePolicy(ctx, &policyv1.CreatePolicyRequest{
 		Writer: writer, Org: s.acme.String(), Policy: policy, Name: "no-activation",
 		Body: &policyv1.PolicyBody{Body: &policyv1.PolicyBody_Guardrail{

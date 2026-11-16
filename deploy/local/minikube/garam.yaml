@@ -594,6 +594,10 @@ spec:
             # The /api/* target, read when the process starts.
             - name: GARAM_API_URL
               value: "http://api:8080"
+            # Where a visitor without a session signs in (ADR-0131),
+            # the origin compose sets; the process exits without it.
+            - name: GARAM_SITE_URL
+              value: "http://garam.localhost:3001"
           ports:
             - name: http
               containerPort: 3000

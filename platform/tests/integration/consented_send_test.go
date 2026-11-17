@@ -160,9 +160,10 @@ func (s *consentedStack) storedFor(t *testing.T, recipient grn.GRN) int {
 // denials reads globex's audit records as its owner, which hold the
 // denials of a send to one of its agents, and answers the pairs of
 // sender and recipient the service denied. A denial is recorded after
-// it is answered, so the read waits until recipient shows or the bound
-// passes, and one that never shows is answered as it stands.
-func (s *consentedStack) denials(t *testing.T, until grn.GRN) map[[2]string]apigen.AuditRecord {
+// it is answered, so the read waits until the denial of every one of
+// recipients shows or the bound passes, and one that never shows is
+// answered as it stands.
+func (s *consentedStack) denials(t *testing.T, recipients ...grn.GRN) map[[2]string]apigen.AuditRecord {
 	t.Helper()
 	read := func() map[[2]string]apigen.AuditRecord {
 		out := map[[2]string]apigen.AuditRecord{}
@@ -186,9 +187,13 @@ func (s *consentedStack) denials(t *testing.T, until grn.GRN) map[[2]string]apig
 	var got map[[2]string]apigen.AuditRecord
 	assert.Eventually(t, func() bool {
 		got = read()
-		_, shown := got[[2]string{s.senderGRN.String(), until.String()}]
-		return shown
-	}, 10*time.Second, 100*time.Millisecond, "the service recorded its denial of the send to %s", until)
+		for _, r := range recipients {
+			if _, shown := got[[2]string{s.senderGRN.String(), r.String()}]; !shown {
+				return false
+			}
+		}
+		return true
+	}, 10*time.Second, 100*time.Millisecond, "the service recorded its denial of the sends to %v", recipients)
 	return got
 }
 
@@ -241,7 +246,7 @@ func TestConsentedSend_TheServiceDecidesAcrossTheBoundaryFromTheConsentsDelivere
 	assert.Equal(t, s.senderGRN.String(), refusal.Recipient, "after the withdrawal the refusal came back to the sender")
 	assert.Equal(t, 0, s.storedFor(t, withdrawn.grn), "after the withdrawal nothing was stored for the recipient")
 
-	denied := s.denials(t, withdrawn.grn)
+	denied := s.denials(t, missing.grn, withdrawn.grn)
 	for name, r := range map[string]recipientOf{"missing half": missing, "withdrawn half": withdrawn} {
 		record, ok := denied[[2]string{s.senderGRN.String(), r.grn.String()}]
 		require.True(t, ok, "the service's audit holds its denial of the send with a %s", name)

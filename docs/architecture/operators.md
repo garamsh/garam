@@ -379,8 +379,7 @@ organization can still forbid. The grant's dates stay the platform's:
 an ended or expired grant is refused before the service is asked. A
 service that cannot be reached, or answers with an error, makes the
 operation unavailable and is never read as an allowance or a denial.
-The engine's `CheckCurrent` is not called on these paths, and both
-listeners refuse to start without `GARAM_POLICY_ADDR`.
+Both listeners refuse to start without `GARAM_POLICY_ADDR`.
 
 **Every read back is decided again.** Introspection answers the audience
 alone, and an unknown, expired or other audience's token is one

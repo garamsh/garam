@@ -216,9 +216,9 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	status, body = machineSend(t, stranger, http.MethodPost, strangerQueue+"/"+claimed.Id+"/completion", "")
 	require.Equal(t, http.StatusNoContent, status, string(body))
 
-	// The same sender reaches a recipient of its own organization, so
-	// what refused above is the recipient's organization and not a
-	// surface that stopped accepting posts.
+	// A sender in the recipient's organization reaches it, so what
+	// refused above is the stranger's crossing and not a surface that
+	// stopped accepting posts.
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages",
 		submissionTo(recipientGRN, "key-4"))
 	require.Equal(t, http.StatusCreated, status, string(body))

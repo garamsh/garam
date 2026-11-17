@@ -943,20 +943,21 @@ Removed. A machine identity's grant on its own organization, once a
 statement the machine listener collected
 ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), is a
 system policy of the policy service, and a send is asked of the service
-about the sender and the recipient (ADR-0168). The listener refuses a
-recipient of another organization before it asks, and the service's
-tenant isolation holds the same boundary behind it.
+about the sender and the recipient (ADR-0168). The listener refuses
+unasked a recipient of another organization that is not an agent; a
+recipient that is an agent is asked of the service, whose tenant
+isolation holds the boundary.
 
 ## Policy persistence
 
 The platform stores no policy. The engine's `policies`,
-`policy_versions` and `policy_attachments` tables, the notification
-`garam_policy_change` and `CheckCurrent` are removed (migration
-000081). The policy service stores an organization's role links,
-guardrails and `permit`s with their versions, activation, roll-back and
-removal, and the platform relays the writes (§Managing policies over
-HTTP). The down migration restores the three tables empty; it does not
-restore a row.
+`policy_versions` and `policy_attachments` tables and the notification
+`garam_policy_change` are removed (migration 000081), and `CheckCurrent`
+is removed with the engine's gRPC server. The policy service stores an
+organization's role links, guardrails and `permit`s with their versions,
+activation, roll-back and removal, and the platform relays the writes
+(§Managing policies over HTTP). The down migration restores the three
+tables empty; it does not restore a row.
 
 ## Managing policies over HTTP
 

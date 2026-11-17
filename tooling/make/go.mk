@@ -24,6 +24,7 @@ export GOTOOLCHAIN := go$(GO_DIRECTIVE)+auto
 OAPI_CODEGEN := go tool oapi-codegen
 SQLC := go tool sqlc
 MOCKERY := go tool mockery
+BUF := go tool buf
 GOIMPORTS := go tool goimports
 
 # The module's packages, listed once so the verbs report the set they

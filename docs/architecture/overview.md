@@ -194,9 +194,9 @@ garam's retired templates and the browser's `operatorGrn`
 - Authorization decisions, expressed as IAM-style policy documents.
 - Org-managed role links, guardrails and permits: written through the
   platform's relay under `/orgs/{org}/iam-policies` to the policy
-  service, which stores and decides them (ADR-0169). The engine's own
-  policy endpoints are removed (ADR-0174); its store waits for round
-  14 of #1796.
+  service, which stores and decides them (ADR-0169). The earlier
+  engine's policy endpoints and store are removed (ADR-0174,
+  ADR-0177).
 - A web console under `/console` for the org structure the API exposes:
   organizations are listed and created, members are invited by link and
   the invitation accepted, groups and projects are read, an operator is
@@ -211,10 +211,8 @@ garam's retired templates and the browser's `operatorGrn`
 - Each of the three processes answers a liveness and a readiness probe
   on a listener a scheduler reaches without credentials, liveness
   reading nothing outside its own process (ADR-0021). Readiness reports
-  what a replica cannot serve without, which is why an engine whose
-  policy-change listener is reconnecting stays in rotation and answers
-  from a cache that is reloading (ADR-0029). The web app answers the
-  same two paths, and neither of its probes reads the API, so an API
+  what a replica cannot serve without (ADR-0029). The web app answers
+  the same two paths, and neither of its probes reads the API, so an API
   outage leaves the console in rotation rather than dark (ADR-0023).
 - One identifier system across every resource (GRN).
 
@@ -445,8 +443,8 @@ list below is today's tree
 each other; `keyfile` holds the one rule key material files are read
 under, reached by `ca`, by the `cli` wiring that reads the machine
 listener's pair and the adapter's, and by `workload` for its record and
-serving key; `wire` is reached by `api` and `machineapi` and no others,
-at their request boundaries, and `health` is shared by the two serve
+serving key; `wire` is reached by `api`, `machineapi` and the policy
+relay's client, and `health` is shared by the two serve
 commands and imported by no domain. `machine` declares the trust root it
 verifies against and `cli` satisfies it from `ca`
 ([structure.md](./structure.md) §Boundaries and dependency direction).
@@ -508,20 +506,14 @@ request surface and no domain.
 | `authn.Password` | `platform/internal/authn` | a password as typed; renders redacted everywhere (ADR-0041) |
 | `authn.Verifier` | `platform/internal/authn` | stored Argon2id verifier, carrying its own parameters (ADR-0041) |
 | `authn.Session` | `platform/internal/authn` | authenticated browser session |
-| `authz.Object` | `platform/internal/authz` | target interface |
-| `authz.Evaluator` | `platform/internal/authz` | policy evaluator (native, IAM-style) |
-| `authz.Policy` | `platform/internal/authz` | stored policy, versioned append-only |
-| `authz.PolicyCache` | `platform/internal/authz` | per-org parsed statement set |
 
 ## Decisions
 
 | Decision | Reason | Where |
 |----------|--------|-------|
 | GRN org/project = owning resource identifiers | Tenancy is structural; reserved `root` owns organizations. | [grn-model.md](./grn-model.md), [ADR-0001](./adr/0001-grn-segments.md) |
-| Policies are IAM-style documents, native evaluator | Deterministic deny-overrides; no runtime dependency. | [authz.md](./authz.md), [ADR-0002](./adr/0002-iam-style-policy-model.md) |
-| Single cobra CLI, independent api/authz packages | One binary, two processes; engine reached over gRPC only. | [ADR-0003](./adr/0003-single-cli-topology.md) |
-| Statements come from two origins, unioned | Org tables stay the source of truth for roles; the engine stays domain-free. | [authz.md](./authz.md), [ADR-0007](./adr/0007-hybrid-statement-collection.md) |
-| `Evaluator` is an interface | Swap in-process / gRPC-client without touching call sites. | [authz.md](./authz.md) |
+| Policies are IAM-style documents, decided by the policy service | A forbid overrides every permit, and an organization's policies are stored beside the decision. | [authz.md](./authz.md), [ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) |
+| Single cobra CLI, one binary | `serve api` and `serve machine` are the processes; the earlier engine's is removed. | [ADR-0003](./adr/0003-single-cli-topology.md), [ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md) |
 | Store interfaces live next to their domain | Implementation swap at the package boundary. | [domains.md](./domains.md) |
 | OpenAPI spec is the API source of truth | Handlers implement a generated interface; drift fails CI. | [adr/0004-openapi-first-api.md](./adr/0004-openapi-first-api.md) |
 | Sessions are server-side rows | Logout must revoke; opaque tokens, only hashes persisted. | [adr/0005-server-side-sessions.md](./adr/0005-server-side-sessions.md) |
@@ -554,8 +546,8 @@ request surface and no domain.
 
 ## Non-functional goals
 
-- **Deterministic decisions** — the engine's `Explain` RPC can
-  reproduce why a request was allowed or denied.
+- **Deterministic decisions** — the policy service's explanation names
+  why a request was allowed or denied.
 - **Transport-agnostic errors** — `errorx` flows over HTTP, gRPC, CLI
   without translation at the source; the kind-to-status mapping the
   HTTP surfaces answer with is declared once in

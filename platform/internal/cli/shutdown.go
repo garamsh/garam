@@ -44,8 +44,7 @@ func (o *observability) serveHTTP(ctx context.Context, grace time.Duration, srv 
 		// held. Neither this error nor Close's is returned: the stop
 		// was requested, and abandoning what did not finish is this
 		// function's decision rather than a failure of it, so the
-		// process exits 0 as serveGRPC does below
-		// (deployment-contract.md §Termination).
+		// process exits 0 (deployment-contract.md §Termination).
 		_ = srv.Close()
 		o.logAbandoned(ctx, grace, err)
 	}

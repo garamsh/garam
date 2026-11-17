@@ -11,7 +11,6 @@ under `platform/internal/` is not one.
 - Delivery surfaces
 - Shared code below the domains
 - Store implementation status
-- Known gap
 - Open questions
 - Future domains
 
@@ -44,7 +43,7 @@ the Go package implementing it is in parentheses.
   the session that carries the proof afterwards
   (`platform/internal/authn`)
 - [authz.md](./authz.md) — the rules that decide what a subject may do,
-  and the engine that decides (`platform/internal/authz`)
+  asked of the policy service (`platform/internal/policydecision`)
 - [operators.md](./operators.md) — what an organization records about
   an operator and what it authenticates with
   (`platform/internal/operator`)
@@ -81,12 +80,11 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**All nine have this shape today.** `platform/internal/user`,
+**All eight have this shape today.** `platform/internal/user`,
 `platform/internal/watch`, `platform/internal/org`,
 `platform/internal/operator`, `platform/internal/agent`,
-`platform/internal/message`, `platform/internal/authz` and
-`platform/internal/authn` each keep their store in
-`platform/internal/<domain>/postgres/` (#1083), and
+`platform/internal/message` and `platform/internal/authn` each keep
+their store in `platform/internal/<domain>/postgres/` (#1083), and
 `platform/internal/machine` persists through
 `platform/internal/machine/postgres` and had no driver import to move.
 `go list -deps` on a domain package names no `jackc/pgx`.
@@ -99,7 +97,7 @@ methods and not a package's stores: `platform/internal/authn/postgres`
 implements five `Store` interfaces on five types, each named for what
 it stores (ADR-0069), and keeps them in one `postgres.go`.
 `ls platform/internal/*/postgres_*.go` names no package now: `org`'s,
-`operator`'s, `agent`'s, `message`'s and `authz`'s splits moved with
+`operator`'s, `agent`'s and `message`'s splits moved with
 their stores into `platform/internal/<domain>/postgres/`. A split
 stayed under the domain while its aggregates' fields were unexported,
 so whatever rehydrated one shared its package — a state the nine have
@@ -136,10 +134,7 @@ entry also sets `omit_unused_structs`, so its `db/` package holds only
 the models its own queries read (#1151).
 
 A change announcement reads no row, so it is not in `queries.sql`, and
-the two domains that use one do not raise it the same way.
-`platform/internal/watch` issues both halves from Go. A policy change is
-announced by triggers the schema carries in `platform/migrations/`, and
-`platform/internal/authz` issues only the `LISTEN`.
+`platform/internal/watch` issues both halves from Go.
 
 ## Sub-responsibilities in a boundary of their own
 
@@ -290,17 +285,18 @@ Presence is the whole of that seam: the question is asked to say what
 deleting an organization would destroy, it needs no key to answer, and
 `garam serve api` still reads no key-encryption key.
 
-Two decisions live at a surface rather than in a domain, because each
-is a question about the caller rather than about the subject. Whom a
+Two decisions live at a surface rather than in a domain, because each is
+a question about the caller rather than about the subject. Whom a
 machine caller may send to is decided at the machine listener: for a
 recipient of the caller's own organization the answer comes from the
 policy service, which reads the sender's memberships itself (ADR-0168).
-A recipient of another organization is refused before the service is
-asked, unless the consent relation stands (ADR-0035)
-([authz.md](./authz.md) §Policy attachment). A post the relation does
-not carry is not rejected — the refusal returns to the sender as an
-ordinary inbound message (ADR-0013), written under the intended
-recipient's identity because garam holds none of its own (ADR-0024).
+A recipient of another organization that is not an agent is refused
+before the service is asked; one that is an agent is asked of the
+service, which holds the boundary between organizations (ADR-0168). A
+post the service does not allow is not rejected — the refusal returns to
+the sender as an ordinary inbound message (ADR-0013), written under the
+intended recipient's identity because garam holds none of its own
+(ADR-0024).
 
 A claim and a renewal answer with how many streams garam is holding for
 the agent, because garam cannot dial an adapter and the poll it already
@@ -381,21 +377,21 @@ transport-agnostic by design, so the same errors flow over any surface,
 and a pgx dependency there would end that. Which sqlstate becomes which
 kind is the package's own doc comment; it is code, and a copy here would
 be a second thing to keep true. Every postgres-backed store answers
-through it, which is nine domains: the four that each held their own
-copy — `org`, `authz`, `user`, `agent` — `operator`, which never had
+through it, which is eight domains: the three that each held their own
+copy — `org`, `user`, `agent` — `operator`, which never had
 one, the sign-in and messaging domains, whose stores read the driver's
 error inline until they were routed through it too, and audit and
 machine identity, whose stores have answered through it from the start.
 The watch boundary's store answers through it as well and is not a
-domain, which is why the query above names ten importers where the
-column counts nine.
+domain, which is why the query above names nine importers where the
+column counts eight.
 
 `platform/internal/pgxtype` holds the timestamptz conversion the stores
 bind and scan: `Timestamptz` makes a present value of a `time.Time`, and
 `Time` reads one back as stored, nil where it is NULL. It also holds
 `Contains`, the `ILIKE` pattern a search binds, in which `%`, `_` and
 the backslash match only themselves. Every postgres-backed store binds
-through it, which is the same nine domains and the watch boundary
+through it, which is the same eight domains and the watch boundary
 `platform/internal/pgxerr` counts; each had declared its own copy
 (#1150). It is a wire format and chooses no behaviour, so it is a
 package of its own rather than part of `pgxerr`, which is errors.
@@ -506,13 +502,6 @@ ORM's tags and associations would reach past. And the features already
 in use — `LISTEN`/`NOTIFY`, triggers, and the row-level locking a queue
 needs — are where an ORM hands the work back anyway. See
 [`../plans/roadmap.md`](../plans/roadmap.md).
-
-## Known gap
-
-Domain types (`User`, `Organization`, …) do not satisfy the
-`authz.Object` seam; the engine adapts a parsed GRN at its transport
-boundary. If a future design needs domain-typed subjects or objects, it
-should define the adapter where it is used.
 
 ## Open questions
 

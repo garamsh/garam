@@ -54,9 +54,8 @@ type observability struct {
 }
 
 // newObservability builds the logger, the metrics registry and the
-// tracer for one server. Metrics are defined by the otelhttp and
-// otelgrpc instrumentation, which finds the providers set here as
-// globals; the registry is the one place they are collected from.
+// tracer for one server. Metrics are defined by the otelhttp
+// instrumentation, which finds the providers set here as globals; the registry is the one place they are collected from.
 func newObservability(service string) (*observability, error) {
 	logger := newLogger(os.Stderr, service)
 	// A line written through the default logger lands in the same

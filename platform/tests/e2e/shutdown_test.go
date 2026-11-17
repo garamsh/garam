@@ -255,17 +255,33 @@ func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 // process alone (ADR-0021), so every assertion above holds against a
 // database that is not there; readiness answers only once the
 // dependency ping reaches one (#893). `serve api` is run alone, against
-// the database and the policy service, and serve fails the test where
-// the probe never answers ok.
+// the database and the policy service. Liveness is waited for first, so
+// a process that never started fails as that and not as a readiness
+// that never came; readiness is then the answer the test is for.
 func TestServeAPI_ReadyzAnswersReadyWithItsDatabase(t *testing.T) {
 	databaseURL := migrated(t)
 	bin := buildGaram(t)
 	httpAddr := freeAddr(t)
 
-	serve(t, bin, "api", append([]string{
+	stop := serve(t, bin, "api", append([]string{
 		"GARAM_DATABASE_URL=" + databaseURL,
 		"GARAM_HTTP_ADDR=" + httpAddr,
-	}, apiPolicyEnv(t)...), "http://"+httpAddr+readyPath)
+	}, apiPolicyEnv(t)...), "http://"+httpAddr+livePath)
+
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		resp, err := http.Get("http://" + httpAddr + readyPath)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("serve api is live but %s never answered ok; logs:\n%s", readyPath, stop())
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // buildGaram builds the binary under test: this layer exercises what

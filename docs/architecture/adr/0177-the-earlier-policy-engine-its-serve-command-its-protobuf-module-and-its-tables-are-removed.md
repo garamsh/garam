@@ -32,17 +32,21 @@ variables `GARAM_AUTHZ_ADDR`, `GARAM_GRPC_ADDR` and
 `GARAM_METRICS_ADDR` that only they read, the tables `policies`,
 `policy_versions` and `policy_attachments` that nothing wrote since
 ADR-0174, and the query `ListProjectsByMember`, whose last caller was
-the engine's statement collection. The engine's last commit in this
-repository is `1273818c0b76f433c38faadaac79c8c00e2bf4ee`.
+the engine's statement collection. The issue
+names `1273818c0b76f433c38faadaac79c8c00e2bf4ee` as the engine's code
+to read; `6595be18cdb68b264057e8c94f73ad9d165d0840` (#1981) touched the
+package after it.
 
 ## Decision
 
-1. **The engine goes.** `platform/internal/authz`, `garam serve authz`,
-   `platform/proto/garam/authz` with its generated code, `buf.yaml`
-   and `buf.gen.yaml`, the `buf` and `protoc` tool pins, and the
-   `wire` types `Effect`, `PolicyStatus` and `Statement` that only the
-   engine's contract used are deleted. The platform has no protobuf
-   module and no gRPC server of its own.
+1. **The engine goes.** `platform/internal/authz`, `garam serve
+   authz`, `platform/proto/garam/authz` with its generated code,
+   `buf.yaml` and `buf.gen.yaml`, and the `wire` types `Effect`,
+   `PolicyStatus` and `Statement` that only the engine's contract used
+   are deleted. The platform has no protobuf module and no gRPC server
+   of its own. The `buf`, `protoc-gen-go` and `protoc-gen-go-grpc` pins
+   stay: `lib/policy-sdk-go` generates with them and `policy` lints with
+   `buf`.
 2. **Its settings go.** `GARAM_AUTHZ_ADDR`, `GARAM_GRPC_ADDR` and
    `GARAM_METRICS_ADDR` are no longer read. A deployment that sets one
    sets nothing the process reads.
@@ -71,15 +75,12 @@ repository is `1273818c0b76f433c38faadaac79c8c00e2bf4ee`.
 ## Consequences
 
 - One process fewer to run, probe, scale and secure, and one gRPC
-  contract fewer to keep. The platform's go.mod drops the `buf`
-  toolchain and the `otelgrpc` instrumentation the engine alone used.
+  contract fewer to keep. The platform's go.mod drops the `otelgrpc`
+  instrumentation the engine alone used.
 - Rolling back past this change needs the engine's code, and the down
   migration restores the tables empty, so a deployment that went back
   would hold no policy it had before. ADR-0146 item 1 already refused
   to convert one.
-- `deploy/` still names `serve authz` until the change that removes it
-  there lands, and the chart's workload for it has nothing to run. The
-  order of the two merges is the PM's.
 - The convention documents that describe `proto/` and `buf` for the
   platform, among them `stack-go.md`, describe a layout the platform no
   longer has. They are the PM's to revise.

@@ -5,8 +5,8 @@ workflow last. Each tier depends only on the tier below it.
 
 ## Contents
 - MVP — Authentication + org permissions (done)
-- P1 — authz engine (done)
-- P2 — authz persistence & policy versioning (done)
+- P1 — authz engine (done, and removed)
+- P2 — authz persistence & policy versioning (done, and removed)
 - Web console (in progress)
 - P3 — Workflow core (not started)
 - P4 — Operational (partly done)

@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -125,78 +126,53 @@ func TestKindOf(t *testing.T) {
 	}
 }
 
-// TestCodeOf closes the round trip with KindOf over every kind, so a
-// kind whose code mapping changes on one side alone fails here. The
-// last case is a kind no constant names, which renders as Unknown and
-// reads back as KindUnknown rather than as itself.
-func TestCodeOf(t *testing.T) {
-	kinds := []errorx.Kind{
-		errorx.KindUnknown,
-		errorx.KindInternal,
-		errorx.KindCanceled,
-		errorx.KindInvalidArgument,
-		errorx.KindDeadlineExceeded,
-		errorx.KindNotFound,
-		errorx.KindAlreadyExists,
-		errorx.KindPermissionDenied,
-		errorx.KindResourceExhausted,
-		errorx.KindFailedPrecondition,
-		errorx.KindAborted,
-		errorx.KindOutOfRange,
-		errorx.KindUnimplemented,
-		errorx.KindUnavailable,
-		errorx.KindDataLoss,
-		errorx.KindUnauthenticated,
-	}
-	for _, k := range kinds {
-		t.Run(k.String(), func(t *testing.T) {
-			assert.Equal(t, k, wire.KindOf(wire.CodeOf(k)))
-		})
-	}
-
-	assert.Equal(t, codes.Unknown, wire.CodeOf(errorx.Kind(99)))
-}
-
 // TestErrorOf reads a gRPC error back as an errorx error: the status
 // code becomes the kind by name and the message is kept as written, so
-// the engine's own sentence reaches the caller. A status built from
-// CodeOf and MessageOf, as the engine builds one, is the round trip. An
-// error that carries no status reads as Unknown rather than as a kind
-// it never named.
+// the service's own sentence reaches the caller. An error that carries
+// no status reads as Unknown rather than as a kind it never named.
 func TestErrorOf(t *testing.T) {
-	for _, kind := range []errorx.Kind{errorx.KindInvalidArgument, errorx.KindPermissionDenied, errorx.KindUnavailable, errorx.KindInternal} {
-		sent := errorx.New(kind, "the engine's own sentence")
-		got := wire.ErrorOf(status.Error(wire.CodeOf(errorx.KindOf(sent)), wire.MessageOf(sent)))
-		assert.True(t, errorx.IsKind(got, kind), "%v: got %v", kind, got)
-		assert.Equal(t, "the engine's own sentence", got.Error())
+	for code, kind := range map[codes.Code]errorx.Kind{
+		codes.InvalidArgument:  errorx.KindInvalidArgument,
+		codes.PermissionDenied: errorx.KindPermissionDenied,
+		codes.Unavailable:      errorx.KindUnavailable,
+		codes.Internal:         errorx.KindInternal,
+	} {
+		got := wire.ErrorOf(status.Error(code, "the service's own sentence"))
+		assert.True(t, errorx.IsKind(got, kind), "%v: got %v", code, got)
+		assert.Equal(t, "the service's own sentence", got.Error())
 	}
 	got := wire.ErrorOf(errors.New("not a status"))
 	assert.True(t, errorx.IsKind(got, errorx.KindUnknown), "got %v", got)
 }
 
-// TestGRPCStatusOf_CarriesTheReasonAcrossTheHop marshals the status the
-// engine sends to bytes and back, as the hop does, and reads the reason
-// and its pointer out the other side. An error with no reason is the
-// control: it crosses as before, with none.
-func TestGRPCStatusOf_CarriesTheReasonAcrossTheHop(t *testing.T) {
-	cross := func(sent error) error {
-		wireBytes, err := proto.Marshal(wire.GRPCStatusOf(sent).Proto())
+// TestErrorOf_ReadsTheReasonTheServiceSends marshals a status carrying
+// an ErrorInfo to bytes and back, as the hop does, and reads the reason
+// and its pointer out the other side. An ErrorInfo of another domain is
+// the control: it reads with no reason.
+func TestErrorOf_ReadsTheReasonTheServiceSends(t *testing.T) {
+	cross := func(domain string) error {
+		sent, err := status.New(codes.InvalidArgument, "Effect must be Allow or Deny").WithDetails(&errdetails.ErrorInfo{
+			Reason:   "policy_document_effect_invalid",
+			Domain:   domain,
+			Metadata: map[string]string{"path": "/Statement/1/Effect"},
+		})
+		require.NoError(t, err)
+		wireBytes, err := proto.Marshal(sent.Proto())
 		require.NoError(t, err)
 		var received spb.Status
 		require.NoError(t, proto.Unmarshal(wireBytes, &received))
 		return wire.ErrorOf(status.FromProto(&received).Err())
 	}
 
-	reason := errorx.Reason{Code: "policy_document_effect_invalid", Path: "/Statement/1/Effect"}
-	got := cross(errorx.NewWithReason(errorx.KindInvalidArgument, reason, "policy document: Effect must be Allow or Deny"))
+	got := cross("garam.sh")
 	assert.True(t, errorx.IsKind(got, errorx.KindInvalidArgument))
-	assert.Equal(t, "policy document: Effect must be Allow or Deny", got.Error())
-	gotReason, ok := errorx.ReasonOf(got)
+	assert.Equal(t, "Effect must be Allow or Deny", got.Error())
+	reason, ok := errorx.ReasonOf(got)
 	require.True(t, ok)
-	assert.Equal(t, reason, gotReason)
+	assert.Equal(t, errorx.Reason{Code: "policy_document_effect_invalid", Path: "/Statement/1/Effect"}, reason)
 
-	plain := cross(errorx.New(errorx.KindInvalidArgument, "no reason here"))
-	_, ok = errorx.ReasonOf(plain)
+	other := cross("example.com")
+	_, ok = errorx.ReasonOf(other)
 	assert.False(t, ok)
-	assert.True(t, errorx.IsKind(plain, errorx.KindInvalidArgument))
+	assert.True(t, errorx.IsKind(other, errorx.KindInvalidArgument))
 }

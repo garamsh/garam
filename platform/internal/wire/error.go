@@ -112,45 +112,6 @@ func messageOfKind(k errorx.Kind) string {
 	}
 }
 
-// CodeOf maps error kinds to gRPC status codes by name; [KindOf] is
-// its inverse.
-func CodeOf(k errorx.Kind) codes.Code {
-	switch k {
-	case errorx.KindCanceled:
-		return codes.Canceled
-	case errorx.KindInvalidArgument:
-		return codes.InvalidArgument
-	case errorx.KindDeadlineExceeded:
-		return codes.DeadlineExceeded
-	case errorx.KindNotFound:
-		return codes.NotFound
-	case errorx.KindAlreadyExists:
-		return codes.AlreadyExists
-	case errorx.KindPermissionDenied:
-		return codes.PermissionDenied
-	case errorx.KindResourceExhausted:
-		return codes.ResourceExhausted
-	case errorx.KindFailedPrecondition:
-		return codes.FailedPrecondition
-	case errorx.KindAborted:
-		return codes.Aborted
-	case errorx.KindOutOfRange:
-		return codes.OutOfRange
-	case errorx.KindUnimplemented:
-		return codes.Unimplemented
-	case errorx.KindInternal:
-		return codes.Internal
-	case errorx.KindUnavailable:
-		return codes.Unavailable
-	case errorx.KindDataLoss:
-		return codes.DataLoss
-	case errorx.KindUnauthenticated:
-		return codes.Unauthenticated
-	default:
-		return codes.Unknown
-	}
-}
-
 // KindOf maps gRPC status codes back to error kinds by name.
 func KindOf(c codes.Code) errorx.Kind {
 	switch c {
@@ -189,18 +150,17 @@ func KindOf(c codes.Code) errorx.Kind {
 	}
 }
 
-// ErrorOf renders an error a gRPC call returned as an errorx error,
-// its status code carrying the kind by name (ADR-0003). It is the
-// inverse of what the engine sends: a status built from [CodeOf] and
-// [MessageOf].
+// ErrorOf renders an error a gRPC call returned as an errorx error, its
+// status code carrying the kind by name (ADR-0003) and an ErrorInfo
+// detail of this domain carrying the reason.
 //
-// The message is taken as this project's own, which is what the engine
-// undertakes to send: it decides what a caller may be told while it
-// still holds the chain's types, because a status crossing the hop
-// carries text and nothing that says who wrote it. A status the engine
-// did not answer at all — one gRPC itself raised for a call that never
-// reached a handler — carries gRPC's text under that undertaking, and
-// every code it raises but two is replaced on the way out as a 5xx.
+// The message is taken as this project's own, which is what the policy
+// service undertakes to send: it decides what a caller may be told,
+// because a status crossing the hop carries text and nothing that says
+// who wrote it. A status the service did not answer at all — one gRPC
+// itself raised for a call that never reached a handler — carries
+// gRPC's text under that undertaking, and every code it raises but two
+// is replaced on the way out as a 5xx.
 func ErrorOf(err error) error {
 	st, _ := status.FromError(err)
 	for _, detail := range st.Details() {
@@ -218,25 +178,3 @@ const (
 	reasonDomain  = "garam.sh"
 	reasonPathKey = "path"
 )
-
-// GRPCStatusOf renders err as the status a gRPC peer reads: the code its
-// kind maps to, the message a caller may be told ([MessageOf]), and the
-// reason it carries as an ErrorInfo detail, which [ErrorOf] reads back.
-func GRPCStatusOf(err error) *status.Status {
-	st := status.New(CodeOf(errorx.KindOf(err)), MessageOf(err))
-	reason, ok := errorx.ReasonOf(err)
-	if !ok {
-		return st
-	}
-	info := &errdetails.ErrorInfo{Reason: reason.Code, Domain: reasonDomain}
-	if reason.Path != "" {
-		info.Metadata = map[string]string{reasonPathKey: reason.Path}
-	}
-	withReason, detailErr := st.WithDetails(info)
-	if detailErr != nil {
-		// WithDetails fails only for a status of code OK, which no
-		// refusal maps to; the status without the reason is still true.
-		return st
-	}
-	return withReason
-}

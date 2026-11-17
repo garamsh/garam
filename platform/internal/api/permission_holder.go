@@ -170,6 +170,7 @@ func (s *Server) holdersAmong(r *http.Request, candidates []holderCandidate, tar
 		}
 		allowed, err := s.decides(r, policydecision.Question{
 			Subject: cand.grn, Action: action, Resource: target, Probe: true,
+			WithoutPermits: actionRules[action].withoutPermits,
 		})
 		if err != nil {
 			return nil, err

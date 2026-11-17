@@ -265,10 +265,8 @@ func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 // database that is not there; readiness answers only once the
 // dependency ping reaches one (#893).
 //
-// `serve authz` and not the other two: readiness on api and machine
-// registers the authz channel beside the database, and this suite runs
-// one process at a time, so neither can answer ready without a second
-// process that has nothing to do with the store.
+// `serve authz` here, and `serve api` in the test after it: the engine
+// is the process whose only dependency is the database.
 func TestServeAuthz_ReadyzAnswersReadyWithItsDatabase(t *testing.T) {
 	databaseURL := migrated(t)
 	bin := buildGaram(t)
@@ -299,6 +297,25 @@ func TestServeAuthz_ReadyzAnswersReadyWithItsDatabase(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode,
 		"readiness answered %d %q; logs:\n%s", resp.StatusCode, bytes.TrimSpace(body), logs.String())
+}
+
+// TestServeAPI_ReadyzAnswersReadyWithNoEngineListening runs `serve api`
+// alone, against the database and the policy service, with
+// GARAM_AUTHZ_ADDR naming an address nothing serves. Readiness is the
+// database and nothing named authz, so it answers ready; serve fails
+// the test where the probe never answers ok. Restoring the check that
+// waited for an engine channel to reach Ready leaves it 503 for the
+// whole wait.
+func TestServeAPI_ReadyzAnswersReadyWithNoEngineListening(t *testing.T) {
+	databaseURL := migrated(t)
+	bin := buildGaram(t)
+	httpAddr := freeAddr(t)
+
+	serve(t, bin, "api", append([]string{
+		"GARAM_DATABASE_URL=" + databaseURL,
+		"GARAM_HTTP_ADDR=" + httpAddr,
+		"GARAM_AUTHZ_ADDR=" + freeAddr(t),
+	}, apiPolicyEnv(t)...), "http://"+httpAddr+readyPath)
 }
 
 // buildGaram builds the binary under test: this layer exercises what

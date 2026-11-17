@@ -194,6 +194,40 @@ func TestListPermissionHolders_AsksTheCheckAsAnAttemptAndTheCandidatesAsProbes(t
 	assert.NotContains(t, got, held.String(), "the agent the service denies is not a holder")
 }
 
+// TestListPermissionHolders_AsksPermitWriteWithoutThePermits holds that
+// each candidate is asked iam:permit.write as the write decides it, as
+// the permission check does (ADR-0175). The service here allows the
+// member only where the permits count, as a member holding a permit
+// naming the action would be, so a member listed is one the question
+// did not leave the permits out of; the owner, allowed either way, is
+// the control that the list lists whom the service allows.
+func TestListPermissionHolders_AsksPermitWriteWithoutThePermits(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.sessionCookieFor(t, "member-sub", "Member")
+	memberGRN := userGRNOf("member-sub")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), memberGRN, org.RoleMember)))
+	ownerGRN := userGRNOf("owner-sub")
+	a := f.record(func(q policydecision.Question) bool {
+		return q.Subject == ownerGRN || q.Subject == memberGRN && !q.WithoutPermits
+	})
+
+	rec := f.do(t, "GET", "/orgs/"+slug+"/permission-holders?action="+url.QueryEscape(org.ActionPermitWrite), "", owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	asked := a.about(org.ActionPermitWrite)
+	require.Len(t, asked, 2, "the owner and the member")
+	for _, q := range asked {
+		assert.True(t, q.WithoutPermits, "candidate %s", q.Subject)
+	}
+	var got []string
+	for _, h := range decodeBody[apigen.PermissionHolders](t, rec).Holders {
+		got = append(got, h.Grn)
+	}
+	assert.Equal(t, []string{ownerGRN.String()}, got)
+}
+
 // TestGroupRoute_AsksTheServiceOnTheGroupItself holds that a route
 // addressing a group is asked on the group, as an attempt.
 func TestGroupRoute_AsksTheServiceOnTheGroupItself(t *testing.T) {

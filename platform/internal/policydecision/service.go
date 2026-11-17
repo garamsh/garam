@@ -14,12 +14,16 @@ import (
 // states that the answer must read the policies and facts as they are
 // now, past the service's cache, which ADR-0146 item 12 reserves for
 // the decisions whose earlier allow must not stand in for it.
+// WithoutPermits states that the organization's permits are left out of
+// the decision, as the write of a permit decides it (ADR-0175), which
+// is how a question about writing one is answered.
 type Question struct {
-	Subject  grn.GRN
-	Action   string
-	Resource grn.GRN
-	Probe    bool
-	Current  bool
+	Subject        grn.GRN
+	Action         string
+	Resource       grn.GRN
+	Probe          bool
+	Current        bool
+	WithoutPermits bool
 }
 
 type probeKey struct{}

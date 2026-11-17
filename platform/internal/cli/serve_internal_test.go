@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,15 +36,6 @@ func TestGoogleProvider_DiscoveryFailure(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "kind: %v", err)
-}
-
-// channelTo returns a client channel for addr, closed with the test.
-func channelTo(t *testing.T, addr string) *grpc.ClientConn {
-	t.Helper()
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	return conn
 }
 
 // TestEnvBool_RefusesAValueItCannotRead covers the three outcomes the
@@ -84,30 +74,6 @@ func TestEnvBool_RefusesAValueItCannotRead(t *testing.T) {
 		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 		assert.Contains(t, err.Error(), key, "the error names the variable, as GARAM_SESSION_TTL's does")
 	})
-}
-
-func TestAuthzChannel_RefusesAChannelThatReachesNoEngine(t *testing.T) {
-	// Internal: readiness reads this beside an unreachable database.
-	// A gRPC server on a port of the kernel's choosing is the engine;
-	// the address nothing serves is the same channel without one, which
-	// is what the check has to tell apart.
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	engine := grpc.NewServer()
-	go func() { _ = engine.Serve(lis) }()
-	t.Cleanup(engine.Stop)
-
-	served, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	require.NoError(t, authzChannel{conn: channelTo(t, lis.Addr().String())}.Check(served))
-
-	// Port 1 is reserved and unservable, so this channel never reaches
-	// Ready and the check's own deadline is what ends the wait.
-	unserved, cancelUnserved := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancelUnserved()
-	err = authzChannel{conn: channelTo(t, "127.0.0.1:1")}.Check(unserved)
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable))
 }
 
 // panickingProbe is a readiness dependency whose check is the

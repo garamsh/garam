@@ -1,8 +1,8 @@
-# The three serve processes of ADR-0017, the policy service and the two
-# web applications, as one local Kubernetes deployment. Local only: no
-# ingress, no DNS, no certificate any authority issued, and images that
-# exist nowhere but this machine's cluster. What reconciles a real
-# cluster is not this (ADR-0020).
+# The api and machine serve processes of ADR-0017, the policy service
+# and the two web applications, as one local Kubernetes deployment.
+# Local only: no ingress, no DNS, no certificate any authority issued,
+# and images that exist nowhere but this machine's cluster. What
+# reconciles a real cluster is not this (ADR-0020).
 #
 # `/healthz` and `/readyz` on the ports below are the interface ADR-0021
 # publishes. A repository this one does not control probes them, so they
@@ -15,73 +15,6 @@
 # every pod rolls onto whatever the tags point at now, and the
 # annotation names a placeholder rather than the image that is running,
 # until the next `make -C deploy/local minikube-apps`.
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: authz
-  namespace: garam-local
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: authz
-  template:
-    metadata:
-      labels:
-        app: authz
-      annotations:
-        image-id: "GARAM_IMAGE_ID"
-    spec:
-      containers:
-        - name: authz
-          image: garam:local
-          imagePullPolicy: Never
-          args: ["serve", "authz"]
-          env:
-            - name: GARAM_DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-app
-                  key: uri
-            - name: GARAM_GRPC_ADDR
-              value: ":9090"
-            # The engine speaks gRPC only, so the probes and /metrics
-            # share a listener of their own.
-            - name: GARAM_METRICS_ADDR
-              value: ":9091"
-          ports:
-            - name: grpc
-              containerPort: 9090
-            - name: health
-              containerPort: 9091
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 9091
-          # The readiness handler bounds one answer at 2s, so a probe
-          # timing out at the default 1s reports its own deadline where
-          # the process would have named the dependency that failed.
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 9091
-            timeoutSeconds: 3
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: authz
-  namespace: garam-local
-spec:
-  selector:
-    app: authz
-  ports:
-    - name: grpc
-      port: 9090
-      targetPort: grpc
-    - name: health
-      port: 9091
-      targetPort: health
 ---
 # The policy service (ADR-0130), which the api feeds and the machine
 # listener asks. It serves no plaintext, so the certificate in its
@@ -290,8 +223,6 @@ spec:
                   key: uri
             - name: GARAM_HTTP_ADDR
               value: ":8080"
-            - name: GARAM_AUTHZ_ADDR
-              value: "authz:9090"
             # The policy service the feed delivers to (ADR-0140),
             # verified against its own certificate and called with a
             # token signed by the key beside it. The issuer is one
@@ -448,10 +379,6 @@ spec:
                   key: uri
             - name: GARAM_MACHINE_ADDR
               value: ":8443"
-            # Every message this listener accepts is decided by the
-            # engine, so it dials the same one the api server does.
-            - name: GARAM_AUTHZ_ADDR
-              value: "authz:9090"
             # The listener above serves no probe route, so the probes
             # get a plaintext listener of their own (ADR-0021).
             - name: GARAM_MACHINE_HEALTH_ADDR

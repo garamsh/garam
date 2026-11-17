@@ -1,8 +1,8 @@
 {{/*
 The base name every object takes, and the labels every object carries.
 Kept here because a workload's Service name is what another workload
-dials: `serve api` and `serve machine` reach the engine at the authz
-Service, so the name has one definition rather than four.
+dials: `serve api` and `serve machine` reach the policy service at its
+Service, so the name has one definition rather than several.
 */}}
 
 {{- define "garam.fullname" -}}

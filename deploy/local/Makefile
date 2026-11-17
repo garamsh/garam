@@ -36,7 +36,7 @@ db-prune:
 	@../../tooling/db-prune.sh
 
 # backend-up starts what the browser suites drive — postgres, the
-# one-shot migration, authz, the policy service with its feed, and
+# one-shot migration, the policy service with its feed, and
 # api — and returns once api answers; the profile-gated `web` service
 # stays down. It builds first, migrations included, because compose
 # starts an existing image stale and reports it healthy (#297). The feed
@@ -187,7 +187,7 @@ minikube-apps: minikube-context
 		echo "minikube-apps: garam:local=$$id garam-web:local=$$web_id garam-site:local=$$site_id policy:local=$$policy_id" && \
 		sed -e "s|GARAM_IMAGE_ID|$$id|" -e "s|GARAM_WEB_IMAGE_ID|$$web_id|" -e "s|GARAM_SITE_IMAGE_ID|$$site_id|" -e "s|GARAM_POLICY_IMAGE_ID|$$policy_id|" $(MINIKUBE_DIR)/garam.yaml \
 		| $(KUBECTL_LOCAL) apply -f -
-	@for d in authz policy api machine web site; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
+	@for d in policy api machine web site; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
 	@$(KUBECTL_LOCAL) get pods
 
 # minikube-forward is how the console and the site are reached: the

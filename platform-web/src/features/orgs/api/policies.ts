@@ -93,7 +93,7 @@ const IamPolicyDetailParser: z.ZodType<IamPolicyDetail> = z.object({
  * in time, which is an outage the page says so and not a refusal, so
  * it is read as the service being unreachable.
  */
-async function viaPolicyService<T>(read: Promise<T>): Promise<T> {
+export async function viaPolicyService<T>(read: Promise<T>): Promise<T> {
   try {
     return await read;
   } catch (error) {

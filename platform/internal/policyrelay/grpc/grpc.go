@@ -159,6 +159,58 @@ func (c *Client) List(ctx context.Context, reader, orgGRN grn.GRN) ([]policyrela
 	return out, nil
 }
 
+// ListAudit reads a page of the organization's audit records.
+func (c *Client) ListAudit(
+	ctx context.Context, reader, orgGRN grn.GRN, pageSize int32, pageToken string,
+) (policyrelay.AuditPage, error) {
+	who, err := subject(reader)
+	if err != nil {
+		return policyrelay.AuditPage{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, feedgrpc.CallTimeout)
+	defer cancel()
+	resp, err := c.client.ListAuditRecords(ctx, &policyv1.ListAuditRecordsRequest{
+		Writer: who, Org: orgGRN.String(), PageSize: pageSize, PageToken: pageToken,
+	})
+	if err != nil {
+		return policyrelay.AuditPage{}, relayed(err)
+	}
+	page := policyrelay.AuditPage{
+		Records:       make([]policyrelay.AuditRecord, len(resp.GetRecords())),
+		NextPageToken: resp.GetNextPageToken(),
+	}
+	for i, r := range resp.GetRecords() {
+		kind, err := auditKindOf(r.GetKind())
+		if err != nil {
+			return policyrelay.AuditPage{}, err
+		}
+		page.Records[i] = policyrelay.AuditRecord{
+			ID: r.GetId(), Kind: kind,
+			FirstAt: r.GetFirstAt().AsTime(), LastAt: r.GetLastAt().AsTime(),
+			Count: r.GetCount(), Service: r.GetService(), Subject: r.GetSubject(),
+			Action: r.GetAction(), Resource: r.GetResource(), Outcome: r.GetOutcome(),
+			PolicyIDs: r.GetPolicyIds(), VersionFrom: r.GetVersionFrom(), VersionTo: r.GetVersionTo(),
+		}
+		if r.GetDay() != nil {
+			page.Records[i].Day = r.GetDay().AsTime()
+		}
+	}
+	return page, nil
+}
+
+func auditKindOf(k policyv1.AuditRecordKind) (policyrelay.AuditKind, error) {
+	switch k {
+	case policyv1.AuditRecordKind_AUDIT_RECORD_KIND_WRITE:
+		return policyrelay.AuditWrite, nil
+	case policyv1.AuditRecordKind_AUDIT_RECORD_KIND_DENIAL:
+		return policyrelay.AuditDenial, nil
+	case policyv1.AuditRecordKind_AUDIT_RECORD_KIND_DENIAL_OVERFLOW:
+		return policyrelay.AuditDenialOverflow, nil
+	case policyv1.AuditRecordKind_AUDIT_RECORD_KIND_UNSPECIFIED:
+	}
+	return "", errorx.New(errorx.KindInternal, "policy service answered an audit record of no kind")
+}
+
 // relayed carries the service's refusal as the kind it answered with,
 // and its message, which the service wrote for the writer. A credential
 // the service does not accept is the platform's fault and not the

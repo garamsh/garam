@@ -2699,6 +2699,38 @@ paths:
           $ref: '#/components/responses/Error'
         '504':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/audit-records:
+    get:
+      operationId: listAuditRecords
+      tags: [policy]
+      summary: Read an organization's audit records, newest first.
+      description: >-
+        Relayed to the policy service as the caller, which decides, read
+        current, whether the caller holds `iam:audit.read` on the
+        organization (ADR-0148, ADR-0176). A caller it refuses is
+        answered 403. The platform keeps none of the records. A page is
+        read with the token the previous page answered.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/pageToken'
+      responses:
+        '200':
+          description: A page of records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/consents:
     get:
       operationId: listOrgConsents
@@ -3052,6 +3084,23 @@ components:
         minimum: 0
         default: 0
       description: Maximum entries to return; 0 means no limit.
+    pageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        default: 0
+      description: >-
+        Maximum records to return; 0 and anything above the policy
+        service's bound mean the bound.
+    pageToken:
+      name: pageToken
+      in: query
+      schema:
+        type: string
+      description: The previous page's `nextPageToken`; absent for the first.
     offset:
       name: offset
       in: query
@@ -4031,6 +4080,86 @@ components:
         A policy's lifecycle state. Only an `active` policy contributes
         statements to a check.
       enum: [draft, active]
+    AuditRecordKind:
+      type: string
+      description: >-
+        What an audit record is: one `write` of a policy, the identical
+        `denial`s of one request collapsed with a count, or the
+        `denial-overflow` of a UTC day.
+      enum: [write, denial, denial-overflow]
+    AuditRecord:
+      type: object
+      description: >-
+        One record of the policy service's audit (ADR-0148). It holds no
+        policy text, no context, no token and no fault text.
+      required: [id, kind, firstAt, lastAt, count, service, subject, action, resource, outcome, policyIds, versionFrom, versionTo]
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          $ref: '#/components/schemas/AuditRecordKind'
+        firstAt:
+          type: string
+          format: date-time
+          description: When a write was made or a denial first occurred.
+        lastAt:
+          type: string
+          format: date-time
+          description: When a denial last occurred; a write's `firstAt`.
+        count:
+          type: integer
+          format: int64
+          description: How many identical denials the record holds; 1 for a write.
+        service:
+          type: string
+          description: The service that made the request; empty on an overflow record.
+        subject:
+          type: string
+          description: >-
+            The GRN of who asked or wrote; empty for a write the service
+            made with no writer and on an overflow record.
+        action:
+          type: string
+          description: The action in its qualified form, such as `iam:permit.write`.
+        resource:
+          type: string
+          description: The GRN asked about; for a write, the policy's.
+        outcome:
+          type: string
+          description: >-
+            `deny`, or `created`, `version-added`, `activated`,
+            `rolled-back` or `removed`.
+        policyIds:
+          type: array
+          items:
+            type: string
+          description: >-
+            The policies of a denial's reasons, `fault` for a reason that
+            is an evaluation fault; for a write, the policy.
+        versionFrom:
+          type: integer
+          format: int32
+          description: The default a write moved from, or 0.
+        versionTo:
+          type: integer
+          format: int32
+          description: The version a write wrote or moved to, or 0.
+        day:
+          type: string
+          format: date-time
+          description: The first second of the UTC day an overflow record holds.
+    AuditRecordPage:
+      type: object
+      required: [records]
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecord'
+        nextPageToken:
+          type: string
+          description: Reads the next page; absent at the end.
     PolicyRollback:
       type: object
       required: [version]

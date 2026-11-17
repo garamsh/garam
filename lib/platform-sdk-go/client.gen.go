@@ -177,6 +177,27 @@ func (e AgentSupervisorState) Valid() bool {
 	}
 }
 
+// Defines values for AuditRecordKind.
+const (
+	Denial         AuditRecordKind = "denial"
+	DenialOverflow AuditRecordKind = "denial-overflow"
+	Write          AuditRecordKind = "write"
+)
+
+// Valid indicates whether the value is a known member of the AuditRecordKind enum.
+func (e AuditRecordKind) Valid() bool {
+	switch e {
+	case Denial:
+		return true
+	case DenialOverflow:
+		return true
+	case Write:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CredentialEventAction.
 const (
 	EventIssue CredentialEventAction = "issue"
@@ -1113,6 +1134,59 @@ type AgentSupervisorPlacement string
 
 // AgentSupervisorState defines model for AgentSupervisor.State.
 type AgentSupervisorState string
+
+// AuditRecord One record of the policy service's audit (ADR-0148). It holds no policy text, no context, no token and no fault text.
+type AuditRecord struct {
+	// Action The action in its qualified form, such as `iam:permit.write`.
+	Action string `json:"action"`
+
+	// Count How many identical denials the record holds; 1 for a write.
+	Count int64 `json:"count"`
+
+	// Day The first second of the UTC day an overflow record holds.
+	Day *time.Time `json:"day,omitempty"`
+
+	// FirstAt When a write was made or a denial first occurred.
+	FirstAt time.Time `json:"firstAt"`
+	Id      int64     `json:"id"`
+
+	// Kind What an audit record is: one `write` of a policy, the identical `denial`s of one request collapsed with a count, or the `denial-overflow` of a UTC day.
+	Kind AuditRecordKind `json:"kind"`
+
+	// LastAt When a denial last occurred; a write's `firstAt`.
+	LastAt time.Time `json:"lastAt"`
+
+	// Outcome `deny`, or `created`, `version-added`, `activated`, `rolled-back` or `removed`.
+	Outcome string `json:"outcome"`
+
+	// PolicyIds The policies of a denial's reasons, `fault` for a reason that is an evaluation fault; for a write, the policy.
+	PolicyIds []string `json:"policyIds"`
+
+	// Resource The GRN asked about; for a write, the policy's.
+	Resource string `json:"resource"`
+
+	// Service The service that made the request; empty on an overflow record.
+	Service string `json:"service"`
+
+	// Subject The GRN of who asked or wrote; empty for a write the service made with no writer and on an overflow record.
+	Subject string `json:"subject"`
+
+	// VersionFrom The default a write moved from, or 0.
+	VersionFrom int32 `json:"versionFrom"`
+
+	// VersionTo The version a write wrote or moved to, or 0.
+	VersionTo int32 `json:"versionTo"`
+}
+
+// AuditRecordKind What an audit record is: one `write` of a policy, the identical `denial`s of one request collapsed with a count, or the `denial-overflow` of a UTC day.
+type AuditRecordKind string
+
+// AuditRecordPage defines model for AuditRecordPage.
+type AuditRecordPage struct {
+	// NextPageToken Reads the next page; absent at the end.
+	NextPageToken *string       `json:"nextPageToken,omitempty"`
+	Records       []AuditRecord `json:"records"`
+}
 
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
@@ -2131,6 +2205,12 @@ type Org = string
 // OtherSlug defines model for other.
 type OtherSlug = string
 
+// PageSize defines model for pageSize.
+type PageSize = int32
+
+// PageToken defines model for pageToken.
+type PageToken = string
+
 // PermissionAction defines model for permissionAction.
 type PermissionAction = string
 
@@ -2178,6 +2258,15 @@ type ListAgentsParams struct {
 	// Limit Maximum entries to return; 0 means no limit.
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListAuditRecordsParams defines parameters for ListAuditRecords.
+type ListAuditRecordsParams struct {
+	// PageSize Maximum records to return; 0 and anything above the policy service's bound mean the bound.
+	PageSize *PageSize `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+
+	// PageToken The previous page's `nextPageToken`; absent for the first.
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListCredentialEventsParams defines parameters for ListCredentialEvents.
@@ -2854,6 +2943,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/agents/{agent}/watch (the `WatchAgent` operationId).
 	WatchAgent(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAuditRecords Read an organization's audit records, newest first.
+	//
+	// Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
+	//
+	// Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
+	ListAuditRecords(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	//
@@ -4314,6 +4410,23 @@ func (c *Client) RenameAgent(ctx context.Context, org Org, agentSlug AgentSlug, 
 // Corresponds with GET /orgs/{org}/agents/{agent}/watch (the `WatchAgent` operationId).
 func (c *Client) WatchAgent(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewWatchAgentRequest(c.Server, org, agentSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAuditRecords Read an organization's audit records, newest first.
+//
+// Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
+//
+// Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
+func (c *Client) ListAuditRecords(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAuditRecordsRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -7078,6 +7191,79 @@ func NewWatchAgentRequest(server string, org Org, agentSlug AgentSlug) (*http.Re
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListAuditRecordsRequest constructs an http.Request for the ListAuditRecords method
+func NewListAuditRecordsRequest(server string, org Org, params *ListAuditRecordsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/audit-records", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pageSize", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageToken != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pageToken", *params.PageToken, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -10273,6 +10459,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/agents/{agent}/watch (the `WatchAgent` operationId).
 	WatchAgentWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*WatchAgentResponse, error)
 
+	// ListAuditRecordsWithResponse Read an organization's audit records, newest first.
+	//
+	// Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
+	ListAuditRecordsWithResponse(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*ListAuditRecordsResponse, error)
+
 	// ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
 	//
 	// Every relation the organization is a side of, standing or waiting on one half (ADR-0035). A message crosses between the two organizations only while both halves stand.
@@ -12878,6 +13073,82 @@ func (r WatchAgentResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r WatchAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListAuditRecordsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AuditRecordPage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAuditRecordsResponse) GetJSON200() *AuditRecordPage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListAuditRecordsResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListAuditRecordsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListAuditRecordsResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ListAuditRecordsResponse) GetJSON503() *Error {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r ListAuditRecordsResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAuditRecordsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAuditRecordsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAuditRecordsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAuditRecordsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17408,6 +17679,21 @@ func (c *ClientWithResponses) WatchAgentWithResponse(ctx context.Context, org Or
 	return ParseWatchAgentResponse(rsp)
 }
 
+// ListAuditRecordsWithResponse Read an organization's audit records, newest first.
+//
+// Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
+func (c *ClientWithResponses) ListAuditRecordsWithResponse(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*ListAuditRecordsResponse, error) {
+	rsp, err := c.ListAuditRecords(ctx, org, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAuditRecordsResponse(rsp)
+}
+
 // ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
 //
 // Every relation the organization is a side of, standing or waiting on one half (ADR-0035). A message crosses between the two organizations only while both halves stand.
@@ -20009,6 +20295,67 @@ func ParseWatchAgentResponse(rsp *http.Response) (*WatchAgentResponse, error) {
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAuditRecordsResponse parses an HTTP response from a ListAuditRecordsWithResponse call
+func ParseListAuditRecordsResponse(rsp *http.Response) (*ListAuditRecordsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAuditRecordsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AuditRecordPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 

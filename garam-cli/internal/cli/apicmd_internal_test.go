@@ -36,7 +36,7 @@ func TestAPIOperations_PlaceEveryOperationOfTheSpecification(t *testing.T) {
 	}{
 		// The counts docs/architecture/cli.md §Coverage states; an
 		// operation added or removed changes both.
-		{"../../../platform/api/openapi.yaml", "commands.yaml", apiOperations, 87},
+		{"../../../platform/api/openapi.yaml", "commands.yaml", apiOperations, 88},
 		{"../../../cowork/api/openapi.yaml", "cowork.yaml", coworkOperations, 28},
 	} {
 		t.Run(tc.config, func(t *testing.T) {
@@ -256,6 +256,38 @@ func TestAPICommand_ReadsAWrappedListAsRows(t *testing.T) {
 	var doc map[string][]map[string]any
 	require.NoError(t, json.Unmarshal([]byte(stdout), &doc), "-o json is the API's own answer")
 	assert.Len(t, doc["keys"], 2)
+}
+
+// TestAuditRecordsList_ReadsAPageAndSaysARefusal: the generated command
+// lists the organization's audit records as rows and passes the page it
+// is asked for on; an organization it may not read is a failure, not an
+// empty table. The first read is the control.
+func TestAuditRecordsList_ReadsAPageAndSaysARefusal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/orgs/globex/audit-records" {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"kind":"permission_denied","message":"not allowed"}`))
+			return
+		}
+		assert.Equal(t, "/api/orgs/acme/audit-records", r.URL.Path)
+		assert.Equal(t, "2", r.URL.Query().Get("pageSize"))
+		_, _ = w.Write([]byte(`{"records":[{"id":9,"kind":"write","firstAt":"2026-11-17T00:00:00Z",` +
+			`"lastAt":"2026-11-17T00:00:00Z","count":1,"subject":"grn:root/iam/user/ada",` +
+			`"action":"iam:policy.create","outcome":"created","policyIds":["p-1"]}],"nextPageToken":"n"}`))
+	}))
+	t.Cleanup(srv.Close)
+	signedInTo(t, srv.URL)
+
+	stdout, stderr, _, err := runRoot(t, "audit-records", "list", "--page-size", "2", "--endpoint", srv.URL)
+	require.NoError(t, err, stderr)
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	require.Len(t, lines, 2, stdout)
+	assert.Regexp(t, `^ID\s+KIND`, lines[0])
+	assert.Regexp(t, `^9\s+write`, lines[1])
+
+	_, _, _, err = runRoot(t, "audit-records", "list", "--org", "globex", "--endpoint", srv.URL)
+	require.Error(t, err, "a refusal is said, not shown as empty")
 }
 
 // TestExitCode_ReportsAUserCommandsFailureByKind, and a server

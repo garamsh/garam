@@ -12,6 +12,8 @@ import type {
   Group,
   GroupMember,
   InvitationPreview,
+  AuditRecord,
+  AuditRecordPage,
   Member,
   Operator,
   OperatorKey,
@@ -152,6 +154,45 @@ export const denyDeletes: IamPolicyDetail = {
     },
     createdBy: alice.grn,
   })),
+};
+
+/** Alice's write of a new version of `denyDeletes`, as the audit reads it. */
+export const aliceWrite: AuditRecord = {
+  id: 7,
+  kind: "write",
+  firstAt: "2026-05-02T09:30:00Z",
+  lastAt: "2026-05-02T09:30:00Z",
+  count: 1,
+  service: "platform",
+  subject: alice.grn,
+  action: "iam:policy.update",
+  resource: `grn:acme/iam/policy/${DENY_DELETES_ID}`,
+  outcome: "created",
+  policyIds: [`grn:acme/iam/policy/${DENY_DELETES_ID}`],
+  versionFrom: 1,
+  versionTo: 2,
+};
+
+/** A member's refused read, collapsed with its repeats. */
+export const collapsedDenial: AuditRecord = {
+  id: 6,
+  kind: "denial",
+  firstAt: "2026-05-02T09:00:00Z",
+  lastAt: "2026-05-02T09:10:00Z",
+  count: 3,
+  service: "platform",
+  subject: "grn:root/iam/user/bob",
+  action: "iam:project.delete",
+  resource: "grn:acme/iam/project/frontend",
+  outcome: "deny",
+  policyIds: [`grn:acme/iam/policy/${DENY_DELETES_ID}`],
+  versionFrom: 0,
+  versionTo: 0,
+};
+
+/** The audit records Acme holds, newest first. */
+export const acmeAuditPage: AuditRecordPage = {
+  records: [aliceWrite, collapsedDenial],
 };
 
 /** A draft role link: Engineering is admin of the frontend project. */
@@ -326,6 +367,7 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   },
   { path: "/orgs/acme/agent-supervisors", guarded: true, body: [buildHost] },
   { path: "/orgs/acme/iam-policies", guarded: true, body: acmePolicies },
+  { path: "/orgs/acme/audit-records", guarded: true, body: acmeAuditPage },
   ...[denyDeletes, engineeringAdmins].map((detail) => ({
     path: `/orgs/acme/iam-policies/${detail.policy.id}`,
     guarded: true,

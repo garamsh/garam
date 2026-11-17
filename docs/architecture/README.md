@@ -1313,9 +1313,9 @@ ADRs:
   an hour collapse into one record with a count and an organization
   holds at most 10,000 live denial records, with a per-day overflow
   record beyond; an organization's owners and administrators read them
-  on `iam:audit.read`; built in the policy service (#1785), not in the
-  platform's relay of the read or the console's view of it; supersedes
-  nothing
+  on `iam:audit.read`; built in the policy service (#1785), and the
+  platform's relay of the read and the console's and the CLI's view of
+  it by ADR-0176; supersedes nothing
 - [0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
   — codehub is a service of the policy service: a `Codehub` manifest
   with the entity `Codehub::Repo`, named `grn:<org>/codehub/repo/<id>`
@@ -1566,3 +1566,10 @@ ADRs:
   organization's `permit`s out as `PermitRight::ask` does, through one
   function the write and the option share; the HTTP binding does not
   carry it; accepted, built (#1983); builds ADR-0172 item 6
+- [0176](./adr/0176-the-platform-relays-the-policy-services-audit-record-to-the-console-and-the-cli.md)
+  — `listAuditRecords` relays the policy service's `ListAuditRecords`
+  as the signed-in user, newest first and paged, the service deciding
+  the read on `iam:audit.read` and its refusal the answer; the console
+  shows it as an Audit section offered unless the server denies the
+  read, and the CLI lists it from the specification; accepted, built
+  (#1991); builds ADR-0148

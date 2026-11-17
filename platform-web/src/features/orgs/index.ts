@@ -84,6 +84,12 @@ export {
   type OperatorKey,
 } from "./api/operator-keys";
 export {
+  listAuditRecords,
+  type AuditRecord,
+  type AuditRecordKind,
+  type AuditRecordPage,
+} from "./api/audit";
+export {
   getIamPolicy,
   listIamPolicies,
   type IamPolicy,

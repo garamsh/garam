@@ -5,6 +5,7 @@ import {
   HardDrive,
   House,
   Server,
+  ScrollText,
   Settings,
   ShieldCheck,
   UserRound,
@@ -124,6 +125,12 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     },
   },
   {
+    segment: "audit",
+    label: "Audit",
+    icon: ScrollText,
+    read: "iam:audit.read",
+  },
+  {
     segment: "settings",
     label: "Settings",
     icon: Settings,
@@ -149,6 +156,7 @@ export const CONSOLE_NAV: readonly NavGroup[] = [
       "agents",
       "teams",
       "permissions",
+      "audit",
       "operators",
       "hosts",
       "settings",

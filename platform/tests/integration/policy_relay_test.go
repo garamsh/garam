@@ -49,8 +49,11 @@ type relayStack struct {
 	rp                  *realPolicy
 	acme                grn.GRN
 	owner, admin, other *http.Cookie
-	ownerGRN            grn.GRN
-	made                []string
+	// rival owns the organization rival, and is no member of acme.
+	rival    *http.Cookie
+	ownerGRN grn.GRN
+	made     []string
+	origin   string
 }
 
 // newRelayStack composes the listener with relay as the policy relay,
@@ -63,19 +66,22 @@ func newRelayStack(t *testing.T, relay func(*realPolicy) policyrelay.Service) *r
 	orgs, users := orgpg.New(p), userpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
-	session := func(id string, role org.Role) (*http.Cookie, grn.GRN) {
+	rival := orgRootGRN("rival")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(rival, "rival")))
+	session := func(id string, home grn.GRN, role org.Role) (*http.Cookie, grn.GRN) {
 		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
-		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))
+		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(home, g, role)))
 		token, err := authn.NewToken()
 		require.NoError(t, err)
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
 	s := &relayStack{rp: rp, acme: acme}
-	s.owner, s.ownerGRN = session("ada", org.RoleOwner)
-	s.admin, _ = session("bea", org.RoleAdmin)
-	s.other, _ = session("bob", org.RoleMember)
+	s.owner, s.ownerGRN = session("ada", acme, org.RoleOwner)
+	s.admin, _ = session("bea", acme, org.RoleAdmin)
+	s.other, _ = session("bob", acme, org.RoleMember)
+	s.rival, _ = session("cy", rival, org.RoleOwner)
 	rp.deliver(t)
 
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil, authnpg.NewSessionStore(p),
@@ -83,7 +89,8 @@ func newRelayStack(t *testing.T, relay func(*realPolicy) policyrelay.Service) *r
 		WithPolicyRelay(relay(rp))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
-	s.url = browser.URL + "/orgs/acme/iam-policies"
+	s.origin = browser.URL + "/orgs/acme"
+	s.url = s.origin + "/iam-policies"
 
 	// The service outlives the test, so what a case made is removed.
 	t.Cleanup(func() {

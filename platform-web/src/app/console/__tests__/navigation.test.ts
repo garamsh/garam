@@ -35,6 +35,7 @@ describe("parseConsolePath", () => {
     "operators",
     "consents",
     "permissions",
+    "audit",
   ])("reads the %s section", (segment) => {
     const location = parseConsolePath(`/console/orgs/acme/${segment}`);
 
@@ -263,6 +264,7 @@ describe("CONSOLE_NAV", () => {
       "agents",
       "teams",
       "permissions",
+      "audit",
       "operators",
       "hosts",
       "settings",

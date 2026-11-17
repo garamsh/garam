@@ -174,6 +174,27 @@ func (e AgentSupervisorState) Valid() bool {
 	}
 }
 
+// Defines values for AuditRecordKind.
+const (
+	Denial         AuditRecordKind = "denial"
+	DenialOverflow AuditRecordKind = "denial-overflow"
+	Write          AuditRecordKind = "write"
+)
+
+// Valid indicates whether the value is a known member of the AuditRecordKind enum.
+func (e AuditRecordKind) Valid() bool {
+	switch e {
+	case Denial:
+		return true
+	case DenialOverflow:
+		return true
+	case Write:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CredentialEventAction.
 const (
 	EventIssue CredentialEventAction = "issue"
@@ -1110,6 +1131,59 @@ type AgentSupervisorPlacement string
 
 // AgentSupervisorState defines model for AgentSupervisor.State.
 type AgentSupervisorState string
+
+// AuditRecord One record of the policy service's audit (ADR-0148). It holds no policy text, no context, no token and no fault text.
+type AuditRecord struct {
+	// Action The action in its qualified form, such as `iam:permit.write`.
+	Action string `json:"action"`
+
+	// Count How many identical denials the record holds; 1 for a write.
+	Count int64 `json:"count"`
+
+	// Day The first second of the UTC day an overflow record holds.
+	Day *time.Time `json:"day,omitempty"`
+
+	// FirstAt When a write was made or a denial first occurred.
+	FirstAt time.Time `json:"firstAt"`
+	Id      int64     `json:"id"`
+
+	// Kind What an audit record is: one `write` of a policy, the identical `denial`s of one request collapsed with a count, or the `denial-overflow` of a UTC day.
+	Kind AuditRecordKind `json:"kind"`
+
+	// LastAt When a denial last occurred; a write's `firstAt`.
+	LastAt time.Time `json:"lastAt"`
+
+	// Outcome `deny`, or `created`, `version-added`, `activated`, `rolled-back` or `removed`.
+	Outcome string `json:"outcome"`
+
+	// PolicyIds The policies of a denial's reasons, `fault` for a reason that is an evaluation fault; for a write, the policy.
+	PolicyIds []string `json:"policyIds"`
+
+	// Resource The GRN asked about; for a write, the policy's.
+	Resource string `json:"resource"`
+
+	// Service The service that made the request; empty on an overflow record.
+	Service string `json:"service"`
+
+	// Subject The GRN of who asked or wrote; empty for a write the service made with no writer and on an overflow record.
+	Subject string `json:"subject"`
+
+	// VersionFrom The default a write moved from, or 0.
+	VersionFrom int32 `json:"versionFrom"`
+
+	// VersionTo The version a write wrote or moved to, or 0.
+	VersionTo int32 `json:"versionTo"`
+}
+
+// AuditRecordKind What an audit record is: one `write` of a policy, the identical `denial`s of one request collapsed with a count, or the `denial-overflow` of a UTC day.
+type AuditRecordKind string
+
+// AuditRecordPage defines model for AuditRecordPage.
+type AuditRecordPage struct {
+	// NextPageToken Reads the next page; absent at the end.
+	NextPageToken *string       `json:"nextPageToken,omitempty"`
+	Records       []AuditRecord `json:"records"`
+}
 
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
@@ -2128,6 +2202,12 @@ type Org = string
 // OtherSlug defines model for other.
 type OtherSlug = string
 
+// PageSize defines model for pageSize.
+type PageSize = int32
+
+// PageToken defines model for pageToken.
+type PageToken = string
+
 // PermissionAction defines model for permissionAction.
 type PermissionAction = string
 
@@ -2175,6 +2255,15 @@ type ListAgentsParams struct {
 	// Limit Maximum entries to return; 0 means no limit.
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListAuditRecordsParams defines parameters for ListAuditRecords.
+type ListAuditRecordsParams struct {
+	// PageSize Maximum records to return; 0 and anything above the policy service's bound mean the bound.
+	PageSize *PageSize `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+
+	// PageToken The previous page's `nextPageToken`; absent for the first.
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListCredentialEventsParams defines parameters for ListCredentialEvents.
@@ -2493,6 +2582,9 @@ type ServerInterface interface {
 	// WatchAgent Watch an agent work. Requires the `iam:agent.watch` action.
 	// (GET /orgs/{org}/agents/{agent}/watch)
 	WatchAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
+	// ListAuditRecords Read an organization's audit records, newest first.
+	// (GET /orgs/{org}/audit-records)
+	ListAuditRecords(w http.ResponseWriter, r *http.Request, org Org, params ListAuditRecordsParams)
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	// (GET /orgs/{org}/consents)
 	ListOrgConsents(w http.ResponseWriter, r *http.Request, org Org)
@@ -3539,6 +3631,61 @@ func (siw *ServerInterfaceWrapper) WatchAgent(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.WatchAgent(w, r, org, agentSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAuditRecords operation middleware
+func (siw *ServerInterfaceWrapper) ListAuditRecords(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAuditRecordsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAuditRecords(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5884,6 +6031,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/versions", wrapper.CreateIamPolicyVersion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/activate", wrapper.ActivateIamPolicy)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/iam-policies/{iamPolicy}/rollback", wrapper.RollbackIamPolicy)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/audit-records", wrapper.ListAuditRecords)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/consents", wrapper.ListOrgConsents)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.WithdrawOrgConsent)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.GrantOrgConsent)

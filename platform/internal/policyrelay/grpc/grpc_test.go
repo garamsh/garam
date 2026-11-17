@@ -3,10 +3,12 @@ package grpc_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -22,6 +24,16 @@ type stubClient struct {
 	policyv1.PolicyServiceClient
 	get  *policyv1.GetPolicyResponse
 	list *policyv1.ListPoliciesResponse
+
+	audit   *policyv1.ListAuditRecordsResponse
+	auditIn *[]*policyv1.ListAuditRecordsRequest
+}
+
+func (s stubClient) ListAuditRecords(
+	_ context.Context, in *policyv1.ListAuditRecordsRequest, _ ...grpc.CallOption,
+) (*policyv1.ListAuditRecordsResponse, error) {
+	*s.auditIn = append(*s.auditIn, in)
+	return s.audit, nil
 }
 
 func (s stubClient) GetPolicy(
@@ -130,4 +142,60 @@ func TestGet_AnUnspecifiedRoleOrScopeIsTheServicesFault(t *testing.T) {
 			assert.True(t, errorx.IsKind(err, errorx.KindInternal), "got %v", err)
 		})
 	}
+}
+
+func TestListAudit_AsksAsTheReaderAndReadsARecordBack(t *testing.T) {
+	var asked []*policyv1.ListAuditRecordsRequest
+	at := time.Date(2026, 11, 17, 1, 2, 3, 0, time.UTC)
+	client := relaygrpc.New(stubClient{auditIn: &asked, audit: &policyv1.ListAuditRecordsResponse{
+		NextPageToken: "next",
+		Records: []*policyv1.AuditRecord{{
+			Id: 7, Kind: policyv1.AuditRecordKind_AUDIT_RECORD_KIND_DENIAL,
+			FirstAt: timestamppb.New(at), LastAt: timestamppb.New(at.Add(time.Hour)),
+			Count: 3, Service: "cowork", Subject: "grn:root/iam/user/bob",
+			Action: "iam:permit.write", Resource: "grn:acme/iam/policy/p-1",
+			Outcome: "deny", PolicyIds: []string{"p-1"},
+		}, {
+			Id: 8, Kind: policyv1.AuditRecordKind_AUDIT_RECORD_KIND_WRITE,
+			FirstAt: timestamppb.New(at), LastAt: timestamppb.New(at),
+			Count: 1, Outcome: "version-added", VersionFrom: 1, VersionTo: 2,
+		}, {
+			Id: 9, Kind: policyv1.AuditRecordKind_AUDIT_RECORD_KIND_DENIAL_OVERFLOW,
+			FirstAt: timestamppb.New(at), LastAt: timestamppb.New(at), Count: 40,
+			Day: timestamppb.New(at.Truncate(24 * time.Hour)),
+		}},
+	}})
+
+	got, err := client.ListAudit(context.Background(), reader, grn.Org("acme"), 20, "tok")
+
+	require.NoError(t, err)
+	require.Len(t, asked, 1)
+	assert.Equal(t, reader.String(), asked[0].GetWriter().GetId())
+	assert.Equal(t, "grn:root/iam/org/acme", asked[0].GetOrg())
+	assert.Equal(t, int32(20), asked[0].GetPageSize())
+	assert.Equal(t, "tok", asked[0].GetPageToken())
+	assert.Equal(t, "next", got.NextPageToken)
+	require.Len(t, got.Records, 3)
+	assert.Equal(t, policyrelay.AuditDenial, got.Records[0].Kind)
+	assert.Equal(t, int64(3), got.Records[0].Count)
+	assert.Equal(t, []string{"p-1"}, got.Records[0].PolicyIDs)
+	assert.Equal(t, at.Add(time.Hour), got.Records[0].LastAt)
+	assert.True(t, got.Records[0].Day.IsZero())
+	assert.Equal(t, policyrelay.AuditWrite, got.Records[1].Kind)
+	assert.Equal(t, int32(1), got.Records[1].VersionFrom)
+	assert.Equal(t, int32(2), got.Records[1].VersionTo)
+	assert.Equal(t, policyrelay.AuditDenialOverflow, got.Records[2].Kind)
+	assert.False(t, got.Records[2].Day.IsZero())
+}
+
+func TestListAudit_AnUnspecifiedKindIsTheServicesFault(t *testing.T) {
+	var asked []*policyv1.ListAuditRecordsRequest
+	client := relaygrpc.New(stubClient{auditIn: &asked, audit: &policyv1.ListAuditRecordsResponse{
+		Records: []*policyv1.AuditRecord{{Id: 1}},
+	}})
+
+	_, err := client.ListAudit(context.Background(), reader, grn.Org("acme"), 0, "")
+
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindInternal), "got %v", err)
 }

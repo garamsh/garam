@@ -190,11 +190,20 @@ func TestListAudit_AsksAsTheReaderAndReadsARecordBack(t *testing.T) {
 
 func TestListAudit_AnUnspecifiedKindIsTheServicesFault(t *testing.T) {
 	var asked []*policyv1.ListAuditRecordsRequest
+	kinded := relaygrpc.New(stubClient{auditIn: &asked, audit: &policyv1.ListAuditRecordsResponse{
+		Records: []*policyv1.AuditRecord{{Id: 1, Kind: policyv1.AuditRecordKind_AUDIT_RECORD_KIND_DENIAL}},
+	}})
+	// The control: the same record with a kind is read.
+	page, err := kinded.ListAudit(context.Background(), reader, grn.Org("acme"), 0, "")
+	require.NoError(t, err)
+	require.Len(t, page.Records, 1)
+	assert.Equal(t, policyrelay.AuditDenial, page.Records[0].Kind)
+
 	client := relaygrpc.New(stubClient{auditIn: &asked, audit: &policyv1.ListAuditRecordsResponse{
 		Records: []*policyv1.AuditRecord{{Id: 1}},
 	}})
 
-	_, err := client.ListAudit(context.Background(), reader, grn.Org("acme"), 0, "")
+	_, err = client.ListAudit(context.Background(), reader, grn.Org("acme"), 0, "")
 
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInternal), "got %v", err)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,13 @@ func policyRef(id string) string {
 // answers the status and body.
 func (s *relayStack) auditRecords(t *testing.T, cookie *http.Cookie, query string) (int, string) {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, s.origin+"/audit-records"+query, nil)
+	return s.auditRecordsAt(t, s.origin, cookie, query)
+}
+
+// auditRecordsAt reads the audit records of the organization at origin.
+func (s *relayStack) auditRecordsAt(t *testing.T, origin string, cookie *http.Cookie, query string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, origin+"/audit-records"+query, nil)
 	require.NoError(t, err)
 	req.AddCookie(cookie)
 	resp, err := http.DefaultClient.Do(req)
@@ -106,6 +113,11 @@ func TestPolicyRelay_AnOwnerAndAnAdministratorReadTheAuditRecords(t *testing.T) 
 	status, got = s.auditRecords(t, s.other, "")
 	assert.Equal(t, http.StatusForbidden, status, "a member holds no iam:audit.read: %s", got)
 	assert.NotContains(t, got, id, "a refusal tells nothing of the records")
+	// The control: the rival's membership reached the service, so it
+	// reads its own organization and is refused only acme's.
+	rivalOrigin := strings.TrimSuffix(s.origin, "/orgs/acme") + "/orgs/rival"
+	status, got = s.auditRecordsAt(t, rivalOrigin, s.rival, "")
+	assert.Equal(t, http.StatusOK, status, "control: the rival's owner reads the rival's own records: %s", got)
 	status, got = s.auditRecords(t, s.rival, "")
 	assert.Equal(t, http.StatusForbidden, status, "another organization's owner is no reader of this one: %s", got)
 	assert.NotContains(t, got, id)

@@ -137,8 +137,8 @@ the sidebar, the breadcrumb, the command palette and the active marking
 all read. The sidebar is
 [ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md):
 Home, Projects, and Organization (People, Agents, Teams, Permissions,
-Audit, Operators, Hosts and Settings). The same file's `CONSOLE_NAV` is where
-each one is placed, with a link only for a route that exists, and
+Audit, Operators, Hosts and Settings). The same file's `CONSOLE_NAV` is
+where each one is placed, with a link only for a route that exists, and
 `CONSOLE_SECTIONS` names the action each section's list is read under;
 adding one is an entry there, a place in a group and a route folder.
 Consents is a section in no group: Settings links it and the palette

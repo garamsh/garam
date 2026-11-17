@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 import AuditPage from "@/app/console/orgs/[org]/audit/page";
 import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, acmeAuditPage } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  collapsedDenial,
+  guardrailCreated,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -35,17 +39,39 @@ function refuse() {
 }
 
 describe("audit page", () => {
-  it("lists a write with its step and a denial with its count", async () => {
+  it("lists each write as the service records it and a denial with its count", async () => {
     await renderAudit();
 
-    const write = screen.getByRole("row", { name: /iam:policy\.update/ });
-    expect(within(write).getByText("created")).toBeInTheDocument();
-    expect(within(write).getByText("v1 to v2")).toBeInTheDocument();
-    expect(within(write).getByText("Policy write")).toBeInTheDocument();
+    const created = screen.getByRole("row", { name: /iam:policy\.create/ });
+    expect(within(created).getByText("created")).toBeInTheDocument();
+    expect(within(created).getByText("v1")).toBeInTheDocument();
+    expect(within(created).getByText("Policy write")).toBeInTheDocument();
+    const added = screen.getByRole("row", { name: /version-added/ });
+    expect(within(added).getByText("v2")).toBeInTheDocument();
+    const back = screen.getByRole("row", { name: /rolled-back/ });
+    expect(within(back).getByText("v2 to v1")).toBeInTheDocument();
+    const removed = screen.getByRole("row", { name: /iam:policy\.delete/ });
+    expect(within(removed).getByText("removed")).toBeInTheDocument();
+    expect(within(removed).queryByText(/v\d/)).not.toBeInTheDocument();
     const denial = screen.getByRole("row", { name: /iam:project\.delete/ });
     expect(within(denial).getByText("deny")).toBeInTheDocument();
     expect(within(denial).getByText("3 times")).toBeInTheDocument();
     expect(screen.queryByText("Older records")).not.toBeInTheDocument();
+  });
+
+  it("reads an overflow record as denials not stored, asked by no one", async () => {
+    await renderAudit();
+
+    const overflow = screen.getByRole("row", {
+      name: /Denials over the day's limit/,
+    });
+    expect(
+      within(overflow).getByText("40 not stored on 2026-05-01"),
+    ).toBeInTheDocument();
+    expect(within(overflow).getByText("Not recorded")).toBeInTheDocument();
+    expect(
+      within(overflow).queryByText("The platform"),
+    ).not.toBeInTheDocument();
   });
 
   it("offers the older records through the page token", async () => {
@@ -54,8 +80,8 @@ describe("audit page", () => {
         const token = new URL(request.url).searchParams.get("pageToken");
         return HttpResponse.json(
           token === "next-1"
-            ? { records: [acmeAuditPage.records[1]] }
-            : { records: [acmeAuditPage.records[0]], nextPageToken: "next-1" },
+            ? { records: [collapsedDenial] }
+            : { records: [guardrailCreated], nextPageToken: "next-1" },
         );
       }),
     );

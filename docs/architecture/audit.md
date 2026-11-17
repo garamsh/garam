@@ -130,10 +130,12 @@ decides it. The platform's database holds none of it, and
   `listAuditRecords` names the signed-in user as the reader, so the
   service decides the read, current, and its refusal is the answer.
   Records come newest first by their id and paged by the service's
-  token. The console's Audit section and `garam audit-records list`
-  show a record as the service makes it: who asked, the action and
-  the resource, the outcome, the policies by id, a write's version
-  step, a collapsed denial's count and the time.
+  token. The console's Audit section shows a record as the service
+  makes it: who asked, the action and the resource, the outcome, the
+  policies by id, a write's version step, a collapsed denial's count
+  and the time. `garam audit-records list` prints a table of the
+  record's own columns; the policies and the next page's token are in
+  `-o json`.
 
 ## Rationale
 

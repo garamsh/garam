@@ -47,8 +47,10 @@ nothing of them, and the read has the same shape.
    for a write, the version it came from and the version it made. A
    denial's `lastAt` moves as it collapses, so the order is the
    service's, by record id and newest first, and not by time. An
-   overflow record names its day. A record with no subject was made
-   by the platform on a membership's behalf. No policy text, request
+   overflow record names its day and nothing of who asked, what or
+   where: it holds the denials the day's cap stored no row for. A
+   write with no subject was made by the platform on a membership's
+   behalf, and a removal names no version. No policy text, request
    context or token is in one.
 4. **The console shows it as a section.** Audit, under Organization,
    lists a page of records with who asked, the action, the resource,

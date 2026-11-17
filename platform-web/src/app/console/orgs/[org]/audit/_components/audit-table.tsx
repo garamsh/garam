@@ -15,19 +15,27 @@ const KIND_LABEL: Record<AuditRecord["kind"], string> = {
   "denial-overflow": "Denials over the day's limit",
 };
 
-/** The outcome as the service names it, a write's in the past tense. */
-function outcomeLabel(record: AuditRecord): string {
-  return record.kind === "write" ? record.outcome : `${record.outcome}`;
-}
-
-/** What a record adds to its outcome: a write's step, a denial's count. */
+/**
+ * What a record adds to its outcome. A write's step is the version it
+ * wrote or moved to, from the default it moved from where there was
+ * one; a removal names no version, so it adds none. A denial's count
+ * is how many identical denials it holds, and an overflow record's the
+ * denials of its UTC day that were not stored.
+ */
 function detail(record: AuditRecord): string | null {
-  if (record.kind === "write") {
-    return record.versionFrom === 0
-      ? `v${record.versionTo}`
-      : `v${record.versionFrom} to v${record.versionTo}`;
+  switch (record.kind) {
+    case "write":
+      if (record.versionTo === 0) return null;
+      return record.versionFrom === 0
+        ? `v${record.versionTo}`
+        : `v${record.versionFrom} to v${record.versionTo}`;
+    case "denial":
+      return record.count > 1 ? `${record.count} times` : "Once";
+    case "denial-overflow":
+      return `${record.count} not stored${
+        record.day ? ` on ${record.day.slice(0, 10)}` : ""
+      }`;
   }
-  return record.count > 1 ? `${record.count} times` : "Once";
 }
 
 const COLUMNS: ColumnDef<AuditRecord, unknown>[] = [
@@ -43,8 +51,10 @@ const COLUMNS: ColumnDef<AuditRecord, unknown>[] = [
     enableSorting: false,
     accessorFn: (record) => record.subject,
     cell: ({ row }) =>
-      row.original.subject === "" ? (
-        <span className="text-muted-foreground">The platform</span>
+      row.original.kind === "denial-overflow" ? (
+        <span className="text-muted-foreground">Not recorded</span>
+      ) : row.original.subject === "" ? (
+        <span className="text-muted-foreground">No one named</span>
       ) : (
         <CopyId value={row.original.subject} label="Subject" />
       ),
@@ -56,7 +66,9 @@ const COLUMNS: ColumnDef<AuditRecord, unknown>[] = [
     accessorFn: (record) => `${KIND_LABEL[record.kind]} ${record.action}`,
     cell: ({ row }) => (
       <div className="flex min-w-0 flex-col items-start gap-1">
-        <span className="font-mono text-xs">{row.original.action}</span>
+        {row.original.action !== "" && (
+          <span className="font-mono text-xs">{row.original.action}</span>
+        )}
         <span className="text-xs text-muted-foreground">
           {KIND_LABEL[row.original.kind]}
         </span>
@@ -79,15 +91,20 @@ const COLUMNS: ColumnDef<AuditRecord, unknown>[] = [
     id: "outcome",
     header: "Outcome",
     enableSorting: false,
-    accessorFn: (record) => outcomeLabel(record),
-    cell: ({ row }) => (
-      <div className="flex flex-col items-start gap-1">
-        <span>{outcomeLabel(row.original)}</span>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {detail(row.original)}
-        </span>
-      </div>
-    ),
+    accessorFn: (record) => record.outcome,
+    cell: ({ row }) => {
+      const added = detail(row.original);
+      return (
+        <div className="flex flex-col items-start gap-1">
+          {row.original.outcome !== "" && <span>{row.original.outcome}</span>}
+          {added && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {added}
+            </span>
+          )}
+        </div>
+      );
+    },
   },
   {
     id: "policies",

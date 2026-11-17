@@ -517,7 +517,10 @@ and not in the same place on every surface.
   store, so a search reads the rows that match and not the whole list.
   People are the exception: the organization's memberships are read
   whole, and the user store matches among them, since memberships and
-  nicknames are two domains'.
+  nicknames are two domains'. Policies are the other: the policy
+  service stores them and has no search, so the platform reads the
+  organization's list through the relay and matches each name or
+  identifier itself, in identifier order.
 - **A member may ask what it may do, and the answer decides nothing.**
   `checkPermissions` takes up to 50 pairs of an action and a resource
   of the caller's organization, the resource named by its kind and the

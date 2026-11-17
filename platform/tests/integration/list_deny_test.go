@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,8 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
@@ -24,14 +21,13 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/cli"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // listStack is the browser-facing listener over real Postgres and a
@@ -42,19 +38,33 @@ type listStack struct {
 	url            string
 	pool           *pgxpool.Pool
 	acme           grn.GRN
-	policies       *authz.PolicyGRPCServer
 	orgs           *orgpg.Store
 	agents         *agentpg.Store
 	ada, dan       *http.Cookie
 	adaGRN, danGRN grn.GRN
 	decisions      *currentDecisions
+	// relay stands for the policy service's list of policies, which the
+	// search reads through the relay: the service is not started here,
+	// and list_policy_test.go holds the search against the real one.
+	relay *listedPolicies
+}
+
+// listedPolicies is the policy relay as far as a list reads it: the
+// policies a test has had it hold, answered whole. Any other method
+// is not one these tests call and panics on the nil interface.
+type listedPolicies struct {
+	policyrelay.Service
+	held []policyrelay.Policy
+}
+
+func (l *listedPolicies) List(context.Context, grn.GRN, grn.GRN) ([]policyrelay.Policy, error) {
+	return slices.Clone(l.held), nil
 }
 
 func newListStack(t *testing.T) *listStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	policies, _ := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
@@ -69,35 +79,17 @@ func newListStack(t *testing.T) *listStack {
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
 	decisions := newCurrentDecisions(p)
-	s := &listStack{pool: p, acme: acme, policies: policies, orgs: orgs, agents: agentpg.New(p), decisions: decisions}
+	s := &listStack{pool: p, acme: acme, orgs: orgs, agents: agentpg.New(p), decisions: decisions, relay: &listedPolicies{}}
 	s.ada, s.adaGRN = session("ada")
 	s.dan, s.danGRN = session("dan")
 
 	srv := api.NewServer(users, orgs, s.agents, nil, messagepg.New(p), nil,
-		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, decisions), nil,
-		api.Config{SessionTTL: time.Hour})
+		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, nil, cli.NewAuthorityService(p, decisions), nil,
+		api.Config{SessionTTL: time.Hour}).WithPolicyRelay(s.relay)
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	s.url = browser.URL
 	return s
-}
-
-// policyService serves policies' lifecycle service, the one
-// listPolicies reads, and answers a connection to it. It is the same
-// server activePolicy and attachPolicy write through, so the list reads
-// what a test wrote.
-func policyService(t *testing.T, policies *authz.PolicyGRPCServer) *grpc.ClientConn {
-	t.Helper()
-	srv := grpc.NewServer()
-	authzv1.RegisterPolicyServiceServer(srv, policies)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(srv.Stop)
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	return conn
 }
 
 // get makes one GET as cookie and answers the status and body.

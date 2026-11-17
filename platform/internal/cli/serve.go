@@ -139,7 +139,6 @@ func serveAPI(cmd *cobra.Command) error {
 		authnpg.NewPasswordAttemptStore(pool),
 		providers,
 		decisions,
-		api.NewGRPCPolicyManager(conn),
 		authorityPresence{orgs: orgpg.New(pool)},
 		NewAuthorityService(pool, decisions),
 		NewStandaloneService(pool, decisions),

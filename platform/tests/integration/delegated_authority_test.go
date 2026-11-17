@@ -87,7 +87,7 @@ func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool
 	member, memberGRN := session("bob", org.RoleMember)
 
 	srv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
-		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, nil, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
+		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 

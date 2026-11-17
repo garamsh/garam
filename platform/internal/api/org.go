@@ -208,9 +208,14 @@ func (s *Server) GetOrgDeletionPreview(w http.ResponseWriter, r *http.Request, o
 		writeError(w, err)
 		return
 	}
-	// The engine owns policies and returns the organization's whole
-	// list rather than a page, so its length is the count.
-	policies, err := s.policies.ListPolicies(ctx, g)
+	// The policy service owns policies and the relay returns the
+	// organization's whole list rather than a page, so its length is
+	// the count.
+	if s.policyRelay == nil {
+		writeError(w, errorx.New(errorx.KindUnavailable, "policy service is not configured"))
+		return
+	}
+	policies, err := s.policyRelay.List(ctx, u.GRN, g)
 	if err != nil {
 		writeError(w, err)
 		return

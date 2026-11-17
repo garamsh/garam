@@ -68,12 +68,6 @@ api:
     signingKeyFile: /vault/secrets/policy-signing-key
   podAnnotations:
     vault.hashicorp.com/agent-inject: "true"
-authz:
-  serviceAccount:
-    name: garam-authz
-    create: true
-    annotations:
-      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-authz
 policy:
   serviceAccount:
     name: garam-policy

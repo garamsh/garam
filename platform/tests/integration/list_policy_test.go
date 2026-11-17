@@ -336,6 +336,17 @@ func TestEnforcement_APermitDoesNotGrantTheRightToWriteOne(t *testing.T) {
 		`{"name":"by the member","body":`+textBody("permit", relayPermit)+`}`)
 	assert.Equal(t, http.StatusForbidden, status, "the write agrees with the check: %s", got)
 	assert.Equal(t, apigen.DecisionAllow, s.check(t, s.owner, org.ActionPermitWrite), "control: the owner's role carries it")
+
+	status, got = s.get(t, "/orgs/acme/permission-holders?action="+url.QueryEscape(org.ActionPermitWrite), s.owner)
+	require.Equal(t, http.StatusOK, status, got)
+	var holders apigen.PermissionHolders
+	require.NoError(t, json.Unmarshal([]byte(got), &holders))
+	var listed []string
+	for _, h := range holders.Holders {
+		listed = append(listed, h.Grn)
+	}
+	assert.Contains(t, listed, s.ownerGRN.String(), "control: the owner is a holder of the right to write a permit")
+	assert.NotContains(t, listed, s.memberGRN.String(), "the member the permit names is not a holder, as the check says")
 }
 
 // TestEnforcement_APolicyWriteIsAskedOnTheOrganization asks the

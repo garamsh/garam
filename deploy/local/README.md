@@ -371,9 +371,8 @@ for `policy-tls` and `policy-keys`, and `web` and `site` for
 `policy`, `cowork-web` for `cowork`, and `cowork-gateway` for
 `cowork-web`. `policy-migrate` waits
 for `policy-db`, `policy` for it, `policy-tls` and `policy-keys`, and
-`policy-feed` for `migrate` and a healthy `policy`. `api` does not wait
-for `policy`: a policy service that is down delays a write by the gate's
-five seconds and never keeps the api from starting. Every server's
+`policy-feed` for `migrate` and a healthy `policy`. `api` waits for a
+healthy `policy` too, as `machine` does. Every server's
 healthcheck is its own readiness probe, so a service is healthy here
 when it can serve a request and not merely when it has bound its port.
 

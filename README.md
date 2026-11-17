@@ -86,7 +86,7 @@ never have matched. It reads tracked files only.
 ## Local stack
 
 [`deploy/local/`](./deploy/local/) runs everything — Postgres,
-migrations, authz, api, and the frontend behind `--profile web` — in
+migrations, the policy service, api, and the frontend behind `--profile web` — in
 containers. See [deploy/local/README.md](./deploy/local/README.md).
 
 ```sh
@@ -164,7 +164,7 @@ does not list `google`.
 browser against the real backend. Bring up the backend first:
 
 ```sh
-make backend-up          # postgres, migrate, authz and api, in containers
+make backend-up          # postgres, migrate, policy and api, in containers
 make web-e2e
 ```
 

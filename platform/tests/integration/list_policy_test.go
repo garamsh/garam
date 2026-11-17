@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
-	policyv1 "github.com/garamsh/garam/lib/policy-sdk-go/gen/garam/policy/v1"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/org"
@@ -164,8 +163,14 @@ func TestEnforcement_AListHidesAnObjectTheServiceRefusesBesideOneItAllows(t *tes
 // policy is deleted when the test ends.
 func (s *enforcementStack) relayedPermit(t *testing.T, name string) grn.GRN {
 	t.Helper()
+	return s.relayedPermitOf(t, name, relayPermit)
+}
+
+// relayedPermitOf is relayedPermit for the Cedar text a test names.
+func (s *enforcementStack) relayedPermitOf(t *testing.T, name, cedar string) grn.GRN {
+	t.Helper()
 	status, got := browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies", s.owner,
-		`{"name":"`+name+`","body":`+textBody("permit", relayPermit)+`}`)
+		`{"name":"`+name+`","body":`+textBody("permit", cedar)+`}`)
 	require.Equal(t, http.StatusCreated, status, got)
 	id := policyID(t, got)
 	t.Cleanup(func() {
@@ -273,16 +278,14 @@ func TestEnforcement_AFailingServiceIsUnavailableNotAnEmptyList(t *testing.T) {
 // the guardrail refuses the owner both.
 func TestEnforcement_PermitWriteIsAnsweredAsTheServiceDecidesAPermitWrite(t *testing.T) {
 	s := newEnforcementStack(t, realDecisions)
-	writer := &policyv1.Subject{Type: "Iam::User", Id: s.ownerGRN.String()}
 	write := func(cookie *http.Cookie) int {
 		status, got := browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies", cookie,
 			`{"name":"n","body":`+textBody("permit", relayPermit)+`}`)
 		if status == http.StatusCreated {
 			made := policyID(t, got)
 			t.Cleanup(func() {
-				_, _ = s.rp.client.DeletePolicy(context.Background(), &policyv1.DeletePolicyRequest{
-					Writer: writer, Org: s.acme.String(), Policy: made,
-				})
+				_ = relaygrpc.New(s.rp.client).Delete(context.Background(),
+					policyrelay.Write{Writer: s.ownerGRN, Org: grn.Org("acme"), ID: made})
 			})
 		}
 		return status
@@ -306,6 +309,33 @@ func TestEnforcement_PermitWriteIsAnsweredAsTheServiceDecidesAPermitWrite(t *tes
 	s.forbid(t, `forbid (principal, action == Iam::Action::"permit.write", resource);`)
 	assert.Equal(t, apigen.DecisionDeny, s.check(t, s.owner, org.ActionPermitWrite), "a guardrail forbids the owner the check")
 	assert.Equal(t, http.StatusForbidden, write(s.owner), "and the write")
+}
+
+// TestEnforcement_APermitDoesNotGrantTheRightToWriteOne gives the member
+// a permit naming iam:permit.write and iam:policy.attach, and asks the
+// permission check and the write as the member. The service decides a
+// write of a permit without the organization's permits (ADR-0175), and
+// the check asks it the same way, so the member is refused both; the
+// policy attach the same permit names is the control, which the
+// permit does grant, so what refuses the first is the question and not
+// a permit that took no effect.
+func TestEnforcement_APermitDoesNotGrantTheRightToWriteOne(t *testing.T) {
+	s := newEnforcementStack(t, realDecisions)
+	require.Equal(t, apigen.DecisionDeny, s.check(t, s.member, org.ActionPolicyAttach),
+		"setup: the member's role does not carry the control action")
+	made := s.relayedPermitOf(t, "member writes permits", `permit (principal == Iam::User::"`+s.memberGRN.String()+
+		`", action in [Iam::Action::"permit.write", Iam::Action::"policy.attach"], resource in Iam::Org::"grn:root/iam/org/acme");`)
+	status, got := browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies/"+made.Identifier+"/activate", s.owner, "")
+	require.Equal(t, http.StatusNoContent, status, got)
+
+	assert.Equal(t, apigen.DecisionAllow, s.check(t, s.member, org.ActionPolicyAttach),
+		"control: the permit grants the member the policy attach")
+	assert.Equal(t, apigen.DecisionDeny, s.check(t, s.member, org.ActionPermitWrite),
+		"the permit does not grant the right to write one")
+	status, got = browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies", s.member,
+		`{"name":"by the member","body":`+textBody("permit", relayPermit)+`}`)
+	assert.Equal(t, http.StatusForbidden, status, "the write agrees with the check: %s", got)
+	assert.Equal(t, apigen.DecisionAllow, s.check(t, s.owner, org.ActionPermitWrite), "control: the owner's role carries it")
 }
 
 // TestEnforcement_APolicyWriteIsAskedOnTheOrganization asks the

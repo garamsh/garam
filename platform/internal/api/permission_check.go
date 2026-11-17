@@ -65,6 +65,9 @@ const (
 type actionRule struct {
 	on        []apigen.PermissionResourceType
 	decidedBy decidedBy
+	// withoutPermits asks the service as a write of the action decides
+	// it, leaving the organization's permits out (ADR-0175).
+	withoutPermits bool
 }
 
 // actionRules holds one rule per action org.Actions defines, read off
@@ -103,7 +106,9 @@ var actionRules = map[string]actionRule{
 	org.ActionPolicyDetach: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
 	org.ActionPolicyDelete: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
 	org.ActionAuditRead:    {on: []apigen.PermissionResourceType{onOrg}},
-	org.ActionPermitWrite:  {on: []apigen.PermissionResourceType{onOrg}},
+	// A permit is written by whoever the service allows without the
+	// permits, so a permit cannot grant the right to write one.
+	org.ActionPermitWrite: {on: []apigen.PermissionResourceType{onOrg}, withoutPermits: true},
 
 	org.ActionConsentRead:     {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionConsentGrant:    {on: []apigen.PermissionResourceType{onOrg}},

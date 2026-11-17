@@ -67,6 +67,8 @@ func (c *Client) evaluate(
 		Resource: resource,
 		Probe:    q.Probe,
 		Read:     readOf(q.Current),
+		// Without permits is the question's own.
+		WithoutPermits: q.WithoutPermits,
 	})
 }
 
@@ -80,9 +82,9 @@ func readOf(current bool) policyv1.Read {
 }
 
 // Evaluations asks the questions in one call. Each carries its own
-// probe, so a mixed batch states each as its caller does. The read is
-// the request's alone, so a batch in which any question asks for
-// current is read current throughout.
+// probe and its own without-permits, so a mixed batch states each as
+// its caller does. The read is the request's alone, so a batch in
+// which any question asks for current is read current throughout.
 func (c *Client) Evaluations(
 	ctx context.Context, qs []policydecision.Question,
 ) ([]policydecision.Decision, error) {
@@ -97,12 +99,13 @@ func (c *Client) Evaluations(
 		if err != nil {
 			return nil, err
 		}
-		probe := q.Probe
+		probe, withoutPermits := q.Probe, q.WithoutPermits
 		asked[i] = &policyv1.Evaluation{
-			Subject:  subject,
-			Action:   &policyv1.Action{Name: q.Action},
-			Resource: resource,
-			Probe:    &probe,
+			Subject:        subject,
+			Action:         &policyv1.Action{Name: q.Action},
+			Resource:       resource,
+			Probe:          &probe,
+			WithoutPermits: &withoutPermits,
 		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, feedgrpc.CallTimeout)

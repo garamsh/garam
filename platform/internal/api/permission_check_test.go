@@ -102,6 +102,41 @@ func TestCheckPermissions_AsksAboutTheNamedResource(t *testing.T) {
 	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
 }
 
+// TestCheckPermissions_AsksPermitWriteWithoutThePermits holds that
+// iam:permit.write is asked as a write of a permit decides it, which
+// leaves the organization's permits out (ADR-0175), and that no other
+// action is: the service here allows a question only where it is asked
+// without the permits, so the allow is the flag's, and the group
+// update asked beside it is the control, asked with them and denied.
+func TestCheckPermissions_AsksPermitWriteWithoutThePermits(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	var asked []policydecision.Question
+	f.answers(func(q policydecision.Question) (bool, error) {
+		asked = append(asked, q)
+		return q.WithoutPermits, nil
+	})
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionPermitWrite},
+		apigen.PermissionCheck{Action: org.ActionGroupCreate},
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, []apigen.PermissionCheckResult{
+		{Action: org.ActionPermitWrite, Decision: apigen.DecisionAllow},
+		{Action: org.ActionGroupCreate, Decision: apigen.DecisionDeny},
+	}, decodeBody[apigen.PermissionCheckAnswer](t, rec).Results)
+	var without []string
+	for _, q := range asked {
+		if q.WithoutPermits {
+			without = append(without, q.Action)
+		}
+	}
+	assert.Equal(t, []string{org.ActionPermitWrite}, without, "only a permit write leaves the permits out")
+}
+
 // TestCheckPermissions_AsksACoworkPageAsItsGRN holds that a cowork
 // page is checked as the GRN cowork names it by, under the org that
 // asks (ADR-0127): the engine here allows one page and not another,

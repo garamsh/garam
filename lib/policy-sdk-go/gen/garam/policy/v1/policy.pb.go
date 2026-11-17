@@ -527,9 +527,15 @@ type EvaluateRequest struct {
 	// what to show, as when it filters a list or enables a control. A
 	// denied probe is not recorded (ADR-0148). The default is an
 	// attempt, a request someone made, and a denied attempt is.
-	Probe         bool `protobuf:"varint,6,opt,name=probe,proto3" json:"probe,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Probe bool `protobuf:"varint,6,opt,name=probe,proto3" json:"probe,omitempty"`
+	// without_permits states that the question is asked as a write
+	// decides the right to write a permit: against the system tier, the
+	// organization's role links and guardrails, and its entities, with
+	// its permits left out (ADR-0175). The default honours them. Storage
+	// is read when asked either way, so read does not change it.
+	WithoutPermits bool `protobuf:"varint,7,opt,name=without_permits,json=withoutPermits,proto3" json:"without_permits,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *EvaluateRequest) Reset() {
@@ -600,6 +606,13 @@ func (x *EvaluateRequest) GetRead() Read {
 func (x *EvaluateRequest) GetProbe() bool {
 	if x != nil {
 		return x.Probe
+	}
+	return false
+}
+
+func (x *EvaluateRequest) GetWithoutPermits() bool {
+	if x != nil {
+		return x.WithoutPermits
 	}
 	return false
 }
@@ -776,9 +789,11 @@ type Evaluation struct {
 	Resource *Resource              `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
 	Context  *structpb.Struct       `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
 	// probe, where set, replaces the request's.
-	Probe         *bool `protobuf:"varint,5,opt,name=probe,proto3,oneof" json:"probe,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Probe *bool `protobuf:"varint,5,opt,name=probe,proto3,oneof" json:"probe,omitempty"`
+	// without_permits, where set, replaces the request's.
+	WithoutPermits *bool `protobuf:"varint,6,opt,name=without_permits,json=withoutPermits,proto3,oneof" json:"without_permits,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Evaluation) Reset() {
@@ -846,6 +861,13 @@ func (x *Evaluation) GetProbe() bool {
 	return false
 }
 
+func (x *Evaluation) GetWithoutPermits() bool {
+	if x != nil && x.WithoutPermits != nil {
+		return *x.WithoutPermits
+	}
+	return false
+}
+
 // EvaluationsRequest holds the defaults its evaluations share.
 type EvaluationsRequest struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -856,9 +878,12 @@ type EvaluationsRequest struct {
 	Read        Read                   `protobuf:"varint,5,opt,name=read,proto3,enum=garam.policy.v1.Read" json:"read,omitempty"`
 	Evaluations []*Evaluation          `protobuf:"bytes,6,rep,name=evaluations,proto3" json:"evaluations,omitempty"`
 	// probe is the default of every entry, as EvaluateRequest's is.
-	Probe         bool `protobuf:"varint,7,opt,name=probe,proto3" json:"probe,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Probe bool `protobuf:"varint,7,opt,name=probe,proto3" json:"probe,omitempty"`
+	// without_permits is the default of every entry, as EvaluateRequest's
+	// is.
+	WithoutPermits bool `protobuf:"varint,8,opt,name=without_permits,json=withoutPermits,proto3" json:"without_permits,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *EvaluationsRequest) Reset() {
@@ -936,6 +961,13 @@ func (x *EvaluationsRequest) GetEvaluations() []*Evaluation {
 func (x *EvaluationsRequest) GetProbe() bool {
 	if x != nil {
 		return x.Probe
+	}
+	return false
+}
+
+func (x *EvaluationsRequest) GetWithoutPermits() bool {
+	if x != nil {
+		return x.WithoutPermits
 	}
 	return false
 }
@@ -2803,14 +2835,15 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x127\n" +
 	"\n" +
 	"properties\x18\x03 \x01(\v2\x17.google.protobuf.StructR\n" +
-	"properties\"\xa1\x02\n" +
+	"properties\"\xca\x02\n" +
 	"\x0fEvaluateRequest\x122\n" +
 	"\asubject\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\asubject\x12/\n" +
 	"\x06action\x18\x02 \x01(\v2\x17.garam.policy.v1.ActionR\x06action\x125\n" +
 	"\bresource\x18\x03 \x01(\v2\x19.garam.policy.v1.ResourceR\bresource\x121\n" +
 	"\acontext\x18\x04 \x01(\v2\x17.google.protobuf.StructR\acontext\x12)\n" +
 	"\x04read\x18\x05 \x01(\x0e2\x15.garam.policy.v1.ReadR\x04read\x12\x14\n" +
-	"\x05probe\x18\x06 \x01(\bR\x05probe\";\n" +
+	"\x05probe\x18\x06 \x01(\bR\x05probe\x12'\n" +
+	"\x0fwithout_permits\x18\a \x01(\bR\x0ewithoutPermits\";\n" +
 	"\x06Reason\x12\x1b\n" +
 	"\tpolicy_id\x18\x01 \x01(\tR\bpolicyId\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\"D\n" +
@@ -2818,15 +2851,17 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\areasons\x18\x01 \x03(\v2\x17.garam.policy.v1.ReasonR\areasons\"j\n" +
 	"\x10EvaluateResponse\x12\x1a\n" +
 	"\bdecision\x18\x01 \x01(\bR\bdecision\x12:\n" +
-	"\acontext\x18\x02 \x01(\v2 .garam.policy.v1.DecisionContextR\acontext\"\x80\x02\n" +
+	"\acontext\x18\x02 \x01(\v2 .garam.policy.v1.DecisionContextR\acontext\"\xc2\x02\n" +
 	"\n" +
 	"Evaluation\x122\n" +
 	"\asubject\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\asubject\x12/\n" +
 	"\x06action\x18\x02 \x01(\v2\x17.garam.policy.v1.ActionR\x06action\x125\n" +
 	"\bresource\x18\x03 \x01(\v2\x19.garam.policy.v1.ResourceR\bresource\x121\n" +
 	"\acontext\x18\x04 \x01(\v2\x17.google.protobuf.StructR\acontext\x12\x19\n" +
-	"\x05probe\x18\x05 \x01(\bH\x00R\x05probe\x88\x01\x01B\b\n" +
-	"\x06_probe\"\xe3\x02\n" +
+	"\x05probe\x18\x05 \x01(\bH\x00R\x05probe\x88\x01\x01\x12,\n" +
+	"\x0fwithout_permits\x18\x06 \x01(\bH\x01R\x0ewithoutPermits\x88\x01\x01B\b\n" +
+	"\x06_probeB\x12\n" +
+	"\x10_without_permits\"\x8c\x03\n" +
 	"\x12EvaluationsRequest\x122\n" +
 	"\asubject\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\asubject\x12/\n" +
 	"\x06action\x18\x02 \x01(\v2\x17.garam.policy.v1.ActionR\x06action\x125\n" +
@@ -2834,7 +2869,8 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\acontext\x18\x04 \x01(\v2\x17.google.protobuf.StructR\acontext\x12)\n" +
 	"\x04read\x18\x05 \x01(\x0e2\x15.garam.policy.v1.ReadR\x04read\x12=\n" +
 	"\vevaluations\x18\x06 \x03(\v2\x1b.garam.policy.v1.EvaluationR\vevaluations\x12\x14\n" +
-	"\x05probe\x18\a \x01(\bR\x05probe\"Z\n" +
+	"\x05probe\x18\a \x01(\bR\x05probe\x12'\n" +
+	"\x0fwithout_permits\x18\b \x01(\bR\x0ewithoutPermits\"Z\n" +
 	"\x13EvaluationsResponse\x12C\n" +
 	"\vevaluations\x18\x01 \x03(\v2!.garam.policy.v1.EvaluateResponseR\vevaluations\"/\n" +
 	"\tEntityRef\x12\x12\n" +

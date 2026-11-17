@@ -1557,3 +1557,8 @@ ADRs:
   message; a new version is stored and not the default; each write is
   offered unless the server denies it; accepted, built (#1980); builds
   ADR-0169
+- [0175](./adr/0175-the-policy-services-evaluate-and-evaluations-take-a-without-permits-option-deciding-as-a-permit-write-does.md)
+  — `Evaluate` and `Evaluations` take `without_permits`, leaving the
+  organization's `permit`s out as `PermitRight::ask` does, through one
+  function the write and the option share; the HTTP binding does not
+  carry it; accepted, built (#1983); builds ADR-0172 item 6

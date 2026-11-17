@@ -13,6 +13,6 @@ mod step;
 pub use body::{Body, BodyKind, Content};
 pub use error::Error;
 pub use link_name::{link_policy, names_link, reserved, scoped_link_policy};
-pub use permit_right::PermitRight;
+pub use permit_right::{PermitRight, evaluate_without_permits};
 pub use postgres::{NewPolicy, PolicyStore, Status, Summary, Version};
 pub use step::{Step, action_for};

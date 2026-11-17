@@ -278,33 +278,25 @@ shows it. The machine listener holds `Service` contracts and exactly
 one store — the consent relation's, which is the messaging domain's own
 data reached the way the queue is. The browser-facing one holds domain
 stores directly, beside the three seams it declares: the two it asks
-the policy engine through, and `AuthorityReader`.
+the policy service through, and `AuthorityReader`.
 
 Neither listener imports the other and they never run in one process
-(ADR-0017). Neither imports the policy engine: each holds a gRPC client
-of its own, and the conversions onto the wire contract are declared
-once in `platform/internal/wire`. Neither imports `platform/internal/ca`
-either. What the browser-facing one reads of a certificate authority is
-whether an organization has one, through `AuthorityReader`, which the
-composition root satisfies with the organizations store's presence read
-below. Presence is the whole of that seam: the question is asked to say
-what deleting an organization would destroy, it needs no key to answer,
-and `garam serve api` still reads no key-encryption key.
+(ADR-0017). Neither imports the policy service: each holds a client of
+its own. Neither imports `platform/internal/ca` either. What the
+browser-facing one reads of a certificate authority is whether an
+organization has one, through `AuthorityReader`, which the composition
+root satisfies with the organizations store's presence read below.
+Presence is the whole of that seam: the question is asked to say what
+deleting an organization would destroy, it needs no key to answer, and
+`garam serve api` still reads no key-encryption key.
 
 Two decisions live at a surface rather than in a domain, because each
 is a question about the caller rather than about the subject. Whom a
 machine caller may send to is decided at the machine listener: for a
 recipient of the caller's own organization the answer comes from the
-policy engine, which the listener unions with what the caller's own GRN
-grants it (ADR-0024), and the question carries the caller's groups
-because an attachment names a group as readily as an identity (ADR-0008,
-ADR-0014). Membership that cannot be read refuses the message rather
-than deciding it without, because an unread group and an empty one are
-otherwise the same answer. A recipient of another organization is
-refused before the engine is asked, unless the consent relation stands
-(ADR-0035): the engine is never asked a cross-organization question,
-because an unattached active policy of the recipient's organization
-would otherwise admit every sender there is
+policy service, which reads the sender's memberships itself (ADR-0168).
+A recipient of another organization is refused before the service is
+asked, unless the consent relation stands (ADR-0035)
 ([authz.md](./authz.md) §Policy attachment). A post the relation does
 not carry is not rejected — the refusal returns to the sender as an
 ordinary inbound message (ADR-0013), written under the intended

@@ -1573,3 +1573,10 @@ ADRs:
   shows it as an Audit section offered unless the server denies the
   read, and the CLI lists it from the specification; accepted, built
   (#1991); builds ADR-0148
+- [0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)
+  — the earlier policy engine is removed: `garam serve authz`,
+  `platform/internal/authz`, the protobuf module and its `buf`
+  configuration, the settings only they read, and the tables
+  `policies`, `policy_versions` and `policy_attachments` by migration
+  000081, reversible empty; accepted, built (#2000); builds ADR-0146
+  item 1; supersedes 0003 in part

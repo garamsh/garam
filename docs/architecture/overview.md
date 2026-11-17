@@ -392,8 +392,7 @@ list below is today's tree
   directions, every postgres-backed store binds and scans through, and
   the `ILIKE` pattern a search binds. Shared primitive.
 - `platform/internal/cli/` — the server's cobra commands + wiring
-  (`serve api` | `serve authz` | `serve machine` | `migrate` | `probe`
-  | `adapter`).
+  (`serve api` | `serve machine` | `migrate` | `probe` | `adapter`).
 - `platform/internal/health/` — what liveness and readiness mean, and
   the two probes every serve command mounts (ADR-0021).
 - `platform/internal/operator/` — the record that an organization has an
@@ -438,45 +437,39 @@ list below is today's tree
   ServerInterface.
 - `platform/internal/authn/` — sign-in provider abstraction, implemented
   by Google OIDC alone (ADR-0044), password verification, sessions.
-- `platform/internal/authz/` — policy engine: model, evaluator, policy
-  store and per-org cache, gRPC servers.
 - `platform/internal/org/` — organizations, groups, projects,
   memberships, invitations.
 - `platform/internal/user/` — human identities.
 
 `grn`, `errorx` and `listfilter` are the packages domains share with
 each other; `keyfile` holds the one rule key material files are read
-under, reached
-by `ca`, by the `cli` wiring that reads the machine listener's pair
-and the adapter's, and by `workload` for its record and serving key;
-`wire` is reached by three packages and no others —
-`api`, `machineapi` and `authz`, the first two at their request
-boundaries and `authz` from its model, where the statement `Effect` it
-declares is the type every surface shares
-([authz.md](./authz.md) §Components) — and `health` is shared by the
-three serve commands and imported by no domain. `machine` declares the
-trust root it verifies against and `cli` satisfies it from `ca`
+under, reached by `ca`, by the `cli` wiring that reads the machine
+listener's pair and the adapter's, and by `workload` for its record and
+serving key; `wire` is reached by `api` and `machineapi` and no others,
+at their request boundaries, and `health` is shared by the two serve
+commands and imported by no domain. `machine` declares the trust root it
+verifies against and `cli` satisfies it from `ca`
 ([structure.md](./structure.md) §Boundaries and dependency direction).
 `api` sees several domains at once and enforces authentication (session
-cookie) at the boundary; org-role checks go through the `Evaluator`
-seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
-machine listener enforces its own authentication at its own boundary
-and shares neither cookie nor session with `api`; `machineapi` reaches
-the engine through an `Evaluator` seam of its own to decide what a
-caller may send, and it and `platform/internal/api` never import each
-other. Neither imports `platform/internal/authz`; the wire contract is
-`platform/proto/garam/authz/v1`, and the conversions onto it are
-declared once in `platform/internal/wire`. Both surfaces compose four
-boundaries — the `agent`, `message` and `operator` domains, and `watch`,
-which is not a domain (`domains.md` §Sub-responsibilities in a boundary
-of their own). `watch` is extracted rather than held by either of them
-because a watch has a lifecycle neither `message` nor `agent` contains,
-and its two ends fall on different listeners — opened on the browser
-one, fed on the machine one — which may not reach each other (ADR-0017,
-ADR-0022). `delivery` is the one package that runs outside garam: it is
-a client of the machine listener rather than part of it, so it reads
-that listener's specification through the models generated from it and
-imports no request surface and no domain.
+cookie) at the boundary; org-role checks ask the policy service through
+its decision client ([authz.md](./authz.md) §Components). The machine
+listener enforces its own authentication at its own boundary and shares
+neither cookie nor session with `api`; `machineapi` asks the policy
+service through a seam of its own to decide what a caller may send, and
+it and `platform/internal/api` never import each other. The earlier
+engine and its wire contract are removed
+([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
+Both surfaces compose four boundaries — the `agent`, `message` and
+`operator` domains, and `watch`, which is not a domain (`domains.md`
+§Sub-responsibilities in a boundary of their own). `watch` is extracted
+rather than held by either of them because a watch has a lifecycle
+neither `message` nor `agent` contains, and its two ends fall on
+different listeners — opened on the browser one, fed on the machine one
+— which may not reach each other (ADR-0017, ADR-0022). `delivery` is the
+one package that runs outside garam: it is a client of the machine
+listener rather than part of it, so it reads that listener's
+specification through the models generated from it and imports no
+request surface and no domain.
 
 ## Core abstractions
 

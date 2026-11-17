@@ -44,9 +44,8 @@ repeated. A second copy is a second thing to keep true.
 |---|---|---|---|
 | Browser-facing HTTP | `garam serve api` | `platform/api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
 | Machine | `garam serve machine` | `platform/api/machine.yaml` | an operator, an agent or a standalone host's supervisor presenting a token garam issued (ADR-0100, ADR-0118) |
-| Policy engine | `garam serve authz` | `platform/proto/garam/authz/v1` | one of the two listeners above, over gRPC (ADR-0003) |
 | Probes | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
-| Metrics | `garam serve api` and `garam serve authz`, on the listener each already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
+| Metrics | `garam serve api`, on the listener it already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
 
 The first two are separate processes
 ([ADR-0017](./adr/0017-machine-process.md)), and neither may call the
@@ -345,11 +344,9 @@ branches on these answers, each carrying the header:
 `platform/api/machine.yaml` is authoritative for the wire, and
 [messaging.md](./messaging.md) for what the budget decides.
 
-**Policy engine.** Nothing. Both listeners hold a client of their own,
-and the transport carries no credential because the processes run
-inside one trust boundary
-([ADR-0003](./adr/0003-single-cli-topology.md)). What keeps anything
-else off that port is the deployment's, not garam's.
+**Policy engine.** Removed. The platform no longer serves a decision
+surface; the policy service is a service of its own with its own
+contract ([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
 
 **Probes and metrics.** Nothing, by decision: a probe holds no
 credential, so the answer is served where none is needed
@@ -401,7 +398,8 @@ and not in the same place on every surface.
   a cross-organization question at all
   ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)).
   Why no policy may reach past that boundary is
-  [authz.md](./authz.md) §Policy attachment. A restriction meant to
+  [authz.md](./authz.md) §Policy attachment, which says what became of
+  it. A restriction meant to
   bear on a cross-organization send is therefore not something a policy
   can carry. Decided, not built: [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
   has the engine decide it, with both organizations' guardrails read.
@@ -792,9 +790,9 @@ callback redirects to it, checked again, or to `/console`, and no answer
 repeats it. A cross-site form can start such a login, and the most it
 decides is where inside one of garam's apps that login lands.
 
-The other three surfaces are fixed differently. The engine's wire
-contract is `platform/proto/garam/authz/v1`, generated and checked the
-same way. The probes have no specification at all: their paths, and the
+The other surfaces are fixed differently. The earlier engine's wire
+contract, `platform/proto/garam/authz/v1`, is removed with it. The
+probes have no specification at all: their paths, and the
 ports they answer on, are interface rather than implementation, so
 changing one supersedes the ADR that set it instead of editing a handler
 (ADR-0021, [ADR-0023](./adr/0023-web-probes.md)). The metrics surface is
@@ -897,20 +895,19 @@ an author having read this far, which is weaker than a check;
   changes an endpoint now has a responsibility document to be paired
   with — and leaves the half only a rule can. What that rule should say
   is the index's to decide and not this document's.
-- **What decides the metrics surface, on two processes of three.**
-  `/metrics` is served by `garam serve api` and `garam serve authz`
-  (§The surfaces) and decided by no ADR: every ADR that names it treats
-  it as a surface that already exists. ADR-0014 and ADR-0017 name it as
-  the shape a listener of its own follows, ADR-0021 puts the probes on
-  the listener its metrics already use, and ADR-0030 counts it among
-  the paths that write nothing — context and reasoning, never a
-  decision. `garam serve machine` is the exception: it serves
-  `/metrics` on its probe port because ADR-0100's migration plan gated
-  removing the certificate path on a count of the listener's requests
-  by how each authenticated, `garam_machine_requests_total`
+- **What decides the metrics surface.** `/metrics` is served by `garam
+  serve api` and `garam serve machine` (§The surfaces) and decided by no
+  ADR: every ADR that names it treats it as a surface that already
+  exists. ADR-0014 and ADR-0017 name it as the shape a listener of its
+  own follows, ADR-0021 puts the probes on the listener its metrics
+  already use, and ADR-0030 counts it among the paths that write nothing
+  — context and reasoning, never a decision. `garam serve machine` is
+  the exception: it serves `/metrics` on its probe port because
+  ADR-0100's migration plan gated removing the certificate path on a
+  count of the listener's requests by how each authenticated,
+  `garam_machine_requests_total`
   (`platform/internal/cli/machine_token.go`). That decides that this
-  process exposes the count, and nothing about what the other two
-  expose.
+  process exposes the count, and nothing about what `serve api` exposes.
 - **Whether anything outside the cluster reaches any listener.** The
   chart renders four `ClusterIP` Services and refuses to offer a value
   that would expose one (ADR-0042), so exposure is the deployment's

@@ -36,7 +36,11 @@ workflow last. Each tier depends only on the tier below it.
 - Migrations under `platform/migrations/` (golang-migrate). Dockerised
   Postgres for dev; e2e store round-trips against real Postgres.
 
-## P1 — authz engine (done)
+## P1 — authz engine (done, and removed)
+
+The engine this tier built is removed: the policy service replaced it
+(ADR-0130) and [ADR-0177](../architecture/adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)
+deleted it, its serve command, its protobuf module and its tables.
 
 - IAM-style `Statement` model and native `StatementEvaluator`
   (ADR-0002); org roles evaluated as statements.
@@ -45,7 +49,10 @@ workflow last. Each tier depends only on the tier below it.
   gRPC client only.
 - Full wildcard semantics (`*`, `?`) in statement patterns.
 
-## P2 — authz persistence & policy versioning (done)
+## P2 — authz persistence & policy versioning (done, and removed)
+
+The tables and the cache this tier built are removed with the engine
+([ADR-0177](../architecture/adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
 
 - Postgres `policies` + append-only `policy_versions` (ADR-0002);
   policies became org-managed data the engine owns.
@@ -87,8 +94,8 @@ already expose, built in parallel rather than gating P3.
   Handlers log the route pattern, never the concrete path, so an
   invitation token cannot reach a log line.
 - Prometheus metrics and OpenTelemetry tracing — metrics done for
-  `serve api` and `serve authz`, on the listener each already runs, and
-  for `serve machine`, on its probe port
+  `serve api`, on the listener it already runs, and for `serve machine`,
+  on its probe port
   ([api-surface.md](../architecture/api-surface.md) §The surfaces).
   Spans are minted and propagated but not exported: there is nowhere to
   ship them yet.

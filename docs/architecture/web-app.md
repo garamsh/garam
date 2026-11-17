@@ -580,7 +580,7 @@ The boundary is as much of the responsibility as the contents.
   rather than a gate: a cookie can be expired or revoked, so the
   console verifies the session against `/me`, and a 401 from any read
   sends the visitor to sign in regardless. Every org-scoped decision
-  belongs to the policy engine
+  belongs to the policy service
   ([ADR-0002](./adr/0002-iam-style-policy-model.md),
   [authz.md](./authz.md)).
   - **The console asks the server whether the caller may take an

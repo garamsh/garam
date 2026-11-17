@@ -102,17 +102,18 @@ Dependencies each process reports (`platform/internal/cli/serve.go`,
 | Process | Readiness dependencies |
 |---|---|
 | `serve api` | the database alone |
-| `serve authz` | the database alone |
 | `serve machine` | the database alone |
 | `policy serve` | the database alone, on a plaintext port of its own (`policy/crates/server/src/probes.rs`) |
 | web | none — it reads nothing, so an API outage takes no replica out of rotation ([ADR-0023](./adr/0023-web-probes.md)) |
 
-The chart deploys the policy service beside `serve authz`, with its own
-database and its own migration (§The migrate job). Decided, not built:
-[ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) removes
-`serve authz`, makes the policy service a required part of every
-deployment and its address required, and has a listener that cannot
-have a request decided refuse it.
+The chart deploys the policy service, with its own database and its
+own migration (§The migrate job). `serve authz` is removed
+([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)), and
+[ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)
+makes the policy service a required part of every deployment and its
+address required, and has a listener that cannot have a request
+decided refuse it. The chart still names `serve authz` until the change
+that removes it from `deploy/` lands.
 
 The semantics, fixed in `platform/internal/health/health.go`:
 
@@ -755,11 +756,11 @@ that would assert one:
   `platform/internal/cli/standalone_run.go`), the supervisor's workload
   (`platform/internal/workload/`) and the adapter's outbox
   (`platform/internal/delivery/outbox.go`), none of which a serve
-  process runs, so the three serve processes need no writable path. What
+  process runs, so the serve processes need no writable path. What
   the web runtime writes, if anything, is unverified — so the
   `securityContext` field is the deployment's to set either way.
-- **Replica safety above one.** Not established for `serve api`,
-  `serve authz`, or `serve machine`. No leader election exists anywhere
+- **Replica safety above one.** Not established for `serve api`
+  or `serve machine`. No leader election exists anywhere
   in the source; whether that makes a second replica safe or unsafe is
   not answered here. This is why the chart fixes every Deployment at one
   replica and offers no value for it. (`migrate` is answered above.)

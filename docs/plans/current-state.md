@@ -15,10 +15,9 @@ none is scheduled.
   (ADR-0008).
 - **`Condition` in policy documents** — reserved: a statement carries
   one through the parse boundary and reads it back as it was written,
-  and nothing evaluates it (ADR-0002). It is the `Statement` type in
-  `platform/internal/authz` that holds it, as raw JSON, because the
-  model names nothing that may appear inside it; no evaluation path
-  reads that field.
+  and nothing evaluates it (ADR-0002). The `Statement` type in
+  `platform/internal/authz` that held it is removed with the earlier
+  engine (ADR-0177).
 
 ## Known corrections applied
 
@@ -27,9 +26,10 @@ mislead.
 
 - The module path is `github.com/garamsh/garam`. It spent a period
   under an interim name and was renamed back (#96); the name is uniform
-  across the module path, `platform/cmd/garam`, the proto package
-  `garam.authz.v1`, `GARAM_*` variables, session cookies, and the
-  `garam_policy_change` NOTIFY channel.
+  across the module path, `platform/cmd/garam`, `GARAM_*` variables and
+  session cookies. The proto package `garam.authz.v1` and the
+  `garam_policy_change` NOTIFY channel it once covered are removed with
+  the earlier engine (ADR-0177).
 - Authorization was once headed for Rego/OPA. That is superseded by
   IAM-style documents (ADR-0002) and the legacy interfaces were removed
   (#28, #40, #47, #59). No Rego package exists.

@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -10,6 +12,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 )
 
 // Bounds of searchOrg's limit: how many objects of each kind it
@@ -167,19 +170,35 @@ func (s *Server) searchTeams(r *http.Request, c *caller, n listfilter.Needle) ([
 
 // searchPolicies finds the org's policies by name or identifier,
 // leaving out each one whose iam:policy.read c is denied, as every
-// other list on this listener does.
+// other list on this listener does. The policy service stores the
+// policies and has no search of its own, so the platform reads the
+// organization's list through the relay and matches the needle on
+// each name or identifier as the other kinds' searches do, ignoring
+// case (ADR-0169).
 func (s *Server) searchPolicies(r *http.Request, c *caller, n listfilter.Needle) ([]apigen.FoundObject, error) {
-	policies, err := s.policies.SearchPolicies(r.Context(), c.org, n)
+	if s.policyRelay == nil {
+		return nil, errorx.New(errorx.KindUnavailable, "policy service is not configured")
+	}
+	listed, err := s.policyRelay.List(r.Context(), c.user.GRN, c.org)
 	if err != nil {
 		return nil, err
 	}
-	policies, err = visible(s, r, c, org.ActionPolicyRead, policies, func(p *Policy) grn.GRN { return p.GRN })
+	text := strings.ToLower(n.Text())
+	matched := make([]policyrelay.Policy, 0, len(listed))
+	for _, p := range listed {
+		if strings.Contains(strings.ToLower(p.Name), text) || strings.Contains(strings.ToLower(p.ID), text) {
+			matched = append(matched, p)
+		}
+	}
+	slices.SortFunc(matched, func(a, b policyrelay.Policy) int { return strings.Compare(a.ID, b.ID) })
+	matched, err = visible(s, r, c, org.ActionPolicyRead, matched,
+		func(p policyrelay.Policy) grn.GRN { return policyGRN(c.org.Identifier, p.ID) })
 	if err != nil {
 		return nil, err
 	}
-	out := make([]apigen.FoundObject, 0, len(policies))
-	for _, p := range policies {
-		out = append(out, foundNamed(p.GRN, p.Name))
+	out := make([]apigen.FoundObject, 0, len(matched))
+	for _, p := range matched {
+		out = append(out, foundNamed(policyGRN(c.org.Identifier, p.ID), p.Name))
 	}
 	return out, nil
 }

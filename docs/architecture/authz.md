@@ -100,13 +100,16 @@ Built in the service; `checkPermissions` does not yet ask with it. The
 explanation (`permission_explanation.go`) asks the service's `Evaluate`
 as a probe and names the policies its reasons give
 ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),
-so nothing on this listener asks `s.evaluator`, which is removed. Two
-reads still go to the engine's `PolicyService`: `searchPolicies`
+so nothing on this listener asks `s.evaluator`, which is removed. The
+two reads that went to the engine's `PolicyService`, `searchPolicies`
 (`search.go`) and the count the organization deletion makes
-(`org.go`); the policy service holds the policies they should read,
-and moving both to its relay is #1990. The store, its tables and the
-engine itself wait for round 14 of #1796. The parity matrix that
-reported where the two engines differ is retired.
+(`org.go`), read the organization's policies through the relay's
+`List` now (#1990): the search matches the needle on each name or
+identifier, case aside, in the platform, since the service has no
+search of its own, and then filters by `iam:policy.read` as above. The
+store, its tables, the engine itself and the `PolicyManager` seam that
+no handler calls any longer wait for round 14 of #1796. The parity
+matrix that reported where the two engines differ is retired.
 
 **Two further decisions are taken, both partly built.** The policy
 service loads `policy/schema/iam.cedarschema` and
@@ -1119,9 +1122,9 @@ listener, the specification and the SDKs
 and so are the `policy_document_*` reasons they raised. Nothing writes
 the engine's `policies`, `policy_versions` and `policy_attachments`
 tables. They, the store and the engine wait for round 14 of #1796,
-which removes them; until then the search of policies and the
-deletion's count (§Decided and not yet built) still read them through
-`PolicyService`.
+which removes them. The search of policies and the deletion's count
+read the policy service's list through the relay and not those
+tables (#1990).
 
 **The audit record is read the same way.**
 `/orgs/{org}/audit-records` relays the policy service's record of

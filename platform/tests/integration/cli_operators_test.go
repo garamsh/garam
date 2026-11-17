@@ -57,7 +57,8 @@ func signedInCLI(t *testing.T) string {
 	srv := api.NewServer(users, orgs, agentpg.New(p), operatorpg.New(p), messagepg.New(p), nil,
 		sessions, nil, nil, nil, nil, newCurrentDecisions(p), api.NewGRPCPolicyManager(policyService(t, policies)), heldAuthorities{orgs},
 		cli.NewAuthorityService(p, newCurrentDecisions(p)), nil,
-		api.Config{SessionTTL: time.Hour, TokenURL: "https://machine.garam.test/oauth/token"})
+		api.Config{SessionTTL: time.Hour, TokenURL: "https://machine.garam.test/oauth/token"}).
+		WithPolicyRelay(&listedPolicies{})
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError})
 	browser := httptest.NewServer(http.StripPrefix("/api", handler))
 	t.Cleanup(browser.Close)

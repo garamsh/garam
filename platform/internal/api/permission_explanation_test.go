@@ -27,6 +27,15 @@ type storedPolicies struct {
 	policyrelay.Service
 	held  map[string]policyrelay.Detail
 	reads atomic.Int32
+	// listed is what List answers, and listedFor the organizations it
+	// was asked of.
+	listed    []policyrelay.Policy
+	listedFor []grn.GRN
+}
+
+func (s *storedPolicies) List(_ context.Context, _, orgGRN grn.GRN) ([]policyrelay.Policy, error) {
+	s.listedFor = append(s.listedFor, orgGRN)
+	return s.listed, nil
 }
 
 func (s *storedPolicies) Get(_ context.Context, w policyrelay.Write) (policyrelay.Detail, error) {

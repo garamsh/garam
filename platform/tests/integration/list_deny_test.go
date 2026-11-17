@@ -29,6 +29,7 @@ import (
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
@@ -48,6 +49,22 @@ type listStack struct {
 	ada, dan       *http.Cookie
 	adaGRN, danGRN grn.GRN
 	decisions      *currentDecisions
+	// relay stands for the policy service's list of policies, which the
+	// search reads through the relay: the service is not started here,
+	// and list_policy_test.go holds the search against the real one.
+	relay *listedPolicies
+}
+
+// listedPolicies is the policy relay as far as a list reads it: the
+// policies a test has had it hold, answered whole. Any other method
+// is not one these tests call and panics on the nil interface.
+type listedPolicies struct {
+	policyrelay.Service
+	held []policyrelay.Policy
+}
+
+func (l *listedPolicies) List(context.Context, grn.GRN, grn.GRN) ([]policyrelay.Policy, error) {
+	return slices.Clone(l.held), nil
 }
 
 func newListStack(t *testing.T) *listStack {
@@ -69,13 +86,13 @@ func newListStack(t *testing.T) *listStack {
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
 	decisions := newCurrentDecisions(p)
-	s := &listStack{pool: p, acme: acme, policies: policies, orgs: orgs, agents: agentpg.New(p), decisions: decisions}
+	s := &listStack{pool: p, acme: acme, policies: policies, orgs: orgs, agents: agentpg.New(p), decisions: decisions, relay: &listedPolicies{}}
 	s.ada, s.adaGRN = session("ada")
 	s.dan, s.danGRN = session("dan")
 
 	srv := api.NewServer(users, orgs, s.agents, nil, messagepg.New(p), nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, decisions), nil,
-		api.Config{SessionTTL: time.Hour})
+		api.Config{SessionTTL: time.Hour}).WithPolicyRelay(s.relay)
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	s.url = browser.URL

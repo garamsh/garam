@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,9 +15,9 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // foundKind is one kind of searchOrg's answer: the GRNs it found in
@@ -97,14 +98,13 @@ func seedAgentAt(t *testing.T, s *listStack, id, _ string) grn.GRN {
 	return g
 }
 
-// seedNamedPolicy creates an active policy, whose identifier garam
-// draws.
+// seedNamedPolicy has the relay hold a policy, whose identifier the
+// service draws and this does too.
 func seedNamedPolicy(t *testing.T, s *listStack, _, name string) grn.GRN {
 	t.Helper()
-	g, err := grn.Parse(activePolicy(t, s.policies, s.acme, name,
-		statementDoc("allow", wire.EffectAllow, org.ActionOrgRead, s.acme.String())))
-	require.NoError(t, err)
-	return g
+	id := "p-" + strconv.Itoa(len(s.relay.held)+1)
+	s.relay.held = append(s.relay.held, policyrelay.Policy{ID: id, Name: name, Status: policyrelay.StatusActive})
+	return grn.New(s.acme.Identifier, "policy", id)
 }
 
 // TestSearch_FindsEachKindByNameOrIdentifierCaseAside seeds, for each

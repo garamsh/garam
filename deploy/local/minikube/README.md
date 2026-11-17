@@ -30,7 +30,7 @@ cluster's own daemon.
 - `policy` — the policy service
   ([ADR-0130](../../../docs/architecture/adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)),
   which serves no plaintext.
-- `authz`, `api`, `machine` — the three serve processes of
+- `api`, `machine` — two of the serve processes of
   [ADR-0017](../../../docs/architecture/adr/0017-machine-process.md),
   from one image. `api` and `machine` both reach `policy` over its TLS
   and sign their calls with one key, under one issuer, which `policy`
@@ -106,8 +106,8 @@ on, which a browser resolves to this machine without a hosts entry:
 cowork is not part of this stack: the site names the address compose
 gives it, and nothing answers there.
 
-To reach anything else — the api, the authz engine's metrics, the
-machine process's probes — forward its Service the same way.
+To reach anything else — the api, the machine process's probes —
+forward its Service the same way.
 
 ## Key material
 

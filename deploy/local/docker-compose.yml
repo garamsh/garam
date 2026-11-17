@@ -96,35 +96,6 @@ services:
         condition: service_healthy
     restart: "no"
 
-  authz:
-    build:
-      context: ../..
-      dockerfile: deploy/local/Dockerfile
-    command: ["serve", "authz"]
-    environment:
-      GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
-      GARAM_GRPC_ADDR: ":9090"
-      # The engine speaks gRPC only, so /metrics and the probes get a
-      # listener and a published port of its own; the api's ride on its
-      # HTTP port.
-      GARAM_METRICS_ADDR: ":9091"
-    ports:
-      - "${GARAM_LOCAL_METRICS_PORT:-9091}:9091"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    # /readyz, so healthy means the engine can answer rather than that a
-    # port is open. It starts answering once the gRPC port is bound.
-    # The image carries no shell or wget, so the check runs the binary's
-    # own probe subcommand.
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/garam", "probe", "http://127.0.0.1:9091/readyz"]
-      interval: 2s
-      timeout: 5s
-      retries: 10
-
   api:
     build:
       context: ../..
@@ -133,7 +104,6 @@ services:
     environment:
       GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
       GARAM_HTTP_ADDR: ":8080"
-      GARAM_AUTHZ_ADDR: authz:9090
       # The policy service the feed delivers to (ADR-0140) and that
       # decides delegated authority (ADR-0146), verifying
       # its certificate against the pair policy-tls wrote and signing
@@ -170,18 +140,16 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      authz:
-        condition: service_healthy
       policy-tls:
         condition: service_completed_successfully
       policy-keys:
         condition: service_completed_successfully
       policy:
         condition: service_healthy
-    # /readyz covers the database and the engine channel both, so `web`
-    # waits for an api that can serve a request rather than one that has
-    # bound its port. The probe is the binary's own subcommand, as for
-    # authz: the image carries no shell or wget.
+    # /readyz covers what the api cannot serve without, so `web` waits
+    # for an api that can serve a request rather than one that has bound
+    # its port. The probe is the binary's own subcommand: the image
+    # carries no shell or wget.
     healthcheck:
       test: ["CMD", "/usr/local/bin/garam", "probe", "http://127.0.0.1:8080/readyz"]
       interval: 2s
@@ -567,7 +535,6 @@ services:
     command: ["serve", "machine"]
     environment:
       GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
-      GARAM_AUTHZ_ADDR: authz:9090
       GARAM_MACHINE_ADDR: ":8443"
       GARAM_MACHINE_HEALTH_ADDR: ":8444"
       GARAM_MACHINE_TLS_CERT_FILE: /machine-material/machine.crt
@@ -598,8 +565,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      authz:
-        condition: service_healthy
       machine-material:
         condition: service_completed_successfully
       policy-tls:

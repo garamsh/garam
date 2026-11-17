@@ -357,9 +357,9 @@ list below is today's tree
 - `deploy/charts/garam/` — the Helm chart a cluster installs garam
   from (ADR-0042).
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,
-  authz, api and (profile-gated) the console and the site on one
-  machine; its `postgres` service also hosts the e2e tests' database
-  (`make db-up`), kept separate from the stack's own.
+  the policy service, api and (profile-gated) the console and the site
+  on one machine; its `postgres` service also hosts the e2e tests'
+  database (`make db-up`), kept separate from the stack's own.
   `deploy/local/README.md` §Databases is authoritative for which
   databases that one server holds, which of them a suite truncates or
   migrates, and what collects the ones a removed worktree leaves

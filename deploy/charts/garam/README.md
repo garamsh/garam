@@ -1,6 +1,6 @@
 # garam Helm Chart
 
-The description of how garam is deployed: the six workloads it runs,
+The description of how garam is deployed: the five workloads it runs,
 the ports they answer on, and every configuration value a deployment
 supplies.
 
@@ -36,14 +36,12 @@ held nothing of this chart when it was read on 2026-08-25.
 
 ## What it renders
 
-Eight workloads, a `ClusterIP` Service in front of each of the six that
+Seven workloads, a `ClusterIP` Service in front of each of the five that
 listen, and a `ServiceAccount` for each workload a deployment names one
 for (§Workload identities). Each workload's file renders all of its own
 objects:
 
 - `templates/api.yaml` — `serve api`, port 8080.
-- `templates/authz.yaml` — `serve authz`, gRPC on 9090, probes and
-  `/metrics` on 9091.
 - `templates/machine.yaml` — `serve machine`, mTLS on 8443, probes on
   8444.
 - `templates/policy.yaml` — `policy serve`, gRPC over TLS on 8443,
@@ -99,14 +97,13 @@ Every workload can run as an account of its own, and **the chart creates
 none by default**. `<workload>.serviceAccount.name` is the account it
 runs as and `<workload>.serviceAccount.create` renders the object under
 that name; both are off until a deployment sets them, so the chart
-renders none, one, or eight accounts and the values decide which.
+renders none, one, or seven accounts and the values decide which.
 `policy-migrate` is the one whose component label carries a hyphen a
 values key does not, so its values sit under `policyMigrate`.
 
 | Workload | Kind | Account name |
 |---|---|---|
 | `api` | Deployment | `api.serviceAccount.name` |
-| `authz` | Deployment | `authz.serviceAccount.name` |
 | `machine` | Deployment | `machine.serviceAccount.name` |
 | `migrate` | Job | `migrate.serviceAccount.name` |
 | `policy` | Deployment | `policy.serviceAccount.name` |
@@ -175,7 +172,7 @@ the machine listener's own rather than one every pod in the namespace
 presents.
 
 `serve api` needs one when it reads a cloud-held secret of its own —
-Google sign-in is the pending case. `authz`, `web`, `site`, `migrate`,
+Google sign-in is the pending case. `web`, `site`, `migrate`,
 `policy` and `policy-migrate` read none, so a role bound to an account
 for any of them would grant what nothing asks for.
 
@@ -265,7 +262,7 @@ two hosts need not share a parent.
 `image.policy`. The defaults are what the Dockerfiles build — 10001
 for the server image and the policy image, 1000 for the web images'
 `node` — and a deployment running any under another account moves the
-pair there rather than one pair per workload, because four of the eight
+pair there rather than one pair per workload, because three of the seven
 workloads run the server image. The machine pod takes the server pair
 for its `fsGroup` as well: the copy
 its init container makes has to be owned by the UID the container
@@ -351,6 +348,9 @@ or a name here that the source no longer reads.
 | `GARAM_ADAPTER_OUTBOX_DIR` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_CONTROL_SOCKET` | Same: the adapter's own deployment, which on a standalone host is its supervisor (ADR-0085). |
 | `GARAM_ADAPTER_SIGN_MESSAGES` | Same: the adapter's own deployment, which alone knows whether the runtime beside it accepts a signature (ADR-0101). |
+| `GARAM_AUTHZ_ADDR` | Nothing reads it: `serve api` and `serve machine` no longer dial the engine, and the chart runs none. The source still declares the name (`platform/internal/cli/cli.go`), which is why it is listed. |
+| `GARAM_GRPC_ADDR` | Only `serve authz` reads it, and the chart runs no such process; the source still reads it until the engine's code is deleted. |
+| `GARAM_METRICS_ADDR` | Same: only `serve authz` reads it. |
 | `GARAM_IDENTITY_ISSUER` | garam's own OIDC issuer is off until a deployment sets it with a signing key, and the chart does not render it yet (ADR-0141). |
 | `GARAM_IDENTITY_SERVICE_KEYS_FILE` | The public keys of each first-party service, by service name, at most two each, which authenticate its principals (ADR-0129); the chart does not render it yet. |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
@@ -391,8 +391,7 @@ listener:
 
 The other listeners carry no such constraint: `serve api` and the web
 app sit behind an ordinary TLS-terminating proxy — the session cookie's
-`Secure` flag assumes one — and `serve authz` is cluster-internal
-(ADR-0003).
+`Secure` flag assumes one — and the policy service is cluster-internal.
 
 ## Key material and secrets
 

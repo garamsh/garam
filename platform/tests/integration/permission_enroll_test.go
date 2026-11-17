@@ -36,8 +36,7 @@ func enrollOn(agent *grn.GRN) apigen.PermissionCheck {
 // decides, is still answered unknown.
 func TestCheckPermissions_AnswersAgentEnrollAsAnApprovalDecides(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	_, held := s.standaloneOf(t)
 	replace := map[string]any{"agentGrn": held.agent.String(), "assigneeGrn": held.supervisor.String(), "epoch": held.epoch}
 	approveAs := func(cookie *http.Cookie, replaces map[string]any) int {

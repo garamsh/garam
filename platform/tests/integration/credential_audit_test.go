@@ -12,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
@@ -33,7 +32,7 @@ import (
 // auditBrowser is a browser-facing listener over the execution stack's
 // database that records credential events and serves their read, as
 // `garam serve api` composes it. The stack's sessions sign in here too.
-func auditBrowser(t *testing.T, s *executionStack, engine grpc.ClientConnInterface, decisions policydecision.Service) string {
+func auditBrowser(t *testing.T, s *executionStack, decisions policydecision.Service) string {
 	t.Helper()
 	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), operatorpg.New(s.pool),
 		nil, nil, authnpg.NewSessionStore(s.pool), nil, nil, nil, nil, decisions, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
@@ -93,9 +92,8 @@ func supervisedHost(t *testing.T, s *tokenStack) (credentialed, string) {
 // credential or a token.
 func TestCredentialAudit_RecordsASupervisorsCredentialAndItsAgentsTokens(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
-	browser := auditBrowser(t, s.executionStack, engine, newCurrentDecisions(p))
+	s := &tokenStack{executionStack: newExecutionStack(t, p)}
+	browser := auditBrowser(t, s.executionStack, newCurrentDecisions(p))
 
 	c, token := supervisedHost(t, s)
 	minted := s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens", operator.TokenContractVersion, token, "", `{}`)
@@ -136,10 +134,9 @@ func TestCredentialAudit_RecordsASupervisorsCredentialAndItsAgentsTokens(t *test
 // with 400; the paging is the shared limit and offset.
 func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s := &tokenStack{executionStack: newExecutionStack(t, p)}
 	decisions := newCurrentDecisions(p)
-	browser := auditBrowser(t, s.executionStack, engine, decisions)
+	browser := auditBrowser(t, s.executionStack, decisions)
 	c, token := supervisedHost(t, s)
 	require.Equal(t, http.StatusCreated, s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens",
 		operator.TokenContractVersion, token, "", `{}`).status)

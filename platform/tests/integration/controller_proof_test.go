@@ -19,12 +19,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/cli"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
@@ -60,8 +58,6 @@ func (c *heldClock) set(at time.Time) {
 // them.
 type proofStack struct {
 	pool       *pgxpool.Pool
-	policies   *authz.PolicyGRPCServer
-	engine     *grpc.ClientConn
 	clock      *heldClock
 	logs       *syncBuffer
 	url        string
@@ -107,15 +103,15 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
-func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, policies *authz.PolicyGRPCServer) *proofStack {
+func newProofStack(t *testing.T, p *pgxpool.Pool) *proofStack {
 	t.Helper()
-	return newProofStackDeciding(t, engine, p, policies, newCurrentDecisions(p))
+	return newProofStackDeciding(t, p, newCurrentDecisions(p))
 }
 
 // newProofStackDeciding is newProofStack where decisions is the policy
 // service the listener asks, which the suite tagged policyservice gives
 // the real one.
-func newProofStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, policies *authz.PolicyGRPCServer, decisions policydecision.Service) *proofStack {
+func newProofStackDeciding(t *testing.T, p *pgxpool.Pool, decisions policydecision.Service) *proofStack {
 	t.Helper()
 	ctx := context.Background()
 	orgs := orgpg.New(p)
@@ -145,7 +141,7 @@ func newProofStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Poo
 	t.Cleanup(func() { _ = srv.Close() })
 
 	s := &proofStack{
-		pool: p, policies: policies, engine: engine, clock: clock, logs: logs,
+		pool: p, clock: clock, logs: logs,
 		url: "https://" + lis.Addr().String(), acme: acme, keys: map[grn.GRN]*rsa.PrivateKey{},
 		hosted:     scopedGRN("acme", operator.ServiceType, "hosted"),
 		controller: scopedGRN("acme", operator.ServiceType, "controller"),
@@ -268,8 +264,7 @@ func (s *proofStack) provision(t *testing.T, client *http.Client) (string, int) 
 // through the same listener and caller.
 func TestControllerProof_ProvesTheControllerItsTokenNames(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newProofStack(t, engine, p, policies)
+	s := newProofStack(t, p)
 
 	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	require.Equal(t, http.StatusOK, got.status, got.body)
@@ -301,8 +296,7 @@ func TestControllerProof_ProvesTheControllerItsTokenNames(t *testing.T) {
 // agent the organization does not have. The first proof is the control.
 func TestControllerProof_BindsAnAgentToItsCurrentAssignment(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newProofStack(t, engine, p, policies)
+	s := newProofStack(t, p)
 	controllerTLS := s.operatorTLS(t, s.controller)
 	placed, epoch := s.provision(t, controllerTLS)
 
@@ -347,8 +341,7 @@ func TestControllerProof_BindsAnAgentToItsCurrentAssignment(t *testing.T) {
 func TestControllerProof_RefusesWithdrawalOnTheSameOpenConnection(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newProofStack(t, engine, p, policies)
+	s := newProofStack(t, p)
 
 	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "").status)
 	require.NoError(t, s.grants.EndGrant(ctx, s.acme, s.hosted, s.grant, time.Now()))
@@ -376,8 +369,7 @@ func TestControllerProof_RefusesWithdrawalOnTheSameOpenConnection(t *testing.T) 
 // token or caller the same move leaves valid.
 func TestControllerProof_ReadsTheTimeOnEveryDecision(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newProofStack(t, engine, p, policies)
+	s := newProofStack(t, p)
 	start := s.clock.now()
 	fresh := s.token(t, s.controller, &s.hosted)
 
@@ -407,9 +399,8 @@ func TestControllerProof_ReadsTheTimeOnEveryDecision(t *testing.T) {
 // is the policyservice suite's.
 func TestControllerProof_AsksTheServiceOnEveryProof(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
 	decisions := newCurrentDecisions(p)
-	s := newProofStackDeciding(t, engine, p, policies, decisions)
+	s := newProofStackDeciding(t, p, decisions)
 	controllerTLS := s.operatorTLS(t, s.controller)
 	placed, _ := s.provision(t, controllerTLS)
 
@@ -439,9 +430,8 @@ func TestControllerProof_AsksTheServiceOnEveryProof(t *testing.T) {
 // control, on the same connection.
 func TestControllerProof_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
 	decisions := newCurrentDecisions(p)
-	s := newProofStackDeciding(t, engine, p, nil, decisions)
+	s := newProofStackDeciding(t, p, decisions)
 
 	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "").status)
 	decisions.failWith(errorx.New(errorx.KindInternal, "the policy service is down"))

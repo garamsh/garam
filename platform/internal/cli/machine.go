@@ -43,10 +43,8 @@ import (
 // a token (ADR-0100, ADR-0118). It terminates TLS itself and takes
 // neither the browser API's proxy nor its cookie, and it runs as a
 // process of its own so the browser-facing one never holds the key
-// the message signing keys are sealed under (ADR-0017). Like the
-// browser-facing one it reaches the policy engine over gRPC, which is
-// what decides the rest, while the policy service decides the messages
-// it accepts.
+// the message signing keys are sealed under (ADR-0017). The policy
+// service decides what it accepts (ADR-0146).
 func newServeMachineCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "machine",
@@ -358,8 +356,8 @@ func (o *observability) machineServer(tokens machine.Tokens, evidence *machine.E
 // machineProbeHandler is what `serve machine` answers on the port
 // beside its TLS one, because the listener above answers a probe on no
 // route: what it serves is the machine specification's operations. It
-// carries /metrics beside the probes, as `serve authz`'s does: the
-// count of requests by how they authenticated (ADR-0100). recoverPanics
+// carries /metrics beside the probes: the count of requests by how
+// they authenticated (ADR-0100). recoverPanics
 // is outermost, as on every listener a serve command runs.
 func (o *observability) machineProbeHandler(deps ...health.Dependency) http.Handler {
 	mux := http.NewServeMux()

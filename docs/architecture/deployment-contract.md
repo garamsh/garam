@@ -111,6 +111,8 @@ migration (§The migrate job), and no `serve authz`: neither the chart,
 the local compose files nor the minikube manifests run that process,
 and no listener dials it
 ([ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)).
+The command itself is removed
+([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
 
 The semantics, fixed in `platform/internal/health/health.go`:
 

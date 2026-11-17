@@ -169,9 +169,8 @@ func (r *realPolicy) deliverWhileRunning(t *testing.T) {
 // the service is asked.
 func TestDelegatedAuthorityPolicy_TheMemberHalfIsTheServicesDecision(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
 	rp := startRealPolicy(t, p)
-	s := newAuthorityStackDeciding(t, engine, p, rp.asked)
+	s := newAuthorityStackDeciding(t, p, rp.asked)
 	rp.deliver(t)
 	rp.deliverWhileRunning(t)
 	d := s.grant(t, "g-1", nil, "iam:agent.create", "iam:agent.configure")
@@ -211,9 +210,8 @@ func TestDelegatedAuthorityPolicy_TheMemberHalfIsTheServicesDecision(t *testing.
 func TestDelegatedAuthorityPolicy_TheOperatorHalfIsTheServicesDecision(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
 	rp := startRealPolicy(t, p)
-	s := newProofStackDeciding(t, engine, p, policies, rp.asked)
+	s := newProofStackDeciding(t, p, rp.asked)
 	owner := grn.New(grn.RootOwner, user.ServiceType, "ada")
 	require.NoError(t, userpg.New(p).Create(ctx, user.New(owner, "ada")))
 	require.NoError(t, orgpg.New(p).AddMember(ctx, org.NewMembership(s.acme, owner, org.RoleOwner)))

@@ -348,9 +348,6 @@ or a name here that the source no longer reads.
 | `GARAM_ADAPTER_OUTBOX_DIR` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_CONTROL_SOCKET` | Same: the adapter's own deployment, which on a standalone host is its supervisor (ADR-0085). |
 | `GARAM_ADAPTER_SIGN_MESSAGES` | Same: the adapter's own deployment, which alone knows whether the runtime beside it accepts a signature (ADR-0101). |
-| `GARAM_AUTHZ_ADDR` | Nothing reads it: `serve api` and `serve machine` no longer dial the engine, and the chart runs none. The source still declares the name (`platform/internal/cli/cli.go`), which is why it is listed. |
-| `GARAM_GRPC_ADDR` | Only `serve authz` reads it, and the chart runs no such process; the source still reads it until the engine's code is deleted. |
-| `GARAM_METRICS_ADDR` | Same: only `serve authz` reads it. |
 | `GARAM_IDENTITY_ISSUER` | garam's own OIDC issuer is off until a deployment sets it with a signing key, and the chart does not render it yet (ADR-0141). |
 | `GARAM_IDENTITY_SERVICE_KEYS_FILE` | The public keys of each first-party service, by service name, at most two each, which authenticate its principals (ADR-0129); the chart does not render it yet. |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |

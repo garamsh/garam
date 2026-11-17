@@ -1,5 +1,5 @@
 // Package cli owns the cobra command tree for the garam server binary
-// (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
+// (ADR-0003, ADR-0017): `serve api`, `serve machine`,
 // `migrate`, `probe` and `adapter`. The user commands a person signs in
 // with are garam-cli's (ADR-0132). Commands are constructed here;
 // cmd/garam only executes the root.
@@ -10,22 +10,14 @@
 //
 // Every serve command answers the two probes internal/health mounts —
 // liveness and readiness — on a listener that asks for no credential:
-// the api's own HTTP port, the authz engine's metrics port, and a port
-// of its own for `serve machine`, whose listener serves no probe route.
+// the api's own HTTP port, and a port of its own for `serve machine`,
+// whose listener serves no probe route.
 //
 // Configuration is entirely via environment variables:
 //
 //	GARAM_DATABASE_URL     postgres connection string (required)
 //	GARAM_MIGRATIONS_DIR   migrations directory (default "migrations")
 //	GARAM_HTTP_ADDR        api listen address (default ":8080")
-//	GARAM_GRPC_ADDR        authz listen address (default ":9090")
-//	GARAM_METRICS_ADDR     authz /metrics and probe listen address
-//	                       (default ":9091"; serve api answers both on
-//	                       GARAM_HTTP_ADDR)
-//	GARAM_AUTHZ_ADDR       read by nothing: serve api and serve machine
-//	                       no longer dial the engine, and serve authz
-//	                       listens on GARAM_GRPC_ADDR; declared until
-//	                       the chart stops setting it (#1997)
 //	GARAM_SESSION_TTL      session lifetime (default "168h")
 //	GARAM_COOKIE_SECURE    mark cookies Secure (default true); accepts
 //	                       what strconv.ParseBool does and refuses the
@@ -194,7 +186,7 @@ func newServeCommand() *cobra.Command {
 		Use:   "serve",
 		Short: "Run a garam server",
 	}
-	serve.AddCommand(newServeAPICommand(), newServeAuthzCommand(), newServeMachineCommand())
+	serve.AddCommand(newServeAPICommand(), newServeMachineCommand())
 	return serve
 }
 
@@ -213,9 +205,6 @@ const (
 	envDatabaseURL             envName = "GARAM_DATABASE_URL"
 	envMigrationsDir           envName = "GARAM_MIGRATIONS_DIR"
 	envHTTPAddr                envName = "GARAM_HTTP_ADDR"
-	envGRPCAddr                envName = "GARAM_GRPC_ADDR"
-	envMetricsAddr             envName = "GARAM_METRICS_ADDR"
-	envAuthzAddr               envName = "GARAM_AUTHZ_ADDR"
 	envSessionTTL              envName = "GARAM_SESSION_TTL"
 	envCookieSecure            envName = "GARAM_COOKIE_SECURE"
 	envGoogleClientID          envName = "GOOGLE_CLIENT_ID"

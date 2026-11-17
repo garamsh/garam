@@ -1,9 +1,10 @@
 # Authorization
 
-Org-scoped permission decisions, served by an independent gRPC policy
-engine (`garam serve authz`, see
-[ADR-0003](./adr/0003-single-cli-topology.md)). Policies are IAM-style
-documents (see [ADR-0002](./adr/0002-iam-style-policy-model.md)).
+Org-scoped permission decisions, served by the policy service
+(`policy/`, a Rust service deciding Cedar policies, see
+[ADR-0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)).
+The platform's earlier engine, `garam serve authz`, is removed
+([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
 
 ## Contents
 - Decided and not yet built
@@ -23,14 +24,13 @@ documents (see [ADR-0002](./adr/0002-iam-style-policy-model.md)).
 ## Decided and not yet built
 
 [ADR-0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
-replaces this engine with `policy/`, a Rust service of its own (#1689).
-Everything below this section describes `garam serve authz` as it runs
-today, and stays true until `policy/` serves the platform's checks.
+replaced the platform's earlier engine with `policy/`, a Rust service
+of its own (#1689), and the engine is removed (ADR-0177). The sections
+from Policy document to Policy attachment say what the engine did and
+where each part went.
 
 `policy/` holds the contract, the schema, the system tier, its stores
-of grants and entities, the access report and the binary. No image
-runs it, nothing calls it for a decision and the platform feeds it
-entities, so it decides over nothing yet.
+of grants and entities, the access report and the binary.
 [ADR-0138](./adr/0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)
 states how a caller authenticates and how an owner writes, and
 `ApplyEntityChanges` serves that write. The platform signs its own
@@ -65,9 +65,7 @@ decides what both listeners ask it: `serve machine` every message send
 ([ADR-0168](./adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)),
 and each listener a user's delegated operation authority and a hosted
 operator's controller proof, read current. `serve api` does not start
-without it. Policies attached through the engine no longer reach those
-decisions, and nothing writes the engine's tables any more: its policy
-endpoints are removed
+without it. Its policy endpoints are removed
 ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)).
 
 The browser listener asks it too
@@ -76,25 +74,25 @@ a handler's own enforcement (`allows`), each `checkPermissions` pair and
 each candidate of the holders list are one `Evaluate` of the signed-in
 user or candidate, the action and the resource, over the state the
 platform has delivered and not read current, since a writer waits for
-its marks to be delivered (ADR-0146 item 5). Which is a probe is
-stated: each `checkPermissions` pair, each holder candidate, the agent
-read that admits agents among them and each kind a search offers are
-asked as probes, and the handler's enforcement and the holders list's
+its marks to be delivered (ADR-0146 item 5). Which is a probe is stated:
+each `checkPermissions` pair, each holder candidate, the agent read that
+admits agents among them and each kind a search offers are asked as
+probes, and the handler's enforcement and the holders list's
 `iam:org.member-list` check are attempts. Any error of the service is a
 503 `unavailable`, never an allow; a forbid is a 403. Membership of the
-organization is checked by the platform before the service is asked.
-A list and the search ask it too
+organization is checked by the platform before the service is asked. A
+list and the search ask it too
 ([ADR-0172](./adr/0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md)):
 `list_visibility.go` puts one probe on each object of a page, on the
 object's own read and through `askedOn`, in one `Evaluations` call (as
 many as it takes past the service's 1000), and keeps those allowed; an
 error of the service is a 503 `unavailable`. `checkPermissions` answers
-`iam:permit.write` on the organization the same way, and the four
-policy writes (`attach`, `detach`, `update`, `delete`) on the
-organization or on a policy. The service's `Evaluate` and `Evaluations`
-take `without_permits`, which leaves the organization's `permit`s out
-of the decision as the write of a `permit` does, through the one
-function `PermitRight::ask` also uses
+`iam:permit.write` on the organization the same way, and the four policy
+writes (`attach`, `detach`, `update`, `delete`) on the organization or
+on a policy. The service's `Evaluate` and `Evaluations` take
+`without_permits`, which leaves the organization's `permit`s out of the
+decision as the write of a `permit` does, through the one function
+`PermitRight::ask` also uses
 ([ADR-0175](./adr/0175-the-policy-services-evaluate-and-evaluations-take-a-without-permits-option-deciding-as-a-permit-write-does.md)).
 `checkPermissions` asks it for `iam:permit.write` and for no other
 action (`actionRules`' `withoutPermits`), so a `permit` naming the
@@ -102,16 +100,15 @@ action does not make the check allow what the write refuses. The
 explanation (`permission_explanation.go`) asks the service's `Evaluate`
 as a probe and names the policies its reasons give
 ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),
-so nothing on this listener asks `s.evaluator`, which is removed. The
-two reads that went to the engine's `PolicyService`, `searchPolicies`
-(`search.go`) and the count the organization deletion makes
-(`org.go`), read the organization's policies through the relay's
-`List` now (#1990): the search matches the needle on each name or
-identifier, case aside, in the platform, since the service has no
-search of its own, and then filters by `iam:policy.read` as above. The
-store, its tables and the engine itself wait for round 14 of #1796; the
-`PolicyManager` seam is gone from the api package. The parity
-matrix that reported where the two engines differ is retired.
+so nothing on this listener asks an evaluator of its own.
+`searchPolicies` (`search.go`) and the count the organization deletion
+makes (`org.go`) read the organization's policies through the relay's
+`List` (#1990): the search matches the needle on each name or
+identifier, case aside, in the platform, since the service has no search
+of its own, and then filters by `iam:policy.read` as above. The engine,
+its store and its tables are removed (ADR-0177), and so is the
+`PolicyManager` seam. The parity matrix that reported where the two
+engines differed is retired.
 
 **Two further decisions are taken, both partly built.** The policy
 service loads `policy/schema/iam.cedarschema` and
@@ -134,7 +131,7 @@ only in the policy service: nothing sends one yet.
   which replaced ADR-0143's hyphen, so a name parses one way) and every
   action moves: the platform's `<type>:<verb>` became
   `iam:<type>.<verb>`, so `iam:org.delete` is
-  `Iam::Action::"org.delete"`, in the evaluator, the roles, the console
+  `Iam::Action::"org.delete"`, in the roles, the console
   and the system tier, and a type's group `iam:<type>.*` holds that
   type's actions and no other's. A role is the `Iam` namespace's, and a
   service's action joins one by naming its group in its own manifest.
@@ -182,7 +179,7 @@ from `@caller`, qualified types and `<service>:<type>.<verb>` actions
 on the wire with the unqualified form refused, the `Iam` roles, and
 `iam:permit.write` declared in `role-owner` alone. The platform's
 outbox sends `Iam::` types under migration 000070. Item 4 renamed the
-platform's own actions, in `role.go`, the evaluator, the console, the
+platform's own actions, in `role.go`, the console, the
 CLI and the SDKs, and migrations 000071 and 000072 rewrote the
 operations stored in delegation grants and authorities, the second to
 the dot form of ADR-0145; no stored policy document was converted, and
@@ -225,12 +222,10 @@ service alone; of what follows, only what a bullet says is built is
 true of the platform.
 
 - **One evaluator.** `garam serve authz`, its gRPC, its policy tables,
-  its change notification and `CheckCurrent` are removed, and no
-  stored document of the earlier format is converted. The policy
-  service is required in every deployment, and a listener that cannot
-  have a request decided refuses it. The sections below this one,
-  from Policy document to Explain, describe what the removed evaluator
-  does today.
+  its change notification and `CheckCurrent` are removed (ADR-0177),
+  and no stored document of the earlier format is converted. The
+  policy service is required in every deployment, and a listener that
+  cannot have a request decided refuses it.
 - **The service serves the write.** Built: seven gRPC RPCs write and
   read role links, guardrails and `permit`s, with versions,
   activation, roll-back and removal, and the HTTP binding gains no
@@ -268,8 +263,8 @@ true of the platform.
   where its policy client is configured.
 - **Every present capability has a place.** The ADR's inventory gives
   each origin of a statement and each surface that reads a decision
-  its form. A hosted operator's delegation, handed to the evaluator
-  as a per-call Allow today, becomes an attribute of the operator's
+  its form. A hosted operator's delegation, handed to the earlier
+  engine as a per-call Allow, becomes an attribute of the operator's
   entity that a system policy per delegable operation reads. The
   policy service holds this half (#1805): `Iam::Operator` carries
   `operations`, joins the principals of the ten delegable actions
@@ -307,7 +302,7 @@ true of the platform.
   `iam:audit.read`
   ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)).
   A write is recorded in its own transaction, so one that cannot be
-  recorded is not made. A denial is recorded after the engine decides
+  recorded is not made. A denial is recorded after the service decides
   it, and is queued for a worker that records it off the answering
   path. One whose record cannot be written, or that meets a full queue
   or a stop with it still queued, is answered anyway, the failure
@@ -897,81 +892,28 @@ service's API, generated from `policy/proto` (ADR-0130).
 revises ADR-0130 on isolation's form and the templates' scopes, and
 makes any evaluation error a deny.
 
-| Today | Under ADR-0130 |
-|-------|----------------|
-| IAM-style documents, matched by `platform/internal/authz` | Cedar policies, evaluated by the `cedar-policy` crate and validated against the manifests under `policy/schema/` |
-| `CheckRequest` carries collected statements, `subject_groups` and `subject_org` | `Evaluate(subject, action, resource, context)` in AuthZEN's shape; the service reads memberships and ancestors itself |
-| Roles are org data the api server turns into statements | A role is a system-tier template, one set for an organization and one for a team or project, and an assignment is a policy linking it |
-| A policy attaches to a user, an agent or a group | A grant names its principal; a guardrail is a `forbid` |
-| An organization's scope is checked by `subject_org` | Tenant isolation is a system `forbid` no policy overrides, unless the subject is in the resource's organization's `OrgMembers`, which no team or project sits in |
-| `CheckCurrent` | A request option reading storage instead of the cache |
-| `Explain` | The decision's reasons, and an access report over grants |
-
 ## Policy document
 
-**Nothing evaluates a `Condition`.** The key is reserved: a document
-carrying one is stored and read back as it was written, and no
-evaluation reads it. Every other key below is read.
-
-```json
-{
-  "Version": "2026-07-25",
-  "Statement": [
-    {
-      "Sid": "AllowOrgRead",
-      "Effect": "Allow",
-      "Action": ["iam:org.read", "iam:project.read"],
-      "Resource": ["grn:acme/*"]
-    }
-  ]
-}
-```
-
-- `Effect`: `Allow` | `Deny`.
-- `Action`: `<service_type>:<verb>` strings; `*` and `?` wildcards may
-  appear anywhere and repeat (`iam:org.*`, `*`). Constants are owned by
-  the defining domain (`platform/internal/org`,
-  `platform/internal/user`, …). The engine matches strings only.
-- `Resource`: GRN patterns with the same wildcard rules
-  (`grn:acme/*` scopes to an org).
-- `Condition`: reserved, as above.
-
-Reserved is not dropped, and neither is anything else. The parse
-boundary refuses a key none of the above names rather than discarding
-it, and what it accepts is stored whole: `policy_versions` is
-append-only, so a field lost on the way in has nothing left to recover
-it from and the version an administrator reads back would not be the
-one they wrote.
+Removed. The earlier engine read IAM-style documents of `Effect`,
+`Action` and `Resource` and matched strings alone; no document of that
+format is read or converted now
+([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
+An organization's policies are the policy service's: role links,
+`forbid` guardrails and `permit` policies, written in Cedar and
+validated against the manifests under `policy/schema/`.
 
 ## Evaluation
 
-```
-Evaluator.Evaluate(context, Context)
-  1. any matching Deny statement?          → DecisionDeny
-  2. else any matching Allow statement?    → DecisionAllow
-  3. else                                  → DecisionDeny (default)
-```
-
-The engine matches strings only. Matching = action pattern ∩ resource
-pattern both match.
+The policy service evaluates. A decision is Cedar's: a matching
+`forbid` denies, else a matching `permit` allows, else the answer is a
+deny, and any evaluation error is a deny
+([ADR-0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)).
 
 ## Statement collection
 
-Evaluation input has two origins and the engine unions them
-([ADR-0007](./adr/0007-hybrid-statement-collection.md)). Deny-overrides
-applies across the union: either origin alone can allow, and a Deny
-from either wins.
-
-| Origin | Owner | Resolved |
-|--------|-------|----------|
-| role-derived statements | none; the policy service holds role links | delivered as links |
-| identity-derived statements | machine listener | per request, from the caller's own GRN |
-| persisted policy statements | authz engine | from the org's cache; from storage for `CheckCurrent` |
-
-The engine scopes a request to the org that owns the object: an org's
-identifier is the organization segment of every resource beneath it
-(ADR-0001). Which of that org's policies apply then depends on their
-attachments (§Policy attachment).
+No process collects statements now. The service reads memberships,
+ancestors and role links itself from what the platform delivers
+(§Delivery).
 
 ### Role-derived statements
 
@@ -997,108 +939,25 @@ is removed
 
 ### Identity-derived statements
 
-A machine identity holds no roles and belongs to no org, so the machine
-listener collects what its GRN alone grants it and supplies that in the
-same slot
-([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)).
-
-| Origin | Action patterns | Resource patterns |
-|--------|-----------------|-------------------|
-| the caller's own GRN | `iam:message.send` | `grn:<caller org>:*` |
-
-That is why an agent nobody has written a policy for goes on sending
-inside its organization. A policy narrows it with a Deny, as a Deny
-narrows a role's grant.
-
-What keeps an agent out of another organization is not that pattern.
-The listener refuses a recipient of another organization before it
-asks, which is how it meets the obligation §Policy attachment states;
-the organization segment in the pattern is defence in depth behind it.
-
-The listener sends the sender's groups beside that statement. Group
-membership is org data and this surface holds no store, so it reads
-them over a seam of its own, which is what makes a policy attached to a
-group decide what its members send (§Policy attachment). Membership it
-cannot read refuses the message rather than deciding it without: an
-unread group and an empty one are the same answer otherwise, and the
-difference is every Deny attached to one. The listener also sends
-`subject_org` — the GRN of the organization the sender's own GRN
-already names — so the engine's scope check (ADR-0038) reads the
-boundary the same way it reads any other subject's.
-
-A send is the exception: the listener asks the policy service about
-the sender and the recipient and sends neither statements nor groups,
-since the service reads memberships and ancestors itself (ADR-0168).
+Removed. A machine identity's grant on its own organization, once a
+statement the machine listener collected
+([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), is a
+system policy of the policy service, and a send is asked of the service
+about the sender and the recipient (ADR-0168). The listener refuses
+unasked a recipient of another organization that is not an agent; a
+recipient that is an agent is asked of the service, whose tenant
+isolation holds the boundary.
 
 ## Policy persistence
 
-Policies are org-managed data in Postgres (ADR-0002): `policies`
-carries the metadata, status, and default-version pointer;
-`policy_versions` is append-only, enforced by a schema trigger. A
-stored version is never rewritten, and versions disappear only with
-the policy that owns them. Appending a version leaves the pointer where
-it is; rollback moves it to any stored version, older or newer than
-the current default; activation changes the status and leaves the
-pointer alone. A policy is retired by deleting it, which removes it
-with its versions and its attachments in one statement holding its row
-lock ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
-
-| State | Meaning |
-|-------|---------|
-| `draft` | stored, evaluated by nothing |
-| `active` | contributes its default version's statements to checks |
-
-The engine parses each org's active documents once and caches the
-resulting statement set. Writes made through the engine drop the org's
-entry directly. Writes made by any other process announce the org on
-the Postgres `LISTEN`/`NOTIFY` channel `garam_policy_change`, which a
-schema trigger raises and the engine's listener consumes.
-
-Losing that connection is ordinary rather than exceptional — a Postgres
-failover breaks it by design — so the listener reopens one, backing off
-between attempts so a database that is down is not retried into an
-outage of its own. A notification raised while it was down is not
-repeated, so a reopened connection drops every cached org: what the
-engine read before the break is what it cannot know is current. Only
-shutting the process down ends the listener, and `garam serve authz`
-reports that.
-
-A reconnecting listener does not take the engine out of rotation. The
-engine's readiness reports the database and nothing else, because
-readiness reports what a replica cannot serve without and one that is
-reloading its cache still answers
-([ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)).
-A decision may therefore be made from statements no notification has
-invalidated yet; if that ever has to be refused, the refusal belongs to
-the check, which can name the request in doubt, and not to a probe,
-which cannot.
-
-**`CheckCurrent` is that refusal**, for the privileged actions that
-must be checked against current authority
-([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
-Nothing on the platform's paths calls it now: delegated operation
-authority and the controller proof are the policy service's decision,
-asked read current ([operators.md](./operators.md) §Delegated
-operation authority, `operators.md` §Controller proof). The RPC stays
-on the engine.
-It decides as
-`Check` does, except that the org's active policies and their
-attachments are read from storage on every call: it neither reads nor
-fills the cache, and storage it cannot read fails the call rather than
-falling back to the cache. Only that read is current. The statements,
-`subject_groups` and `subject_org` a caller sends are taken as sent,
-so a caller needing current membership, roles or groups resolves them
-afresh. It is a method of its own and not a field on `CheckRequest`:
-an engine predating it answers `UNIMPLEMENTED`, where a field it does
-not know would be dropped unread and the call answered from its cache.
-`Check` and `Explain` keep the cached behaviour above.
-
-Lifecycle is served by `PolicyService` in
-`platform/proto/garam/authz/v1`: create, append a version, list policies
-and versions, search policies by name or identifier for `searchOrg`
-(api-surface.md), activate, delete, roll back, attach, detach, and list
-attachments. Documents are validated at the write boundary, so a stored
-document always parses.
+The platform stores no policy. The engine's `policies`,
+`policy_versions` and `policy_attachments` tables and the notification
+`garam_policy_change` are removed (migration 000081), and `CheckCurrent`
+is removed with the engine's gRPC server. The policy service stores an
+organization's role links, guardrails and `permit`s with their versions,
+activation, roll-back and removal, and the platform relays the writes
+(§Managing policies over HTTP). The down migration restores the three
+tables empty; it does not restore a row.
 
 ## Managing policies over HTTP
 
@@ -1116,17 +975,15 @@ before asking a role link it derives from a membership, a user in
 organization scope or a team or project linked to itself, so a user's
 organization role stays the membership's.
 
-**The engine's policy endpoints are removed.** `/orgs/{org}/policies`
-and its versions, activation, rollback and attachment operations, with
-the `PolicyManager` handlers behind them, are gone from the browser
-listener, the specification and the SDKs
+**The earlier engine's policy endpoints are removed.**
+`/orgs/{org}/policies` and its versions, activation, rollback and
+attachment operations are gone from the browser listener, the
+specification and the SDKs
 ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),
-and so are the `policy_document_*` reasons they raised. Nothing writes
-the engine's `policies`, `policy_versions` and `policy_attachments`
-tables. They, the store and the engine wait for round 14 of #1796,
-which removes them. The search of policies and the deletion's count
-read the policy service's list through the relay and not those
-tables (#1990).
+and so are the `policy_document_*` reasons they raised. The engine, its
+store and its tables are removed too (ADR-0177). The search of policies
+and the deletion's count read the policy service's list through the
+relay (#1990).
 
 **The audit record is read the same way.**
 `/orgs/{org}/audit-records` relays the policy service's record of
@@ -1157,90 +1014,14 @@ naming one subject.
 
 ## Policy attachment
 
-An active policy is attached to subjects through `policy_attachments`
-([ADR-0008](./adr/0008-identity-based-policy-attachments.md)). The
-engine matches subject strings and validates no service type, so an
-agent GRN is a subject on the same terms as a user
-([ADR-0014](./adr/0014-agent-authentication.md)) — it needs no model
-change, only a caller that can authenticate as one. The machine
-listener is one; the browser-facing listener is to be the other
-(§An agent on the browser-facing listener).
+Removed. A policy attached to a user, an agent or a group, and the
+obligation that a caller establish the subject's organization before
+asking, belonged to the earlier engine (ADR-0008, ADR-0025, ADR-0038).
+In the policy service a grant names its principal, a guardrail is a
+`forbid`, and tenant isolation is a system `forbid` that membership of
+the resource's organization lifts, so no caller establishes it
+(ADR-0137, ADR-0146 item 7).
 
-| Attachment | Applies to |
-|------------|------------|
-| none | every subject the caller asks about (see below) |
-| a user GRN | that user |
-| an agent GRN | that agent |
-| a group GRN | the members the request reports for that subject |
-
-A check therefore evaluates four sources: the org's unattached active
-policies, the policies attached to the subject, the policies attached
-to a group the subject belongs to, and the statements the calling
-server collected. Deny-overrides applies across all four.
-
-**An unattached policy's scope is the caller's obligation, not the
-engine's**
-([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)) — the
-engine did not hold it, and the engine now does. The engine loads the
-policies of the organization owning the **object** and applies every
-unattached one to whatever subject it was handed; it holds no membership
-data and cannot tell whether that subject belongs to that organization.
-The caller therefore establishes that the subject belongs to the
-object's organization before asking, sends that organization as
-`subject_org` on `Check` / `Explain`, and the engine refuses the call
-when the field is unset or does not match
-([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
-`platform/internal/api` populates it from the org whose member it
-fetched; the machine listener's send is asked of the policy service
-instead and populates nothing (ADR-0168). A
-caller that hands the engine a subject from another organization is
-refused at the engine — the boundary has moved, and the engine is where
-the obligation now lives. The groups a caller sends are subjects too,
-and the same obligation covers them: a group belongs to the org that
-names it in its GRN.
-
-The row above reads "every subject the caller asks about" for that
-reason. A caller that hands the engine a subject from another
-organization gets that organization's unattached policies applied to
-it — only when it also names the right `subject_org`, which is what
-the engine now requires.
-
-Detaching an active policy's last attachment is refused, because the
-policy would not retire — it would widen back to the org, which for a
-Deny turns one subject's restriction into every subject's, and for an
-Allow hands that grant to every subject a caller asks about. The
-remedies the refusal names are the deliberate acts: delete the policy to
-retire it, or attach the next subject before detaching this one. The
-org-wide state itself is unchanged
-([ADR-0008](./adr/0008-identity-based-policy-attachments.md)): a policy
-created and activated without an attachment applies to every subject the
-caller asks about, so entering that state stays possible and is never a
-side effect of removing an attachment. A draft policy's last attachment
-detaches freely, since nothing evaluates it. Deleting is what takes a
-policy out of every check, attached or not: nothing of it is left to
-widen, so the deletion refuses nothing on attachments.
-
-An attached policy decides what an agent sends
-([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), inside
-the sending agent's own org and nowhere else. Every attachment that
-decides an agent's message is therefore a Deny: an Allow widens nothing
-the identity-derived grant does not already cover, and it buys no
-recipient outside the org, which the listener refuses before a policy
-is read.
-
-Each caller resolves the subject's groups from the org tables and sends
-them as `subject_groups` on `Check` / `Explain`; the engine matches
-those GRNs against attachments without knowing what a group is. Each
-caller also sends `subject_org` — the GRN of the organization the
-subject belongs to — and the engine refuses the call when it is unset
-or does not name the object's organization (ADR-0038). An attachment
-stays inside the policy's org, enforced by a schema trigger; a
-root-owned identity such as a user cannot name an org in its GRN, so
-org membership is established by the api server populating `subject_org`
-before asking. An agent names its org in its own GRN, so the
-machine listener reads it directly where it still asks the engine.
-Attachment writes announce the org on `garam_policy_change` like any
-other policy write.
 
 ## An agent on the browser-facing listener
 
@@ -1249,35 +1030,21 @@ a non-member before it asks.
 [ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
 admits an agent presenting a browser token
 ([machine-identity.md](./machine-identity.md) §Browser tokens), and
-decides it this way:
+decides it in the earlier engine's terms, which the policy service
+replaces:
 
-| Field | For an agent |
-|-------|--------------|
-| subject | the agent's GRN |
-| `subject_groups` | the groups whose members list that GRN |
-| `subject_org` | the organization the agent's GRN names |
-| collected statements | none: an agent holds no membership, group or project role |
-
-- **Its authority is the policies that reach it**: attached to it,
-  attached to a group holding it, and the org's unattached active
-  policies. An agent no policy reaches can do nothing there.
+- **Its authority is the policies that reach it**: the grants naming
+  it or a team holding it. An agent no policy reaches can do nothing
+  there.
 - **The membership check becomes an organization check.** The path's
   org must be the one the agent's GRN names.
-- **A floor no policy lifts.** Before the engine is asked, an agent
+- **A floor no policy lifts.** Before the service is asked, an agent
   is refused every operation outside its own organization, and
   `issueOperatorKey`, `createInvitation`, `mintOperationAuthority`
   and `approveAgentEnrollment` inside it. Policy writes, group
   membership and deleting the organization are left to policy, which
-  a Deny attached to the agent bounds.
-- **Under ADR-0130** the agent is a principal type beside the user,
-  decided on the grants naming it or a team holding it, and the floor
-  is a system `forbid`.
-
-The engine needs no change for it. It was measured asking `Check` and
-`Explain` about an agent and a user carrying the same attachments, a
-group holding both included, with no collected statements: every
-decision and every matched statement was the same for both
-(ADR-0123 §Context).
+  a `forbid` naming the agent bounds. The floor is a system `forbid`
+  under ADR-0130.
 
 ## cowork's principal
 
@@ -1286,7 +1053,6 @@ decision and every matched statement was the same for both
 [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
 gives each organization a cowork principal on the machine listener
 ([machine-identity.md](./machine-identity.md) §cowork's principal).
-No such subject reaches the engine today from the platform's path.
 [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
 supersedes in part ADR-0127 §5: cowork asks the policy service
 itself, under a caller token from `exchangeClientAssertion` with
@@ -1309,102 +1075,60 @@ the policy service holds the change
 #1919): without it, the read that follows is denied as a `fault` of
 `tenant-isolation` until the loop has run. The request wakes the loop
 and waits up to 5 seconds on the entity's own mark, and answers 503
-`change_not_applied` naming the stored entity's GRN at the bound. A page's
-delete waits on the mark of each page it removed, those beneath it
-too. Updates, reads and writes through a page's sync
-connection do not wait: the service holds an entity's type,
-identifier and organization, and none of them changes there.
+`change_not_applied` naming the stored entity's GRN at the bound. A
+page's delete waits on the mark of each page it removed, those beneath
+it too. Updates, reads and writes through a page's sync connection do
+not wait: the service holds an entity's type, identifier and
+organization, and none of them changes there.
 
 - **Decided as a machine sender.** Its `postMessage` asks
-  `iam:message.send` with its GRN as subject and the recipient as
-  object, on the identity-derived Allow over its own organization
-  (§Identity-derived statements). A policy attached to it applies, so a
-  Deny narrows which agents cowork may deliver to; an Allow widens
-  nothing.
-- **A floor before the engine.** A recipient that is not an agent of
+  `iam:message.send` of the policy service with its GRN as subject and
+  the recipient as object.
+- **A floor before the service.** A recipient that is not an agent of
   its organization is refused, and no consent relation carries it
   across. Its token reaches no other operation.
 - **A revoked principal stops cowork for its organization.** While the
   deployment holds an organization's principal revoked, the api server
   refuses every `cowork:` action on that organization before it asks.
-- **Under ADR-0130** it is a `Service` entity, its sending the system
-  policy ADR-0024's baseline becomes, and the floor and the revocation
-  are system `forbid`s.
+- **Under ADR-0130** it is a `Service` entity, its sending a system
+  policy, and the floor and the revocation are system `forbid`s.
 
 ## Components
 
-| Component | Responsibility | Depends on |
-|-----------|----------------|------------|
-| `Statement` / `PolicyDocument` | IAM-style rule model (ADR-0002); the `Effect` type is declared once in `platform/internal/wire` and shared with every surface | `platform/internal/wire` |
-| `Evaluator` | statement-set → `Decision` | — |
-| `StatementEvaluator` | native in-process `Evaluator` | — |
-| `Policy` / `PolicyVersion` | stored policy and its revisions | — |
-| `PolicyAttachment` | binds a policy to a subject (ADR-0008) | — |
-| `Store` | policy and attachment persistence, implemented by `platform/internal/authz/postgres` (ADR-0069) | `platform/migrations/` |
-| `PolicyCache` | per-org parsed policies and their attachments, and the uncached read `CheckCurrent` uses (the platform no longer calls it) | `Store` |
-| `ListenPolicyChanges` (`platform/internal/authz/postgres`) | drops a `PolicyCache` entry as `garam_policy_change` announces the write | `PolicyCache` |
-| `GRPCServer` | `Check` / `CheckBatch` / `CheckCurrent` / `Explain` RPCs | `PolicyCache` |
-| `PolicyGRPCServer` | policy lifecycle RPCs | `Store`, `PolicyCache` |
+The platform holds no decision component. `platform/internal/authz` is
+removed, and with it `Statement`, `Evaluator`, `PolicyCache`, the
+store, the change listener and the two gRPC servers (ADR-0177). What
+decides is the policy service, and what the platform holds of it is a
+client, the delivery and the relay:
 
-Role persistence (subject × role × scope) stays roadmap; roles remain
-org data resolved by the api server.
+| Component | Responsibility |
+|-----------|----------------|
+| policy decision client | enforcement, `checkPermissions`, the holders list, the lists and the explanation ask the service through it (ADR-0171, ADR-0172, ADR-0174); wired by `platform/internal/cli/serve.go` and, for a send, by `platform/internal/cli/machine.go` (ADR-0168) |
+| `currentDecision` (`platform/internal/cli/authority.go`) | delegated operation authority and the controller proof, asked read current, sending the actor, the action and the object and nothing else (ADR-0146 items 14 and 15) |
+| the outbox and its loop | deliver entities and role links (§Delivery) |
+| the relay | writes of policies and the audit record (§Managing policies over HTTP) |
 
-The api server never imports this package; it calls the engine over
-gRPC (`Check`, `CheckBatch` and `Explain` in
-`platform/proto/garam/authz/v1`) and supplies the role-derived
-statements it collected. `CheckBatch` is `Check` asked of many objects
-for one subject and one action: the statements that hold for every
-object are sent once, each object carries those that reach the subject
-through it alone, and the persisted statements are read once for the
-call. Each object is decided as `Check` would decide it, and one outside
-the subject's organization refuses the call. An org-gated list asks it
-once per page to drop the objects the caller may not read
-([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)),
-which the browser listener no longer does: its lists ask the policy
-service (ADR-0172).
-The machine listener reaches the same engine the same way, over a seam
-of its own, and supplies the identity-derived ones, except for a
-message send, which it asks of the policy service (ADR-0168). Delegated
-operation authority and the controller proof on both listeners are the
-policy service's decision too, asked read current through one adapter,
-`currentDecision` in `platform/internal/cli/authority.go`, which sends
-the actor, the action and the object and nothing else (ADR-0146 items
-14 and 15). The
-browser listener's `Evaluator` seam, now asked by the explanation
-alone, has one non-test implementation,
-the gRPC client, wired by `platform/internal/cli/serve.go`, which also
-wires the policy decision client that enforcement, `checkPermissions`,
-the holders list and the lists ask; the machine listener has no engine
-seam, and wires the policy decision client in
-`platform/internal/cli/machine.go` (ADR-0168).
-The in-process evaluator is the engine's own rather than a test
-substitute: `StatementEvaluator` is what `Check` runs on every request
-(`platform/internal/authz/server.go`).
+`list_visibility.go` asks the service for each object of a list in one
+`Evaluations` call, as ADR-0115 asked the earlier engine's `CheckBatch`.
 
 ## Roles vs policies
 
 | Concept | Storage | Update cadence | Where it runs |
 |---------|---------|----------------|---------------|
-| Role | Postgres, `org` tables | frequent | api server collects the statements a role grants |
-| Policy | Postgres, engine tables | rare; audited | parsed, cached per org, evaluated per request; read from storage for `CheckCurrent` |
+| Role | Postgres, `org` tables, delivered as role links | frequent | the policy service decides on the links |
+| Policy | the policy service's store | rare; audited | evaluated per request by the service |
 
 Roles are data. Policies are rules. Keep them on separate update
 channels.
 
 ## Explain
 
-The `Explain` RPC reports which statements matched and which produced
-the final decision, across both origins. It decides over the set
-`Check` decides over, read from the same cache, so its decision is
-`Check`'s. A persisted statement's trace names the policy holding it
-and the subjects of the request that policy is attached to — none for
-one applying org-wide — so a denied request is reproducible after the
-fact down to the attachment that carried it.
-
-It has no caller on the browser-facing listener now:
-`explainPermission` asks the policy service ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md))
-([api-surface.md](./api-surface.md) §What decides the rest). No CLI
-subcommand asks it, and the machine listener does not.
+The explanation is the policy service's `Evaluate` asked as a probe,
+and its reasons name the policies that decided
+(`permission_explanation.go`,
+[ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md),
+[api-surface.md](./api-surface.md) §What decides the rest). The earlier
+engine's `Explain` RPC is removed.
 
 ## Constraints
 
@@ -1413,5 +1137,3 @@ subcommand asks it, and the machine listener does not.
 - The earlier Rego/OPA direction is superseded (ADR-0002), and no Rego
   source is in this repository. The WIP that ADR calls reference
   material is at a path outside it, so nothing here preserves it.
-- Domain types do not satisfy `authz.Object`; the engine adapts a
-  parsed GRN at the transport boundary.

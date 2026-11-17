@@ -86,8 +86,9 @@ never have matched. It reads tracked files only.
 ## Local stack
 
 [`deploy/local/`](./deploy/local/) runs everything — Postgres,
-migrations, the policy service, api, and the frontend behind `--profile web` — in
-containers. See [deploy/local/README.md](./deploy/local/README.md).
+migrations, the policy service, api, and the frontend behind
+`--profile web` — in containers. See
+[deploy/local/README.md](./deploy/local/README.md).
 
 ```sh
 cp deploy/local/.env.example deploy/local/.env

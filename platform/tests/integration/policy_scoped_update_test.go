@@ -50,7 +50,6 @@ func TestPolicyScopedLinks_ARenameIsNotAnsweredByASetAsideMark(t *testing.T) {
 	_, err := d.pass(t)
 	require.NoError(t, err)
 
-	_, engine := policyEngine(t, p)
 	token, err := authn.NewToken()
 	require.NoError(t, err)
 	lee, err := grn.Parse(outboxUser)
@@ -60,8 +59,7 @@ func TestPolicyScopedLinks_ARenameIsNotAnsweredByASetAsideMark(t *testing.T) {
 
 	gate := runLoop(t, p, d, 2*time.Second)
 	srv := api.NewServer(userpg.New(p), orgpg.New(p), agentpg.New(p), nil, messagepg.New(p), nil,
-		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), newCurrentDecisions(p), nil, nil, nil, nil,
+		authnpg.NewSessionStore(p), nil, nil, nil, nil, newCurrentDecisions(p), nil, nil, nil, nil,
 		api.Config{SessionTTL: time.Hour}).WithFeed(gate)
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

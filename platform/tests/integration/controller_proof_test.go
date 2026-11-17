@@ -113,7 +113,7 @@ func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, polic
 }
 
 // newProofStackDeciding is newProofStack where decisions is the policy
-// service the listener asks, which the suite tagged policymatrix gives
+// service the listener asks, which the suite tagged policyservice gives
 // the real one.
 func newProofStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, policies *authz.PolicyGRPCServer, decisions policydecision.Service) *proofStack {
 	t.Helper()
@@ -404,7 +404,7 @@ func TestControllerProof_ReadsTheTimeOnEveryDecision(t *testing.T) {
 // an earlier proof: each proof on an open connection is a question to
 // it, and an answer that turns to a denial refuses the next, for the
 // session and for an agent. What the service decides from what it holds
-// is the policymatrix suite's.
+// is the policyservice suite's.
 func TestControllerProof_AsksTheServiceOnEveryProof(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)

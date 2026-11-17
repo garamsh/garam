@@ -2,21 +2,31 @@ package api
 
 import (
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
-	"github.com/garamsh/garam/platform/internal/wire"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
+)
+
+// The identifiers the platform reserves to the role links it writes
+// (ADR-0161, ADR-0163): `link-<role>-<hex>` holds a member's role in
+// the organization, and `link-scoped-<role>-<hex>` the role a team or a
+// project holds on itself.
+const (
+	linkPrefix       = "link-"
+	scopedLinkPrefix = "link-scoped-"
 )
 
 // ExplainPermission answers why the signed-in caller may or may not
 // take one action: the decision checkPermissions answers for the pair,
-// and where the engine decides it, the statements that did, each with
-// the path through which it reaches the caller. A policy statement the
-// caller may not read is answered without its content. Requires
-// membership.
+// and where the policy service decides it, the grounds it names. A
+// guardrail or a permit the caller may not read is named without its
+// content. Requires membership.
 func (s *Server) ExplainPermission(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ExplainPermissionParams) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -66,130 +76,238 @@ func permissionPair(action string, kind *apigen.PermissionResourceType, id *stri
 }
 
 // explain answers one pair whose target permissionTarget accepted. An
-// action the engine's Check does not alone decide is answered with
-// checkPermissions' decision and no statements, since what decides it
-// is the operation.
+// action the policy service does not alone decide is answered with
+// checkPermissions' decision and no grounds, since what decides it is
+// the operation. Any other is the question checkPermissions asks, so
+// its decision is the same.
 func (s *Server) explain(r *http.Request, c *caller, target grn.GRN, action string) (apigen.PermissionExplanation, error) {
-	none := []apigen.ExplainedStatement{}
+	none := []apigen.ExplainedGround{}
 	if !org.IsAction(action) {
-		return apigen.PermissionExplanation{Decision: apigen.DecisionDeny, Basis: apigen.BasisUndefinedAction, Statements: none}, nil
+		return apigen.PermissionExplanation{Decision: apigen.DecisionDeny, Basis: apigen.BasisUndefinedAction, Grounds: none}, nil
 	}
 	if actionRules[action].decidedBy != decidedByCheck {
 		decision, err := s.decide(r, c, target, action)
 		if err != nil {
 			return apigen.PermissionExplanation{}, err
 		}
-		return apigen.PermissionExplanation{Decision: decision, Basis: apigen.BasisOperation, Statements: none}, nil
+		return apigen.PermissionExplanation{Decision: decision, Basis: apigen.BasisOperation, Grounds: none}, nil
 	}
-	in, err := s.question(r, c, target, action)
+	d, err := s.asks(r, c, target, action)
 	if err != nil {
 		return apigen.PermissionExplanation{}, err
 	}
-	ex, err := s.evaluator.Explain(r.Context(), in)
+	grounds, err := s.groundsOf(r, c, target, d)
 	if err != nil {
 		return apigen.PermissionExplanation{}, err
 	}
-	decision, deciding := apigen.DecisionDeny, wire.EffectDeny
-	if ex.Allowed {
-		decision, deciding = apigen.DecisionAllow, wire.EffectAllow
+	decision := apigen.DecisionDeny
+	if d.Allowed {
+		decision = apigen.DecisionAllow
 	}
-	statements, err := s.decidingStatements(r, c, in.Statements, ex.Traces, deciding)
-	if err != nil {
-		return apigen.PermissionExplanation{}, err
-	}
-	return apigen.PermissionExplanation{Decision: decision, Basis: apigen.BasisStatements, Statements: statements}, nil
+	return apigen.PermissionExplanation{Decision: decision, Basis: apigen.BasisPolicyService, Grounds: grounds}, nil
 }
 
-// decidingStatements renders the traces that matched with the effect
-// that decided. A collected statement is named by the role it came
-// from; a policy statement by its policy and each path it reached the
-// caller by, where the caller may read the policy, and otherwise once,
-// as unreadable, however many such statements decided.
-func (s *Server) decidingStatements(r *http.Request, c *caller, collected []Statement, traces []Trace, deciding wire.Effect) ([]apigen.ExplainedStatement, error) {
-	bySid := make(map[string]Statement, len(collected))
-	for _, st := range collected {
-		bySid[st.Sid] = st
+// groundsOf names each reason of d, in the order of the policy each
+// names so that the same decision reads the same. Whether the caller
+// may read a stored policy is asked once, however many the decision
+// names, and only when one is named.
+func (s *Server) groundsOf(r *http.Request, c *caller, target grn.GRN, d policydecision.Decision) ([]apigen.ExplainedGround, error) {
+	reasons := make([]policydecision.Reason, 0, len(d.Reasons))
+	for reason := range d.Reasons {
+		reasons = append(reasons, reason)
 	}
-	effect := effectToAPI(deciding)
-	readable := map[grn.GRN]bool{}
-	out := []apigen.ExplainedStatement{}
-	unreadable := false
-	for _, t := range traces {
-		if !t.Matched || t.Effect != deciding {
-			continue
+	slices.SortFunc(reasons, func(a, b policydecision.Reason) int {
+		if byPolicy := strings.Compare(a.PolicyID, b.PolicyID); byPolicy != 0 {
+			return byPolicy
 		}
-		if t.Policy.IsZero() {
-			st, ok := bySid[t.Sid]
-			if !ok {
-				return nil, errorx.New(errorx.KindInternal, "explain: the engine traced a statement nobody sent")
+		return strings.Compare(a.Error, b.Error)
+	})
+	var may *bool
+	readable := func() (bool, error) {
+		if may == nil {
+			allowed, err := s.allows(r, c, c.org, org.ActionPolicyRead)
+			if err != nil {
+				return false, err
 			}
-			out = append(out, roleStatement(st, effect))
-			continue
+			may = &allowed
 		}
-		may, seen := readable[t.Policy]
-		if !seen {
-			var err error
-			if may, err = s.allows(r, c, t.Policy, org.ActionPolicyRead); err != nil {
-				return nil, err
-			}
-			readable[t.Policy] = may
-		}
-		if !may {
-			unreadable = true
-			continue
-		}
-		out = append(out, policyStatements(c, t, effect)...)
+		return *may, nil
 	}
-	if unreadable {
-		out = append(out, apigen.ExplainedStatement{Effect: effect, Source: apigen.SourceUnreadablePolicy})
+	out := make([]apigen.ExplainedGround, 0, len(reasons))
+	for _, reason := range reasons {
+		ground, err := s.groundOf(r, c, target, reason, readable)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ground)
 	}
 	return out, nil
 }
 
-// roleStatement names a collected statement by the role it came from.
-func roleStatement(st Statement, effect apigen.ExplainedStatementEffect) apigen.ExplainedStatement {
-	roles := st.Origin.Roles
-	out := apigen.ExplainedStatement{Effect: effect, Sid: &st.Sid, Roles: &roles}
-	via := st.Origin.Via.Identifier
-	switch st.Origin.Kind {
-	case OriginOrgRole:
-		out.Source = apigen.SourceOrgRole
-	case OriginGroupRole:
-		out.Source, out.Group = apigen.SourceGroupRole, &via
-	case OriginProjectRole:
-		out.Source, out.Project = apigen.SourceProjectRole, &via
+// groundOf names one reason. A policy is told apart by how the service
+// names it: a stored policy of the caller's organization by its GRN; a
+// system policy by its file name; and a sending organization's
+// guardrail by `<organization GRN>/<its GRN>`, which names a policy
+// that is not the caller's organization's to read. A stored policy is a
+// role link where its identifier is one the platform reserves
+// (ADR-0161, ADR-0163), and otherwise is the kind the policy service
+// holds for it, which only a caller who may read it is told. To any
+// other caller the kind is withheld and never read off the decision,
+// since a role link that allows and a permit that allows look alike
+// there. A reason that carries an error is an error, beside the policy
+// it arose in where that one is named.
+func (s *Server) groundOf(
+	r *http.Request, c *caller, target grn.GRN, reason policydecision.Reason,
+	readable func() (bool, error),
+) (apigen.ExplainedGround, error) {
+	ground := apigen.ExplainedGround{Kind: apigen.GroundStoredPolicy}
+	if reason.Error != "" {
+		ground.Kind, ground.Error = apigen.GroundError, &reason.Error
 	}
-	return out
-}
-
-// policyStatements names a policy statement once for each path it
-// reached the caller by: org-wide, attached to the caller, or attached
-// to one of the caller's groups.
-func policyStatements(c *caller, t Trace, effect apigen.ExplainedStatementEffect) []apigen.ExplainedStatement {
-	named := func(attachment apigen.ExplainedStatementAttachment, group *string) apigen.ExplainedStatement {
-		sid, policy := t.Sid, t.Policy.Identifier
-		return apigen.ExplainedStatement{Effect: effect, Source: apigen.SourcePolicy, Sid: &sid, Policy: &policy,
-			Attachment: &attachment, Group: group}
-	}
-	if len(t.AttachedTo) == 0 {
-		return []apigen.ExplainedStatement{named(apigen.AttachmentOrganization, nil)}
-	}
-	out := make([]apigen.ExplainedStatement, 0, len(t.AttachedTo))
-	for _, subject := range t.AttachedTo {
-		if subject == c.user.GRN {
-			out = append(out, named(apigen.AttachmentCaller, nil))
-			continue
+	switch {
+	case reason.PolicyID == "":
+		ground.Kind = apigen.GroundError
+		return ground, nil
+	case !strings.HasPrefix(reason.PolicyID, "grn:"):
+		ground.Policy = &reason.PolicyID
+		if reason.Error == "" {
+			ground.Kind = apigen.GroundSystemPolicy
 		}
-		group := subject.Identifier
-		out = append(out, named(apigen.AttachmentGroup, &group))
+		return ground, nil
 	}
-	return out
+	g, err := grn.Parse(reason.PolicyID)
+	if err != nil || g.Organization != c.org.Identifier || g.ServiceType != serviceTypePolicy {
+		return ground, nil
+	}
+	id := g.Identifier
+	ground.Policy = &id
+	if reason.Error != "" {
+		return ground, nil
+	}
+	if role, scoped, ok := linkRole(id); ok {
+		nameLink(&ground, target, role, scoped)
+		return ground, nil
+	}
+	may, err := readable()
+	if err != nil || !may {
+		return ground, err
+	}
+	return ground, s.readContent(r, c, &ground, id)
 }
 
-// effectToAPI renders an effect for an explanation.
-func effectToAPI(e wire.Effect) apigen.ExplainedStatementEffect {
-	if e == wire.EffectAllow {
-		return apigen.StatementEffectAllow
+// linkRole reads the role a role link's reserved identifier holds, and
+// whether it is the link of a team or a project: an identifier that
+// opens `link-<role>-` or `link-scoped-<role>-` (ADR-0161 item 1,
+// ADR-0163 item 1). A policy of the organization that opens neither is
+// no role link by its identifier.
+func linkRole(id string) (role org.Role, scoped, ok bool) {
+	rest, scoped := strings.CutPrefix(id, scopedLinkPrefix)
+	if !scoped {
+		var found bool
+		if rest, found = strings.CutPrefix(id, linkPrefix); !found {
+			return "", false, false
+		}
 	}
-	return apigen.StatementEffectDeny
+	word, _, found := strings.Cut(rest, "-")
+	if !found {
+		return "", false, false
+	}
+	role, err := org.ParseRole(word)
+	if err != nil {
+		return "", false, false
+	}
+	return role, scoped, true
+}
+
+// nameLink names a role link by its role and the path it reaches the
+// caller by. An organization role reaches the caller through their
+// membership. The role of a team or a project is the link of that team
+// or project on itself (ADR-0163), so it reaches the caller on the
+// team or the project the question names and on none other; a link
+// asked about a resource that is neither carries no path.
+func nameLink(ground *apigen.ExplainedGround, target grn.GRN, role org.Role, scoped bool) {
+	ground.Kind = apigen.GroundRoleLink
+	apiRole := apigen.Role(role)
+	ground.Role = &apiRole
+	path := apigen.GroundPathOrganization
+	slug := target.Identifier
+	switch {
+	case !scoped:
+	case target.ServiceType == org.ServiceTypeGroup:
+		path = apigen.GroundPathTeam
+		ground.Team = &slug
+	case target.ServiceType == org.ServiceTypeProject:
+		path = apigen.GroundPathProject
+		ground.Project = &slug
+	default:
+		return
+	}
+	ground.Path = &path
+}
+
+// readContent names a stored policy by the kind the policy service
+// holds for it, read as the caller: a role link by the role and the
+// path its body gives, a guardrail or a permit by its name and text. A
+// policy the service no longer shows the caller stays a stored policy
+// whose kind is withheld: what decided is the delivered state, and a
+// read is the current one.
+func (s *Server) readContent(r *http.Request, c *caller, ground *apigen.ExplainedGround, id string) error {
+	if s.policyRelay == nil {
+		return errorx.New(errorx.KindUnavailable, "policy service is not configured")
+	}
+	detail, err := s.policyRelay.Get(r.Context(), policyrelay.Write{Writer: c.user.GRN, Org: c.org, ID: id})
+	if errorx.IsKind(err, errorx.KindPermissionDenied) || errorx.IsKind(err, errorx.KindNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var body policyrelay.Body
+	for _, v := range detail.Versions {
+		if v.Number == detail.Policy.DefaultVersion {
+			body = v.Body
+		}
+	}
+	switch detail.Policy.Kind {
+	case policyrelay.KindRoleLink:
+		nameStoredLink(ground, body.Link)
+	case policyrelay.KindGuardrail, policyrelay.KindPermit:
+		ground.Kind = apigen.GroundGuardrail
+		if detail.Policy.Kind == policyrelay.KindPermit {
+			ground.Kind = apigen.GroundPermit
+		}
+		name := detail.Policy.Name
+		ground.Name = &name
+		if body.Text != "" {
+			ground.Text = &body.Text
+		}
+	}
+	return nil
+}
+
+// nameStoredLink names a role link a writer stored by the role and the
+// path its body gives: the organization's, or the team's or the
+// project's the link is on. A body that is missing, or names a
+// resource that is neither, leaves the link without that much.
+func nameStoredLink(ground *apigen.ExplainedGround, link *policyrelay.RoleLink) {
+	ground.Kind = apigen.GroundRoleLink
+	if link == nil {
+		return
+	}
+	role := apigen.Role(link.Role)
+	ground.Role = &role
+	path := apigen.GroundPathOrganization
+	slug := link.Resource.Identifier
+	switch {
+	case link.Scope == policyrelay.ScopeOrganization:
+	case link.Resource.ServiceType == org.ServiceTypeGroup:
+		path = apigen.GroundPathTeam
+		ground.Team = &slug
+	case link.Resource.ServiceType == org.ServiceTypeProject:
+		path = apigen.GroundPathProject
+		ground.Project = &slug
+	default:
+		return
+	}
+	ground.Path = &path
 }

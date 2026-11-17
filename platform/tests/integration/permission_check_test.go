@@ -46,7 +46,7 @@ func newCheckStack(t *testing.T) *checkStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	policies, _ := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
@@ -68,8 +68,7 @@ func newCheckStack(t *testing.T) *checkStack {
 
 	decisions := newCurrentDecisions(p)
 	srv := api.NewServer(users, orgs, nil, nil, messagepg.New(p), nil,
-		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), decisions, nil, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
+		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, nil, nil, cli.NewAuthorityService(p, decisions), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	return &checkStack{url: browser.URL, acme: acme, owner: owner, ownerGRN: ownerGRN, member: member,

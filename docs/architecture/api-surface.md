@@ -465,15 +465,16 @@ and not in the same place on every surface.
   reached, 504 when the call times out, and a write refused stores
   nothing. The platform answers 400 itself for a role link it
   derives from a membership. `listIamPolicies` is the service's read,
-  not filtered here. The `/orgs/{org}/policies*` operations remain
-  until round 11 of #1796
+  not filtered here. The `/orgs/{org}/policies*` operations are removed
+  ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),
+  and the store and tables behind them wait for round 14 of #1796
   ([ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md),
   [authz.md](./authz.md) §Managing policies over HTTP).
 - **A list answers only the objects its caller may read.**
-  `listGroups`, `listProjects`, `listAgents` and `listPolicies` are
+  `listGroups`, `listProjects` and `listAgents` are
   authorized on their read action on the organization, and then drop
   each object whose own read the caller is denied: the read
-  `getGroup`, `getProject`, `getAgent` and `listPolicyVersions` each
+  `getGroup`, `getProject` and `getAgent` each
   make on the object. A Deny on one object therefore hides it from the
   list as it refuses its read. Every object of a page is asked in one
   `Evaluations` call to the policy service, as a probe, and an error of
@@ -484,8 +485,8 @@ and not in the same place on every surface.
   page is filtered as read, so `limit` and `offset` count the stored
   rows, and a page can hold fewer objects than its limit with more
   after it; a client pages until a page comes back empty. Lists gated
-  on a parent object — a group's or project's members, a policy's
-  versions and attachments, an operator's keys — are not filtered: the
+  on a parent object — a group's or project's members, an operator's
+  keys — are not filtered: the
   parent's read is what decides them.
 - **A caller's own teams are one filtered list.** `listGroups` with
   `member=me` answers only the groups the signed-in caller belongs to,
@@ -569,25 +570,23 @@ and not in the same place on every surface.
   cannot decide fails the whole request rather than answering the rest.
 - **A member may ask why, from the inputs enforcement uses.**
   `explainPermission` takes one pair, named as `checkPermissions`
-  names one, and answers the decision `checkPermissions` answers it.
-  Where the engine's `Check` alone decides, the same statements, groups
-  and organization are put to the engine's `Explain`, which decides
-  over the set `Check` decides over
-  ([authz.md](./authz.md) §Explain), and the answer carries the
-  statements that decided: each matching Deny for a deny, each matching
-  Allow for an allow, none where nothing allows. Each is named by its
-  path to the caller — their org role, their own roles, a group's or
-  project's roles, or a policy applying org-wide, attached to them or
-  attached to a group they belong to.
-  - **A policy the caller cannot read is not described.** A policy
-    statement is named only where the caller holds `iam:policy.read` on
-    that policy, the check `getPolicy` makes; every other one is
-    answered once as an unreadable policy with its effect alone, which
-    the decision already gives.
-  - **An action decided past `Check` is explained no further than its
-    decision**: the mint-decided actions, `iam:operator.delegate` and
-    `iam:agent.enroll` answer `checkPermissions`' decision with no
-    statement, since their operation is what decides. An action garam
+  names one, and answers the decision `checkPermissions` answers it,
+  asked of the policy service's `Evaluate` as a probe
+  ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)).
+  Its grounds are the service's reasons: a role link, named by its
+  reserved identifier and the path it reaches the caller by (the
+  organization, a team or a project); a guardrail or a permit, named
+  by GRN; a system policy, named by its file name; or an error of
+  evaluation. An allow names each policy that permits, a deny each
+  that forbids, and a deny that nothing forbids names none.
+  - **A policy the caller cannot read is named without content.** A
+    guardrail or a permit carries its name and text only where the
+    caller holds `iam:policy.read` on the organization; otherwise it
+    is named by its identifier alone.
+  - **An action decided past the check is explained no further than
+    its decision**: the mint-decided actions, `iam:operator.delegate`
+    and `iam:agent.enroll` answer `checkPermissions`' decision with no
+    grounds, since their operation is what decides. An action garam
     does not define is answered deny as such.
 - **Who holds an action is a list read on `iam:org.member-list`.**
   `listPermissionHolders` puts one pair to the engine's `Check` for

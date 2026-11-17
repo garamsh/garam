@@ -368,7 +368,7 @@ func TestMachineSurface_ADeniedSendStoresNothingForItsRecipient(t *testing.T) {
 // What decides it is the policy service's answer (ADR-0168), which
 // this suite stands a double in for; the engine's scope check that
 // ADR-0038 added is held by the authz suites, and the service's own
-// boundary by the policy matrix.
+// boundary by the policyservice suite.
 //
 // The recipient's own neighbour is the control: it is stored while the
 // foreign sender's post is refused, so a surface that stopped accepting

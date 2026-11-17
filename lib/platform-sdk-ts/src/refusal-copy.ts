@@ -34,8 +34,6 @@ export type RefusalAnswer = {
 export type RefusalOperation =
   | "acceptInvitation"
   | "registerPassword"
-  | "createPolicy"
-  | "addPolicyVersion"
   | "grantOrgConsent"
   | "approveAgentEnrollment"
   | "withdrawAgentEnrollment"
@@ -53,12 +51,6 @@ const INVITATION_NOT_FOUND =
 // status and kind (`failed_precondition`), so one sentence covers both.
 const INVITATION_SPENT =
   "This invitation can no longer be used: it was already accepted or it has expired. Ask an admin of the organization for a new one.";
-
-// garam answers every rule a policy document breaks with the same
-// status and kind (`invalid_argument`), so the sentence names the rules
-// rather than the one that failed.
-const POLICY_DOCUMENT_REFUSED =
-  "This policy document can't be saved. It needs a Version and at least one statement, and every statement needs an Effect of Allow or Deny, an Action and a Resource. Keys other than Version, Statement, Sid, Effect, Action, Resource and Condition aren't allowed.";
 
 const CONSENT_WITH_ITSELF =
   "That is this organization's own identifier. A consent is granted to another organization.";
@@ -104,8 +96,6 @@ const BY_OPERATION: Record<
     "409 failed_precondition": INVITATION_SPENT,
     "409 already_exists": "That username is taken. Choose another one.",
   },
-  createPolicy: { "400 invalid_argument": POLICY_DOCUMENT_REFUSED },
-  addPolicyVersion: { "400 invalid_argument": POLICY_DOCUMENT_REFUSED },
   // garam answers a grant naming this organization itself with 400 and
   // one naming no organization it holds with 404, neither for a reason
   // the generic sentences say.
@@ -137,7 +127,6 @@ export const REFUSAL_COPY = {
   unreachable: "garam can't be reached right now. Try again in a moment.",
   invitationNotFound: INVITATION_NOT_FOUND,
   invitationSpent: INVITATION_SPENT,
-  policyDocumentRefused: POLICY_DOCUMENT_REFUSED,
   consentWithItself: CONSENT_WITH_ITSELF,
   consentPartnerNotFound: CONSENT_PARTNER_NOT_FOUND,
   preparedUnreadable: PREPARED_UNREADABLE,
@@ -164,65 +153,11 @@ export function unmappedRefusalCopy(message: string): string {
 }
 
 /**
- * A JSON Pointer into a policy document as a sentence names the place:
- * `/Statement/1/Effect` is "statement 2's Effect".
+ * The sentence each documented reason reads as. A reason garam adds
+ * later and this file does not know is read by its status and kind
+ * instead.
  */
-function placeIn(path: string | undefined): string {
-  const tokens = (path ?? "")
-    .split("/")
-    .slice(1)
-    .map((token) =>
-      canonical(token.replaceAll("~1", "/").replaceAll("~0", "~")),
-    );
-  if (tokens.length === 0) return "the document";
-  if (tokens[0] !== "Statement" || tokens.length === 1)
-    return tokens.join(" › ");
-  const statement = `statement ${Number(tokens[1]) + 1}`;
-  if (tokens.length === 2) return statement;
-  const item = tokens.length > 3 ? `, item ${Number(tokens[3]) + 1}` : "";
-  return `${statement}'s ${tokens[2]}${item}`;
-}
-
-/** The keys the policy format names, as it spells them. */
-const POLICY_KEYS = [
-  "Version",
-  "Statement",
-  "Sid",
-  "Effect",
-  "Action",
-  "Resource",
-  "Condition",
-];
-
-/**
- * A pointer token in the format's own spelling where it names a key the
- * format holds. garam already points at known keys by that spelling
- * (`platform/api/openapi.yaml` `Error.path`); this keeps a sentence in
- * it whatever case reaches here. Any other token is shown as written.
- */
-function canonical(token: string): string {
-  return (
-    POLICY_KEYS.find((key) => key.toLowerCase() === token.toLowerCase()) ??
-    token
-  );
-}
-
-/** The pointer to what holds the place `path` leads to. */
-function parentOf(path: string | undefined): string {
-  return (path ?? "").split("/").slice(0, -1).join("/");
-}
-
-/** Capitalizes the first letter, for a place that opens a sentence. */
-function opening(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/**
- * The sentence each documented reason reads as, given the pointer it
- * came with. A reason garam adds later and this file does not know is
- * read by its status and kind instead.
- */
-const BY_REASON: Record<string, (path: string | undefined) => string> = {
+const BY_REASON: Record<string, () => string> = {
   change_not_applied: () =>
     "Your change is saved but not yet in effect. Wait a moment and check again; don't repeat the request.",
   change_refused: () =>
@@ -233,25 +168,6 @@ const BY_REASON: Record<string, (path: string | undefined) => string> = {
     "This invitation has expired. Ask an admin of the organization to send you a new one.",
   key_issuance_unconfigured: () =>
     "This garam doesn't issue operator keys: its machine token URL isn't set. Whoever runs garam sets it.",
-  policy_document_malformed: () =>
-    "This policy document isn't valid JSON. Check for a missing quote, comma or bracket.",
-  policy_document_trailing_data: () =>
-    "There is text after the end of the policy document. Remove it and save again.",
-  policy_document_wrong_type: (path) =>
-    path === undefined || path === ""
-      ? "A policy document must be a JSON object."
-      : `${opening(placeIn(path))} has the wrong type of value.`,
-  policy_document_unknown_key: (path) =>
-    `${opening(placeIn(path))} isn't part of the policy format. The keys it allows are Version, Statement, Sid, Effect, Action, Resource and Condition.`,
-  policy_document_version_missing: () => "The document needs a Version.",
-  policy_document_statement_empty: () =>
-    "The document needs at least one statement.",
-  policy_document_effect_invalid: (path) =>
-    `${opening(placeIn(path))} must be Allow or Deny.`,
-  policy_document_action_missing: (path) =>
-    `${opening(placeIn(parentOf(path)))} needs at least one Action.`,
-  policy_document_resource_missing: (path) =>
-    `${opening(placeIn(parentOf(path)))} needs at least one Resource.`,
 };
 
 /** The reasons this file writes a sentence for. */
@@ -274,7 +190,7 @@ export function refusalCopy(
     answer.reason !== undefined && Object.hasOwn(BY_REASON, answer.reason)
       ? BY_REASON[answer.reason]
       : undefined;
-  if (byReason !== undefined) return byReason(answer.path);
+  if (byReason !== undefined) return byReason();
   const key: RefusalKey = `${answer.status} ${answer.kind}`;
   const mapped =
     (operation === undefined ? undefined : BY_OPERATION[operation][key]) ??

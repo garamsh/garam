@@ -171,7 +171,7 @@ func readiness(t *testing.T, handler http.Handler) (int, string) {
 // not this test's subject, so it is left unasserted.
 func TestAPIHandler_AnswersAPanicOnARouteTheGeneratedSliceDoesNotReach(t *testing.T) {
 	// Internal: serve api mounts no probe a test can make panic.
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 	var served lines
 	status, _ := readiness(t, recordingObservability(&served).apiHandler(srv, presentProbe{}))
@@ -294,7 +294,7 @@ func TestEngineServer_AnswersAPanicAndKeepsServing(t *testing.T) {
 func enginePolicySeam(t *testing.T, out *lines, err error) api.PolicyManager {
 	t.Helper()
 	store := authzmocks.NewMockStore(t)
-	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, mock.Anything).Return(nil, err)
+	store.EXPECT().ListPolicies(mock.Anything, mock.Anything).Return(nil, err)
 
 	lis, listenErr := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, listenErr)
@@ -353,8 +353,8 @@ func TestEngineSeam_DisclosesOverTheHopWhatItWouldInProcess(t *testing.T) {
 			var out lines
 			seam := enginePolicySeam(t, &out, tc.stored)
 
-			_, err := seam.ActivatePolicy(context.Background(),
-				grn.New("acme", "policy", "9f2ac1b40d8e7a35"))
+			_, err := seam.ListPolicies(context.Background(),
+				grn.Org("acme"))
 
 			require.Error(t, err)
 			assert.Equal(t, errorx.KindOf(tc.stored), errorx.KindOf(err), "the kind crosses the hop")

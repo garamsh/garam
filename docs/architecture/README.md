@@ -472,9 +472,6 @@ Responsibility documents:
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization policy domain: the rules
   that decide what a subject may do, and the engine that decides
-- [policy-matrix.md](./policy-matrix.md) — where the platform's engine
-  and the policy service answer one question differently, measured by
-  the matrix suite
 - [api-surface.md](./api-surface.md) — the listeners garam serves on,
   what admits a caller to each, and what each one's specification is
   authoritative for
@@ -1043,7 +1040,7 @@ ADRs:
   exchanges are not recorded yet
 - [0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)
   — `listGroups`, `listProjects`, `listAgents`, `listAgentTemplates`
-  and `listPolicies` drop each object whose own read the caller is
+  and the removed `listPolicies` drop each object whose own read the caller is
   denied, asked of the engine in one `CheckBatch` call per page; a page
   is filtered as read, so a short page is not the end
 - [0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md)
@@ -1557,6 +1554,13 @@ ADRs:
   message; a new version is stored and not the default; each write is
   offered unless the server denies it; accepted, built (#1980); builds
   ADR-0169
+- [0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)
+  — `explainPermission` is the service's `Evaluate` as a probe and
+  names the role link, guardrail, permit or system policy its reasons
+  give, content only to a caller who may read policies; ten old policy
+  operations are removed; the parity matrix is retired; accepted,
+  built (#1987); supersedes 0171 in part (item 6's reservation of the
+  explanation)
 - [0175](./adr/0175-the-policy-services-evaluate-and-evaluations-take-a-without-permits-option-deciding-as-a-permit-write-does.md)
   — `Evaluate` and `Evaluations` take `without_permits`, leaving the
   organization's `permit`s out as `PermitRight::ask` does, through one

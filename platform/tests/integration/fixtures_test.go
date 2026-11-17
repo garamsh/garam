@@ -426,7 +426,7 @@ func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, *grpc
 // the service answers for the pairs the suite sends between: allow
 // where sender and recipient share an organization, deny across the
 // boundary, where no consent relation is held. The suite tagged
-// policymatrix asks the real service instead.
+// policyservice asks the real service instead.
 type sameOrganizationSends struct{ policydecision.Service }
 
 func (sameOrganizationSends) Evaluate(_ context.Context, q policydecision.Question) (policydecision.Decision, error) {
@@ -483,7 +483,7 @@ func (s *sendsRefusing) Evaluate(ctx context.Context, q policydecision.Question)
 // checked its grant covers, and either is denied where a test forbids
 // the pair; a test can also make it fail or stall. What the service
 // itself reads, the fed operations, the guardrails and the role links,
-// is held by the suite tagged policymatrix against the real service.
+// is held by the suite tagged policyservice against the real service.
 type currentDecisions struct {
 	policydecision.Service
 	orgs org.Store

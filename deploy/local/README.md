@@ -220,9 +220,9 @@ host trusts `ca.pem` and signs with `signing.pem`, both in
 leaves the copies there, owned by the account that ran make, the key at
 mode 600. The directory is ignored by git and holds only this stack's
 throwaway material; no suite reads a container for either file.
-`make -C platform stack-up policy-matrix` brings the backend up and runs
-the platform's policy matrix against that address. `make -C platform
-stack-up suites` runs it with the other suites, as CI does.
+`make -C platform stack-up policy-service` brings the backend up and
+runs the platform's real-service suites against that address. `make -C
+platform stack-up suites` runs it with the other suites, as CI does.
 
 The certificate is made once, so a stack whose volume predates the two
 extra names keeps a certificate that does not name `localhost`: bring it

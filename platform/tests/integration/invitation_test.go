@@ -57,7 +57,7 @@ func TestGetInvitation_ReadsEachStateFromPostgres(t *testing.T) {
 		authnpg.NewSessionStore(p), nil,
 		authnpg.NewPasswordCredentialStore(p),
 		authnpg.NewPasswordAttemptStore(p),
-		nil, nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
+		nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)
 	read := func(token string) (int, apigen.InvitationPreview) {
 		rec := httptest.NewRecorder()
@@ -142,7 +142,7 @@ func newInvitationStack(t *testing.T) *invitationStack {
 		authnpg.NewSessionStore(p), nil,
 		authnpg.NewPasswordCredentialStore(p),
 		authnpg.NewPasswordAttemptStore(p),
-		nil, nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
+		nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	return &invitationStack{pool: p, handler: apigen.Handler(srv), users: users, orgs: orgs, owner: owner}
 }
 

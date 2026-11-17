@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 
 	"google.golang.org/grpc"
 
@@ -14,8 +13,7 @@ import (
 )
 
 // GRPCPolicyManager is the PolicyManager seam over gRPC (ADR-0003
-// stage 2). Every method is a pass-through to PolicyService; the
-// engine validates documents and owns the lifecycle rules.
+// stage 2). Every method is a pass-through to PolicyService.
 type GRPCPolicyManager struct {
 	client authzv1.PolicyServiceClient
 }
@@ -27,21 +25,6 @@ var _ PolicyManager = (*GRPCPolicyManager)(nil)
 // authz engine over conn.
 func NewGRPCPolicyManager(conn grpc.ClientConnInterface) *GRPCPolicyManager {
 	return &GRPCPolicyManager{client: authzv1.NewPolicyServiceClient(conn)}
-}
-
-// CreatePolicy stores a draft policy with document as its first
-// version.
-func (m *GRPCPolicyManager) CreatePolicy(ctx context.Context, orgGRN grn.GRN, name string, document json.RawMessage, createdBy grn.GRN) (*Policy, error) {
-	resp, err := m.client.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
-		OrgGrn:    orgGRN.String(),
-		Name:      name,
-		Document:  string(document),
-		CreatedBy: createdBy.String(),
-	})
-	if err != nil {
-		return nil, wire.ErrorOf(err)
-	}
-	return policyFromProto(resp.GetPolicy())
 }
 
 // ListPolicies lists the org's policies in ascending GRN order.
@@ -79,110 +62,6 @@ func (m *GRPCPolicyManager) SearchPolicies(ctx context.Context, orgGRN grn.GRN, 
 	return out, nil
 }
 
-// AddPolicyVersion appends a version, leaving the default version
-// pointer where it is.
-func (m *GRPCPolicyManager) AddPolicyVersion(ctx context.Context, policyGRN grn.GRN, document json.RawMessage, createdBy grn.GRN) (*PolicyVersion, error) {
-	resp, err := m.client.AddPolicyVersion(ctx, &authzv1.AddPolicyVersionRequest{
-		PolicyGrn: policyGRN.String(),
-		Document:  string(document),
-		CreatedBy: createdBy.String(),
-	})
-	if err != nil {
-		return nil, wire.ErrorOf(err)
-	}
-	return policyVersionFromProto(resp.GetVersion())
-}
-
-// ListPolicyVersions lists the policy's versions, oldest first.
-func (m *GRPCPolicyManager) ListPolicyVersions(ctx context.Context, policyGRN grn.GRN) ([]*PolicyVersion, error) {
-	resp, err := m.client.ListPolicyVersions(ctx, &authzv1.ListPolicyVersionsRequest{PolicyGrn: policyGRN.String()})
-	if err != nil {
-		return nil, wire.ErrorOf(err)
-	}
-	out := make([]*PolicyVersion, 0, len(resp.GetVersions()))
-	for _, v := range resp.GetVersions() {
-		version, err := policyVersionFromProto(v)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, version)
-	}
-	return out, nil
-}
-
-// ActivatePolicy makes the policy count in evaluation.
-func (m *GRPCPolicyManager) ActivatePolicy(ctx context.Context, policyGRN grn.GRN) (*Policy, error) {
-	resp, err := m.client.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN.String()})
-	if err != nil {
-		return nil, wire.ErrorOf(err)
-	}
-	return policyFromProto(resp.GetPolicy())
-}
-
-// RollbackPolicy points the policy at any stored version, older or
-// newer than its current default. The version is the width the request
-// carried it in, so nothing here narrows it.
-func (m *GRPCPolicyManager) RollbackPolicy(ctx context.Context, policyGRN grn.GRN, version int32) (*Policy, error) {
-	resp, err := m.client.RollbackPolicy(ctx, &authzv1.RollbackPolicyRequest{
-		PolicyGrn: policyGRN.String(),
-		Version:   version,
-	})
-	if err != nil {
-		return nil, wire.ErrorOf(err)
-	}
-	return policyFromProto(resp.GetPolicy())
-}
-
-// AttachPolicy binds the policy to a subject.
-func (m *GRPCPolicyManager) AttachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) (*PolicyAttachment, error) {
-	resp, err := m.client.AttachPolicy(ctx, &authzv1.AttachPolicyRequest{
-		PolicyGrn:  policyGRN.String(),
-		SubjectGrn: subjectGRN.String(),
-	})
-	if err != nil {
-		return nil, wire.ErrorOf(err)
-	}
-	return attachmentFromProto(resp.GetAttachment())
-}
-
-// DetachPolicy removes one attachment.
-func (m *GRPCPolicyManager) DetachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) error {
-	_, err := m.client.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{
-		PolicyGrn:  policyGRN.String(),
-		SubjectGrn: subjectGRN.String(),
-	})
-	if err != nil {
-		return wire.ErrorOf(err)
-	}
-	return nil
-}
-
-// DeletePolicy removes the policy with its versions and attachments.
-func (m *GRPCPolicyManager) DeletePolicy(ctx context.Context, policyGRN grn.GRN) error {
-	if _, err := m.client.DeletePolicy(ctx, &authzv1.DeletePolicyRequest{PolicyGrn: policyGRN.String()}); err != nil {
-		return wire.ErrorOf(err)
-	}
-	return nil
-}
-
-// ListPolicyAttachments lists the policy's attachments in ascending
-// subject GRN order.
-func (m *GRPCPolicyManager) ListPolicyAttachments(ctx context.Context, policyGRN grn.GRN) ([]*PolicyAttachment, error) {
-	resp, err := m.client.ListPolicyAttachments(ctx, &authzv1.ListPolicyAttachmentsRequest{PolicyGrn: policyGRN.String()})
-	if err != nil {
-		return nil, wire.ErrorOf(err)
-	}
-	out := make([]*PolicyAttachment, 0, len(resp.GetAttachments()))
-	for _, a := range resp.GetAttachments() {
-		attachment, err := attachmentFromProto(a)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, attachment)
-	}
-	return out, nil
-}
-
 func policyFromProto(p *authzv1.Policy) (*Policy, error) {
 	g, err := grn.Parse(p.GetGrn())
 	if err != nil {
@@ -201,34 +80,4 @@ func policyFromProto(p *authzv1.Policy) (*Policy, error) {
 		CreatedAt:      p.GetCreatedAt().AsTime(),
 		UpdatedAt:      p.GetUpdatedAt().AsTime(),
 	}, nil
-}
-
-func policyVersionFromProto(v *authzv1.PolicyVersion) (*PolicyVersion, error) {
-	g, err := grn.Parse(v.GetPolicyGrn())
-	if err != nil {
-		return nil, errorx.Wrap(err, "policy grn", errorx.KindInternal)
-	}
-	createdBy, err := grn.Parse(v.GetCreatedBy())
-	if err != nil {
-		return nil, errorx.Wrap(err, "policy version created_by", errorx.KindInternal)
-	}
-	return &PolicyVersion{
-		PolicyGRN: g,
-		Version:   int(v.GetVersion()),
-		Document:  json.RawMessage(v.GetDocument()),
-		CreatedBy: createdBy,
-		CreatedAt: v.GetCreatedAt().AsTime(),
-	}, nil
-}
-
-func attachmentFromProto(a *authzv1.PolicyAttachment) (*PolicyAttachment, error) {
-	g, err := grn.Parse(a.GetPolicyGrn())
-	if err != nil {
-		return nil, errorx.Wrap(err, "policy grn", errorx.KindInternal)
-	}
-	subject, err := grn.Parse(a.GetSubjectGrn())
-	if err != nil {
-		return nil, errorx.Wrap(err, "attachment subject grn", errorx.KindInternal)
-	}
-	return &PolicyAttachment{PolicyGRN: g, SubjectGRN: subject, CreatedAt: a.GetCreatedAt().AsTime()}, nil
 }

@@ -1,95 +1,92 @@
-import type { ExplainedStatement } from "@/lib/permission-explanation";
+import type { ExplainedGround } from "@/lib/permission-explanation";
 
 /**
- * How far from the caller a statement reaches them: the organization,
- * a project, a team, or the caller themselves. Access is read from the
- * root down (ADR-0113), so a reading lists the organization first.
- * `unread` is a policy the caller may not read, whose path garam does
- * not say, so it is placed nowhere and read last.
+ * How far from the caller a ground reaches them: the organization, a
+ * project or a team. Access is read from the root down (ADR-0113), so a
+ * reading lists the organization first. `policy` is a guardrail, a
+ * permit, a stored policy whose kind is withheld, a system policy or an
+ * error, whose path the policy service does not state, so it is placed
+ * nowhere and read last.
  */
-export type Scope = "organization" | "project" | "team" | "you" | "unread";
+export type Scope = "organization" | "project" | "team" | "policy";
 
 const ORDER: Record<Scope, number> = {
   organization: 0,
   project: 1,
   team: 2,
-  you: 3,
-  unread: 4,
+  policy: 3,
 };
 
-/** One line of a reading: where the grant sits and what it is. */
+/** One line of a reading: where the ground sits and what it is. */
 export type GrantLine = {
   scope: Scope;
-  effect: ExplainedStatement["effect"];
   text: string;
+  /** The Cedar text of a guardrail or permit the caller may read. */
+  detail?: string;
 };
 
-function roleList(roles: readonly string[] | undefined): string {
-  const list = roles ?? [];
-  return list.length === 1 ? `role ${list[0]}` : `roles ${list.join(", ")}`;
+/** A policy by the name the caller may read, else by its identifier. */
+function policyName(ground: ExplainedGround): string {
+  return ground.name ?? ground.policy ?? "of another organization";
 }
 
-/** Where one statement sits, and the sentence naming it. */
-function line(statement: ExplainedStatement): GrantLine {
-  const { effect } = statement;
-  switch (statement.source) {
-    case "org-role":
-      return {
-        scope: "organization",
-        effect,
-        text: `Your organization ${roleList(statement.roles)}`,
-      };
-    case "group-role":
-      return {
-        scope: "team",
-        effect,
-        text: `Team ${statement.group}'s ${roleList(statement.roles)}`,
-      };
-    case "project-role":
-      return {
-        scope: "project",
-        effect,
-        text: `Project ${statement.project}'s ${roleList(statement.roles)}`,
-      };
-    case "policy": {
-      const named = statement.sid
-        ? `Policy ${statement.policy}, statement ${statement.sid}`
-        : `Policy ${statement.policy}`;
-      switch (statement.attachment) {
+/** Where one ground sits, and the sentence naming it. */
+function line(ground: ExplainedGround): GrantLine {
+  switch (ground.kind) {
+    case "role-link": {
+      const role = `role ${ground.role}`;
+      switch (ground.path) {
+        case "team":
+          return { scope: "team", text: `Team ${ground.team}'s ${role}` };
+        case "project":
+          return {
+            scope: "project",
+            text: `Project ${ground.project}'s ${role}`,
+          };
         case "organization":
-          return {
-            scope: "organization",
-            effect,
-            text: `${named}, applied to the whole organization`,
-          };
-        case "group":
-          return {
-            scope: "team",
-            effect,
-            text: `${named}, attached to team ${statement.group}`,
-          };
+          return { scope: "organization", text: `Your organization ${role}` };
         default:
-          return { scope: "you", effect, text: `${named}, attached to you` };
+          return { scope: "policy", text: `A ${role} link` };
       }
     }
-    case "unreadable-policy":
+    case "guardrail":
       return {
-        scope: "unread",
-        effect,
-        text: "A policy you can't read",
+        scope: "policy",
+        text: `Guardrail ${policyName(ground)}`,
+        detail: ground.text,
       };
+    case "permit":
+      return {
+        scope: "policy",
+        text: `Permit ${policyName(ground)}`,
+        detail: ground.text,
+      };
+    case "system-policy":
+      return { scope: "policy", text: `System policy ${ground.policy}` };
+    case "stored-policy":
+      return {
+        scope: "policy",
+        text: `Policy ${ground.policy ?? "of another organization"}`,
+      };
+    case "error": {
+      const why = ground.error ? `: ${ground.error}` : "";
+      return {
+        scope: "policy",
+        text: ground.policy
+          ? `Policy ${ground.policy} failed to evaluate${why}`
+          : `The question was refused${why}`,
+      };
+    }
   }
 }
 
 /**
- * The statements that decided an action, as lines from the
- * organization down to the caller. Their order within one scope is
- * garam's.
+ * The grounds the policy service named for an action, as lines from
+ * the organization down. Their order within one scope is the order
+ * given.
  */
-export function grantLines(
-  statements: readonly ExplainedStatement[],
-): GrantLine[] {
-  return statements
+export function grantLines(grounds: readonly ExplainedGround[]): GrantLine[] {
+  return grounds
     .map(line)
     .map((entry, index) => ({ entry, index }))
     .sort(

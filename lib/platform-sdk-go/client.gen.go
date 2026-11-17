@@ -327,66 +327,51 @@ func (e DeviceTokenRequestGrantType) Valid() bool {
 	}
 }
 
-// Defines values for ExplainedStatementAttachment.
+// Defines values for ExplainedGroundKind.
 const (
-	AttachmentCaller       ExplainedStatementAttachment = "caller"
-	AttachmentGroup        ExplainedStatementAttachment = "group"
-	AttachmentOrganization ExplainedStatementAttachment = "organization"
+	GroundError        ExplainedGroundKind = "error"
+	GroundGuardrail    ExplainedGroundKind = "guardrail"
+	GroundPermit       ExplainedGroundKind = "permit"
+	GroundRoleLink     ExplainedGroundKind = "role-link"
+	GroundStoredPolicy ExplainedGroundKind = "stored-policy"
+	GroundSystemPolicy ExplainedGroundKind = "system-policy"
 )
 
-// Valid indicates whether the value is a known member of the ExplainedStatementAttachment enum.
-func (e ExplainedStatementAttachment) Valid() bool {
+// Valid indicates whether the value is a known member of the ExplainedGroundKind enum.
+func (e ExplainedGroundKind) Valid() bool {
 	switch e {
-	case AttachmentCaller:
+	case GroundError:
 		return true
-	case AttachmentGroup:
+	case GroundGuardrail:
 		return true
-	case AttachmentOrganization:
+	case GroundPermit:
+		return true
+	case GroundRoleLink:
+		return true
+	case GroundStoredPolicy:
+		return true
+	case GroundSystemPolicy:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ExplainedStatementEffect.
+// Defines values for ExplainedGroundPath.
 const (
-	StatementEffectAllow ExplainedStatementEffect = "Allow"
-	StatementEffectDeny  ExplainedStatementEffect = "Deny"
+	GroundPathOrganization ExplainedGroundPath = "organization"
+	GroundPathProject      ExplainedGroundPath = "project"
+	GroundPathTeam         ExplainedGroundPath = "team"
 )
 
-// Valid indicates whether the value is a known member of the ExplainedStatementEffect enum.
-func (e ExplainedStatementEffect) Valid() bool {
+// Valid indicates whether the value is a known member of the ExplainedGroundPath enum.
+func (e ExplainedGroundPath) Valid() bool {
 	switch e {
-	case StatementEffectAllow:
+	case GroundPathOrganization:
 		return true
-	case StatementEffectDeny:
+	case GroundPathProject:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ExplainedStatementSource.
-const (
-	SourceGroupRole        ExplainedStatementSource = "group-role"
-	SourceOrgRole          ExplainedStatementSource = "org-role"
-	SourcePolicy           ExplainedStatementSource = "policy"
-	SourceProjectRole      ExplainedStatementSource = "project-role"
-	SourceUnreadablePolicy ExplainedStatementSource = "unreadable-policy"
-)
-
-// Valid indicates whether the value is a known member of the ExplainedStatementSource enum.
-func (e ExplainedStatementSource) Valid() bool {
-	switch e {
-	case SourceGroupRole:
-		return true
-	case SourceOrgRole:
-		return true
-	case SourcePolicy:
-		return true
-	case SourceProjectRole:
-		return true
-	case SourceUnreadablePolicy:
+	case GroundPathTeam:
 		return true
 	default:
 		return false
@@ -726,7 +711,7 @@ func (e OperatorKeyState) Valid() bool {
 // Defines values for PermissionBasis.
 const (
 	BasisOperation       PermissionBasis = "operation"
-	BasisStatements      PermissionBasis = "statements"
+	BasisPolicyService   PermissionBasis = "policy-service"
 	BasisUndefinedAction PermissionBasis = "undefined-action"
 )
 
@@ -735,7 +720,7 @@ func (e PermissionBasis) Valid() bool {
 	switch e {
 	case BasisOperation:
 		return true
-	case BasisStatements:
+	case BasisPolicyService:
 		return true
 	case BasisUndefinedAction:
 		return true
@@ -1267,40 +1252,44 @@ type Error struct {
 	// Path A JSON Pointer (RFC 6901) into the document the request sent, to the place `reason` is about, e.g. `/Statement/1/Effect`. A key the document's format names is spelled as the format spells it, whatever case the request used: a document accepts `statement` for `Statement`, and the pointer reads `/Statement`. A key the format does not name is spelled as it was sent. Absent where the reason is about the document as a whole or about no document.
 	Path *string `json:"path,omitempty"`
 
-	// Reason A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Role links: `change_not_applied`, on the 503 that answers a request which changed what the policy service decides from (an organization, its membership, a group or project and its members, a registration, an operator) when the policy service has not applied the change within five seconds. The change is stored and stays so; the service decides by the roles it last held until it applies them, so a member added is not yet allowed and a member removed is not yet denied. The answer names the organization in `resource`; do not repeat the request. A registration has signed the person in, and its session cookie is set on this answer. The same reason answers a grant or a withdrawal of an organization's consent when the policy service has not applied it in that time: the half is stored and stays so, and until the service applies it the policy service decides by the consents it last held. Repeating the request changes nothing. The answer names the organization that granted or withdrew in `resource`. `change_refused`, on the same 503 when the policy service refused the member's role link for good: the change is stored, but delivery does not go on, and the service holds no role for the member until the membership is written again or an operator restarts the feed, so the member is denied meanwhile. There is nothing to wait for: do not repeat the request and do not poll; an operator reads the set-aside link. It names the organization in `resource` as the answer above does. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`.
+	// Reason A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Role links: `change_not_applied`, on the 503 that answers a request which changed what the policy service decides from (an organization, its membership, a group or project and its members, a registration, an operator) when the policy service has not applied the change within five seconds. The change is stored and stays so; the service decides by the roles it last held until it applies them, so a member added is not yet allowed and a member removed is not yet denied. The answer names the organization in `resource`; do not repeat the request. A registration has signed the person in, and its session cookie is set on this answer. The same reason answers a grant or a withdrawal of an organization's consent when the policy service has not applied it in that time: the half is stored and stays so, and until the service applies it the policy service decides by the consents it last held. Repeating the request changes nothing. The answer names the organization that granted or withdrew in `resource`. `change_refused`, on the same 503 when the policy service refused the member's role link for good: the change is stored, but delivery does not go on, and the service holds no role for the member until the membership is written again or an operator restarts the feed, so the member is denied meanwhile. There is nothing to wait for: do not repeat the request and do not poll; an operator reads the set-aside link. It names the organization in `resource` as the answer above does.
 	Reason *string `json:"reason,omitempty"`
 
 	// Resource The GRN of the organization a request stored before it answered `change_not_applied` or `change_refused`: the one it created, joined, registered into, deleted, or granted or withdrew consent for, or that owns what the request changed. A client that cannot repeat the request reads from it what was stored and goes on. Present only with those reasons.
 	Resource *string `json:"resource,omitempty"`
 }
 
-// ExplainedStatement One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the three role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone.
-type ExplainedStatement struct {
-	// Attachment How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
-	Attachment *ExplainedStatementAttachment `json:"attachment,omitempty"`
-	Effect     ExplainedStatementEffect      `json:"effect"`
+// ExplainedGround One ground of a decision, as the policy service names it. `kind` says which fields are present: `role`, `path` and, for a team or a project, `team` or `project`, for `role-link`; `name` and `text`, where the caller may read the policy, for `guardrail` and `permit`; `error` for `error`, which is a policy that failed to evaluate, or a question the policy service refused and so names no policy. `policy` names the policy where it is the caller's organization's, or a system policy's file name. `stored-policy` is a policy of the caller's organization, or of a sending organization, whose kind the caller may not be told: the kind is never read off the decision. A role link the platform reserves the identifier of is a `role-link` to every caller.
+type ExplainedGround struct {
+	// Error Why the policy failed to evaluate.
+	Error *string             `json:"error,omitempty"`
+	Kind  ExplainedGroundKind `json:"kind"`
 
-	// Group The group's slug.
-	Group *string `json:"group,omitempty"`
+	// Name The policy's name, to a caller who may read it.
+	Name *string `json:"name,omitempty"`
 
-	// Policy The policy's identifier, as `getPolicy` addresses it.
+	// Path How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it. Absent where a team's or a project's link was asked about a resource that is neither, and where a stored link's body does not say.
+	Path *ExplainedGroundPath `json:"path,omitempty"`
+
+	// Policy The policy's identifier, as `getIamPolicy` addresses it, or the file name of a system policy.
 	Policy *string `json:"policy,omitempty"`
 
 	// Project The project's slug.
-	Project *string                  `json:"project,omitempty"`
-	Roles   *[]string                `json:"roles,omitempty"`
-	Sid     *string                  `json:"sid,omitempty"`
-	Source  ExplainedStatementSource `json:"source"`
+	Project *string `json:"project,omitempty"`
+	Role    *Role   `json:"role,omitempty"`
+
+	// Team The team's slug.
+	Team *string `json:"team,omitempty"`
+
+	// Text The Cedar text of the policy's default version, to a caller who may read it.
+	Text *string `json:"text,omitempty"`
 }
 
-// ExplainedStatementAttachment How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
-type ExplainedStatementAttachment string
+// ExplainedGroundKind defines model for ExplainedGround.Kind.
+type ExplainedGroundKind string
 
-// ExplainedStatementEffect defines model for ExplainedStatement.Effect.
-type ExplainedStatementEffect string
-
-// ExplainedStatementSource defines model for ExplainedStatement.Source.
-type ExplainedStatementSource string
+// ExplainedGroundPath How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it. Absent where a team's or a project's link was asked about a resource that is neither, and where a stored link's body does not say.
+type ExplainedGroundPath string
 
 // FoundKind defines model for FoundKind.
 type FoundKind struct {
@@ -1839,7 +1828,7 @@ type PendingInvitation struct {
 	Role Role               `json:"role"`
 }
 
-// PermissionBasis `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
+// PermissionBasis `policy-service` is a decision the policy service reached, explained by `grounds`. `operation` is an action the operation decides past the policy service, explained no further than the decision. `undefined-action` is a name garam does not define.
 type PermissionBasis string
 
 // PermissionCheck defines model for PermissionCheck.
@@ -1878,17 +1867,17 @@ type PermissionDecision string
 type PermissionExplanation struct {
 	Action string `json:"action"`
 
-	// Basis `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
+	// Basis `policy-service` is a decision the policy service reached, explained by `grounds`. `operation` is an action the operation decides past the policy service, explained no further than the decision. `undefined-action` is a name garam does not define.
 	Basis PermissionBasis `json:"basis"`
 
 	// Decision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
 	Decision PermissionDecision `json:"decision"`
 
+	// Grounds What the policy service names, where `basis` is `policy-service`; empty otherwise, and where nothing permits the action. The order is not stated.
+	Grounds []ExplainedGround `json:"grounds"`
+
 	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page`, a `cowork-channel`, a `cowork-task` or a `cowork-artifact` is named as cowork names it (ADR-0127): garam keeps none of them, and answers only what may be done to one.
 	Resource *PermissionResource `json:"resource,omitempty"`
-
-	// Statements The statements that decided, where `basis` is `statements`; empty otherwise, and where nothing allows the action.
-	Statements []ExplainedStatement `json:"statements"`
 }
 
 // PermissionHolder defines model for PermissionHolder.
@@ -1920,43 +1909,6 @@ type PermissionResource struct {
 // PermissionResourceType defines model for PermissionResourceType.
 type PermissionResourceType string
 
-// Policy defines model for Policy.
-type Policy struct {
-	CreatedAt time.Time `json:"createdAt"`
-
-	// DefaultVersion The version evaluated while the policy is active.
-	DefaultVersion int    `json:"defaultVersion"`
-	Grn            string `json:"grn"`
-	Name           string `json:"name"`
-	OrgGrn         string `json:"orgGrn"`
-
-	// Status A policy's lifecycle state. Only an `active` policy contributes statements to a check.
-	Status    PolicyStatus `json:"status"`
-	UpdatedAt time.Time    `json:"updatedAt"`
-}
-
-// PolicyAttachment defines model for PolicyAttachment.
-type PolicyAttachment struct {
-	CreatedAt  time.Time `json:"createdAt"`
-	PolicyGrn  string    `json:"policyGrn"`
-	SubjectGrn string    `json:"subjectGrn"`
-}
-
-// PolicyAttachmentCreate The user or group the policy applies to.
-type PolicyAttachmentCreate struct {
-	SubjectGrn string `json:"subjectGrn"`
-}
-
-// PolicyCreate defines model for PolicyCreate.
-type PolicyCreate struct {
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-	Document PolicyDocument `json:"document"`
-	Name     string         `json:"name"`
-}
-
-// PolicyDocument An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-type PolicyDocument = json.RawMessage
-
 // PolicyRollback defines model for PolicyRollback.
 type PolicyRollback struct {
 	// Version A stored version of the policy, older or newer than its current default.
@@ -1965,23 +1917,6 @@ type PolicyRollback struct {
 
 // PolicyStatus A policy's lifecycle state. Only an `active` policy contributes statements to a check.
 type PolicyStatus string
-
-// PolicyVersion defines model for PolicyVersion.
-type PolicyVersion struct {
-	CreatedAt time.Time `json:"createdAt"`
-	CreatedBy string    `json:"createdBy"`
-
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-	Document  PolicyDocument `json:"document"`
-	PolicyGrn string         `json:"policyGrn"`
-	Version   int            `json:"version"`
-}
-
-// PolicyVersionCreate defines model for PolicyVersionCreate.
-type PolicyVersionCreate struct {
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-	Document PolicyDocument `json:"document"`
-}
 
 // Project defines model for Project.
 type Project struct {
@@ -2202,17 +2137,11 @@ type PermissionAction = string
 // PermissionResourceId defines model for permissionResourceId.
 type PermissionResourceId = string
 
-// PolicySlug defines model for policy.
-type PolicySlug = string
-
 // ProjectSlug defines model for project.
 type ProjectSlug = string
 
 // Provider defines model for provider.
 type Provider = string
-
-// SubjectGrn defines model for subject.
-type SubjectGrn = string
 
 // ContractError defines model for ContractError.
 type ContractError = Error
@@ -2453,18 +2382,6 @@ type SetOperatorManagerJSONRequestBody = OperatorManagerWrite
 
 // CheckPermissionsJSONRequestBody defines body for CheckPermissions for application/json ContentType.
 type CheckPermissionsJSONRequestBody = PermissionCheckRequest
-
-// CreatePolicyJSONRequestBody defines body for CreatePolicy for application/json ContentType.
-type CreatePolicyJSONRequestBody = PolicyCreate
-
-// AttachPolicyJSONRequestBody defines body for AttachPolicy for application/json ContentType.
-type AttachPolicyJSONRequestBody = PolicyAttachmentCreate
-
-// RollbackPolicyJSONRequestBody defines body for RollbackPolicy for application/json ContentType.
-type RollbackPolicyJSONRequestBody = PolicyRollback
-
-// AddPolicyVersionJSONRequestBody defines body for AddPolicyVersion for application/json ContentType.
-type AddPolicyVersionJSONRequestBody = PolicyVersionCreate
 
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = ProjectCreate
@@ -3421,15 +3338,15 @@ type ClientInterface interface {
 
 	// ExplainPermission Explain why the signed-in caller may or may not take one action. Requires membership.
 	//
-	// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
+	// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the policy service's decision for it, asked as a probe and read as the check reads it, so the `decision` is the one `checkPermissions` answers for the pair.
 	//
-	// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+	// Where the policy service decides (`basis` is `policy-service`), `grounds` holds what it names: every policy that permits when the answer is `allow`, every policy that forbids when it is `deny` because one does, an evaluation error where a policy failed to evaluate, and none when it is `deny` because nothing permits. A role link is named by its reserved identifier and the path through which it reaches the caller: their organization role, or the roles of a team or a project, which reach the caller on that team or project alone. A guardrail or a permit is named by its identifier, and a system policy by its file name.
 	//
-	// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+	// A guardrail or a permit is named with its `name` and its `text` only where the caller holds `iam:policy.read` on the organization, the check `getIamPolicy` makes. Every other one is named without them. A guardrail of another organization that denies a message to the caller's is named by its kind alone.
 	//
-	// The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
+	// The actions `checkPermissions` puts to more than the policy service — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `grounds` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
 	//
-	// The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403.
+	// The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403. A policy service that does not answer is 503.
 	//
 	// Corresponds with GET /orgs/{org}/permission-explanation (the `ExplainPermission` operationId).
 	ExplainPermission(ctx context.Context, org Org, params *ExplainPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3446,116 +3363,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/permission-holders (the `ListPermissionHolders` operationId).
 	ListPermissionHolders(ctx context.Context, org Org, params *ListPermissionHoldersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListPolicies List an organization's policies. Requires the `admin` role.
-	//
-	// Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
-	//
-	// Corresponds with GET /orgs/{org}/policies (the `ListPolicies` operationId).
-	ListPolicies(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreatePolicyWithBody Create a policy in an organization. Requires the `admin` role.
-	//
-	// Stores the document as the policy's first version. The policy is a draft until it is activated.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /orgs/{org}/policies (the `CreatePolicy` operationId).
-	CreatePolicyWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreatePolicy Create a policy in an organization. Requires the `admin` role.
-	//
-	// Stores the document as the policy's first version. The policy is a draft until it is activated.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /orgs/{org}/policies (the `CreatePolicy` operationId).
-	CreatePolicy(ctx context.Context, org Org, body CreatePolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeletePolicy Delete a policy. Requires the `admin` role.
-	//
-	// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
-	//
-	// Corresponds with DELETE /orgs/{org}/policies/{policy} (the `DeletePolicy` operationId).
-	DeletePolicy(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ActivatePolicy Activate a policy. Requires the `admin` role.
-	//
-	// An active policy contributes its default version to checks. Activation changes the policy's status and leaves its default version where it is.
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/activate (the `ActivatePolicy` operationId).
-	ActivatePolicy(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListPolicyAttachments List a policy's attachments. Requires the `admin` role.
-	//
-	// Corresponds with GET /orgs/{org}/policies/{policy}/attachments (the `ListPolicyAttachments` operationId).
-	ListPolicyAttachments(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// AttachPolicyWithBody Attach a policy to a subject. Requires the `admin` role.
-	//
-	// The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/attachments (the `AttachPolicy` operationId).
-	AttachPolicyWithBody(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// AttachPolicy Attach a policy to a subject. Requires the `admin` role.
-	//
-	// The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/attachments (the `AttachPolicy` operationId).
-	AttachPolicy(ctx context.Context, org Org, policySlug PolicySlug, body AttachPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DetachPolicy Detach a policy from a subject. Requires the `admin` role.
-	//
-	// Detaching an active policy's last attachment is refused with 409, because a policy left with none would apply org-wide. Delete the policy, or attach another subject first.
-	//
-	// Corresponds with DELETE /orgs/{org}/policies/{policy}/attachments/{subject} (the `DetachPolicy` operationId).
-	DetachPolicy(ctx context.Context, org Org, policySlug PolicySlug, subjectGrn SubjectGrn, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// RollbackPolicyWithBody Point a policy at a stored version. Requires the `admin` role.
-	//
-	// Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/rollback (the `RollbackPolicy` operationId).
-	RollbackPolicyWithBody(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// RollbackPolicy Point a policy at a stored version. Requires the `admin` role.
-	//
-	// Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/rollback (the `RollbackPolicy` operationId).
-	RollbackPolicy(ctx context.Context, org Org, policySlug PolicySlug, body RollbackPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListPolicyVersions List a policy's versions. Requires the `admin` role.
-	//
-	// Corresponds with GET /orgs/{org}/policies/{policy}/versions (the `ListPolicyVersions` operationId).
-	ListPolicyVersions(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// AddPolicyVersionWithBody Append a version to a policy. Requires the `admin` role.
-	//
-	// Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/versions (the `AddPolicyVersion` operationId).
-	AddPolicyVersionWithBody(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// AddPolicyVersion Append a version to a policy. Requires the `admin` role.
-	//
-	// Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/versions (the `AddPolicyVersion` operationId).
-	AddPolicyVersion(ctx context.Context, org Org, policySlug PolicySlug, body AddPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListProjects List an organization's projects. Requires the `member` role.
 	//
@@ -5560,15 +5367,15 @@ func (c *Client) CheckPermissions(ctx context.Context, org Org, body CheckPermis
 
 // ExplainPermission Explain why the signed-in caller may or may not take one action. Requires membership.
 //
-// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
+// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the policy service's decision for it, asked as a probe and read as the check reads it, so the `decision` is the one `checkPermissions` answers for the pair.
 //
-// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+// Where the policy service decides (`basis` is `policy-service`), `grounds` holds what it names: every policy that permits when the answer is `allow`, every policy that forbids when it is `deny` because one does, an evaluation error where a policy failed to evaluate, and none when it is `deny` because nothing permits. A role link is named by its reserved identifier and the path through which it reaches the caller: their organization role, or the roles of a team or a project, which reach the caller on that team or project alone. A guardrail or a permit is named by its identifier, and a system policy by its file name.
 //
-// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+// A guardrail or a permit is named with its `name` and its `text` only where the caller holds `iam:policy.read` on the organization, the check `getIamPolicy` makes. Every other one is named without them. A guardrail of another organization that denies a message to the caller's is named by its kind alone.
 //
-// The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
+// The actions `checkPermissions` puts to more than the policy service — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `grounds` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
 //
-// The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403.
+// The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403. A policy service that does not answer is 503.
 //
 // Corresponds with GET /orgs/{org}/permission-explanation (the `ExplainPermission` operationId).
 func (c *Client) ExplainPermission(ctx context.Context, org Org, params *ExplainPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5596,256 +5403,6 @@ func (c *Client) ExplainPermission(ctx context.Context, org Org, params *Explain
 // Corresponds with GET /orgs/{org}/permission-holders (the `ListPermissionHolders` operationId).
 func (c *Client) ListPermissionHolders(ctx context.Context, org Org, params *ListPermissionHoldersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListPermissionHoldersRequest(c.Server, org, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListPolicies List an organization's policies. Requires the `admin` role.
-//
-// Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
-//
-// Corresponds with GET /orgs/{org}/policies (the `ListPolicies` operationId).
-func (c *Client) ListPolicies(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListPoliciesRequest(c.Server, org)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreatePolicyWithBody Create a policy in an organization. Requires the `admin` role.
-//
-// Stores the document as the policy's first version. The policy is a draft until it is activated.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /orgs/{org}/policies (the `CreatePolicy` operationId).
-func (c *Client) CreatePolicyWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreatePolicyRequestWithBody(c.Server, org, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreatePolicy Create a policy in an organization. Requires the `admin` role.
-//
-// Stores the document as the policy's first version. The policy is a draft until it is activated.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /orgs/{org}/policies (the `CreatePolicy` operationId).
-func (c *Client) CreatePolicy(ctx context.Context, org Org, body CreatePolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreatePolicyRequest(c.Server, org, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// DeletePolicy Delete a policy. Requires the `admin` role.
-//
-// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
-//
-// Corresponds with DELETE /orgs/{org}/policies/{policy} (the `DeletePolicy` operationId).
-func (c *Client) DeletePolicy(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeletePolicyRequest(c.Server, org, policySlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ActivatePolicy Activate a policy. Requires the `admin` role.
-//
-// An active policy contributes its default version to checks. Activation changes the policy's status and leaves its default version where it is.
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/activate (the `ActivatePolicy` operationId).
-func (c *Client) ActivatePolicy(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewActivatePolicyRequest(c.Server, org, policySlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListPolicyAttachments List a policy's attachments. Requires the `admin` role.
-//
-// Corresponds with GET /orgs/{org}/policies/{policy}/attachments (the `ListPolicyAttachments` operationId).
-func (c *Client) ListPolicyAttachments(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListPolicyAttachmentsRequest(c.Server, org, policySlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// AttachPolicyWithBody Attach a policy to a subject. Requires the `admin` role.
-//
-// The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/attachments (the `AttachPolicy` operationId).
-func (c *Client) AttachPolicyWithBody(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAttachPolicyRequestWithBody(c.Server, org, policySlug, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// AttachPolicy Attach a policy to a subject. Requires the `admin` role.
-//
-// The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/attachments (the `AttachPolicy` operationId).
-func (c *Client) AttachPolicy(ctx context.Context, org Org, policySlug PolicySlug, body AttachPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAttachPolicyRequest(c.Server, org, policySlug, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// DetachPolicy Detach a policy from a subject. Requires the `admin` role.
-//
-// Detaching an active policy's last attachment is refused with 409, because a policy left with none would apply org-wide. Delete the policy, or attach another subject first.
-//
-// Corresponds with DELETE /orgs/{org}/policies/{policy}/attachments/{subject} (the `DetachPolicy` operationId).
-func (c *Client) DetachPolicy(ctx context.Context, org Org, policySlug PolicySlug, subjectGrn SubjectGrn, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDetachPolicyRequest(c.Server, org, policySlug, subjectGrn)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// RollbackPolicyWithBody Point a policy at a stored version. Requires the `admin` role.
-//
-// Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/rollback (the `RollbackPolicy` operationId).
-func (c *Client) RollbackPolicyWithBody(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRollbackPolicyRequestWithBody(c.Server, org, policySlug, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// RollbackPolicy Point a policy at a stored version. Requires the `admin` role.
-//
-// Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/rollback (the `RollbackPolicy` operationId).
-func (c *Client) RollbackPolicy(ctx context.Context, org Org, policySlug PolicySlug, body RollbackPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRollbackPolicyRequest(c.Server, org, policySlug, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListPolicyVersions List a policy's versions. Requires the `admin` role.
-//
-// Corresponds with GET /orgs/{org}/policies/{policy}/versions (the `ListPolicyVersions` operationId).
-func (c *Client) ListPolicyVersions(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListPolicyVersionsRequest(c.Server, org, policySlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// AddPolicyVersionWithBody Append a version to a policy. Requires the `admin` role.
-//
-// Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/versions (the `AddPolicyVersion` operationId).
-func (c *Client) AddPolicyVersionWithBody(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddPolicyVersionRequestWithBody(c.Server, org, policySlug, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// AddPolicyVersion Append a version to a policy. Requires the `admin` role.
-//
-// Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/versions (the `AddPolicyVersion` operationId).
-func (c *Client) AddPolicyVersion(ctx context.Context, org Org, policySlug PolicySlug, body AddPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddPolicyVersionRequest(c.Server, org, policySlug, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9696,461 +9253,6 @@ func NewListPermissionHoldersRequest(server string, org Org, params *ListPermiss
 	return req, nil
 }
 
-// NewListPoliciesRequest constructs an http.Request for the ListPolicies method
-func NewListPoliciesRequest(server string, org Org) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCreatePolicyRequest calls the generic CreatePolicy builder with application/json body
-func NewCreatePolicyRequest(server string, org Org, body CreatePolicyJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreatePolicyRequestWithBody(server, org, "application/json", bodyReader)
-}
-
-// NewCreatePolicyRequestWithBody constructs an http.Request for the CreatePolicy method, with any body, and a specified content type
-func NewCreatePolicyRequestWithBody(server string, org Org, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewDeletePolicyRequest constructs an http.Request for the DeletePolicy method
-func NewDeletePolicyRequest(server string, org Org, policySlug PolicySlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "policy", policySlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewActivatePolicyRequest constructs an http.Request for the ActivatePolicy method
-func NewActivatePolicyRequest(server string, org Org, policySlug PolicySlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "policy", policySlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies/%s/activate", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewListPolicyAttachmentsRequest constructs an http.Request for the ListPolicyAttachments method
-func NewListPolicyAttachmentsRequest(server string, org Org, policySlug PolicySlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "policy", policySlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies/%s/attachments", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewAttachPolicyRequest calls the generic AttachPolicy builder with application/json body
-func NewAttachPolicyRequest(server string, org Org, policySlug PolicySlug, body AttachPolicyJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewAttachPolicyRequestWithBody(server, org, policySlug, "application/json", bodyReader)
-}
-
-// NewAttachPolicyRequestWithBody constructs an http.Request for the AttachPolicy method, with any body, and a specified content type
-func NewAttachPolicyRequestWithBody(server string, org Org, policySlug PolicySlug, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "policy", policySlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies/%s/attachments", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewDetachPolicyRequest constructs an http.Request for the DetachPolicy method
-func NewDetachPolicyRequest(server string, org Org, policySlug PolicySlug, subjectGrn SubjectGrn) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "policy", policySlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam2 string
-
-	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "subject", subjectGrn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies/%s/attachments/%s", pathParam0, pathParam1, pathParam2)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewRollbackPolicyRequest calls the generic RollbackPolicy builder with application/json body
-func NewRollbackPolicyRequest(server string, org Org, policySlug PolicySlug, body RollbackPolicyJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewRollbackPolicyRequestWithBody(server, org, policySlug, "application/json", bodyReader)
-}
-
-// NewRollbackPolicyRequestWithBody constructs an http.Request for the RollbackPolicy method, with any body, and a specified content type
-func NewRollbackPolicyRequestWithBody(server string, org Org, policySlug PolicySlug, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "policy", policySlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies/%s/rollback", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewListPolicyVersionsRequest constructs an http.Request for the ListPolicyVersions method
-func NewListPolicyVersionsRequest(server string, org Org, policySlug PolicySlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "policy", policySlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies/%s/versions", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewAddPolicyVersionRequest calls the generic AddPolicyVersion builder with application/json body
-func NewAddPolicyVersionRequest(server string, org Org, policySlug PolicySlug, body AddPolicyVersionJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewAddPolicyVersionRequestWithBody(server, org, policySlug, "application/json", bodyReader)
-}
-
-// NewAddPolicyVersionRequestWithBody constructs an http.Request for the AddPolicyVersion method, with any body, and a specified content type
-func NewAddPolicyVersionRequestWithBody(server string, org Org, policySlug PolicySlug, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "policy", policySlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/policies/%s/versions", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewListProjectsRequest constructs an http.Request for the ListProjects method
 func NewListProjectsRequest(server string, org Org, params *ListProjectsParams) (*http.Request, error) {
 	var err error
@@ -11702,15 +10804,15 @@ type ClientWithResponsesInterface interface {
 
 	// ExplainPermissionWithResponse Explain why the signed-in caller may or may not take one action. Requires membership.
 	//
-	// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
+	// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the policy service's decision for it, asked as a probe and read as the check reads it, so the `decision` is the one `checkPermissions` answers for the pair.
 	//
-	// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+	// Where the policy service decides (`basis` is `policy-service`), `grounds` holds what it names: every policy that permits when the answer is `allow`, every policy that forbids when it is `deny` because one does, an evaluation error where a policy failed to evaluate, and none when it is `deny` because nothing permits. A role link is named by its reserved identifier and the path through which it reaches the caller: their organization role, or the roles of a team or a project, which reach the caller on that team or project alone. A guardrail or a permit is named by its identifier, and a system policy by its file name.
 	//
-	// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+	// A guardrail or a permit is named with its `name` and its `text` only where the caller holds `iam:policy.read` on the organization, the check `getIamPolicy` makes. Every other one is named without them. A guardrail of another organization that denies a message to the caller's is named by its kind alone.
 	//
-	// The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
+	// The actions `checkPermissions` puts to more than the policy service — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `grounds` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
 	//
-	// The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403.
+	// The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403. A policy service that does not answer is 503.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11731,128 +10833,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/permission-holders (the `ListPermissionHolders` operationId).
 	ListPermissionHoldersWithResponse(ctx context.Context, org Org, params *ListPermissionHoldersParams, reqEditors ...RequestEditorFn) (*ListPermissionHoldersResponse, error)
-
-	// ListPoliciesWithResponse List an organization's policies. Requires the `admin` role.
-	//
-	// Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/policies (the `ListPolicies` operationId).
-	ListPoliciesWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListPoliciesResponse, error)
-
-	// CreatePolicyWithBodyWithResponse Create a policy in an organization. Requires the `admin` role.
-	//
-	// Stores the document as the policy's first version. The policy is a draft until it is activated.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies (the `CreatePolicy` operationId).
-	CreatePolicyWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePolicyResponse, error)
-
-	// CreatePolicyWithResponse Create a policy in an organization. Requires the `admin` role.
-	//
-	// Stores the document as the policy's first version. The policy is a draft until it is activated.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies (the `CreatePolicy` operationId).
-	CreatePolicyWithResponse(ctx context.Context, org Org, body CreatePolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePolicyResponse, error)
-
-	// DeletePolicyWithResponse Delete a policy. Requires the `admin` role.
-	//
-	// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /orgs/{org}/policies/{policy} (the `DeletePolicy` operationId).
-	DeletePolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*DeletePolicyResponse, error)
-
-	// ActivatePolicyWithResponse Activate a policy. Requires the `admin` role.
-	//
-	// An active policy contributes its default version to checks. Activation changes the policy's status and leaves its default version where it is.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/activate (the `ActivatePolicy` operationId).
-	ActivatePolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*ActivatePolicyResponse, error)
-
-	// ListPolicyAttachmentsWithResponse List a policy's attachments. Requires the `admin` role.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/policies/{policy}/attachments (the `ListPolicyAttachments` operationId).
-	ListPolicyAttachmentsWithResponse(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*ListPolicyAttachmentsResponse, error)
-
-	// AttachPolicyWithBodyWithResponse Attach a policy to a subject. Requires the `admin` role.
-	//
-	// The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/attachments (the `AttachPolicy` operationId).
-	AttachPolicyWithBodyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AttachPolicyResponse, error)
-
-	// AttachPolicyWithResponse Attach a policy to a subject. Requires the `admin` role.
-	//
-	// The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/attachments (the `AttachPolicy` operationId).
-	AttachPolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, body AttachPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*AttachPolicyResponse, error)
-
-	// DetachPolicyWithResponse Detach a policy from a subject. Requires the `admin` role.
-	//
-	// Detaching an active policy's last attachment is refused with 409, because a policy left with none would apply org-wide. Delete the policy, or attach another subject first.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /orgs/{org}/policies/{policy}/attachments/{subject} (the `DetachPolicy` operationId).
-	DetachPolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, subjectGrn SubjectGrn, reqEditors ...RequestEditorFn) (*DetachPolicyResponse, error)
-
-	// RollbackPolicyWithBodyWithResponse Point a policy at a stored version. Requires the `admin` role.
-	//
-	// Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/rollback (the `RollbackPolicy` operationId).
-	RollbackPolicyWithBodyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RollbackPolicyResponse, error)
-
-	// RollbackPolicyWithResponse Point a policy at a stored version. Requires the `admin` role.
-	//
-	// Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/rollback (the `RollbackPolicy` operationId).
-	RollbackPolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, body RollbackPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*RollbackPolicyResponse, error)
-
-	// ListPolicyVersionsWithResponse List a policy's versions. Requires the `admin` role.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/policies/{policy}/versions (the `ListPolicyVersions` operationId).
-	ListPolicyVersionsWithResponse(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*ListPolicyVersionsResponse, error)
-
-	// AddPolicyVersionWithBodyWithResponse Append a version to a policy. Requires the `admin` role.
-	//
-	// Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/versions (the `AddPolicyVersion` operationId).
-	AddPolicyVersionWithBodyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddPolicyVersionResponse, error)
-
-	// AddPolicyVersionWithResponse Append a version to a policy. Requires the `admin` role.
-	//
-	// Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/policies/{policy}/versions (the `AddPolicyVersion` operationId).
-	AddPolicyVersionWithResponse(ctx context.Context, org Org, policySlug PolicySlug, body AddPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*AddPolicyVersionResponse, error)
 
 	// ListProjectsWithResponse List an organization's projects. Requires the `member` role.
 	//
@@ -16913,6 +15893,8 @@ type ExplainPermissionResponse struct {
 	JSON401 *Error
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *Error
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Error
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -16933,6 +15915,11 @@ func (r ExplainPermissionResponse) GetJSON401() *Error {
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
 func (r ExplainPermissionResponse) GetJSON403() *Error {
 	return r.JSON403
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ExplainPermissionResponse) GetJSON503() *Error {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -17020,661 +16007,6 @@ func (r ListPermissionHoldersResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListPermissionHoldersResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListPoliciesResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]Policy
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListPoliciesResponse) GetJSON200() *[]Policy {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ListPoliciesResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ListPoliciesResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ListPoliciesResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r ListPoliciesResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListPoliciesResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListPoliciesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListPoliciesResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type CreatePolicyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *Policy
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreatePolicyResponse) GetJSON201() *Policy {
-	return r.JSON201
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r CreatePolicyResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r CreatePolicyResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r CreatePolicyResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r CreatePolicyResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r CreatePolicyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r CreatePolicyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreatePolicyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreatePolicyResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DeletePolicyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r DeletePolicyResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r DeletePolicyResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r DeletePolicyResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r DeletePolicyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r DeletePolicyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeletePolicyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DeletePolicyResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ActivatePolicyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Policy
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ActivatePolicyResponse) GetJSON200() *Policy {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ActivatePolicyResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ActivatePolicyResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ActivatePolicyResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r ActivatePolicyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ActivatePolicyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ActivatePolicyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ActivatePolicyResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListPolicyAttachmentsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]PolicyAttachment
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListPolicyAttachmentsResponse) GetJSON200() *[]PolicyAttachment {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ListPolicyAttachmentsResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ListPolicyAttachmentsResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ListPolicyAttachmentsResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r ListPolicyAttachmentsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListPolicyAttachmentsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListPolicyAttachmentsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListPolicyAttachmentsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type AttachPolicyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *PolicyAttachment
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Error
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r AttachPolicyResponse) GetJSON201() *PolicyAttachment {
-	return r.JSON201
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r AttachPolicyResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r AttachPolicyResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r AttachPolicyResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r AttachPolicyResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r AttachPolicyResponse) GetJSON409() *Error {
-	return r.JSON409
-}
-
-// GetBody returns the raw response body bytes
-func (r AttachPolicyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r AttachPolicyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r AttachPolicyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r AttachPolicyResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DetachPolicyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Error
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r DetachPolicyResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r DetachPolicyResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r DetachPolicyResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r DetachPolicyResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r DetachPolicyResponse) GetJSON409() *Error {
-	return r.JSON409
-}
-
-// GetBody returns the raw response body bytes
-func (r DetachPolicyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r DetachPolicyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DetachPolicyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DetachPolicyResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type RollbackPolicyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Policy
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r RollbackPolicyResponse) GetJSON200() *Policy {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r RollbackPolicyResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r RollbackPolicyResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r RollbackPolicyResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r RollbackPolicyResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r RollbackPolicyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r RollbackPolicyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r RollbackPolicyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r RollbackPolicyResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListPolicyVersionsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]PolicyVersion
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListPolicyVersionsResponse) GetJSON200() *[]PolicyVersion {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ListPolicyVersionsResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ListPolicyVersionsResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ListPolicyVersionsResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r ListPolicyVersionsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListPolicyVersionsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListPolicyVersionsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListPolicyVersionsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type AddPolicyVersionResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *PolicyVersion
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r AddPolicyVersionResponse) GetJSON201() *PolicyVersion {
-	return r.JSON201
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r AddPolicyVersionResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r AddPolicyVersionResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r AddPolicyVersionResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r AddPolicyVersionResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r AddPolicyVersionResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r AddPolicyVersionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r AddPolicyVersionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r AddPolicyVersionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19943,15 +18275,15 @@ func (c *ClientWithResponses) CheckPermissionsWithResponse(ctx context.Context, 
 
 // ExplainPermissionWithResponse Explain why the signed-in caller may or may not take one action. Requires membership.
 //
-// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
+// Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the policy service's decision for it, asked as a probe and read as the check reads it, so the `decision` is the one `checkPermissions` answers for the pair.
 //
-// Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+// Where the policy service decides (`basis` is `policy-service`), `grounds` holds what it names: every policy that permits when the answer is `allow`, every policy that forbids when it is `deny` because one does, an evaluation error where a policy failed to evaluate, and none when it is `deny` because nothing permits. A role link is named by its reserved identifier and the path through which it reaches the caller: their organization role, or the roles of a team or a project, which reach the caller on that team or project alone. A guardrail or a permit is named by its identifier, and a system policy by its file name.
 //
-// A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+// A guardrail or a permit is named with its `name` and its `text` only where the caller holds `iam:policy.read` on the organization, the check `getIamPolicy` makes. Every other one is named without them. A guardrail of another organization that denies a message to the caller's is named by its kind alone.
 //
-// The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
+// The actions `checkPermissions` puts to more than the policy service — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `grounds` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
 //
-// The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403.
+// The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403. A policy service that does not answer is 503.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19983,212 +18315,6 @@ func (c *ClientWithResponses) ListPermissionHoldersWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseListPermissionHoldersResponse(rsp)
-}
-
-// ListPoliciesWithResponse List an organization's policies. Requires the `admin` role.
-//
-// Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/policies (the `ListPolicies` operationId).
-func (c *ClientWithResponses) ListPoliciesWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListPoliciesResponse, error) {
-	rsp, err := c.ListPolicies(ctx, org, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListPoliciesResponse(rsp)
-}
-
-// CreatePolicyWithBodyWithResponse Create a policy in an organization. Requires the `admin` role.
-//
-// Stores the document as the policy's first version. The policy is a draft until it is activated.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies (the `CreatePolicy` operationId).
-func (c *ClientWithResponses) CreatePolicyWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePolicyResponse, error) {
-	rsp, err := c.CreatePolicyWithBody(ctx, org, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreatePolicyResponse(rsp)
-}
-
-// CreatePolicyWithResponse Create a policy in an organization. Requires the `admin` role.
-//
-// Stores the document as the policy's first version. The policy is a draft until it is activated.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies (the `CreatePolicy` operationId).
-func (c *ClientWithResponses) CreatePolicyWithResponse(ctx context.Context, org Org, body CreatePolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePolicyResponse, error) {
-	rsp, err := c.CreatePolicy(ctx, org, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreatePolicyResponse(rsp)
-}
-
-// DeletePolicyWithResponse Delete a policy. Requires the `admin` role.
-//
-// Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /orgs/{org}/policies/{policy} (the `DeletePolicy` operationId).
-func (c *ClientWithResponses) DeletePolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*DeletePolicyResponse, error) {
-	rsp, err := c.DeletePolicy(ctx, org, policySlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeletePolicyResponse(rsp)
-}
-
-// ActivatePolicyWithResponse Activate a policy. Requires the `admin` role.
-//
-// An active policy contributes its default version to checks. Activation changes the policy's status and leaves its default version where it is.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/activate (the `ActivatePolicy` operationId).
-func (c *ClientWithResponses) ActivatePolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*ActivatePolicyResponse, error) {
-	rsp, err := c.ActivatePolicy(ctx, org, policySlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseActivatePolicyResponse(rsp)
-}
-
-// ListPolicyAttachmentsWithResponse List a policy's attachments. Requires the `admin` role.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/policies/{policy}/attachments (the `ListPolicyAttachments` operationId).
-func (c *ClientWithResponses) ListPolicyAttachmentsWithResponse(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*ListPolicyAttachmentsResponse, error) {
-	rsp, err := c.ListPolicyAttachments(ctx, org, policySlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListPolicyAttachmentsResponse(rsp)
-}
-
-// AttachPolicyWithBodyWithResponse Attach a policy to a subject. Requires the `admin` role.
-//
-// The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/attachments (the `AttachPolicy` operationId).
-func (c *ClientWithResponses) AttachPolicyWithBodyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AttachPolicyResponse, error) {
-	rsp, err := c.AttachPolicyWithBody(ctx, org, policySlug, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAttachPolicyResponse(rsp)
-}
-
-// AttachPolicyWithResponse Attach a policy to a subject. Requires the `admin` role.
-//
-// The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/attachments (the `AttachPolicy` operationId).
-func (c *ClientWithResponses) AttachPolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, body AttachPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*AttachPolicyResponse, error) {
-	rsp, err := c.AttachPolicy(ctx, org, policySlug, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAttachPolicyResponse(rsp)
-}
-
-// DetachPolicyWithResponse Detach a policy from a subject. Requires the `admin` role.
-//
-// Detaching an active policy's last attachment is refused with 409, because a policy left with none would apply org-wide. Delete the policy, or attach another subject first.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /orgs/{org}/policies/{policy}/attachments/{subject} (the `DetachPolicy` operationId).
-func (c *ClientWithResponses) DetachPolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, subjectGrn SubjectGrn, reqEditors ...RequestEditorFn) (*DetachPolicyResponse, error) {
-	rsp, err := c.DetachPolicy(ctx, org, policySlug, subjectGrn, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDetachPolicyResponse(rsp)
-}
-
-// RollbackPolicyWithBodyWithResponse Point a policy at a stored version. Requires the `admin` role.
-//
-// Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/rollback (the `RollbackPolicy` operationId).
-func (c *ClientWithResponses) RollbackPolicyWithBodyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RollbackPolicyResponse, error) {
-	rsp, err := c.RollbackPolicyWithBody(ctx, org, policySlug, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRollbackPolicyResponse(rsp)
-}
-
-// RollbackPolicyWithResponse Point a policy at a stored version. Requires the `admin` role.
-//
-// Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/rollback (the `RollbackPolicy` operationId).
-func (c *ClientWithResponses) RollbackPolicyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, body RollbackPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*RollbackPolicyResponse, error) {
-	rsp, err := c.RollbackPolicy(ctx, org, policySlug, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRollbackPolicyResponse(rsp)
-}
-
-// ListPolicyVersionsWithResponse List a policy's versions. Requires the `admin` role.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/policies/{policy}/versions (the `ListPolicyVersions` operationId).
-func (c *ClientWithResponses) ListPolicyVersionsWithResponse(ctx context.Context, org Org, policySlug PolicySlug, reqEditors ...RequestEditorFn) (*ListPolicyVersionsResponse, error) {
-	rsp, err := c.ListPolicyVersions(ctx, org, policySlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListPolicyVersionsResponse(rsp)
-}
-
-// AddPolicyVersionWithBodyWithResponse Append a version to a policy. Requires the `admin` role.
-//
-// Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/versions (the `AddPolicyVersion` operationId).
-func (c *ClientWithResponses) AddPolicyVersionWithBodyWithResponse(ctx context.Context, org Org, policySlug PolicySlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddPolicyVersionResponse, error) {
-	rsp, err := c.AddPolicyVersionWithBody(ctx, org, policySlug, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAddPolicyVersionResponse(rsp)
-}
-
-// AddPolicyVersionWithResponse Append a version to a policy. Requires the `admin` role.
-//
-// Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/policies/{policy}/versions (the `AddPolicyVersion` operationId).
-func (c *ClientWithResponses) AddPolicyVersionWithResponse(ctx context.Context, org Org, policySlug PolicySlug, body AddPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*AddPolicyVersionResponse, error) {
-	rsp, err := c.AddPolicyVersion(ctx, org, policySlug, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAddPolicyVersionResponse(rsp)
 }
 
 // ListProjectsWithResponse List an organization's projects. Requires the `member` role.
@@ -24485,6 +22611,13 @@ func ParseExplainPermissionResponse(rsp *http.Response) (*ExplainPermissionRespo
 		}
 		response.JSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -24531,517 +22664,6 @@ func ParseListPermissionHoldersResponse(rsp *http.Response) (*ListPermissionHold
 			return nil, err
 		}
 		response.JSON403 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListPoliciesResponse parses an HTTP response from a ListPoliciesWithResponse call
-func ParseListPoliciesResponse(rsp *http.Response) (*ListPoliciesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListPoliciesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []Policy
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreatePolicyResponse parses an HTTP response from a CreatePolicyWithResponse call
-func ParseCreatePolicyResponse(rsp *http.Response) (*CreatePolicyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreatePolicyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest Policy
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeletePolicyResponse parses an HTTP response from a DeletePolicyWithResponse call
-func ParseDeletePolicyResponse(rsp *http.Response) (*DeletePolicyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeletePolicyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseActivatePolicyResponse parses an HTTP response from a ActivatePolicyWithResponse call
-func ParseActivatePolicyResponse(rsp *http.Response) (*ActivatePolicyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ActivatePolicyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Policy
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListPolicyAttachmentsResponse parses an HTTP response from a ListPolicyAttachmentsWithResponse call
-func ParseListPolicyAttachmentsResponse(rsp *http.Response) (*ListPolicyAttachmentsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListPolicyAttachmentsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []PolicyAttachment
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseAttachPolicyResponse parses an HTTP response from a AttachPolicyWithResponse call
-func ParseAttachPolicyResponse(rsp *http.Response) (*AttachPolicyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &AttachPolicyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest PolicyAttachment
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDetachPolicyResponse parses an HTTP response from a DetachPolicyWithResponse call
-func ParseDetachPolicyResponse(rsp *http.Response) (*DetachPolicyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DetachPolicyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseRollbackPolicyResponse parses an HTTP response from a RollbackPolicyWithResponse call
-func ParseRollbackPolicyResponse(rsp *http.Response) (*RollbackPolicyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &RollbackPolicyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Policy
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListPolicyVersionsResponse parses an HTTP response from a ListPolicyVersionsWithResponse call
-func ParseListPolicyVersionsResponse(rsp *http.Response) (*ListPolicyVersionsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListPolicyVersionsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []PolicyVersion
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseAddPolicyVersionResponse parses an HTTP response from a AddPolicyVersionWithResponse call
-func ParseAddPolicyVersionResponse(rsp *http.Response) (*AddPolicyVersionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &AddPolicyVersionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest PolicyVersion
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
 
 	}
 

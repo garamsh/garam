@@ -145,4 +145,4 @@ becomes a role link the platform writes from the membership). Groups and
 projects are addressed under their organization's HTTP paths, and their
 GRNs carry the owning org in the organization segment, so a group or
 project role is scoped to that resource alone ([authz.md](./authz.md)
-§Statement collection).
+§Role-derived statements).

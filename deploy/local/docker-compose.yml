@@ -424,7 +424,7 @@ services:
     restart: "no"
 
   # The contract's port is published on loopback for the suite on the
-  # host that asks the service (platform's policy-matrix), which dials
+  # host that asks the service (platform's policy-service), which dials
   # localhost: the certificate names it beside `policy`, the name the
   # stack's own callers use. The service is given the JWKS alone of the
   # keys volume, never the signing key.

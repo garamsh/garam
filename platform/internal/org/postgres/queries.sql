@@ -34,9 +34,8 @@ DELETE FROM orgs WHERE grn = $1;
 -- What this organization holds of what DeleteOrg's cascade removes,
 -- counted in one round trip so the four numbers describe one moment.
 -- Each count is of the rows keyed on the organization itself; the rows
--- keyed on those in turn -- group_members, project_members,
--- policy_versions, policy_attachments -- go with their parent and are
--- not counted separately.
+-- keyed on those in turn -- group_members, project_members -- go with
+-- their parent and are not counted separately.
 SELECT
     (SELECT count(*) FROM groups      g WHERE g.org_grn = $1) AS group_count,
     (SELECT count(*) FROM projects    p WHERE p.org_grn = $1) AS project_count,

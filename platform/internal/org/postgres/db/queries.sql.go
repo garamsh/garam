@@ -164,9 +164,8 @@ type CountOrgContentsRow struct {
 // What this organization holds of what DeleteOrg's cascade removes,
 // counted in one round trip so the four numbers describe one moment.
 // Each count is of the rows keyed on the organization itself; the rows
-// keyed on those in turn -- group_members, project_members,
-// policy_versions, policy_attachments -- go with their parent and are
-// not counted separately.
+// keyed on those in turn -- group_members, project_members -- go with
+// their parent and are not counted separately.
 func (q *Queries) CountOrgContents(ctx context.Context, orgGrn string) (CountOrgContentsRow, error) {
 	row := q.db.QueryRow(ctx, countOrgContents, orgGrn)
 	var i CountOrgContentsRow

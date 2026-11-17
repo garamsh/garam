@@ -1,4 +1,4 @@
-# platform — the Go module behind the api, authz and machine processes
+# platform — the Go module behind the api and machine processes
 # (ADR-0125). Its verbs are every module's (#1661); `make -C platform
 # ci` is its fast gate, and `stack-up suites` the half that needs
 # Docker.
@@ -13,22 +13,14 @@ include ../tooling/make/stack.mk
 # else, for the reasons stated at that target (#875).
 GREMLINS := go tool gremlins
 
-# What buf lint will read, counted on lint's line. buf itself fails on a
-# module holding no .proto file; the guard below is for an ls-files that
-# comes back empty, which would otherwise print a zero nobody checked.
-PROTO_FILES = $(shell $(BUF) ls-files)
-
 ci: format lint test build check-gen
 
 format:
 	$(go-format)
 
 lint:
-	@echo 'lint: $(words $(PROTO_FILES)) proto files (buf lint); go vet counted on its own line below'
-	@test -n '$(PROTO_FILES)' || { echo 'lint: nothing to lint — the buf module matched no input'; exit 1; }
 	$(go-vet)
 	$(go-tidy-check)
-	@$(BUF) lint
 
 test:
 	$(go-test)
@@ -38,7 +30,7 @@ build:
 	$(go-build)
 
 # gen regenerates everything derived from a source of truth: the
-# OpenAPI servers, sqlc queries, protobuf code, and mocks. The client of
+# OpenAPI servers, sqlc queries, and mocks. The client of
 # the browser API is lib/platform-sdk-go's, and the commands derived
 # from it garam-cli's (ADR-0132).
 gen:
@@ -46,8 +38,6 @@ gen:
 	$(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml
 	$(SQLC) generate
 	$(MOCKERY)
-	$(BUF) generate
-	$(GOIMPORTS) -w proto/gen
 
 # The output each generator owns, read from its config, since no
 # generator answers "what do I own" and none deletes what it stops
@@ -56,7 +46,6 @@ gen:
 # outside it and read as clean (#360).
 GEN_PATHS := $(shell { sed -n 's|^output: ||p' api/oapi-codegen.yaml api/machine-codegen.yaml; \
 	sed -n 's|^        out: ||p' sqlc.yaml; \
-	sed -n 's|^    out: ||p' buf.gen.yaml; \
 	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; } | sort -u)
 
 check-gen:

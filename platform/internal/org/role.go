@@ -26,7 +26,7 @@ func ParseRole(s string) (Role, error) {
 }
 
 // Org-scoped action constants. Domains own their actions (ADR-0003);
-// the authz engine matches the strings only.
+// the policy service matches the strings only.
 const (
 	ActionOrgRead       = "iam:org.read"
 	ActionOrgUpdate     = "iam:org.update"

@@ -20,7 +20,8 @@ import (
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
-	"github.com/garamsh/garam/platform/internal/wire"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
+	relaygrpc "github.com/garamsh/garam/platform/internal/policyrelay/grpc"
 )
 
 // The cases here hold the lists and the search the browser listener
@@ -158,19 +159,36 @@ func TestEnforcement_AListHidesAnObjectTheServiceRefusesBesideOneItAllows(t *tes
 	}
 }
 
-// TestEnforcement_APolicySearchIsAskedOnTheOrganization searches a
-// policy of the platform's own store. The service holds no entity for
-// it, so each question is put on the policy's organization and the
-// policy is listed (ADR-0171 item 7); a question on the policy itself
-// would be denied to everyone and list nothing.
-func TestEnforcement_APolicySearchIsAskedOnTheOrganization(t *testing.T) {
-	const via = "/orgs/acme/search?q=held"
+// relayedPermit writes a permit named name through the relay as the
+// owner and answers the GRN of the policy the service made of it. The
+// policy is deleted when the test ends.
+func (s *enforcementStack) relayedPermit(t *testing.T, name string) grn.GRN {
+	t.Helper()
+	status, got := browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies", s.owner,
+		`{"name":"`+name+`","body":`+textBody("permit", relayPermit)+`}`)
+	require.Equal(t, http.StatusCreated, status, got)
+	id := policyID(t, got)
+	t.Cleanup(func() {
+		_ = relaygrpc.New(s.rp.client).Delete(context.Background(),
+			policyrelay.Write{Writer: s.ownerGRN, Org: grn.Org("acme"), ID: id})
+	})
+	return grn.New("acme", "policy", id)
+}
+
+// TestEnforcement_APolicySearchReadsTheServiceAndIsAskedOnTheOrganization
+// searches a policy the service holds, written through the relay. Each
+// question is put on the policy's organization and the policy is
+// listed (ADR-0171 item 7); a question on the policy itself would be
+// denied to everyone and list nothing. A needle the policy does not
+// hold finds nothing, which is the control that the match is the name.
+func TestEnforcement_APolicySearchReadsTheServiceAndIsAskedOnTheOrganization(t *testing.T) {
+	const via = "/orgs/acme/search?q=HELD"
 	s := newEnforcementStack(t, realDecisions)
-	policy, err := grn.Parse(activePolicy(t, s.policies, s.acme, "held",
-		statementDoc("held", wire.EffectAllow, org.ActionOrgRead, s.acme.String())))
-	require.NoError(t, err)
+	policy := s.relayedPermit(t, "held by the service")
 	before := len(s.rp.asked.batchesAsked())
 
+	assert.Empty(t, s.grns(t, "/orgs/acme/search?q=nothing-holds-this", "policy", s.owner),
+		"control: a needle the name does not hold finds nothing")
 	assert.Equal(t, []string{policy.String()}, s.grns(t, via, "policy", s.owner))
 
 	batches := s.askedAbout(before, org.ActionPolicyRead)
@@ -178,6 +196,26 @@ func TestEnforcement_APolicySearchIsAskedOnTheOrganization(t *testing.T) {
 	assert.Equal(t, []policydecision.Question{
 		{Subject: s.ownerGRN, Action: org.ActionPolicyRead, Resource: s.acme, Probe: true},
 	}, batches[len(batches)-1], "the question is on the organization")
+}
+
+// TestEnforcement_TheDeletionPreviewCountsThePoliciesTheServiceHolds
+// reads the preview before and after a policy is written through the
+// relay: the count rises by one. A count read from the platform's old
+// store would not move.
+func TestEnforcement_TheDeletionPreviewCountsThePoliciesTheServiceHolds(t *testing.T) {
+	s := newEnforcementStack(t, realDecisions)
+	count := func() int {
+		status, body := s.get(t, "/orgs/acme/deletion-preview", s.owner)
+		require.Equal(t, http.StatusOK, status, body)
+		var preview apigen.OrgDeletionPreview
+		require.NoError(t, json.Unmarshal([]byte(body), &preview))
+		return preview.Counts.Policies
+	}
+	before := count()
+
+	s.relayedPermit(t, "counted")
+
+	assert.Equal(t, before+1, count())
 }
 
 // failingBatches is the policy service whose Evaluations call fails

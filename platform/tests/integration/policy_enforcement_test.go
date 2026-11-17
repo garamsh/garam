@@ -22,11 +22,13 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
+	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
+	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/policydecision"
 	decisiongrpc "github.com/garamsh/garam/platform/internal/policydecision/grpc"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 	relaygrpc "github.com/garamsh/garam/platform/internal/policyrelay/grpc"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
@@ -50,7 +52,6 @@ type enforcementStack struct {
 	member              *http.Cookie
 	ownerGRN, memberGRN grn.GRN
 	acme                grn.GRN
-	policies            *authz.PolicyGRPCServer
 	orgs                *orgpg.Store
 	agents              *agentpg.Store
 }
@@ -98,17 +99,21 @@ func newEnforcementStack(t *testing.T, decide func(*realPolicy) policydecision.S
 	dropGuardrails()
 	t.Cleanup(dropGuardrails)
 
-	policies, _ := policyEngine(t, p)
-	s.policies = policies
-	srv := api.NewServer(users, orgs, s.agents, nil, nil, nil, authnpg.NewSessionStore(p),
-		nil, nil, nil, nil, decide(rp), api.NewGRPCPolicyManager(policyService(t, policies)),
-		nil, nil, nil, api.Config{SessionTTL: time.Hour}).
+	srv := api.NewServer(users, orgs, s.agents, operatorpg.New(p), messagepg.New(p), nil, authnpg.NewSessionStore(p),
+		nil, nil, nil, nil, decide(rp), noAuthority{}, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithPolicyRelay(relaygrpc.New(rp.client))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	s.url = browser.URL
 	return s
 }
+
+// noAuthority reports that no organization holds a certificate
+// authority, which the deletion preview asks and these suites do not
+// vary.
+type noAuthority struct{}
+
+func (noAuthority) HasAuthority(context.Context, grn.GRN) (bool, error) { return false, nil }
 
 func realDecisions(rp *realPolicy) policydecision.Service { return rp.asked }
 
@@ -212,6 +217,10 @@ func (s *enforcementStack) writeGuardrail(t *testing.T, name, cedar string, acti
 	status, got := browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies", s.owner, `{"name":"`+name+`","body":`+textBody("guardrail", cedar)+`}`)
 	require.Equal(t, http.StatusCreated, status, got)
 	id := policyID(t, got)
+	t.Cleanup(func() {
+		_ = relaygrpc.New(s.rp.client).Delete(context.Background(),
+			policyrelay.Write{Writer: s.ownerGRN, Org: grn.Org("acme"), ID: id})
+	})
 	if activate {
 		status, got = browse(t, http.MethodPost, s.url+"/orgs/acme/iam-policies/"+id+"/activate", s.owner, "")
 		require.Equal(t, http.StatusNoContent, status, got)

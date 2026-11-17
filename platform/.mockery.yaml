@@ -12,9 +12,6 @@ packages:
   github.com/garamsh/garam/platform/internal/agent:
     interfaces:
       StandaloneService: {}
-  github.com/garamsh/garam/platform/internal/api:
-    interfaces:
-      PolicyManager: {}
   github.com/garamsh/garam/platform/internal/authz:
     interfaces:
       Store: {}

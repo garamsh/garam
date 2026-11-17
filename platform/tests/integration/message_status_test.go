@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,42 +41,6 @@ func fieldsOf(t *testing.T, body []byte) []string {
 		names = append(names, name)
 	}
 	return names
-}
-
-// leaseWait bounds how long a lapsed lease is waited for. A poll answers
-// no sooner than the lease it waits on lapses and no later than its own
-// wait, and both start from different moments, so one poll can answer 204
-// just ahead of the lapse (#1982); the bound is what a loaded machine is
-// given to get past it.
-const leaseWait = 10 * time.Second
-
-// await runs ready until it answers true, and fails once leaseWait has
-// passed.
-func await(t *testing.T, what string, ready func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(leaseWait)
-	for !ready() {
-		require.True(t, time.Now().Before(deadline), "timed out waiting for %s", what)
-		time.Sleep(briefDelivery().PollInterval)
-	}
-}
-
-// claimWhenReady polls queue as its reader until a message is handed
-// out. The previous hold on it lapses as a moment passes that nothing
-// announces, and a poll that answers 204 has found it not yet lapsed.
-func claimWhenReady(t *testing.T, reader *http.Client, queue string) machinegen.Claim {
-	t.Helper()
-	var claim machinegen.Claim
-	await(t, "the previous hold to lapse", func() bool {
-		status, body := machineSend(t, reader, http.MethodPost, queue, "")
-		if status == http.StatusNoContent {
-			return false
-		}
-		require.Equal(t, http.StatusOK, status, string(body))
-		require.NoError(t, json.Unmarshal(body, &claim))
-		return true
-	})
-	return claim
 }
 
 // TestMessageStatus_ASenderReadsItsOwnMessageThroughEveryStateItReaches
@@ -165,7 +128,13 @@ func TestMessageStatus_ASenderReadsItsOwnMessageThroughEveryStateItReaches(t *te
 	abandonedRead := url + "/messages/" + abandoned.Id
 
 	for attempt := 1; attempt <= briefDelivery().Attempts; attempt++ {
-		handed := claimWhenReady(t, recipient, queue)
+		// The poll is the wait: a lapsed lease is a moment passing that
+		// nothing announces, so the call that finds the message ready
+		// again is what says the previous hold is over.
+		status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+		require.Equal(t, http.StatusOK, status, string(body))
+		var handed machinegen.Claim
+		require.NoError(t, json.Unmarshal(body, &handed))
 		require.Equal(t, abandoned.Id, handed.Message.Id)
 
 		holding := statusOf(t, sender, abandonedRead)
@@ -173,15 +142,11 @@ func TestMessageStatus_ASenderReadsItsOwnMessageThroughEveryStateItReaches(t *te
 		assert.Equal(t, attempt, holding.Attempts)
 	}
 
-	// The queue is done with it: once the last lease has lapsed a poll
-	// answers that nothing is ready and the sender reads the message as
-	// given up on. That the sender reads it so is the condition the state
-	// below rests on, so it is the one waited for.
-	await(t, "the last lease to lapse", func() bool {
-		status, body := machineSend(t, recipient, http.MethodPost, queue, "")
-		require.Equal(t, http.StatusNoContent, status, string(body))
-		return statusOf(t, sender, abandonedRead).State == machinegen.MessageStateExhausted
-	})
+	// The queue is done with it: this poll waits out the last lease and
+	// answers that nothing is ready, which is the condition the state
+	// below rests on rather than a duration a test guessed at.
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	require.Equal(t, http.StatusNoContent, status, string(body))
 	spent := statusOf(t, sender, abandonedRead)
 	assert.Equal(t, machinegen.MessageStateExhausted, spent.State,
 		"a message the queue hands out no further still read as one waiting for a reader")

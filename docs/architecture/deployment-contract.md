@@ -101,9 +101,9 @@ Dependencies each process reports (`platform/internal/cli/serve.go`,
 
 | Process | Readiness dependencies |
 |---|---|
-| `serve api` | the database, and the channel to the engine |
+| `serve api` | the database alone |
 | `serve authz` | the database alone |
-| `serve machine` | the database, and the channel to the engine |
+| `serve machine` | the database alone |
 | `policy serve` | the database alone, on a plaintext port of its own (`policy/crates/server/src/probes.rs`) |
 | web | none — it reads nothing, so an API outage takes no replica out of rotation ([ADR-0023](./adr/0023-web-probes.md)) |
 

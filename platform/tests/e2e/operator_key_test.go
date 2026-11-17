@@ -91,24 +91,20 @@ func TestOperatorKey_TheBuiltBinariesIssueAKeyAndExchangeItsAssertion(t *testing
 	// The api's enforcement is the policy service's decision
 	// (ADR-0171), so what it writes reaches the service by the feed.
 	startPolicyFeed(t, garam, p.DatabaseURL)
-	grpcAddr, metricsAddr := freeAddr(t), freeAddr(t)
 	apiAddr, unconfiguredAddr := freeAddr(t), freeAddr(t)
 	machineAddr, machineHealthAddr := freeAddr(t), freeAddr(t)
 	tokenURL := "https://" + machineAddr + "/oauth/token"
 
-	serve(t, garam, "authz", []string{
-		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_GRPC_ADDR=" + grpcAddr, "GARAM_METRICS_ADDR=" + metricsAddr,
-	}, "http://"+metricsAddr+readyPath)
 	serve(t, garam, "api", append([]string{
-		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + apiAddr, "GARAM_AUTHZ_ADDR=" + grpcAddr,
+		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + apiAddr,
 		"GARAM_MACHINE_TOKEN_URL=" + tokenURL,
 	}, apiPolicyEnv(t)...), "http://"+apiAddr+readyPath)
 	serve(t, garam, "api", append([]string{
-		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + unconfiguredAddr, "GARAM_AUTHZ_ADDR=" + grpcAddr,
+		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + unconfiguredAddr,
 	}, apiPolicyEnv(t)...), "http://"+unconfiguredAddr+readyPath)
 	certFile, keyFile, kekFile, rootFile := machineKeyMaterialFiles(t)
 	serve(t, garam, "machine", append([]string{
-		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_AUTHZ_ADDR=" + grpcAddr,
+		"GARAM_DATABASE_URL=" + p.DatabaseURL,
 		"GARAM_MACHINE_ADDR=" + machineAddr, "GARAM_MACHINE_HEALTH_ADDR=" + machineHealthAddr,
 		"GARAM_MACHINE_TLS_CERT_FILE=" + certFile, "GARAM_MACHINE_TLS_KEY_FILE=" + keyFile,
 		"GARAM_CA_KEY_FILE=" + kekFile, "GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,

@@ -340,12 +340,20 @@ func attachPolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, s
 // briefDelivery is the queue's delivery configuration with the waits
 // shortened to what a test can sit through. What each parameter governs
 // is unchanged; `garam serve machine` runs on the defaults.
+//
+// Wait exceeds Lease by a second, which TestMessageStatus_ASender... relies
+// on: it takes a message, lets the lease lapse and polls again, and that
+// poll is the wait. A poll starts after the claim it waits out and its last
+// query can start before the lease lapses, so a Wait equal to Lease leaves
+// the poll only the milliseconds between them and it answers 204 under
+// load (#1982). A second is far past what a loaded machine adds to one
+// request.
 func briefDelivery() message.Config {
 	return message.Config{
 		Lease:        2 * time.Second,
 		LeaseCeiling: 5 * time.Second,
 		Attempts:     2,
-		Wait:         2 * time.Second,
+		Wait:         3 * time.Second,
 		PollInterval: 20 * time.Millisecond,
 	}
 }

@@ -92,7 +92,7 @@ policy-service:
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' POLICY_SERVICE_ADDR='$(POLICY_HOST_ADDR)' \
 		POLICY_SERVICE_CA='$(POLICY_LOCAL_DIR)/ca.pem' POLICY_SERVICE_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
 		POLICY_SERVICE_ISSUER=https://garam.localhost/api \
-		go test -count=1 -tags policyservice -run 'TestDelegatedAuthorityPolicy_|TestPolicyRelay_|TestEnforcement_' ./tests/integration/
+		go test -count=1 -tags policyservice -run 'TestDelegatedAuthorityPolicy_|TestPolicyRelay_|TestEnforcement_|TestConsentedSend_' ./tests/integration/
 
 # e2e runs the built binary as the processes a deployment runs, against
 # the same Postgres.

@@ -57,7 +57,6 @@ func serveAPIEnv(t *testing.T, overrides map[string]string) {
 		"GARAM_POLICY_SIGNING_KEY_FILE": keyFile,
 		"GARAM_POLICY_TOKEN_ISSUER":     "https://garam.test",
 		"GARAM_DATABASE_URL":            unreachableDatabase,
-		"GARAM_AUTHZ_ADDR":              "127.0.0.1:1",
 		"GARAM_HTTP_ADDR":               "",
 		"GARAM_SESSION_TTL":             "",
 		"GARAM_COOKIE_SECURE":           "",

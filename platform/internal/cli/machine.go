@@ -118,14 +118,6 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	defer closeDecisions()
 
-	// What else this surface decides is the policy engine's, which runs
-	// as a process of its own and is reached over gRPC (ADR-0003).
-	conn, err := dialAuthz()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
 	srv, err := NewMachineServer(pool, MachineConfig{
 		Sealer:           keys.sealer,
 		SigningCustodian: signingCustodian,
@@ -154,10 +146,9 @@ func serveMachine(cmd *cobra.Command) error {
 	// listener, and losing this one must not take that one down.
 	healthAddr := envOr(envMachineHealthAddr, ":8444")
 	go func() {
-		// The tokens and the agents this surface answers for are rows;
-		// the decision admitting a message comes from the engine.
+		// The tokens and the agents this surface answers for are rows.
 		if err := http.ListenAndServe(healthAddr,
-			obs.machineProbeHandler(health.Database(pool), authzChannel{conn: conn})); err != nil {
+			obs.machineProbeHandler(health.Database(pool))); err != nil {
 			obs.logger.Error("health listener stopped", slog.String("error", err.Error()))
 		}
 	}()

@@ -161,7 +161,6 @@ plaintext HTTP port (`serve.go:51-159`).
 |---|---|---|
 | `GARAM_DATABASE_URL` | yes | exit 1, "GARAM_DATABASE_URL is required" (`connect.go:17-27`) |
 | `GARAM_HTTP_ADDR` | no | `:8080` (`serve.go:153`) |
-| `GARAM_AUTHZ_ADDR` | no | `localhost:9090`; insecure gRPC, connected lazily (`connect.go:34-38`) |
 | `GARAM_SESSION_TTL` | no | `168h`; an unparsable value is refused (`serve.go:81-83`) |
 | `GARAM_COOKIE_SECURE` | no | `true`; an unparsable value is refused (`serve.go:85`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URL` | no | no Google sign-in; the first two are set together or neither (`serve.go:215-234`) |
@@ -200,7 +199,7 @@ Read timeout 30s, a request body bounded at 1 MiB, keep-alives off
 (`cli.go:263,273`, `serve.go:168-176,200`).
 
 **Probes.** `/healthz` and `/readyz` on the same port. Readiness is
-bounded at 2s and reports the database and the authz channel
+bounded at 2s and reports the database
 (`platform/internal/health/health.go:17-72`, `serve.go:156,236-260`).
 What readiness reports is
 [deployment-contract.md](./deployment-contract.md) §What readiness
@@ -214,10 +213,9 @@ process logs "shutdown abandoned work in flight" and still exits 0
 version when `serve api` starts, so what it does against a database not
 migrated is under §Not established.
 
-**Calls.** PostgreSQL (`GARAM_DATABASE_URL`), the authz process
-(`GARAM_AUTHZ_ADDR`), the policy service where configured, and Google
-where configured. It holds one session connection for `LISTEN`, from
-which a goroutine relays turn events
+**Calls.** PostgreSQL (`GARAM_DATABASE_URL`), the policy service where
+configured, and Google where configured. It holds one session
+connection for `LISTEN`, from which a goroutine relays turn events
 (`platform/internal/watch/postgres/postgres_relay.go:152`).
 
 ## garam/server: serve authz
@@ -257,7 +255,6 @@ owner's states the rule on what may stand in front of it.
 | Setting | Required | If unset |
 |---|---|---|
 | `GARAM_DATABASE_URL` | yes | exit 1 (`connect.go:17-27`) |
-| `GARAM_AUTHZ_ADDR` | no | `localhost:9090` (`connect.go:38`) |
 | `GARAM_MACHINE_ADDR` | no | `:8443` (`machine.go:142`) |
 | `GARAM_MACHINE_HEALTH_ADDR` | no | `:8444` (`machine.go:146`) |
 | `GARAM_MACHINE_TLS_CERT_FILE` | yes | refused at start (`machine.go:400`) |
@@ -309,7 +306,7 @@ owner's states the rule on what may stand in front of it.
   cowork and codehub at `/oauth/token`, and codehub at
   `/oauth/introspect` (§codehub as a caller).
   `GARAM_MACHINE_HEALTH_ADDR`: HTTP, plaintext, `/healthz`, `/readyz`
-  (database and authz channel) and `/metrics` (`machine.go:146-155`).
+  (database) and `/metrics` (`machine.go:146-155`).
 - **Assertion audience.** A service principal's assertion names as `aud`
   `GARAM_IDENTITY_ISSUER` as the only value, with `typ`
   `client-authentication+jwt` or `JWT`. An `aud` naming the endpoint's
@@ -324,7 +321,7 @@ owner's states the rule on what may stand in front of it.
 - **Stop.** The TLS listener through `serveHTTP`, 10s as `serve api`;
   the health listener has no graceful stop (`machine.go:150,157`).
 - **Before start.** `garam migrate` complete; the same absence.
-- **Calls.** PostgreSQL, the authz process, and Transit where
+- **Calls.** PostgreSQL, the policy service, and Transit where
   `GARAM_TRANSIT_ADDR` is set.
 
 ## garam/server: migrate

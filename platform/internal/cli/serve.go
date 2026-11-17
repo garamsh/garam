@@ -13,7 +13,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -37,7 +36,7 @@ import (
 )
 
 // newServeAPICommand constructs `garam serve api`: the OpenAPI HTTP
-// backend. It reaches the authz engine over gRPC (ADR-0003 stage 2).
+// backend. Its decisions come from the policy service (ADR-0146).
 func newServeAPICommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "api",
@@ -71,12 +70,6 @@ func serveAPI(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-
-	conn, err := dialAuthz()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
 
 	// A user's delegated authority is the policy service's decision
 	// (ADR-0146), so a process without one does not start.
@@ -160,9 +153,7 @@ func serveAPI(cmd *cobra.Command) error {
 	srv.WithFeed(gate)
 
 	addr := envOr(envHTTPAddr, ":8080")
-	// A request needs both to be served: rows out of the database, and
-	// the decision that admits it.
-	httpSrv := apiServer(addr, obs.apiHandler(srv, health.Database(pool), authzChannel{conn: conn}))
+	httpSrv := apiServer(addr, obs.apiHandler(srv, health.Database(pool)))
 	obs.logger.Info("serving api", slog.String("addr", addr))
 	return obs.serveHTTP(ctx, shutdownGrace, httpSrv, httpSrv.ListenAndServe)
 }
@@ -240,32 +231,6 @@ func googleProvider(ctx context.Context, cfg authn.GoogleConfig) (authn.Provider
 		return nil, errorx.Wrap(err, "google provider")
 	}
 	return p, nil
-}
-
-// authzChannel is the connection to the policy engine as readiness
-// sees it (health.Dependency). Every org-scoped request is decided
-// there, so a channel that cannot carry a decision is a reason to send
-// requests to another replica.
-type authzChannel struct{ conn *grpc.ClientConn }
-
-func (authzChannel) Name() string { return "authz" }
-
-// Check waits for the channel to reach Ready inside ctx, connecting it
-// when it is idle. The state alone would answer for a channel that has
-// never reached the engine — grpc.NewClient connects on the first call
-// — and answering with an RPC would mean sending the engine one it
-// acts on.
-func (a authzChannel) Check(ctx context.Context) error {
-	for {
-		state := a.conn.GetState()
-		if state == connectivity.Ready {
-			return nil
-		}
-		a.conn.Connect()
-		if !a.conn.WaitForStateChange(ctx, state) {
-			return errorx.New(errorx.KindUnavailable, "authz channel is "+state.String())
-		}
-	}
 }
 
 // newServeAuthzCommand constructs `garam serve authz`: the gRPC policy

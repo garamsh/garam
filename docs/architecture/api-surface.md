@@ -446,13 +446,18 @@ and not in the same place on every surface.
   No event carries a key, token, credential or certificate
   ([machine-identity.md](./machine-identity.md) §Credential events).
 - **An organization's policy writes and denials are read on
-  `iam:audit.read`.** Unbuilt
-  ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)):
-  no operation serves them yet, and the manifest declares no such
-  action. When built, the platform's browser API and the CLI answer an
-  organization's owners and administrators from a read on the policy
-  service's contract ([audit.md](./audit.md) §The policy service's
-  record).
+  `iam:audit.read`.** `listAuditRecords`
+  (`GET /orgs/{org}/audit-records`, with `pageSize` and `pageToken`)
+  relays the policy service's `ListAuditRecords` as the signed-in
+  user, newest first and paged
+  ([ADR-0176](./adr/0176-the-platform-relays-the-policy-services-audit-record-to-the-console-and-the-cli.md),
+  [ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)).
+  The service decides the read and its refusal is the answer: 403 for
+  a reader it refuses, 400 for a token it never issued, 503 when it
+  cannot be reached and 504 when the call times out. The platform
+  stores and filters nothing
+  ([audit.md](./audit.md) §The policy service's record). The CLI
+  derives `garam audit-records list` from it.
 - **An organization's role links, guardrails and permits are relayed
   to the policy service.** `/orgs/{org}/iam-policies` serves
   `createIamPolicy`, `listIamPolicies`, `getIamPolicy`,
@@ -961,6 +966,9 @@ document owes an update.
   — a cross-organization message needs both organizations' consent
 - [ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)
   — no surface serves a secret's value
+- [ADR-0176](./adr/0176-the-platform-relays-the-policy-services-audit-record-to-the-console-and-the-cli.md)
+  — `listAuditRecords` relays the policy service's audit record as the
+  signed-in user, the service deciding the read on `iam:audit.read`
 - [ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)
   — the browser listener's enforcement asks the policy service, and a
   failure of it is a 503

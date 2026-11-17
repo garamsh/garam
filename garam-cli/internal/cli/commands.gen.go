@@ -455,6 +455,20 @@ var apiOperations = []apiOperation{
 		},
 	},
 	{
+		ID: "listAuditRecords", Method: "GET", Path: "/orgs/{org}/audit-records",
+		Words: []string{"audit-records"}, Verb: "list", Short: "Read an organization's audit records, newest first.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "pageSize", In: "query", Kind: "integer", Required: false, Help: "Maximum records to return; 0 and anything above the policy service's bound mean the bound."},
+			{Name: "pageToken", In: "query", Kind: "string", Required: false, Help: "The previous page's `nextPageToken`; absent for the first."},
+		},
+		Columns: []string{"id", "kind", "firstAt", "lastAt", "count", "service", "subject", "action", "resource", "outcome", "versionFrom", "versionTo", "day"},
+		Rows:    "records",
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewListAuditRecordsRequest(server, path[0], nil)
+		},
+	},
+	{
 		ID: "listInvitations", Method: "GET", Path: "/orgs/{org}/invitations",
 		Words: []string{"invitations"}, Verb: "list", Short: "List the invitations that can still be accepted. Requires `iam:org.invite`.",
 		Args: []string(nil), FromOrg: true,

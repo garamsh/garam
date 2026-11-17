@@ -12,6 +12,8 @@ import type {
   Group,
   GroupMember,
   InvitationPreview,
+  AuditRecord,
+  AuditRecordPage,
   Member,
   Operator,
   OperatorKey,
@@ -152,6 +154,124 @@ export const denyDeletes: IamPolicyDetail = {
     },
     createdBy: alice.grn,
   })),
+};
+
+const POLICY_GRN = `grn:acme/iam/policy/${DENY_DELETES_ID}`;
+
+/**
+ * A write as the policy service records it: its own `platform` service,
+ * the writer, the policy as resource and policy id, and the versions its
+ * step carries (`policy/crates/grant/tests/write_record.rs`).
+ */
+function recordedWrite(
+  id: number,
+  outcome: string,
+  action: string,
+  versionFrom: number,
+  versionTo: number,
+): AuditRecord {
+  const at = `2026-05-02T09:${String(10 + id).padStart(2, "0")}:00Z`;
+  return {
+    id,
+    kind: "write",
+    firstAt: at,
+    lastAt: at,
+    count: 1,
+    service: "platform",
+    subject: alice.grn,
+    action,
+    resource: POLICY_GRN,
+    outcome,
+    policyIds: [POLICY_GRN],
+    versionFrom,
+    versionTo,
+  };
+}
+
+/** A guardrail's creation: its first version, under the create action. */
+export const guardrailCreated = recordedWrite(
+  1,
+  "created",
+  "iam:policy.create",
+  0,
+  1,
+);
+
+/** A version appended to a policy: the version, no default moved from. */
+export const versionAdded = recordedWrite(
+  2,
+  "version-added",
+  "iam:policy.update",
+  0,
+  2,
+);
+
+/** The default moved from version 2 back to version 1. */
+export const rolledBack = recordedWrite(
+  3,
+  "rolled-back",
+  "iam:policy.update",
+  2,
+  1,
+);
+
+/** A policy removed: the record names no version. */
+export const policyRemoved = recordedWrite(
+  4,
+  "removed",
+  "iam:policy.delete",
+  0,
+  0,
+);
+
+/** A member's refused delete, collapsed with its repeats. */
+export const collapsedDenial: AuditRecord = {
+  id: 5,
+  kind: "denial",
+  firstAt: "2026-05-02T09:00:00Z",
+  lastAt: "2026-05-02T09:10:00Z",
+  count: 3,
+  service: "platform",
+  subject: "grn:root/iam/user/bob",
+  action: "iam:project.delete",
+  resource: "grn:acme/iam/project/frontend",
+  outcome: "deny",
+  policyIds: [POLICY_GRN],
+  versionFrom: 0,
+  versionTo: 0,
+};
+
+/**
+ * The denials of a UTC day the cap stored no row for: it names no
+ * service, subject, action, resource or outcome (`policy.proto`).
+ */
+export const overflowedDay: AuditRecord = {
+  id: 6,
+  kind: "denial-overflow",
+  firstAt: "2026-05-01T00:00:00Z",
+  lastAt: "2026-05-01T23:00:00Z",
+  count: 40,
+  service: "",
+  subject: "",
+  action: "",
+  resource: "",
+  outcome: "",
+  policyIds: [],
+  versionFrom: 0,
+  versionTo: 0,
+  day: "2026-05-01T00:00:00Z",
+};
+
+/** The audit records Acme holds, newest first. */
+export const acmeAuditPage: AuditRecordPage = {
+  records: [
+    overflowedDay,
+    collapsedDenial,
+    policyRemoved,
+    rolledBack,
+    versionAdded,
+    guardrailCreated,
+  ],
 };
 
 /** A draft role link: Engineering is admin of the frontend project. */
@@ -326,6 +446,7 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   },
   { path: "/orgs/acme/agent-supervisors", guarded: true, body: [buildHost] },
   { path: "/orgs/acme/iam-policies", guarded: true, body: acmePolicies },
+  { path: "/orgs/acme/audit-records", guarded: true, body: acmeAuditPage },
   ...[denyDeletes, engineeringAdmins].map((detail) => ({
     path: `/orgs/acme/iam-policies/${detail.policy.id}`,
     guarded: true,

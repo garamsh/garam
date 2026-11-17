@@ -1219,6 +1219,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/audit-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an organization's audit records, newest first.
+         * @description Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
+         */
+        get: operations["listAuditRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/consents": {
         parameters: {
             query?: never;
@@ -1862,6 +1882,64 @@ export interface components {
          * @enum {string}
          */
         PolicyStatus: "draft" | "active";
+        /**
+         * @description What an audit record is: one `write` of a policy, the identical `denial`s of one request collapsed with a count, or the `denial-overflow` of a UTC day.
+         * @enum {string}
+         */
+        AuditRecordKind: "write" | "denial" | "denial-overflow";
+        /** @description One record of the policy service's audit (ADR-0148). It holds no policy text, no context, no token and no fault text. */
+        AuditRecord: {
+            /** Format: int64 */
+            id: number;
+            kind: components["schemas"]["AuditRecordKind"];
+            /**
+             * Format: date-time
+             * @description When a write was made or a denial first occurred.
+             */
+            firstAt: string;
+            /**
+             * Format: date-time
+             * @description When a denial last occurred; a write's `firstAt`.
+             */
+            lastAt: string;
+            /**
+             * Format: int64
+             * @description How many identical denials the record holds; 1 for a write.
+             */
+            count: number;
+            /** @description The service that made the request; empty on an overflow record. */
+            service: string;
+            /** @description The GRN of who asked or wrote; empty for a write the service made with no writer and on an overflow record. */
+            subject: string;
+            /** @description The action in its qualified form, such as `iam:permit.write`. */
+            action: string;
+            /** @description The GRN asked about; for a write, the policy's. */
+            resource: string;
+            /** @description `deny`, or `created`, `version-added`, `activated`, `rolled-back` or `removed`. */
+            outcome: string;
+            /** @description The policies of a denial's reasons, `fault` for a reason that is an evaluation fault; for a write, the policy. */
+            policyIds: string[];
+            /**
+             * Format: int32
+             * @description The default a write moved from, or 0.
+             */
+            versionFrom: number;
+            /**
+             * Format: int32
+             * @description The version a write wrote or moved to, or 0.
+             */
+            versionTo: number;
+            /**
+             * Format: date-time
+             * @description The first second of the UTC day an overflow record holds.
+             */
+            day?: string;
+        };
+        AuditRecordPage: {
+            records: components["schemas"]["AuditRecord"][];
+            /** @description Reads the next page; absent at the end. */
+            nextPageToken?: string;
+        };
         PolicyRollback: {
             /**
              * Format: int32
@@ -2335,6 +2413,10 @@ export interface components {
         permissionResourceId: string;
         /** @description Maximum entries to return; 0 means no limit. */
         limit: number;
+        /** @description Maximum records to return; 0 and anything above the policy service's bound mean the bound. */
+        pageSize: number;
+        /** @description The previous page's `nextPageToken`; absent for the first. */
+        pageToken: string;
         offset: number;
     };
     requestBodies: never;
@@ -4659,6 +4741,39 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    listAuditRecords: {
+        parameters: {
+            query?: {
+                /** @description Maximum records to return; 0 and anything above the policy service's bound mean the bound. */
+                pageSize?: components["parameters"]["pageSize"];
+                /** @description The previous page's `nextPageToken`; absent for the first. */
+                pageToken?: components["parameters"]["pageToken"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditRecordPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
             503: components["responses"]["Error"];
             504: components["responses"]["Error"];
         };

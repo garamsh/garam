@@ -1123,6 +1123,14 @@ which removes them; until then the search of policies and the
 deletion's count (§Decided and not yet built) still read them through
 `PolicyService`.
 
+**The audit record is read the same way.**
+`/orgs/{org}/audit-records` relays the policy service's record of
+policy writes and denials naming the caller as the reader, and the
+service decides `iam:audit.read` on the organization, which `owner`
+and `admin` hold and `member` does not
+([ADR-0176](./adr/0176-the-platform-relays-the-policy-services-audit-record-to-the-console-and-the-cli.md),
+[audit.md](./audit.md) §The policy service's record).
+
 The `iam:policy.create`, `iam:policy.read`, `iam:policy.update`,
 `iam:policy.attach`, `iam:policy.detach` and `iam:policy.delete`
 constants live in `platform/internal/org`. `owner` and `admin` grant

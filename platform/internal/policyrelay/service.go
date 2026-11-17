@@ -149,6 +149,13 @@ type Service interface {
 	Get(ctx context.Context, w Write) (Detail, error)
 	// List reads the organization's policies.
 	List(ctx context.Context, reader grn.GRN, org grn.GRN) ([]Policy, error)
+	// ListAudit reads a page of the organization's audit records,
+	// newest first, for a reader the service lets read them
+	// (`iam:audit.read`). An empty token reads the first page and a
+	// size of 0 the service's bound.
+	ListAudit(
+		ctx context.Context, reader, org grn.GRN, pageSize int32, pageToken string,
+	) (AuditPage, error)
 }
 
 // NewID names a policy the platform creates. It is 32 hex digits under

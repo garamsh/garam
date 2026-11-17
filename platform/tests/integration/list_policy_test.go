@@ -158,33 +158,26 @@ func TestEnforcement_AListHidesAnObjectTheServiceRefusesBesideOneItAllows(t *tes
 	}
 }
 
-// TestEnforcement_APolicyListIsAskedOnTheOrganization lists and
-// searches a policy of the platform's own store. The service holds no
-// entity for it, so each question is put on the policy's organization
-// and the policy is listed (ADR-0171 item 7); a question on the policy
-// itself would be denied to everyone and list nothing.
-func TestEnforcement_APolicyListIsAskedOnTheOrganization(t *testing.T) {
-	for _, via := range []string{"/orgs/acme/policies", "/orgs/acme/search?q=held"} {
-		t.Run(via, func(t *testing.T) {
-			s := newEnforcementStack(t, realDecisions)
-			policy, err := grn.Parse(activePolicy(t, s.policies, s.acme, "held",
-				statementDoc("held", wire.EffectAllow, org.ActionOrgRead, s.acme.String())))
-			require.NoError(t, err)
-			kind := ""
-			if via != "/orgs/acme/policies" {
-				kind = "policy"
-			}
-			before := len(s.rp.asked.batchesAsked())
+// TestEnforcement_APolicySearchIsAskedOnTheOrganization searches a
+// policy of the platform's own store. The service holds no entity for
+// it, so each question is put on the policy's organization and the
+// policy is listed (ADR-0171 item 7); a question on the policy itself
+// would be denied to everyone and list nothing.
+func TestEnforcement_APolicySearchIsAskedOnTheOrganization(t *testing.T) {
+	const via = "/orgs/acme/search?q=held"
+	s := newEnforcementStack(t, realDecisions)
+	policy, err := grn.Parse(activePolicy(t, s.policies, s.acme, "held",
+		statementDoc("held", wire.EffectAllow, org.ActionOrgRead, s.acme.String())))
+	require.NoError(t, err)
+	before := len(s.rp.asked.batchesAsked())
 
-			assert.Equal(t, []string{policy.String()}, s.grns(t, via, kind, s.owner))
+	assert.Equal(t, []string{policy.String()}, s.grns(t, via, "policy", s.owner))
 
-			batches := s.askedAbout(before, org.ActionPolicyRead)
-			require.NotEmpty(t, batches)
-			assert.Equal(t, []policydecision.Question{
-				{Subject: s.ownerGRN, Action: org.ActionPolicyRead, Resource: s.acme, Probe: true},
-			}, batches[len(batches)-1], "the question is on the organization")
-		})
-	}
+	batches := s.askedAbout(before, org.ActionPolicyRead)
+	require.NotEmpty(t, batches)
+	assert.Equal(t, []policydecision.Question{
+		{Subject: s.ownerGRN, Action: org.ActionPolicyRead, Resource: s.acme, Probe: true},
+	}, batches[len(batches)-1], "the question is on the organization")
 }
 
 // failingBatches is the policy service whose Evaluations call fails

@@ -107,8 +107,8 @@ two reads that went to the engine's `PolicyService`, `searchPolicies`
 `List` now (#1990): the search matches the needle on each name or
 identifier, case aside, in the platform, since the service has no
 search of its own, and then filters by `iam:policy.read` as above. The
-store, its tables, the engine itself and the `PolicyManager` seam that
-no handler calls any longer wait for round 14 of #1796. The parity
+store, its tables and the engine itself wait for round 14 of #1796; the
+`PolicyManager` seam is gone from the api package. The parity
 matrix that reported where the two engines differ is retired.
 
 **Two further decisions are taken, both partly built.** The policy

@@ -22,7 +22,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
@@ -53,7 +52,6 @@ type enforcementStack struct {
 	member              *http.Cookie
 	ownerGRN, memberGRN grn.GRN
 	acme                grn.GRN
-	policies            *authz.PolicyGRPCServer
 	orgs                *orgpg.Store
 	agents              *agentpg.Store
 }
@@ -101,11 +99,8 @@ func newEnforcementStack(t *testing.T, decide func(*realPolicy) policydecision.S
 	dropGuardrails()
 	t.Cleanup(dropGuardrails)
 
-	policies, _ := policyEngine(t, p)
-	s.policies = policies
 	srv := api.NewServer(users, orgs, s.agents, operatorpg.New(p), messagepg.New(p), nil, authnpg.NewSessionStore(p),
-		nil, nil, nil, nil, decide(rp), api.NewGRPCPolicyManager(policyService(t, policies)),
-		noAuthority{}, nil, nil, api.Config{SessionTTL: time.Hour}).
+		nil, nil, nil, nil, decide(rp), noAuthority{}, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithPolicyRelay(relaygrpc.New(rp.client))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

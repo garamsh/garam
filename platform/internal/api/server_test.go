@@ -22,7 +22,6 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	agentmocks "github.com/garamsh/garam/platform/internal/agent/mocks"
 	"github.com/garamsh/garam/platform/internal/api"
-	"github.com/garamsh/garam/platform/internal/api/mocks"
 	"github.com/garamsh/garam/platform/internal/authn"
 	operatormocks "github.com/garamsh/garam/platform/internal/operator/mocks"
 	"github.com/garamsh/garam/platform/internal/org"
@@ -49,7 +48,6 @@ type fixture struct {
 	attempts    *fakePasswordAttemptStore
 	provider    *fakeProvider
 	decisions   *policydecisionmocks.MockService
-	policies    *mocks.MockPolicyManager
 	authorities *fakeAuthorityReader
 	authority   *operatormocks.MockAuthorityService
 	standalone  *agentmocks.MockStandaloneService
@@ -82,7 +80,6 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		attempts:    newFakePasswordAttemptStore(),
 		provider:    &fakeProvider{name: "google"},
 		decisions:   policydecisionmocks.NewMockService(t),
-		policies:    mocks.NewMockPolicyManager(t),
 		authorities: newFakeAuthorityReader(),
 		authority:   operatormocks.NewMockAuthorityService(t),
 		standalone:  agentmocks.NewMockStandaloneService(t),
@@ -97,7 +94,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
-	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.policies, f.authorities, f.authority, f.standalone, cfg).
+	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.authorities, f.authority, f.standalone, cfg).
 		WithDeviceGrant(f.devices)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.

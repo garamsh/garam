@@ -36,7 +36,7 @@ import (
 func auditBrowser(t *testing.T, s *executionStack, engine grpc.ClientConnInterface, decisions policydecision.Service) string {
 	t.Helper()
 	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), operatorpg.New(s.pool),
-		nil, nil, authnpg.NewSessionStore(s.pool), nil, nil, nil, nil, decisions, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
+		nil, nil, authnpg.NewSessionStore(s.pool), nil, nil, nil, nil, decisions, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithCredentialAudit(auditpg.NewCredentialStore(s.pool))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

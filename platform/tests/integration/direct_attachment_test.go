@@ -346,8 +346,7 @@ func current(t *testing.T, s *executionStack, g grn.GRN) string {
 // one.
 func TestDirectAttachment_FirstAttachmentAndItsRetryActivateWhatTheRuntimeReports(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h := newDirectHost(t, s, freeLoopback(t), nil)
 	rt, err := startDirectRuntime(t, h.store, h.address, h.agent.String(), h.epoch)
 	require.NoError(t, err)
@@ -372,8 +371,7 @@ func TestDirectAttachment_FirstAttachmentAndItsRetryActivateWhatTheRuntimeReport
 // generation the runtime under the GRN reports, which is activated.
 func TestDirectAttachment_RefusesWhatTheRuntimeDoesNotReport(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h := newDirectHost(t, s, freeLoopback(t), nil)
 	h.run(t, s)
 	stale := string(generationOf(7))
@@ -418,8 +416,7 @@ func TestDirectAttachment_RefusesWhatTheRuntimeDoesNotReport(t *testing.T) {
 // garam fences the old one.
 func TestDirectAttachment_ARestartIsTakenOnlyOnceTheOldProcessHasExited(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h := newDirectHost(t, s, freeLoopback(t), nil)
 	old, err := startDirectRuntime(t, h.store, h.address, h.agent.String(), h.epoch)
 	require.NoError(t, err)
@@ -481,8 +478,7 @@ func TestDirectAttachment_ARestartIsTakenOnlyOnceTheOldProcessHasExited(t *testi
 // activated.
 func TestDirectAttachment_AReplacementActivatesOnlyAGenerationReportingTheNewEpoch(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	address := freeLoopback(t)
 	before := newDirectHost(t, s, address, nil)
 	old, err := startDirectRuntime(t, before.store, address, before.agent.String(), before.epoch)

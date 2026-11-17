@@ -1,7 +1,7 @@
 // Package standalone_test runs a standalone host end to end (#1180's
 // joint matrix, #1157 scenarios 2 and 5): the shipped `garam` binary
 // prepares, enrolls and runs the host's supervisor, against a real
-// garam built from this tree — its authz, api and machine listener as
+// garam built from this tree — its api and machine listener as
 // containers over a database tests/testprincipal creates — on a real
 // rootless Docker daemon with the pinned Sherlock images.
 //
@@ -228,13 +228,10 @@ func (s *stack) inside() string {
 	return u.String()
 }
 
-// serve starts authz, api and the machine listener from the garam
-// image, and waits until each answers.
+// serve starts the api and the machine listener from the garam image,
+// and waits until each answers.
 func (s *stack) serve() {
 	s.t.Helper()
-	authz := s.prefix + "authz"
-	s.mustDocker("run", "-d", "--name", authz, "--network", s.network,
-		"-e", "GARAM_DATABASE_URL="+s.inside(), s.garam, "serve", "authz")
 	api := s.prefix + "api"
 	// The api refuses to start without the policy service that decides a
 	// user's delegated authority (ADR-0146), and the approval of a
@@ -246,7 +243,7 @@ func (s *stack) serve() {
 	s.mustDocker("run", "--rm", "--network", s.network, "-e", "GARAM_DATABASE_URL="+s.inside(),
 		s.garam, "policy-feed", "start")
 	s.mustDocker("create", "--name", api, "--network", s.network, "-p", "127.0.0.1::8080",
-		"-e", "GARAM_DATABASE_URL="+s.inside(), "-e", "GARAM_AUTHZ_ADDR="+authz+":9090",
+		"-e", "GARAM_DATABASE_URL="+s.inside(),
 		"-e", "GARAM_COOKIE_SECURE=false",
 		"-e", "GARAM_POLICY_ADDR="+policyAddr, "-e", "GARAM_POLICY_CA_FILE=/etc/garam/policy-ca.pem",
 		"-e", "GARAM_POLICY_SIGNING_KEY_FILE=/etc/garam/policy-signing.pem",
@@ -261,7 +258,7 @@ func (s *stack) serve() {
 	}))
 	s.mustDocker("start", api)
 	s.apiURL = "http://" + s.mustDocker("port", api, "8080")
-	s.startMachine(authz)
+	s.startMachine()
 	s.eventually("the api answering", func() bool {
 		status, _ := s.browse(http.MethodGet, "/me", "")
 		return status == http.StatusOK
@@ -293,7 +290,7 @@ func (s *stack) policyMaterial() (ca, key []byte) {
 // two addresses the listener is reached at, the host's loopback and its
 // bridge address, which is known only once it runs and is then written
 // in place, since the listener reads its certificate per handshake.
-func (s *stack) startMachine(authz string) {
+func (s *stack) startMachine() {
 	s.t.Helper()
 	rootKey, root, rootPEM := mintRoot(s.t)
 	s.rootKey, s.root = rootKey, root
@@ -307,7 +304,7 @@ func (s *stack) startMachine(authz string) {
 
 	name := s.prefix + "machine"
 	s.mustDocker("create", "--name", name, "--network", s.network, "-p", "127.0.0.1::8443",
-		"-e", "GARAM_DATABASE_URL="+s.inside(), "-e", "GARAM_AUTHZ_ADDR="+authz+":9090",
+		"-e", "GARAM_DATABASE_URL="+s.inside(),
 		"-e", "GARAM_MACHINE_TLS_CERT_FILE=/etc/garam/tls.crt", "-e", "GARAM_MACHINE_TLS_KEY_FILE=/etc/garam/tls.key",
 		"-e", "GARAM_MACHINE_SERVER_ROOT_FILE=/etc/garam/server-root.pem", "-e", "GARAM_CA_KEY_FILE=/etc/garam/kek",
 		"-e", "GARAM_MACHINE_ISSUER=https://garam.test",

@@ -19,7 +19,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -124,7 +123,7 @@ func loopbackCertificate(t *testing.T) tls.Certificate {
 }
 
 // TestServe_ExitsZeroOnSIGTERM runs the built binary as each of the
-// three serve processes, stops it the way a rollout does, and asserts
+// two serve processes, stops it the way a rollout does, and asserts
 // the exit code a kubelet would record. The liveness answer is the
 // control: the signal reaches a process that was serving, so a pass
 // cannot come from one that never started.
@@ -146,14 +145,6 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 				"GARAM_DATABASE_URL=" + databaseURL,
 				"GARAM_HTTP_ADDR=" + addr,
 			}, apiPolicyEnv(t)...), "http://" + addr
-		}},
-		{"authz", func(t *testing.T) ([]string, string) {
-			metricsAddr := freeAddr(t)
-			return []string{
-				"GARAM_DATABASE_URL=" + databaseURL,
-				"GARAM_GRPC_ADDR=" + freeAddr(t),
-				"GARAM_METRICS_ADDR=" + metricsAddr,
-			}, "http://" + metricsAddr
 		}},
 		{"machine", func(t *testing.T) ([]string, string) {
 			certFile, keyFile, kekFile, rootFile := machineKeyMaterialFiles(t)
@@ -259,54 +250,14 @@ func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 	}
 }
 
-// TestServeAuthz_ReadyzAnswersReadyWithItsDatabase is what makes this
+// TestServeAPI_ReadyzAnswersReadyWithItsDatabase is what makes this
 // layer need the Postgres `make db-up` starts. Liveness answers for the
 // process alone (ADR-0021), so every assertion above holds against a
 // database that is not there; readiness answers only once the
-// dependency ping reaches one (#893).
-//
-// `serve authz` here, and `serve api` in the test after it: the engine
-// is the process whose only dependency is the database.
-func TestServeAuthz_ReadyzAnswersReadyWithItsDatabase(t *testing.T) {
-	databaseURL := migrated(t)
-	bin := buildGaram(t)
-	metricsAddr := freeAddr(t)
-
-	var logs bytes.Buffer
-	cmd := exec.Command(bin, "serve", "authz")
-	cmd.Env = []string{
-		"GARAM_DATABASE_URL=" + databaseURL,
-		"GARAM_GRPC_ADDR=" + freeAddr(t),
-		"GARAM_METRICS_ADDR=" + metricsAddr,
-	}
-	cmd.Stdout = &logs
-	cmd.Stderr = &logs
-	require.NoError(t, cmd.Start())
-	t.Cleanup(func() { _ = cmd.Process.Kill() })
-
-	// Liveness first, so a readiness answer that never arrives is
-	// reported against a process that was already serving.
-	waitForProbe(t, "http://"+metricsAddr+livePath, &logs)
-
-	// One request, no polling: pgxpool connects on demand, so readiness
-	// is not a condition that becomes true while the test waits.
-	resp, err := http.Get("http://" + metricsAddr + readyPath)
-	require.NoError(t, err, "readiness did not answer; logs:\n%s", logs.String())
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode,
-		"readiness answered %d %q; logs:\n%s", resp.StatusCode, bytes.TrimSpace(body), logs.String())
-}
-
-// TestServeAPI_ReadyzAnswersReadyWithNoEngineListening runs `serve api`
-// alone, against the database and the policy service, with
-// GARAM_AUTHZ_ADDR naming an address nothing serves. Readiness is the
-// database and nothing named authz, so it answers ready; serve fails
-// the test where the probe never answers ok. Restoring the check that
-// waited for an engine channel to reach Ready leaves it 503 for the
-// whole wait.
-func TestServeAPI_ReadyzAnswersReadyWithNoEngineListening(t *testing.T) {
+// dependency ping reaches one (#893). `serve api` is run alone, against
+// the database and the policy service, and serve fails the test where
+// the probe never answers ok.
+func TestServeAPI_ReadyzAnswersReadyWithItsDatabase(t *testing.T) {
 	databaseURL := migrated(t)
 	bin := buildGaram(t)
 	httpAddr := freeAddr(t)
@@ -314,7 +265,6 @@ func TestServeAPI_ReadyzAnswersReadyWithNoEngineListening(t *testing.T) {
 	serve(t, bin, "api", append([]string{
 		"GARAM_DATABASE_URL=" + databaseURL,
 		"GARAM_HTTP_ADDR=" + httpAddr,
-		"GARAM_AUTHZ_ADDR=" + freeAddr(t),
 	}, apiPolicyEnv(t)...), "http://"+httpAddr+readyPath)
 }
 

@@ -19,7 +19,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/cli"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
@@ -37,7 +36,6 @@ type explainStack struct {
 	acme                     grn.GRN
 	eng                      grn.GRN
 	agent                    grn.GRN
-	policies                 *authz.PolicyGRPCServer
 	orgs                     *orgpg.Store
 	ada, bob, carol          *http.Cookie
 	adaGRN, bobGRN, carolGRN grn.GRN
@@ -48,7 +46,6 @@ func newExplainStack(t *testing.T) *explainStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	policies, _ := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	agents := agentpg.New(p)
@@ -64,7 +61,7 @@ func newExplainStack(t *testing.T) *explainStack {
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
 	decisions := newCurrentDecisions(p)
-	s := &explainStack{acme: acme, policies: policies, orgs: orgs, decisions: decisions}
+	s := &explainStack{acme: acme, orgs: orgs, decisions: decisions}
 	s.ada, s.adaGRN = session("ada", org.RoleOwner)
 	s.bob, s.bobGRN = session("bob", org.RoleMember)
 	s.carol, s.carolGRN = session("carol", org.RoleMember)

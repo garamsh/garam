@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -41,7 +40,6 @@ import (
 // run.
 type authorityStack struct {
 	pool       *pgxpool.Pool
-	engine     *grpc.ClientConn
 	decisions  *currentDecisions
 	browser    string
 	machine    string
@@ -56,10 +54,10 @@ type authorityStack struct {
 	controlTLS *http.Client
 }
 
-func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *authorityStack {
+func newAuthorityStack(t *testing.T, p *pgxpool.Pool) *authorityStack {
 	t.Helper()
 	decisions := newCurrentDecisions(p)
-	s := newAuthorityStackDeciding(t, engine, p, decisions)
+	s := newAuthorityStackDeciding(t, p, decisions)
 	s.decisions = decisions
 	return s
 }
@@ -67,7 +65,7 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 // newAuthorityStackDeciding is newAuthorityStack where decisions is
 // the policy service both listeners ask, which the suite tagged
 // policyservice gives the real one.
-func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, decisions policydecision.Service) *authorityStack {
+func newAuthorityStackDeciding(t *testing.T, p *pgxpool.Pool, decisions policydecision.Service) *authorityStack {
 	t.Helper()
 	ctx := context.Background()
 	orgs := orgpg.New(p)
@@ -96,7 +94,7 @@ func newAuthorityStackDeciding(t *testing.T, engine *grpc.ClientConn, p *pgxpool
 	controller := scopedGRN("acme", operator.ServiceType, "controller")
 	machine := machineListenerDeciding(t, p, sealer, nil, decisions)
 	return &authorityStack{
-		pool: p, engine: engine, browser: browser.URL, machine: machine,
+		pool: p, browser: browser.URL, machine: machine,
 		acme: acme, owner: owner, ownerGRN: ownerGRN, member: member, memberGRN: memberGRN, hosted: hosted, controller: controller,
 		hostedTLS:  operatorClient(t, p, machine, hosted),
 		controlTLS: operatorClient(t, p, machine, controller),
@@ -192,8 +190,7 @@ func (s *authorityStack) introspect(t *testing.T, client *http.Client, authority
 // own certificate. Each refusal sits beside the call that succeeds.
 func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 
 	body := `{"requestId":"m-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent.create"],"expiresAt":"` +
 		time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`
@@ -270,8 +267,7 @@ func (s *authorityStack) provisionAgent(t *testing.T) string {
 // first mint and the owner's authority are the controls.
 func TestDelegatedAuthority_RefusesWhatTheServiceNowDenies(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, "iam:agent.create")
 	status, got := s.mint(t, s.member, "iam:agent.create", s.controller.String(), "req-1")
 	require.Equal(t, http.StatusCreated, status, got)
@@ -303,8 +299,7 @@ func TestDelegatedAuthority_RefusesWhatTheServiceNowDenies(t *testing.T) {
 func TestDelegatedAuthority_RechecksRoles(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	s.grant(t, "g-1", nil, "iam:agent.create", "iam:agent.configure")
@@ -349,8 +344,7 @@ func TestDelegatedAuthority_RechecksRoles(t *testing.T) {
 // before the failure is the control, answered by the store.
 func TestDelegatedAuthority_AServiceFailureRefuses(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	status, got := call(t, http.DefaultClient, http.MethodGet, s.delegationPath(), s.member, "")
 	require.Equal(t, http.StatusNotFound, status, "control: with the service answering, the read reaches the store: %s", got)
 	s.decisions.failWith(errorx.New(errorx.KindPermissionDenied, "the service refused this caller"))

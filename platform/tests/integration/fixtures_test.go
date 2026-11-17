@@ -38,16 +38,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
-	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
 	"github.com/garamsh/garam/platform/internal/ca"
 	"github.com/garamsh/garam/platform/internal/cli"
 	"github.com/garamsh/garam/platform/internal/message"
@@ -57,8 +53,6 @@ import (
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
-	"github.com/garamsh/garam/platform/internal/wire"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 var migrateOnce sync.Once
@@ -266,26 +260,6 @@ func seedAgent(t *testing.T, s *agentpg.Store, orgGRN grn.GRN) grn.GRN {
 
 func ptr[T any](v T) *T { return &v }
 
-// policyDoc builds a one-statement document whose Sid identifies the
-// version it belongs to.
-func policyDoc(sid string, effect wire.Effect) authz.PolicyDocument {
-	return statementDoc(sid, effect, "iam:org.read", "grn:acme/*")
-}
-
-// statementDoc builds a one-statement document over an explicit action
-// and resource pattern.
-func statementDoc(sid string, effect wire.Effect, action, resource string) authz.PolicyDocument {
-	return authz.PolicyDocument{
-		Version: "2026-07-25",
-		Statement: []authz.Statement{{
-			Sid:      sid,
-			Effect:   effect,
-			Action:   []string{action},
-			Resource: []string{resource},
-		}},
-	}
-}
-
 // newPolicyOrg creates the org a policy hangs off and returns its GRN.
 func newPolicyOrg(t *testing.T, p *pgxpool.Pool) grn.GRN {
 	t.Helper()
@@ -303,38 +277,6 @@ func orgRootGRN(name string) grn.GRN {
 // fixed to "acme".
 func scopedGRN(orgName, serviceType, id string) grn.GRN {
 	return grn.New(orgName, serviceType, id)
-}
-
-// activePolicy creates and activates a policy in orgGRN through the
-// lifecycle service, so the cache is dropped the way a production write
-// drops it. It returns the policy GRN in wire form.
-func activePolicy(t *testing.T, srv *authz.PolicyGRPCServer, orgGRN grn.GRN, name string, doc authz.PolicyDocument) string {
-	t.Helper()
-	ctx := context.Background()
-	raw, err := json.Marshal(doc)
-	require.NoError(t, err)
-	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
-		OrgGrn:    orgGRN.String(),
-		Name:      name,
-		Document:  string(raw),
-		CreatedBy: scopedGRN(orgGRN.Identifier, "user", "ada").String(),
-	})
-	require.NoError(t, err)
-	policyGRN := created.GetPolicy().GetGrn()
-	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
-	require.NoError(t, err)
-	return policyGRN
-}
-
-// attachPolicy attaches policyGRN to subject through the lifecycle
-// service.
-func attachPolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, subject grn.GRN) {
-	t.Helper()
-	_, err := srv.AttachPolicy(context.Background(), &authzv1.AttachPolicyRequest{
-		PolicyGrn:  policyGRN,
-		SubjectGrn: subject.String(),
-	})
-	require.NoError(t, err)
 }
 
 // briefDelivery is the queue's delivery configuration with the waits
@@ -401,31 +343,6 @@ func certificatePEM(c listenerCertificate) []byte {
 		out = append(out, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
 	}
 	return out
-}
-
-// policyEngine serves the authz engine over gRPC against the policies
-// Postgres holds, and returns the lifecycle service an organization
-// writes them through beside the seam the machine listener asks
-// through. It is the pair of processes `garam serve authz` and `garam
-// serve machine` are, over one database.
-func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, *grpc.ClientConn) {
-	t.Helper()
-	store := authzpg.New(p)
-	cache := authz.NewPolicyCache(store)
-
-	srv := grpc.NewServer()
-	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(srv.Stop)
-
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	// Writes made through this service drop the org's cache entry
-	// directly, as they do in the engine's own process.
-	return authz.NewPolicyGRPCServer(store, cache), conn
 }
 
 // sameOrganizationSends is the policydecision.Service the default
@@ -652,9 +569,45 @@ func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Questi
 	if err != nil {
 		return policydecision.Decision{}, err
 	}
-	role := authz.Statement{Action: m.Role.Actions(), Resource: []string{
-		grn.Org(owning).String(), grn.OrgPattern(owning)}}
-	return policydecision.Decision{Allowed: role.Matches(q.Action, q.Resource.String())}, nil
+	return policydecision.Decision{Allowed: matchAny(m.Role.Actions(), q.Action) &&
+		matchAny([]string{grn.Org(owning).String(), grn.OrgPattern(owning)}, q.Resource.String())}, nil
+}
+
+// matchAny reports whether value matches one of patterns, where `*`
+// matches any run of characters and `?` any one.
+func matchAny(patterns []string, value string) bool {
+	for _, pattern := range patterns {
+		if matchPattern(pattern, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchPattern(pattern, value string) bool {
+	px, vx := 0, 0
+	star, starV := -1, 0
+	for vx < len(value) {
+		switch {
+		case px < len(pattern) && (pattern[px] == '?' || pattern[px] == value[vx]):
+			px++
+			vx++
+		case px < len(pattern) && pattern[px] == '*':
+			star = px
+			starV = vx
+			px++
+		case star != -1:
+			px = star + 1
+			starV++
+			vx = starV
+		default:
+			return false
+		}
+	}
+	for px < len(pattern) && pattern[px] == '*' {
+		px++
+	}
+	return px == len(pattern)
 }
 
 // refusalText is the body of the refusal garam stores to a sender whose

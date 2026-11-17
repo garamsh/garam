@@ -66,8 +66,7 @@ func bindingOf(t *testing.T, body string) machinegen.OperationBinding {
 // it differs from in one field.
 func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, consoleOperations...)
 	orgTarget := s.acme.String()
 	const templates = "/prefix/v1/orgs/acme/templates?after=web%20agent"
@@ -135,8 +134,7 @@ func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T
 //   - a grant that no longer lists the operation.
 func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	d := s.grant(t, "g-1", nil, "iam:operator.read")
 	orgTarget := s.acme.String()
 	const operators = "/v1/orgs/acme/operators"
@@ -177,8 +175,7 @@ func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
 // and a publication's request identifier stays bound to its body.
 func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, append([]string{"iam:agent.configure", "iam:agent.recover"}, consoleOperations...)...)
 	agentGRN := s.provisionAgent(t)
 	const target = "/v1/orgs/acme/agents/x/revisions"
@@ -224,8 +221,7 @@ func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
 // control, minting the same request.
 func TestConsoleAuthority_EachReadNeedsItsOwnDelegation(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	d := s.grant(t, "g-1", nil, "iam:agent.create", "iam:agent.configure")
 
 	status, got := s.mintTarget(t, s.owner, "iam:agent-template.read", s.acme.String(), "read-1", "/v1/orgs/acme/templates")
@@ -247,8 +243,7 @@ func TestConsoleAuthority_EachReadNeedsItsOwnDelegation(t *testing.T) {
 func TestConsoleAuthority_RechecksBeforeTheOperatorAnswers(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	d := s.grant(t, "g-1", nil, consoleOperations...)
 	minted := func(cookie *http.Cookie, requestID string) string {
 		status, got := s.mintTarget(t, cookie, "iam:agent-template.read", s.acme.String(), requestID, "/v1/orgs/acme/templates")
@@ -315,8 +310,7 @@ func plain(t *testing.T, method, url string, cookie *http.Cookie, body string) (
 // moving the endpoint moves no audience an authority already names.
 func TestControlEndpoint_IsTheDelegatingActNotARename(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, consoleOperations...)
 	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
 	operatorPath := s.browser + "/orgs/acme/operators/hosted"

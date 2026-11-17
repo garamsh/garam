@@ -21,7 +21,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -95,7 +94,7 @@ type executionStack struct {
 }
 
 // newExecutionStack is the stack before any activation of its agent.
-func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterface) *executionStack {
+func newExecutionStack(t *testing.T, p *pgxpool.Pool) *executionStack {
 	t.Helper()
 	ctx := context.Background()
 	orgs := orgpg.New(p)
@@ -488,8 +487,7 @@ func generationOf(n int) agent.Generation {
 // token each step supersedes and admits the one it issues.
 func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	s.open(t, s.agentTLS)
 
 	// An agent never activated writes nothing: not without a token, and
@@ -571,8 +569,7 @@ func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(
 // execution token.
 func TestExecutionFence_RecoveryFencesTheOldLineageOnAnOpenConnection(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	s.open(t, s.agentTLS)
 	first := s.activated(t, "r-1", generationOf(1), nil, s.forwarded)
 
@@ -660,8 +657,7 @@ func TestExecutionFence_AMutationQueuedBehindItsReplacementCannotCommit(t *testi
 			}
 			t.Run(order, func(t *testing.T) {
 				p := pool(t)
-				_, engine := policyEngine(t, p)
-				s := newExecutionStack(t, p, engine)
+				s := newExecutionStack(t, p)
 				activated := s.activated(t, "r-1", generationOf(1), nil, s.forwarded)
 				current, token := &activated, activated.Token
 				r := s.prepareRecovery(t, "rec-1")
@@ -759,8 +755,7 @@ func (s *executionStack) stored(t *testing.T, key string) int {
 // names is the control.
 func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	introspection, err := json.Marshal(map[string]any{"token": s.forwarded, "generation": nil})
 	require.NoError(t, err)
 
@@ -800,8 +795,7 @@ func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 // The restored service is the control.
 func TestExecutionFence_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 
 	s.decisions.failWith(errorx.New(errorx.KindInternal, "the policy service is down"))
 	got := s.activate(t, s.hostedTLS, "r-1", generationOf(1), nil, s.forwarded)
@@ -858,8 +852,7 @@ func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.
 	for _, a := range acts {
 		t.Run(a.name, func(t *testing.T) {
 			p := pool(t)
-			_, engine := policyEngine(t, p)
-			s := newExecutionStack(t, p, engine)
+			s := newExecutionStack(t, p)
 			var current *machinegen.Activation
 			if a.activated {
 				activated := s.activated(t, "r-0", generationOf(1), nil, s.forwarded)
@@ -893,8 +886,7 @@ func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.
 // deadline; the service answering is the control.
 func TestExecutionFence_AnAuthorityThatDoesNotAnswerIsBoundedByTheServersDeadline(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 
 	release := s.decisions.stall()
 	got, elapsed := s.boundedBy(t, func() (reply, error) {

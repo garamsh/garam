@@ -18,7 +18,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/cli"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
@@ -38,7 +37,6 @@ type checkStack struct {
 	member    *http.Cookie
 	memberGRN grn.GRN
 	outsider  *http.Cookie
-	policies  *authz.PolicyGRPCServer
 	decisions *currentDecisions
 }
 
@@ -46,7 +44,6 @@ func newCheckStack(t *testing.T) *checkStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	policies, _ := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
@@ -72,7 +69,7 @@ func newCheckStack(t *testing.T) *checkStack {
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	return &checkStack{url: browser.URL, acme: acme, owner: owner, ownerGRN: ownerGRN, member: member,
-		memberGRN: memberGRN, outsider: outsider, policies: policies, decisions: decisions}
+		memberGRN: memberGRN, outsider: outsider, decisions: decisions}
 }
 
 // send makes one request as cookie and answers the status and body.
@@ -222,8 +219,7 @@ func TestCheckPermissions_LeavesGrantActionsUnknown(t *testing.T) {
 // lands.
 func TestCheckPermissions_AnswersDelegationAsItsWritesDecide(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
 	grantBody := `{"requestId":"m-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent.create"],"expiresAt":"` +
 		time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`
@@ -256,8 +252,7 @@ func TestCheckPermissions_AnswersDelegationAsItsWritesDecide(t *testing.T) {
 // to a refusal, and every question asked was about that action.
 func TestCheckPermissions_AnswersDelegationOnOperatorDelegateAlone(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
 	put := func() (int, string) {
 		return call(t, http.DefaultClient, http.MethodPut, endpointPath, s.owner, `{"url":"https://control.example.com/garam"}`)
@@ -287,8 +282,7 @@ func TestCheckPermissions_AnswersDelegationOnOperatorDelegateAlone(t *testing.T)
 // iam:agent.configure then answers both deny and refuses both mints.
 func TestCheckPermissions_AsksAnAgentActionOnTheAgentNamed(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, org.ActionAgentConfigure)
 	allowed, other := s.provisionAgent(t), s.provisionAgent(t)
 	on := func(agent string) apigen.PermissionCheck {
@@ -326,8 +320,7 @@ func TestCheckPermissions_AsksAnAgentActionOnTheAgentNamed(t *testing.T) {
 // control for the member: unknown, and minted.
 func TestCheckPermissions_DeniesAGrantActionItsMintDenies(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, org.ActionAgentTemplatePublish, org.ActionAgentCreate)
 	publish := func(cookie *http.Cookie, requestID string) int {
 		status, _ := call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", cookie,
@@ -355,8 +348,7 @@ func TestCheckPermissions_DeniesAGrantActionItsMintDenies(t *testing.T) {
 // action.
 func TestCheckPermissions_AsksTheServiceAsAProbeAndAnActionDoesNot(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	counts := func() (probes, actions int) {
 		for _, q := range s.decisions.currentQuestions() {
 			if q.Probe {

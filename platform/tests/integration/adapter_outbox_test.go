@@ -55,8 +55,7 @@ func absent(path string) func() bool {
 // last is offered again.
 func TestAdapterOutbox_ForwardsARepliesUnderDurableDeliveryAndRemovesItOnItsAcknowledgement(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	dir := t.TempDir()
 	now := time.Now()
 

@@ -14,7 +14,6 @@ packages:
       StandaloneService: {}
   github.com/garamsh/garam/platform/internal/api:
     interfaces:
-      Evaluator: {}
       PolicyManager: {}
   github.com/garamsh/garam/platform/internal/authz:
     interfaces:

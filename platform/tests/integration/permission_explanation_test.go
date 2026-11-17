@@ -48,7 +48,7 @@ func newExplainStack(t *testing.T) *explainStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	policies, _ := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	agents := agentpg.New(p)
@@ -75,8 +75,7 @@ func newExplainStack(t *testing.T) *explainStack {
 	s.agent = seedAgent(t, agents, acme)
 
 	srv := api.NewServer(users, orgs, agents, nil, messagepg.New(p), nil,
-		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), decisions, nil, nil, cli.NewAuthorityService(p, decisions), cli.NewStandaloneService(p, decisions),
+		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, nil, nil, cli.NewAuthorityService(p, decisions), cli.NewStandaloneService(p, decisions),
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

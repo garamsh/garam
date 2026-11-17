@@ -293,7 +293,7 @@ func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action
 
 // authorizeOn enforces the action on target, a resource of orgGRN.
 // Org membership is the precondition; non-members and denied actions
-// both yield 403. Collection: authz.md §Statement collection.
+// both yield 403. Role grants: authz.md §Role-derived statements.
 //
 // Both GRNs are validated first: the target's here, the org's in
 // callerIn.

@@ -27,8 +27,7 @@ import (
 func agentReader(t *testing.T, s *executionStack, engine grpc.ClientConnInterface) string {
 	t.Helper()
 	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), nil, nil, nil,
-		authnpg.NewSessionStore(s.pool), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), newCurrentDecisions(s.pool), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
+		authnpg.NewSessionStore(s.pool), nil, nil, nil, nil, newCurrentDecisions(s.pool), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	return browser.URL

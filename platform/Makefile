@@ -89,11 +89,12 @@ integration:
 
 # policy-service runs the platform's suites that ask the stack's real
 # policy service: what it decides, what the relay writes to it and what
-# the platform asks of it. It needs the whole backend (make -C deploy/local backend-up), which publishes
-# the service on loopback under a certificate naming localhost and
-# leaves that certificate and the platform's signing key in
-# POLICY_LOCAL_DIR (deploy/local/README.md §policy). The tag keeps the
-# suite out of `integration`.
+# the platform asks of it. It needs the whole backend (make -C
+# deploy/local backend-up), which publishes the service on loopback
+# under a certificate naming localhost and leaves that certificate and
+# the platform's signing key in POLICY_LOCAL_DIR
+# (deploy/local/README.md §policy). The tag keeps the suite out of
+# `integration`.
 policy-service:
 	@test -n '$(TEST_DATABASE_URL)' || { echo "policy-service: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
 	@test -n '$(POLICY_HOST_ADDR)' || { echo "policy-service: no policy service published on this host — run make -C platform stack-up" >&2; exit 1; }

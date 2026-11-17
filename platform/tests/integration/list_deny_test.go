@@ -54,7 +54,7 @@ func newListStack(t *testing.T) *listStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
+	policies, _ := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
@@ -74,8 +74,7 @@ func newListStack(t *testing.T) *listStack {
 	s.dan, s.danGRN = session("dan")
 
 	srv := api.NewServer(users, orgs, s.agents, nil, messagepg.New(p), nil,
-		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), decisions, api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, decisions), nil,
+		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, decisions), nil,
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

@@ -107,6 +107,9 @@ function Grant({ reading }: { reading: Reading }) {
       ? grantLines(explanation.grounds)
       : [];
   const denied = reading.permission === "denied";
+  // The grounds are the policy service's, so what they did is its
+  // decision, not the check's.
+  const forbidden = explanation?.decision === "deny";
   return (
     <>
       {denied && (
@@ -121,7 +124,7 @@ function Grant({ reading }: { reading: Reading }) {
         <ol className="flex flex-col gap-1">
           {lines.map((line, index) => (
             <li key={index}>
-              {denied ? "Denied by " : ""}
+              {forbidden ? "Denied by " : ""}
               {line.text}
               {line.detail !== undefined && (
                 <pre className="mt-1 overflow-x-auto font-mono text-xs">

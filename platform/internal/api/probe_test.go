@@ -15,6 +15,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 )
 
 // TestExplainPermission_AsksWhetherThePolicyIsReadableAsAProbe holds
@@ -27,6 +28,12 @@ func TestExplainPermission_AsksWhetherThePolicyIsReadableAsAProbe(t *testing.T) 
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	guardrail := grn.New(slug, "policy", "p-1")
+	// The service would show the policy, so that nothing is read of it
+	// is the gate's and not the want of a relay.
+	relay := &storedPolicies{held: map[string]policyrelay.Detail{
+		"p-1": stored(policyrelay.KindGuardrail, "closed", policyrelay.Body{Text: "forbid(principal, action, resource);"}),
+	}}
+	f.server.WithPolicyRelay(relay)
 	a := &asked{}
 	f.decisions.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, q policydecision.Question) (policydecision.Decision, error) {
@@ -43,8 +50,10 @@ func TestExplainPermission_AsksWhetherThePolicyIsReadableAsAProbe(t *testing.T) 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	body := decodeBody[apigen.PermissionExplanation](t, rec)
 	require.Len(t, body.Grounds, 1)
-	assert.Equal(t, apigen.GroundGuardrail, body.Grounds[0].Kind)
+	assert.Equal(t, apigen.GroundStoredPolicy, body.Grounds[0].Kind, "the kind is withheld")
+	assert.Nil(t, body.Grounds[0].Name, "the caller may not read it")
 	assert.Nil(t, body.Grounds[0].Text, "the caller may not read it")
+	assert.Zero(t, relay.reads.Load(), "the service is not read for a caller the probe denies")
 	reads := a.about(org.ActionPolicyRead)
 	require.Len(t, reads, 1)
 	assert.True(t, reads[0].Probe, "naming a guardrail is not acted on")

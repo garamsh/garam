@@ -66,4 +66,22 @@ describe("reading access from the root down", () => {
       "The question was refused: unknown action",
     ]);
   });
+
+  it("names a failure and a refusal without inventing a message", () => {
+    const lines = grantLines([
+      { kind: "error", policy: "p-3" },
+      { kind: "error" },
+    ]);
+
+    expect(lines.map((line) => line.text)).toEqual([
+      "Policy p-3 failed to evaluate",
+      "The question was refused",
+    ]);
+  });
+
+  it("names a stored policy whose kind is withheld by its identifier alone", () => {
+    const lines = grantLines([{ kind: "stored-policy", policy: "p-7" }]);
+
+    expect(lines).toEqual([{ scope: "policy", text: "Policy p-7" }]);
+  });
 });

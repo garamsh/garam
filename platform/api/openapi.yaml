@@ -3742,15 +3742,21 @@ components:
         says which fields are present: `role`, `path` and, for a team or
         a project, `team` or `project`, for `role-link`; `name` and
         `text`, where the caller may read the policy, for `guardrail`
-        and `permit`; `error` for `error`. `policy` names the policy
-        where it is the caller's organization's, or a system policy's
-        file name.
+        and `permit`; `error` for `error`, which is a policy that
+        failed to evaluate, or a question the policy service refused
+        and so names no policy. `policy` names the policy where it is
+        the caller's organization's, or a system policy's file name.
+        `stored-policy` is a policy of the caller's
+        organization, or of a sending organization, whose kind the
+        caller may not be told: the kind is never read off the
+        decision. A role link the platform reserves the identifier of
+        is a `role-link` to every caller.
       required: [kind]
       properties:
         kind:
           type: string
-          enum: [role-link, guardrail, permit, system-policy, error]
-          x-enum-varnames: [GroundRoleLink, GroundGuardrail, GroundPermit, GroundSystemPolicy, GroundError]
+          enum: [role-link, guardrail, permit, system-policy, stored-policy, error]
+          x-enum-varnames: [GroundRoleLink, GroundGuardrail, GroundPermit, GroundSystemPolicy, GroundStoredPolicy, GroundError]
         policy:
           type: string
           description: >-
@@ -3763,7 +3769,9 @@ components:
           description: >-
             How the role link reaches the caller: it is their
             `organization` role, or the role of the `team` or `project`
-            named beside it.
+            named beside it. Absent where a team's or a project's link
+            was asked about a resource that is neither, and where a
+            stored link's body does not say.
           enum: [organization, team, project]
           x-enum-varnames: [GroundPathOrganization, GroundPathTeam, GroundPathProject]
         team:
@@ -4829,14 +4837,6 @@ components:
             repeat the request and do not poll; an operator reads the
             set-aside link. It names the organization in `resource`
             as the answer above does.
-            Policy documents, each with `path`:
-            `policy_document_malformed`, `policy_document_trailing_data`,
-            `policy_document_wrong_type`, `policy_document_unknown_key`,
-            `policy_document_version_missing`,
-            `policy_document_statement_empty`,
-            `policy_document_effect_invalid`,
-            `policy_document_action_missing`,
-            `policy_document_resource_missing`.
         path:
           type: string
           description: >-

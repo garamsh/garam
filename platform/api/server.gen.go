@@ -330,6 +330,7 @@ const (
 	GroundGuardrail    ExplainedGroundKind = "guardrail"
 	GroundPermit       ExplainedGroundKind = "permit"
 	GroundRoleLink     ExplainedGroundKind = "role-link"
+	GroundStoredPolicy ExplainedGroundKind = "stored-policy"
 	GroundSystemPolicy ExplainedGroundKind = "system-policy"
 )
 
@@ -343,6 +344,8 @@ func (e ExplainedGroundKind) Valid() bool {
 	case GroundPermit:
 		return true
 	case GroundRoleLink:
+		return true
+	case GroundStoredPolicy:
 		return true
 	case GroundSystemPolicy:
 		return true
@@ -1246,14 +1249,14 @@ type Error struct {
 	// Path A JSON Pointer (RFC 6901) into the document the request sent, to the place `reason` is about, e.g. `/Statement/1/Effect`. A key the document's format names is spelled as the format spells it, whatever case the request used: a document accepts `statement` for `Statement`, and the pointer reads `/Statement`. A key the format does not name is spelled as it was sent. Absent where the reason is about the document as a whole or about no document.
 	Path *string `json:"path,omitempty"`
 
-	// Reason A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Role links: `change_not_applied`, on the 503 that answers a request which changed what the policy service decides from (an organization, its membership, a group or project and its members, a registration, an operator) when the policy service has not applied the change within five seconds. The change is stored and stays so; the service decides by the roles it last held until it applies them, so a member added is not yet allowed and a member removed is not yet denied. The answer names the organization in `resource`; do not repeat the request. A registration has signed the person in, and its session cookie is set on this answer. The same reason answers a grant or a withdrawal of an organization's consent when the policy service has not applied it in that time: the half is stored and stays so, and until the service applies it the policy service decides by the consents it last held. Repeating the request changes nothing. The answer names the organization that granted or withdrew in `resource`. `change_refused`, on the same 503 when the policy service refused the member's role link for good: the change is stored, but delivery does not go on, and the service holds no role for the member until the membership is written again or an operator restarts the feed, so the member is denied meanwhile. There is nothing to wait for: do not repeat the request and do not poll; an operator reads the set-aside link. It names the organization in `resource` as the answer above does. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`.
+	// Reason A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Role links: `change_not_applied`, on the 503 that answers a request which changed what the policy service decides from (an organization, its membership, a group or project and its members, a registration, an operator) when the policy service has not applied the change within five seconds. The change is stored and stays so; the service decides by the roles it last held until it applies them, so a member added is not yet allowed and a member removed is not yet denied. The answer names the organization in `resource`; do not repeat the request. A registration has signed the person in, and its session cookie is set on this answer. The same reason answers a grant or a withdrawal of an organization's consent when the policy service has not applied it in that time: the half is stored and stays so, and until the service applies it the policy service decides by the consents it last held. Repeating the request changes nothing. The answer names the organization that granted or withdrew in `resource`. `change_refused`, on the same 503 when the policy service refused the member's role link for good: the change is stored, but delivery does not go on, and the service holds no role for the member until the membership is written again or an operator restarts the feed, so the member is denied meanwhile. There is nothing to wait for: do not repeat the request and do not poll; an operator reads the set-aside link. It names the organization in `resource` as the answer above does.
 	Reason *string `json:"reason,omitempty"`
 
 	// Resource The GRN of the organization a request stored before it answered `change_not_applied` or `change_refused`: the one it created, joined, registered into, deleted, or granted or withdrew consent for, or that owns what the request changed. A client that cannot repeat the request reads from it what was stored and goes on. Present only with those reasons.
 	Resource *string `json:"resource,omitempty"`
 }
 
-// ExplainedGround One ground of a decision, as the policy service names it. `kind` says which fields are present: `role`, `path` and, for a team or a project, `team` or `project`, for `role-link`; `name` and `text`, where the caller may read the policy, for `guardrail` and `permit`; `error` for `error`. `policy` names the policy where it is the caller's organization's, or a system policy's file name.
+// ExplainedGround One ground of a decision, as the policy service names it. `kind` says which fields are present: `role`, `path` and, for a team or a project, `team` or `project`, for `role-link`; `name` and `text`, where the caller may read the policy, for `guardrail` and `permit`; `error` for `error`, which is a policy that failed to evaluate, or a question the policy service refused and so names no policy. `policy` names the policy where it is the caller's organization's, or a system policy's file name. `stored-policy` is a policy of the caller's organization, or of a sending organization, whose kind the caller may not be told: the kind is never read off the decision. A role link the platform reserves the identifier of is a `role-link` to every caller.
 type ExplainedGround struct {
 	// Error Why the policy failed to evaluate.
 	Error *string             `json:"error,omitempty"`
@@ -1262,7 +1265,7 @@ type ExplainedGround struct {
 	// Name The policy's name, to a caller who may read it.
 	Name *string `json:"name,omitempty"`
 
-	// Path How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it.
+	// Path How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it. Absent where a team's or a project's link was asked about a resource that is neither, and where a stored link's body does not say.
 	Path *ExplainedGroundPath `json:"path,omitempty"`
 
 	// Policy The policy's identifier, as `getIamPolicy` addresses it, or the file name of a system policy.
@@ -1282,7 +1285,7 @@ type ExplainedGround struct {
 // ExplainedGroundKind defines model for ExplainedGround.Kind.
 type ExplainedGroundKind string
 
-// ExplainedGroundPath How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it.
+// ExplainedGroundPath How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it. Absent where a team's or a project's link was asked about a resource that is neither, and where a stored link's body does not say.
 type ExplainedGroundPath string
 
 // FoundKind defines model for FoundKind.

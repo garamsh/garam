@@ -4,8 +4,9 @@ import type { ExplainedGround } from "@/lib/permission-explanation";
  * How far from the caller a ground reaches them: the organization, a
  * project or a team. Access is read from the root down (ADR-0113), so a
  * reading lists the organization first. `policy` is a guardrail, a
- * permit, a system policy or an error, whose path the policy service
- * does not state, so it is placed nowhere and read last.
+ * permit, a stored policy whose kind is withheld, a system policy or an
+ * error, whose path the policy service does not state, so it is placed
+ * nowhere and read last.
  */
 export type Scope = "organization" | "project" | "team" | "policy";
 
@@ -62,13 +63,20 @@ function line(ground: ExplainedGround): GrantLine {
       };
     case "system-policy":
       return { scope: "policy", text: `System policy ${ground.policy}` };
-    case "error":
+    case "stored-policy":
+      return {
+        scope: "policy",
+        text: `Policy ${ground.policy ?? "of another organization"}`,
+      };
+    case "error": {
+      const why = ground.error ? `: ${ground.error}` : "";
       return {
         scope: "policy",
         text: ground.policy
-          ? `Policy ${ground.policy} failed to evaluate: ${ground.error}`
-          : `The question was refused: ${ground.error}`,
+          ? `Policy ${ground.policy} failed to evaluate${why}`
+          : `The question was refused${why}`,
       };
+    }
   }
 }
 

@@ -171,7 +171,7 @@ func readiness(t *testing.T, handler http.Handler) (int, string) {
 // not this test's subject, so it is left unasserted.
 func TestAPIHandler_AnswersAPanicOnARouteTheGeneratedSliceDoesNotReach(t *testing.T) {
 	// Internal: serve api mounts no probe a test can make panic.
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 	var served lines
 	status, _ := readiness(t, recordingObservability(&served).apiHandler(srv, presentProbe{}))

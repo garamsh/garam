@@ -66,7 +66,9 @@ decides what both listeners ask it: `serve machine` every message send
 and each listener a user's delegated operation authority and a hosted
 operator's controller proof, read current. `serve api` does not start
 without it. Policies attached through the engine no longer reach those
-decisions, though their endpoints remain.
+decisions, and nothing writes the engine's tables any more: its policy
+endpoints are removed
+([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)).
 
 The browser listener asks it too
 ([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)):
@@ -98,8 +100,13 @@ Built in the service; `checkPermissions` does not yet ask with it. The
 explanation (`permission_explanation.go`) asks the service's `Evaluate`
 as a probe and names the policies its reasons give
 ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),
-so nothing on this listener calls the platform's engine. The parity
-matrix that reported where the two engines differ is retired.
+so nothing on this listener asks `s.evaluator`, which is removed. Two
+reads still go to the engine's `PolicyService`: `searchPolicies`
+(`search.go`) and the count the organization deletion makes
+(`org.go`); the policy service holds the policies they should read,
+and moving both to its relay is #1990. The store, its tables and the
+engine itself wait for round 14 of #1796. The parity matrix that
+reported where the two engines differ is retired.
 
 **Two further decisions are taken, both partly built.** The policy
 service loads `policy/schema/iam.cedarschema` and
@@ -952,7 +959,7 @@ from either wins.
 
 | Origin | Owner | Resolved |
 |--------|-------|----------|
-| role-derived statements | api server | per request, from org tables |
+| role-derived statements | none; the policy service holds role links | delivered as links |
 | identity-derived statements | machine listener | per request, from the caller's own GRN |
 | persisted policy statements | authz engine | from the org's cache; from storage for `CheckCurrent` |
 
@@ -963,29 +970,25 @@ attachments (§Policy attachment).
 
 ### Role-derived statements
 
-The api server checks each request against the resource it targets —
-the org, or the group or project addressed by the path — and collects
-the statements that apply to that resource:
-
-| Origin | Action patterns | Resource patterns |
-|--------|-----------------|-------------------|
-| org membership role | `Role.Actions()` | the org GRN and `grn:<org>/*` |
-| target group's roles, when the subject is a member | `org.ActionsFor(group.Roles())` | the group GRN |
-| target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
+The api server collects no statements. It once derived them per
+request from the org tables and the target's roles; it now delivers
+what those tables say to the policy service as entities and role links
+(§Delivery) and asks the service, which holds the decision
+([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md),
+[ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)).
+What each role grants is `Role.Actions()` and `org.ActionsFor`, which
+the role links carry.
 
 Group and project roles reuse the org role vocabulary (`owner`,
 `admin`, `member`), are assigned through the `roles` field of the
 group and project create and patch endpoints, and are narrowed by
-resource: a group `admin`
-administers that group and nothing else, while an org `admin`
-administers everything the org owns. Unknown role names grant nothing.
-Org membership stays the precondition for every check — a group grant
-does not admit a non-member of the org. A user holds no role of its
-own: the column that stored one, `users.roles`, is removed
+resource: a group `admin` administers that group and nothing else,
+while an org `admin` administers everything the org owns. Unknown role
+names grant nothing. Org membership stays the precondition for every
+check: a group grant does not admit a non-member of the org. A user
+holds no role of its own: the column that stored one, `users.roles`,
+is removed
 ([ADR-0162](./adr/0162-a-groups-and-a-projects-roles-reach-the-policy-service-as-scoped-links-the-platform-writes-and-a-users-direct-roles-are-removed.md)).
-Policies are not collected here at all — the engine owns
-them and resolves them from the subject and the groups the request
-carries (§Policy attachment).
 
 ### Identity-derived statements
 
@@ -1106,41 +1109,38 @@ stores nothing. Only an owner writes a permit, because the service asks
 `iam:permit.write` and `role-owner` alone holds it. The platform refuses
 before asking a role link it derives from a membership, a user in
 organization scope or a team or project linked to itself, so a user's
-organization role stays the membership's. **The endpoints below remain
-until round 11 of #1796** and write the removed engine's documents.
+organization role stays the membership's.
 
-Org admins reach that lifecycle under `/orgs/{org}/policies`
-(`platform/api/openapi.yaml`). The api server passes each call through
-the `PolicyManager` seam — the gRPC client to `PolicyService` — so it
-never imports the engine and never parses a document: a document that
-does not parse comes back as `invalid_argument` and leaves as 400.
+**The engine's policy endpoints are removed.** `/orgs/{org}/policies`
+and its versions, activation, rollback and attachment operations, with
+the `PolicyManager` handlers behind them, are gone from the browser
+listener, the specification and the SDKs
+([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),
+and so are the `policy_document_*` reasons they raised. Nothing writes
+the engine's `policies`, `policy_versions` and `policy_attachments`
+tables. They, the store and the engine wait for round 14 of #1796,
+which removes them; until then the search of policies and the
+deletion's count (§Decided and not yet built) still read them through
+`PolicyService`.
 
-Policy management is authorized like any other action. The
-`iam:policy.create`, `iam:policy.read`, `iam:policy.update`,
+The `iam:policy.create`, `iam:policy.read`, `iam:policy.update`,
 `iam:policy.attach`, `iam:policy.detach` and `iam:policy.delete`
-constants live in `platform/internal/org`, because the api server
-enforces them and may not import the engine that stores policies.
-`owner` and `admin` grant `iam:policy.*`; `member` grants none, so
-reading a policy is an admin action. The addressed policy's GRN names
-the object, and its organization segment is the org in the path, so a
-policy of another org is not addressable. The policy service holds no
-entity for a policy, so the platform asks it an `iam:policy.*`
-question on the policy's organization, as the service decides a write
-to a policy, and a caller's question naming the policy is answered
-that way
+constants live in `platform/internal/org`. `owner` and `admin` grant
+`iam:policy.*`; `member` grants none, so reading a policy is an admin
+action. The policy service holds no entity for a policy, so the
+platform asks it an `iam:policy.*` question on the policy's
+organization, as the service decides a write to a policy, and a
+caller's question naming the policy is answered that way
 ([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)
 item 7).
 
-The console does not call these operations. Since
-[ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md)
-and #1975 it reads and manages an organization's policies through the
+The console reads and manages an organization's policies through the
 relay to the policy service, and manages no attachment and creates no
 old-engine document
 ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)
-is superseded in part). What these operations mean stays the engine's,
-and [web-app.md](./web-app.md) §What it serves states what the console
-presents instead. No operation answers the policies naming one subject,
-and the console no longer assembles that from attachments.
+is superseded in part). [web-app.md](./web-app.md) §What it serves
+states what the console presents. No operation answers the policies
+naming one subject.
 
 ## Policy attachment
 

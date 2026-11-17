@@ -192,12 +192,11 @@ garam's retired templates and the browser's `operatorGrn`
 - An OpenAPI-first HTTP API; server code is generated from the spec.
 - Postgres-backed stores (sqlc) with migrations.
 - Authorization decisions, expressed as IAM-style policy documents.
-- Org-managed policy documents: stored, versioned append-only,
-  activated and rolled back over the authz service, and cached per org
-  in the engine. Org admins drive that lifecycle over the HTTP API
-  under `/orgs/{org}/policies`, and attach a policy to any identity —
-  a user, a group, or an agent (ADR-0008, ADR-0014); an unattached
-  active policy still grants org-wide.
+- Org-managed role links, guardrails and permits: written through the
+  platform's relay under `/orgs/{org}/iam-policies` to the policy
+  service, which stores and decides them (ADR-0169). The engine's own
+  policy endpoints are removed (ADR-0174); its store waits for round
+  14 of #1796.
 - A web console under `/console` for the org structure the API exposes:
   organizations are listed and created, members are invited by link and
   the invitation accepted, groups and projects are read, an operator is

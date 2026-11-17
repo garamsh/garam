@@ -89,6 +89,26 @@ describe("Your access", () => {
     expect(rename).toHaveTextContent("forbid (principal, action, resource);");
   });
 
+  it("says denied by from the policy service's decision and not the check's", async () => {
+    server.use(
+      answerPermissionChecks(() => "deny"),
+      answerExplanations(() => ({
+        decision: "allow",
+        basis: "policy-service",
+        grounds: [{ kind: "stored-policy", policy: "p-9" }],
+      })),
+      http.get(`${API_URL}/orgs/acme/permission-holders`, () =>
+        HttpResponse.json({ holders: [] }),
+      ),
+    );
+
+    const panel = await renderPanel(ACTIONS.slice(0, 1));
+
+    const rename = row(panel, "Rename it");
+    expect(rename).toHaveTextContent("Policy p-9");
+    expect(rename).not.toHaveTextContent("Denied by");
+  });
+
   it("names a denied action once in its summary, and behind Details only the permission it lacks and who holds it", async () => {
     server.use(
       answerPermissionChecks(() => "deny"),

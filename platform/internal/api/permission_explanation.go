@@ -109,8 +109,8 @@ func (s *Server) explain(r *http.Request, c *caller, target grn.GRN, action stri
 
 // groundsOf names each reason of d, in the order of the policy each
 // names so that the same decision reads the same. Whether the caller
-// may read a guardrail or a permit is asked once, however many the
-// decision names, and only when one is named.
+// may read a stored policy is asked once, however many the decision
+// names, and only when one is named.
 func (s *Server) groundsOf(r *http.Request, c *caller, target grn.GRN, d policydecision.Decision) ([]apigen.ExplainedGround, error) {
 	reasons := make([]policydecision.Reason, 0, len(d.Reasons))
 	for reason := range d.Reasons {
@@ -135,7 +135,7 @@ func (s *Server) groundsOf(r *http.Request, c *caller, target grn.GRN, d policyd
 	}
 	out := make([]apigen.ExplainedGround, 0, len(reasons))
 	for _, reason := range reasons {
-		ground, err := s.groundOf(r, c, target, d.Allowed, reason, readable)
+		ground, err := s.groundOf(r, c, target, reason, readable)
 		if err != nil {
 			return nil, err
 		}
@@ -145,21 +145,22 @@ func (s *Server) groundsOf(r *http.Request, c *caller, target grn.GRN, d policyd
 }
 
 // groundOf names one reason. A policy is told apart by how the service
-// names it: a stored policy of the caller's organization by its GRN,
-// which is a role link where the identifier is one the platform
-// reserves (ADR-0161, ADR-0163) and otherwise a guardrail where the
-// decision is a deny and a permit where it is an allow, since a
-// guardrail only forbids and a permit only permits; a system policy by
-// its file name; and a sending organization's guardrail by
-// `<organization GRN>/<its GRN>`, which names a policy that is not the
-// caller's organization's to read, so it is named by its kind alone. A
-// reason that carries an error is an error, beside the policy it arose
-// in where that one is named.
+// names it: a stored policy of the caller's organization by its GRN; a
+// system policy by its file name; and a sending organization's
+// guardrail by `<organization GRN>/<its GRN>`, which names a policy
+// that is not the caller's organization's to read. A stored policy is a
+// role link where its identifier is one the platform reserves
+// (ADR-0161, ADR-0163), and otherwise is the kind the policy service
+// holds for it, which only a caller who may read it is told. To any
+// other caller the kind is withheld and never read off the decision,
+// since a role link that allows and a permit that allows look alike
+// there. A reason that carries an error is an error, beside the policy
+// it arose in where that one is named.
 func (s *Server) groundOf(
-	r *http.Request, c *caller, target grn.GRN, allowed bool, reason policydecision.Reason,
+	r *http.Request, c *caller, target grn.GRN, reason policydecision.Reason,
 	readable func() (bool, error),
 ) (apigen.ExplainedGround, error) {
-	ground := apigen.ExplainedGround{Kind: guardrailOrPermit(allowed)}
+	ground := apigen.ExplainedGround{Kind: apigen.GroundStoredPolicy}
 	if reason.Error != "" {
 		ground.Kind, ground.Error = apigen.GroundError, &reason.Error
 	}
@@ -194,18 +195,11 @@ func (s *Server) groundOf(
 	return ground, s.readContent(r, c, &ground, id)
 }
 
-// guardrailOrPermit is the kind of a stored policy that is no role
-// link, read off the decision it took part in.
-func guardrailOrPermit(allowed bool) apigen.ExplainedGroundKind {
-	if allowed {
-		return apigen.GroundPermit
-	}
-	return apigen.GroundGuardrail
-}
-
 // linkRole reads the role a role link's reserved identifier holds, and
-// whether it is the link of a team or a project. A policy of the
-// organization that opens neither prefix is no role link.
+// whether it is the link of a team or a project: an identifier that
+// opens `link-<role>-` or `link-scoped-<role>-` (ADR-0161 item 1,
+// ADR-0163 item 1). A policy of the organization that opens neither is
+// no role link by its identifier.
 func linkRole(id string) (role org.Role, scoped, ok bool) {
 	rest, scoped := strings.CutPrefix(id, scopedLinkPrefix)
 	if !scoped {
@@ -214,7 +208,10 @@ func linkRole(id string) (role org.Role, scoped, ok bool) {
 			return "", false, false
 		}
 	}
-	word, _, _ := strings.Cut(rest, "-")
+	word, _, found := strings.Cut(rest, "-")
+	if !found {
+		return "", false, false
+	}
 	role, err := org.ParseRole(word)
 	if err != nil {
 		return "", false, false
@@ -248,10 +245,12 @@ func nameLink(ground *apigen.ExplainedGround, target grn.GRN, role org.Role, sco
 	ground.Path = &path
 }
 
-// readContent names a guardrail or a permit by the name and the text
-// the policy service holds for it, read as the caller. A policy the
-// service no longer shows the caller stays named without them: what
-// decided is the delivered state, and a read is the current one.
+// readContent names a stored policy by the kind the policy service
+// holds for it, read as the caller: a role link by the role and the
+// path its body gives, a guardrail or a permit by its name and text. A
+// policy the service no longer shows the caller stays a stored policy
+// whose kind is withheld: what decided is the delivered state, and a
+// read is the current one.
 func (s *Server) readContent(r *http.Request, c *caller, ground *apigen.ExplainedGround, id string) error {
 	if s.policyRelay == nil {
 		return errorx.New(errorx.KindUnavailable, "policy service is not configured")
@@ -263,13 +262,52 @@ func (s *Server) readContent(r *http.Request, c *caller, ground *apigen.Explaine
 	if err != nil {
 		return err
 	}
-	name := detail.Policy.Name
-	ground.Name = &name
+	var body policyrelay.Body
 	for _, v := range detail.Versions {
-		if v.Number == detail.Policy.DefaultVersion && v.Body.Text != "" {
-			text := v.Body.Text
-			ground.Text = &text
+		if v.Number == detail.Policy.DefaultVersion {
+			body = v.Body
+		}
+	}
+	switch detail.Policy.Kind {
+	case policyrelay.KindRoleLink:
+		nameStoredLink(ground, body.Link)
+	case policyrelay.KindGuardrail, policyrelay.KindPermit:
+		ground.Kind = apigen.GroundGuardrail
+		if detail.Policy.Kind == policyrelay.KindPermit {
+			ground.Kind = apigen.GroundPermit
+		}
+		name := detail.Policy.Name
+		ground.Name = &name
+		if body.Text != "" {
+			ground.Text = &body.Text
 		}
 	}
 	return nil
+}
+
+// nameStoredLink names a role link a writer stored by the role and the
+// path its body gives: the organization's, or the team's or the
+// project's the link is on. A body that is missing, or names a
+// resource that is neither, leaves the link without that much.
+func nameStoredLink(ground *apigen.ExplainedGround, link *policyrelay.RoleLink) {
+	ground.Kind = apigen.GroundRoleLink
+	if link == nil {
+		return
+	}
+	role := apigen.Role(link.Role)
+	ground.Role = &role
+	path := apigen.GroundPathOrganization
+	slug := link.Resource.Identifier
+	switch {
+	case link.Scope == policyrelay.ScopeOrganization:
+	case link.Resource.ServiceType == org.ServiceTypeGroup:
+		path = apigen.GroundPathTeam
+		ground.Team = &slug
+	case link.Resource.ServiceType == org.ServiceTypeProject:
+		path = apigen.GroundPathProject
+		ground.Project = &slug
+	default:
+		return
+	}
+	ground.Path = &path
 }

@@ -119,7 +119,7 @@ describe("garamFetch", () => {
           {
             kind: "invalid_argument",
             message: "policy document: Effect must be Allow or Deny",
-            reason: "policy_document_effect_invalid",
+            reason: "change_refused",
             path: "/Statement/0/Effect",
           },
           { status: 400 },
@@ -131,7 +131,7 @@ describe("garamFetch", () => {
       status: 400,
       kind: "invalid_argument",
       reason: {
-        code: "policy_document_effect_invalid",
+        code: "change_refused",
         path: "/Statement/0/Effect",
       },
     });
@@ -199,43 +199,6 @@ describe("refusal", () => {
     expect(refusal(notFound, "approveAgentEnrollment").message).toBe(
       refusal(notFound).message,
     );
-  });
-
-  it("reads a documented reason before the status and kind, naming the place it points at", () => {
-    const refused = (reason: string, path?: string) =>
-      refusal(
-        new GaramApiError(400, "policy document: rule", "invalid_argument", {
-          code: reason,
-          path,
-        }),
-      ).message;
-
-    expect(
-      refused("policy_document_effect_invalid", "/Statement/1/Effect"),
-    ).toBe("Statement 2's Effect must be Allow or Deny.");
-    expect(
-      refused("policy_document_resource_missing", "/Statement/0/Resource"),
-    ).toBe("Statement 1 needs at least one Resource.");
-    expect(
-      refused("policy_document_unknown_key", "/Statement/0/Bogus~1x"),
-    ).toMatch(/^Statement 1's Bogus\/x isn't part of the policy format\./);
-    expect(refused("policy_document_wrong_type", "/Statement/0/Action/1")).toBe(
-      "Statement 1's Action, item 2 has the wrong type of value.",
-    );
-    // The format's own spelling, whatever case the pointer arrived in.
-    expect(
-      refused("policy_document_effect_invalid", "/statement/0/effect"),
-    ).toBe("Statement 1's Effect must be Allow or Deny.");
-    expect(refused("policy_document_version_missing", "/Version")).toBe(
-      "The document needs a Version.",
-    );
-    // The control: the same status and kind with no reason read none of
-    // the sentences above, so they are the reason's.
-    expect(
-      refusal(
-        new GaramApiError(400, "policy document: rule", "invalid_argument"),
-      ).message,
-    ).not.toMatch(/Statement 1|needs a Version/);
   });
 
   it("tells a used invitation from an expired one by reason", () => {

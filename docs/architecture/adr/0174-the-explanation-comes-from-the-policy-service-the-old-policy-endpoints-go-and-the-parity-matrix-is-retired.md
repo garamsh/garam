@@ -10,7 +10,10 @@
 Drafted for #1987, which reserves this number, under #1796. It builds
 the last browser-listener share of
 [ADR-0146](./0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md):
-after it nothing on that listener calls the platform's engine.
+after it nothing on that listener asks `s.evaluator`, the platform's
+engine's decision. Two reads on it still go to the engine's
+`PolicyService`: `searchPolicies` and the count the organization
+deletion makes; #1990 moves both to the relay.
 [authz.md](../authz.md), [api-surface.md](../api-surface.md) and
 [web-app.md](../web-app.md) state the rules beside what they govern.
 
@@ -43,21 +46,33 @@ differences: 10 in the platform engine, none in the service.
    the check reads it.** `explainPermission` asks the pair the way
    `checkPermissions` does, so its `decision` is the one the check
    answers. Its grounds are the service's `reasons`, with no new RPC:
-   a role link, named by its reserved identifier and the path it
-   reaches the caller by (the organization, or a team or project); a
-   guardrail or a permit, named by its GRN; a system policy, named by
-   its file name; or an error of evaluation. A deny that nothing
-   forbids names no grounds. A guardrail or a permit is named with its
-   name and text only where the caller holds `iam:policy.read` on the
-   organization, and by its identifier alone otherwise. The basis is
-   `policy-service`; an action decided past the check, and an action
-   garam does not define, keep their own bases and name no grounds.
+   a role link the platform writes, named by its reserved identifier
+   (`link-owner-`, `link-admin-`, `link-member-`, `link-scoped-`) and
+   the path it reaches the caller by (the organization, or a team or
+   project); a system policy, named by its file name; or an error of
+   evaluation, which also covers a question the service refused. A
+   deny that nothing forbids names no grounds. **The kind of any other
+   stored policy is the relay's, never the decision's.** The console
+   writes every policy under a `p-` identifier, role links among them,
+   so the identifier does not tell a link from a permit, and an allow
+   does not tell a permit from a link. Where the caller holds
+   `iam:policy.read` on the organization the explanation reads the
+   policy through the relay and names its `Detail.Policy.Kind`: a role
+   link with its role and, where the body says, its team or project; a
+   guardrail or a permit with its name and text. Where the caller may
+   not read, or the service does not show the policy, the kind is
+   `stored-policy`: a policy of the organization named by its
+   identifier alone, its kind withheld. The kind is never guessed from
+   the decision. The basis is `policy-service`; an action decided past
+   the check, and an action garam does not define, keep their own
+   bases and name no grounds.
 2. **The ten old policy operations are removed.** `createPolicy`,
    `listPolicies`, `listPolicyVersions`, `addPolicyVersion`,
    `activatePolicy`, `deletePolicy`, `rollbackPolicy`,
    `listPolicyAttachments`, `attachPolicy` and `detachPolicy` leave the
    OpenAPI document, the handlers, the CLI and both SDKs. The platform's
-   tables, store and engine stay until round 14.
+   tables, store and engine stay until round 14, which removes them;
+   nothing writes the tables from this round on.
 3. **The parity matrix is retired.** Its make target, test, test data
    and `policy-matrix.md` are removed. The real-service suites stay in
    CI, under the target `policy-service` and the build tag
@@ -65,15 +80,19 @@ differences: 10 in the platform engine, none in the service.
 
 ## Consequences
 
-- Nothing on the browser listener calls `s.evaluator`.
+- Nothing on the browser listener asks `s.evaluator`, and the type is
+  removed. `searchPolicies` and the organization deletion's count
+  still call the engine's `PolicyService` until #1990.
 - The decision an explanation gives and the grounds it names come from
   one evaluation, so they cannot disagree.
-- A caller refused `iam:policy.read` is told that a guardrail forbade
-  an action, and which one by identifier, and nothing of its content.
+- A caller refused `iam:policy.read` is told that a stored policy
+  decided an action, and which one by identifier, and nothing of its
+  kind or content.
 - Nothing measures the platform's engine against the service any more;
   the engine leaves in round 14.
 - The console's Your access names a role link by its role and path,
-  and a stored policy by its name where the caller may read it.
+  and a stored policy by its name where the caller may read it, else
+  by its identifier.
 
 ## Signs the decision was wrong
 

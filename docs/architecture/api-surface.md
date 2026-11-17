@@ -465,8 +465,9 @@ and not in the same place on every surface.
   reached, 504 when the call times out, and a write refused stores
   nothing. The platform answers 400 itself for a role link it
   derives from a membership. `listIamPolicies` is the service's read,
-  not filtered here. The `/orgs/{org}/policies*` operations remain
-  until round 11 of #1796
+  not filtered here. The `/orgs/{org}/policies*` operations are removed
+  ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),
+  and the store and tables behind them wait for round 14 of #1796
   ([ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md),
   [authz.md](./authz.md) §Managing policies over HTTP).
 - **A list answers only the objects its caller may read.**
@@ -484,8 +485,8 @@ and not in the same place on every surface.
   page is filtered as read, so `limit` and `offset` count the stored
   rows, and a page can hold fewer objects than its limit with more
   after it; a client pages until a page comes back empty. Lists gated
-  on a parent object — a group's or project's members, a policy's
-  versions and attachments, an operator's keys — are not filtered: the
+  on a parent object — a group's or project's members, an operator's
+  keys — are not filtered: the
   parent's read is what decides them.
 - **A caller's own teams are one filtered list.** `listGroups` with
   `member=me` answers only the groups the signed-in caller belongs to,

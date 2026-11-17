@@ -48,7 +48,6 @@ type fixture struct {
 	credentials *fakePasswordCredentialStore
 	attempts    *fakePasswordAttemptStore
 	provider    *fakeProvider
-	evaluator   *mocks.MockEvaluator
 	decisions   *policydecisionmocks.MockService
 	policies    *mocks.MockPolicyManager
 	authorities *fakeAuthorityReader
@@ -82,7 +81,6 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		credentials: newFakePasswordCredentialStore(),
 		attempts:    newFakePasswordAttemptStore(),
 		provider:    &fakeProvider{name: "google"},
-		evaluator:   mocks.NewMockEvaluator(t),
 		decisions:   policydecisionmocks.NewMockService(t),
 		policies:    mocks.NewMockPolicyManager(t),
 		authorities: newFakeAuthorityReader(),
@@ -99,7 +97,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
-	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.decisions, f.policies, f.authorities, f.authority, f.standalone, cfg).
+	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.policies, f.authorities, f.authority, f.standalone, cfg).
 		WithDeviceGrant(f.devices)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.

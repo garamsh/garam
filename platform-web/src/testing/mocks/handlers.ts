@@ -407,7 +407,14 @@ export function answerExplanations(
 export const ownerAllows: Omit<PermissionExplanation, "action" | "resource"> = {
   decision: "allow",
   basis: "policy-service",
-  grounds: [{ kind: "role-link", role: "owner", path: "organization" }],
+  grounds: [
+    {
+      kind: "role-link",
+      policy: "link-owner-0123456789abcdef0123456789abcdef",
+      role: "owner",
+      path: "organization",
+    },
+  ],
 };
 
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */

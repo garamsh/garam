@@ -49,6 +49,7 @@ const ExplanationParser = parserFor<PermissionExplanation>()(
           "guardrail",
           "permit",
           "system-policy",
+          "stored-policy",
           "error",
         ]),
         policy: z.string().optional(),

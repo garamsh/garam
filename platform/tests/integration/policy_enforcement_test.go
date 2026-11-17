@@ -98,10 +98,10 @@ func newEnforcementStack(t *testing.T, decide func(*realPolicy) policydecision.S
 	dropGuardrails()
 	t.Cleanup(dropGuardrails)
 
-	policies, engine := policyEngine(t, p)
+	policies, _ := policyEngine(t, p)
 	s.policies = policies
 	srv := api.NewServer(users, orgs, s.agents, nil, nil, nil, authnpg.NewSessionStore(p),
-		nil, nil, nil, nil, api.NewGRPCEvaluator(engine), decide(rp), api.NewGRPCPolicyManager(policyService(t, policies)),
+		nil, nil, nil, nil, decide(rp), api.NewGRPCPolicyManager(policyService(t, policies)),
 		nil, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithPolicyRelay(relaygrpc.New(rp.client))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))

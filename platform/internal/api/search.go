@@ -166,8 +166,8 @@ func (s *Server) searchTeams(r *http.Request, c *caller, n listfilter.Needle) ([
 }
 
 // searchPolicies finds the org's policies by name or identifier,
-// leaving out each one whose iam:policy.read c is denied, as
-// listPolicies does.
+// leaving out each one whose iam:policy.read c is denied, as every
+// other list on this listener does.
 func (s *Server) searchPolicies(r *http.Request, c *caller, n listfilter.Needle) ([]apigen.FoundObject, error) {
 	policies, err := s.policies.SearchPolicies(r.Context(), c.org, n)
 	if err != nil {

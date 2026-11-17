@@ -423,6 +423,7 @@ func (s *Server) allows(r *http.Request, c *caller, target grn.GRN, action strin
 func (s *Server) asks(r *http.Request, c *caller, target grn.GRN, action string) (policydecision.Decision, error) {
 	return s.evaluate(r, policydecision.Question{
 		Subject: c.user.GRN, Action: action, Resource: askedOn(target), Probe: policydecision.IsProbe(r.Context()),
+		WithoutPermits: actionRules[action].withoutPermits,
 	})
 }
 

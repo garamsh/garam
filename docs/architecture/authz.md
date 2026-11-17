@@ -96,7 +96,9 @@ take `without_permits`, which leaves the organization's `permit`s out
 of the decision as the write of a `permit` does, through the one
 function `PermitRight::ask` also uses
 ([ADR-0175](./adr/0175-the-policy-services-evaluate-and-evaluations-take-a-without-permits-option-deciding-as-a-permit-write-does.md)).
-Built in the service; `checkPermissions` does not yet ask with it. The
+`checkPermissions` asks it for `iam:permit.write` and for no other
+action (`actionRules`' `withoutPermits`), so a `permit` naming the
+action does not make the check allow what the write refuses. The
 explanation (`permission_explanation.go`) asks the service's `Evaluate`
 as a probe and names the policies its reasons give
 ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),

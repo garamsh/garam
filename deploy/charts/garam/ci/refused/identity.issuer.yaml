@@ -1,0 +1,9 @@
+# An issuer spelled with a trailing slash, beside a policy token issuer
+# of the same value so that no other guard refuses first. The render
+# must refuse and name identity.issuer: serve api and serve machine
+# accept one spelling of it and compare it byte for byte (ADR-0141).
+identity:
+  issuer: https://garam.example/api/
+api:
+  policy:
+    tokenIssuer: https://garam.example/api/

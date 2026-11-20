@@ -17,8 +17,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// reasonPackages are the packages whose refusals carry a reason.
-var reasonPackages = []string{"../org", "../authz", "../operator", "../policyfeed"}
+// reasonPackages are the packages whose refusals carry a reason to the
+// browser listener. The engine's policy documents' are not among them:
+// they reached HTTP only through the policy endpoints ADR-0174 removes.
+var reasonPackages = []string{"../org", "../operator", "../policyfeed"}
 
 // reasonConstants reads every `Reason*` string constant the reason
 // packages declare, from their source, so a code added there is in this

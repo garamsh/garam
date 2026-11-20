@@ -92,11 +92,10 @@ cowork principal, so each organization's record stays its own:
 
 ## The policy service's record
 
-**Unbuilt.**
+**Built in the policy service (#1785), read through the platform
+(#1991).**
 [ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
-decides it. Today the policy service keeps nothing of a decision, and
-a stored policy version names its writer and holds no time or outcome
-of its own. The platform's database holds none of it, and
+decides it. The platform's database holds none of it, and
 `platform/internal/audit` is not where it goes:
 
 - **Kept by the policy service, in its own database,** because every
@@ -123,9 +122,20 @@ of its own. The platform's database holds none of it, and
   10,000 live denial records, and past that a per-day overflow record
   counts the denials not stored.
 - **Read by an organization's owners and administrators** on
-  `iam:audit.read`, which the `Iam` manifest does not declare yet,
-  through a read on the policy service's contract that the platform
-  calls. A member and another organization's owner do not read it.
+  `iam:audit.read`, through a read on the policy service's contract
+  that the platform calls. A member and another organization's owner
+  do not read it.
+- **The platform relays the read and keeps nothing of it**
+  ([ADR-0176](./adr/0176-the-platform-relays-the-policy-services-audit-record-to-the-console-and-the-cli.md)).
+  `listAuditRecords` names the signed-in user as the reader, so the
+  service decides the read, current, and its refusal is the answer.
+  Records come newest first by their id and paged by the service's
+  token. The console's Audit section shows a record as the service
+  makes it: who asked, the action and the resource, the outcome, the
+  policies by id, a write's version step, a collapsed denial's count
+  and the time. `garam audit-records list` prints a table of the
+  record's own columns; the policies and the next page's token are in
+  `-o json`.
 
 ## Rationale
 

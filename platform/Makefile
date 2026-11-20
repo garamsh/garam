@@ -1,4 +1,4 @@
-# platform — the Go module behind the api, authz and machine processes
+# platform — the Go module behind the api and machine processes
 # (ADR-0125). Its verbs are every module's (#1661); `make -C platform
 # ci` is its fast gate, and `stack-up suites` the half that needs
 # Docker.
@@ -6,17 +6,12 @@
 include ../tooling/make/go.mk
 include ../tooling/make/stack.mk
 
-.PHONY: ci format lint test build gen check-gen stack-up suites integration policy-matrix e2e workload-integration standalone-e2e mutation
+.PHONY: ci format lint test build gen check-gen stack-up suites integration policy-service e2e workload-integration standalone-e2e mutation
 
 # A third tool directive on the terms go.mk states, and the only one no
 # whole-set name reaches: `mutation` is invoked by hand and by nothing
 # else, for the reasons stated at that target (#875).
 GREMLINS := go tool gremlins
-
-# What buf lint will read, counted on lint's line. buf itself fails on a
-# module holding no .proto file; the guard below is for an ls-files that
-# comes back empty, which would otherwise print a zero nobody checked.
-PROTO_FILES = $(shell $(BUF) ls-files)
 
 ci: format lint test build check-gen
 
@@ -24,11 +19,8 @@ format:
 	$(go-format)
 
 lint:
-	@echo 'lint: $(words $(PROTO_FILES)) proto files (buf lint); go vet counted on its own line below'
-	@test -n '$(PROTO_FILES)' || { echo 'lint: nothing to lint — the buf module matched no input'; exit 1; }
 	$(go-vet)
 	$(go-tidy-check)
-	@$(BUF) lint
 
 test:
 	$(go-test)
@@ -38,7 +30,7 @@ build:
 	$(go-build)
 
 # gen regenerates everything derived from a source of truth: the
-# OpenAPI servers, sqlc queries, protobuf code, and mocks. The client of
+# OpenAPI servers, sqlc queries, and mocks. The client of
 # the browser API is lib/platform-sdk-go's, and the commands derived
 # from it garam-cli's (ADR-0132).
 gen:
@@ -46,8 +38,6 @@ gen:
 	$(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml
 	$(SQLC) generate
 	$(MOCKERY)
-	$(BUF) generate
-	$(GOIMPORTS) -w proto/gen
 
 # The output each generator owns, read from its config, since no
 # generator answers "what do I own" and none deletes what it stops
@@ -56,7 +46,6 @@ gen:
 # outside it and read as clean (#360).
 GEN_PATHS := $(shell { sed -n 's|^output: ||p' api/oapi-codegen.yaml api/machine-codegen.yaml; \
 	sed -n 's|^        out: ||p' sqlc.yaml; \
-	sed -n 's|^    out: ||p' buf.gen.yaml; \
 	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; } | sort -u)
 
 check-gen:
@@ -64,11 +53,11 @@ check-gen:
 
 # The stack the suites below run against: postgres, the openbao
 # `integration` signs against and the rustfs it shares with cowork's,
-# and the backend policy-matrix asks the policy service of.
+# and the backend policy-service asks the policy service of.
 stack-up:
 	@$(MAKE) --no-print-directory -C ../deploy/local db-up backend-up
 
-suites: integration e2e policy-matrix
+suites: integration e2e policy-service
 
 INTEGRATION_PKGS = $(call go-test-pkgs,./tests/integration/...)
 INTEGRATION_TEST_FILES = $(call go-test-files,./tests/integration/...)
@@ -87,22 +76,23 @@ integration:
 		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' \
 		go test -count=1 $(INTEGRATION_PKGS)
 
-# policy-matrix asks the platform's engine and the stack's policy
-# service the same questions and compares the answers (#1915). It needs
-# the whole backend (make -C deploy/local backend-up), which publishes
-# the service on loopback under a certificate naming localhost and
-# leaves that certificate and the platform's signing key in
-# POLICY_LOCAL_DIR (deploy/local/README.md §policy). The tag keeps the
-# suite out of `integration`.
-policy-matrix:
-	@test -n '$(TEST_DATABASE_URL)' || { echo "policy-matrix: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
-	@test -n '$(POLICY_HOST_ADDR)' || { echo "policy-matrix: no policy service published on this host — run make -C platform stack-up" >&2; exit 1; }
-	@test -r '$(POLICY_LOCAL_DIR)/ca.pem' && test -r '$(POLICY_LOCAL_DIR)/signing.pem' || { echo "policy-matrix: no ca.pem and signing.pem in $(POLICY_LOCAL_DIR) — run make -C platform stack-up" >&2; exit 1; }
-	@echo 'policy-matrix: the policy service at $(POLICY_HOST_ADDR), trusting and signing with the files in $(POLICY_LOCAL_DIR)'
-	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' POLICY_MATRIX_ADDR='$(POLICY_HOST_ADDR)' \
-		POLICY_MATRIX_CA='$(POLICY_LOCAL_DIR)/ca.pem' POLICY_MATRIX_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
-		POLICY_MATRIX_ISSUER=https://garam.localhost/api \
-		go test -count=1 -tags policymatrix -run 'TestPolicyMatrix$$|TestCompareDifferences' ./tests/integration/
+# policy-service runs the platform's suites that ask the stack's real
+# policy service: what it decides, what the relay writes to it and what
+# the platform asks of it. It needs the whole backend (make -C
+# deploy/local backend-up), which publishes the service on loopback
+# under a certificate naming localhost and leaves that certificate and
+# the platform's signing key in POLICY_LOCAL_DIR
+# (deploy/local/README.md §policy). The tag keeps the suite out of
+# `integration`.
+policy-service:
+	@test -n '$(TEST_DATABASE_URL)' || { echo "policy-service: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
+	@test -n '$(POLICY_HOST_ADDR)' || { echo "policy-service: no policy service published on this host — run make -C platform stack-up" >&2; exit 1; }
+	@test -r '$(POLICY_LOCAL_DIR)/ca.pem' && test -r '$(POLICY_LOCAL_DIR)/signing.pem' || { echo "policy-service: no ca.pem and signing.pem in $(POLICY_LOCAL_DIR) — run make -C platform stack-up" >&2; exit 1; }
+	@echo 'policy-service: the policy service at $(POLICY_HOST_ADDR), trusting and signing with the files in $(POLICY_LOCAL_DIR)'
+	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' POLICY_SERVICE_ADDR='$(POLICY_HOST_ADDR)' \
+		POLICY_SERVICE_CA='$(POLICY_LOCAL_DIR)/ca.pem' POLICY_SERVICE_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
+		POLICY_SERVICE_ISSUER=https://garam.localhost/api \
+		go test -count=1 -tags policyservice -run 'TestDelegatedAuthorityPolicy_|TestPolicyRelay_|TestEnforcement_|TestConsentedSend_' ./tests/integration/
 
 # e2e runs the built binary as the processes a deployment runs, against
 # the same Postgres.
@@ -110,7 +100,11 @@ e2e:
 	@echo 'e2e: $(words $(E2E_PKGS)) packages, $(words $(E2E_TEST_FILES)) test files, against $(TEST_DB_NAME)'
 	@test -n '$(E2E_PKGS)' || { echo 'e2e: nothing to run — no package under ./tests/e2e/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
-	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
+	@test -n '$(POLICY_HOST_ADDR)' || { echo "e2e: no policy service published on this host — run make -C platform stack-up" >&2; exit 1; }
+	@test -r '$(POLICY_LOCAL_DIR)/ca.pem' && test -r '$(POLICY_LOCAL_DIR)/signing.pem' || { echo "e2e: no ca.pem and signing.pem in $(POLICY_LOCAL_DIR) — run make -C platform stack-up" >&2; exit 1; }
+	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' GARAM_TEST_POLICY_ADDR='$(POLICY_HOST_ADDR)' \
+		GARAM_TEST_POLICY_CA='$(POLICY_LOCAL_DIR)/ca.pem' GARAM_TEST_POLICY_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
+		go test -count=1 $(E2E_PKGS)
 
 # The Sherlock release the real-runtime suites run against, by tag and
 # digest, recorded here alone (#1220). v0.9.0 keeps v0.8.0's ingress
@@ -159,7 +153,9 @@ standalone-e2e:
 	@echo 'standalone-e2e: $(words $(STANDALONE_PKGS)) packages, $(words $(STANDALONE_TEST_FILES)) test files, against $(GARAM_TEST_DOCKER_HOST)'
 	@test -n '$(STANDALONE_PKGS)' || { echo 'standalone-e2e: nothing to run — no package under ./tests/standalone/... holds a test file'; exit 1; }
 	@test -n '$(DB_HOST_ADDR)' || { echo "standalone-e2e: no postgres published on this host — run make -C platform stack-up" >&2; exit 1; }
-	GARAM_TEST_SERVER_URL='postgres://garam:garam@$(DB_HOST_ADDR)/postgres?sslmode=disable' \
+	@test -r '$(POLICY_LOCAL_DIR)/ca.pem' && test -r '$(POLICY_LOCAL_DIR)/signing.pem' || { echo "standalone-e2e: no ca.pem and signing.pem in $(POLICY_LOCAL_DIR) — run make -C platform stack-up" >&2; exit 1; }
+	GARAM_TEST_POLICY_CA='$(POLICY_LOCAL_DIR)/ca.pem' GARAM_TEST_POLICY_KEY='$(POLICY_LOCAL_DIR)/signing.pem' \
+		GARAM_TEST_SERVER_URL='postgres://garam:garam@$(DB_HOST_ADDR)/postgres?sslmode=disable' \
 		GARAM_TEST_POSTGRES_CONTAINER="$$($(COMPOSE_LOCAL) ps -q postgres)" \
 		go test -count=1 -timeout 60m $(STANDALONE_PKGS)
 

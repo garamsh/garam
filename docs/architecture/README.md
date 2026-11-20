@@ -472,9 +472,6 @@ Responsibility documents:
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization policy domain: the rules
   that decide what a subject may do, and the engine that decides
-- [policy-matrix.md](./policy-matrix.md) — where the platform's engine
-  and the policy service answer one question differently, measured by
-  the matrix suite
 - [api-surface.md](./api-surface.md) — the listeners garam serves on,
   what admits a caller to each, and what each one's specification is
   authoritative for
@@ -743,7 +740,8 @@ ADRs:
   policy operations, any stored version made the default, a stated and
   confirmed scope before a policy evaluates, and a subject's policies
   sorted by source with what was not read marked unchecked; its archive
-  and "no delete" are superseded by 0117
+  and "no delete" are superseded by 0117, and the console no longer
+  manages attachments or creates old-engine documents (0169, #1975)
 - [0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)
   — an operator carries a name and description beside its GRN, changed
   on `iam:operator.update` and moving nothing it authenticates or enrols
@@ -1042,7 +1040,7 @@ ADRs:
   exchanges are not recorded yet
 - [0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)
   — `listGroups`, `listProjects`, `listAgents`, `listAgentTemplates`
-  and `listPolicies` drop each object whose own read the caller is
+  and the removed `listPolicies` drop each object whose own read the caller is
   denied, asked of the engine in one `CheckBatch` call per page; a page
   is filtered as read, so a short page is not the end
 - [0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md)
@@ -1315,9 +1313,9 @@ ADRs:
   an hour collapse into one record with a count and an organization
   holds at most 10,000 live denial records, with a per-day overflow
   record beyond; an organization's owners and administrators read them
-  on `iam:audit.read`; built in the policy service (#1785), not in the
-  platform's relay of the read or the console's view of it; supersedes
-  nothing
+  on `iam:audit.read`; built in the policy service (#1785), and the
+  platform's relay of the read and the console's and the CLI's view of
+  it by ADR-0176; supersedes nothing
 - [0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
   — codehub is a service of the policy service: a `Codehub` manifest
   with the entity `Codehub::Repo`, named `grn:<org>/codehub/repo/<id>`
@@ -1513,6 +1511,15 @@ ADRs:
   denial a 403; a service that cannot be reached fails the send
   closed, and `serve machine` with no `GARAM_POLICY_ADDR` fails at
   start; accepted, built (#1941); takes ADR-0147's owed round
+- [0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md)
+  — the browser API creates, versions, activates, rolls back, deletes,
+  reads and lists an organization's role links, guardrails and permits
+  under `/orgs/{org}/iam-policies`, the kind in the body, each relayed
+  to the policy service with the caller as writer and none of the body
+  stored; the platform names the policy, answers the service's refusal,
+  and refuses a role link it derives from a membership; the old
+  `/policies*` routes remain until round 11; accepted, built (#1969);
+  builds ADR-0146 item 3
 - [0170](./adr/0170-garam-carries-no-gaon-integration-and-gaon-operator-leaves-without-a-handover.md)
   — garam carries no gaon integration: `gaon-operator/`,
   `deploy/charts/garam-gaon/`, the pair-run harness and the documents
@@ -1522,3 +1529,54 @@ ADRs:
   whole, 0158 in part (item 3's condition and item 4) and 0152 in
   part (its gaon-specific deployment clause and one consequence; the
   login mechanism stands)
+- [0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)
+  — the browser listener's enforcement, `checkPermissions` and holders
+  list ask the policy service, one question per pair and per
+  candidate, reading delivered state and not current; a
+  `checkPermissions` pair, a holder candidate and a search kind are
+  probes and the handler's own enforcement an attempt; any error of
+  the service is a 503 `unavailable`; the explanation and the list
+  filter stay on the platform's engine until rounds 10 and 11;
+  accepted, built (#1974); builds ADR-0146
+- [0172](./adr/0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md)
+  — the lists and the search filter ask the policy service, one probe
+  per object of a page in one `Evaluations` call, an error of the
+  service a 503 `unavailable`, a policy asked on its organization;
+  `checkPermissions` answers `iam:permit.write`, which the owner holds
+  and which may allow what a permit write refuses where a permit names
+  it; accepted, built (#1979); builds ADR-0146; supersedes 0115 in part
+  (the engine's `CheckBatch` as the list filter) and 0171 in part
+  (item 6's list filter, item 7's reservation of `iam:permit.write`)
+- [0173](./adr/0173-the-console-writes-role-links-guardrails-and-permits-through-the-relay.md)
+  — the console writes a role link in a role form that offers only what
+  the relay accepts, and a guardrail or a permit, and a new version of
+  either, in a plain Cedar text editor that shows the service's
+  message; a new version is stored and not the default; each write is
+  offered unless the server denies it; accepted, built (#1980); builds
+  ADR-0169
+- [0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)
+  — `explainPermission` is the service's `Evaluate` as a probe and
+  names the role link, guardrail, permit or system policy its reasons
+  give, content only to a caller who may read policies; ten old policy
+  operations are removed; the parity matrix is retired; accepted,
+  built (#1987); supersedes 0171 in part (item 6's reservation of the
+  explanation)
+- [0175](./adr/0175-the-policy-services-evaluate-and-evaluations-take-a-without-permits-option-deciding-as-a-permit-write-does.md)
+  — `Evaluate` and `Evaluations` take `without_permits`, leaving the
+  organization's `permit`s out as `PermitRight::ask` does, through one
+  function the write and the option share; the HTTP binding does not
+  carry it; accepted, built (#1983); builds ADR-0172 item 6
+- [0176](./adr/0176-the-platform-relays-the-policy-services-audit-record-to-the-console-and-the-cli.md)
+  — `listAuditRecords` relays the policy service's `ListAuditRecords`
+  as the signed-in user, newest first and paged, the service deciding
+  the read on `iam:audit.read` and its refusal the answer; the console
+  shows it as an Audit section offered unless the server denies the
+  read, and the CLI lists it from the specification; accepted, built
+  (#1991); builds ADR-0148
+- [0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)
+  — the earlier policy engine is removed: `garam serve authz`,
+  `platform/internal/authz`, the protobuf module and its `buf`
+  configuration, the settings only they read, and the tables
+  `policies`, `policy_versions` and `policy_attachments` by migration
+  000081, reversible empty; accepted, built (#2000); builds ADR-0146
+  item 1; supersedes 0003 in part

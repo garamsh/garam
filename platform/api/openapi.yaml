@@ -53,8 +53,8 @@ tags:
       projects an organization contains.
   - name: policy
     description: >-
-      The versioned policy documents an organization evaluates, and the
-      subjects they are attached to.
+      The role links, guardrails and permits an organization's policy
+      service holds, relayed as the caller (ADR-0169).
   - name: operator
     description: >-
       The operators an organization has registered, and the keys
@@ -875,32 +875,35 @@ paths:
       summary: Explain why the signed-in caller may or may not take one action. Requires membership.
       description: >-
         Explains the pair `checkPermissions` would answer for the same
-        caller, action and resource, from the same inputs: the same role
-        statements, groups and attached policies, asked of the policy
-        engine's `Explain`, which decides as its `Check` does. The
+        caller, action and resource, from the policy service's decision
+        for it, asked as a probe and read as the check reads it, so the
         `decision` is the one `checkPermissions` answers for the pair.
 
 
-        Where the engine decides (`basis` is `statements`), `statements`
-        holds the statements that decided: every matching `Deny` when
-        the answer is `deny` because one matched, every matching `Allow`
-        when it is `allow`, and none when it is `deny` because nothing
-        allows it. Each names the path through which it reaches the
-        caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached
-        to them, or is attached to a group they belong to. A policy
-        reaching by two paths is named once for each.
+        Where the policy service decides (`basis` is `policy-service`),
+        `grounds` holds what it names: every policy that permits when
+        the answer is `allow`, every policy that forbids when it is
+        `deny` because one does, an evaluation error where a policy
+        failed to evaluate, and none when it is `deny` because nothing
+        permits. A role link is named by its reserved identifier and
+        the path through which it reaches the caller: their
+        organization role, or the roles of a team or a project, which
+        reach the caller on that team or project alone. A guardrail or a
+        permit is named by its identifier, and a system policy by its
+        file name.
 
 
-        A policy statement is named only where the caller holds
-        `iam:policy.read` on that policy, the check `getPolicy` makes.
-        Every other one is answered once, as `unreadable-policy`, with
-        its effect and nothing else: no policy, statement or path.
+        A guardrail or a permit is named with its `name` and its `text`
+        only where the caller holds `iam:policy.read` on the
+        organization, the check `getIamPolicy` makes. Every other one is
+        named without them. A guardrail of another organization that
+        denies a message to the caller's is named by its kind alone.
 
 
-        The actions `checkPermissions` puts to more than the engine's
-        `Check` — a delegation grant, or the check delegation writes or
+        The actions `checkPermissions` puts to more than the policy
+        service — a delegation grant, or the check delegation writes or
         standalone host approvals run — are explained no further
-        than its answer: `basis` is `operation`, `statements` is empty,
+        than its answer: `basis` is `operation`, `grounds` is empty,
         and the operation decides. An action garam does not define is
         answered `deny` with `basis` `undefined-action`.
 
@@ -908,7 +911,8 @@ paths:
         The pair is the query's `action`, `resourceType` and
         `resourceId`, refused with 400 as `checkPermissions` refuses one,
         and where only one of the last two is given. A caller who is not
-        a member of the organization is refused with 403.
+        a member of the organization is refused with 403. A policy
+        service that does not answer is 503.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/permissionAction'
@@ -926,6 +930,8 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
         '403':
+          $ref: '#/components/responses/Error'
+        '503':
           $ref: '#/components/responses/Error'
   /orgs/{org}/permission-holders:
     get:
@@ -2482,14 +2488,18 @@ paths:
           $ref: '#/components/responses/ContractError'
         '409':
           $ref: '#/components/responses/ContractError'
-  /orgs/{org}/policies:
+  /orgs/{org}/iam-policies:
     post:
-      operationId: createPolicy
+      operationId: createIamPolicy
       tags: [policy]
-      summary: Create a policy in an organization. Requires the `admin` role.
+      summary: Write an organization's role link, guardrail or permit.
       description: >-
-        Stores the document as the policy's first version. The policy
-        is a draft until it is activated.
+        Relayed to the policy service as the caller, which stores the
+        first version as a draft and decides, read current, whether the
+        caller may (ADR-0146 item 3). The platform stores none of the
+        body. The identifier is the platform's. A permit is written by
+        an owner alone. A role link the platform derives from a
+        membership is refused with 400.
       parameters:
         - $ref: '#/components/parameters/org'
       requestBody:
@@ -2497,141 +2507,89 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PolicyCreate'
+              $ref: '#/components/schemas/IamPolicyCreate'
       responses:
         '201':
           description: Policy created.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Policy'
+                $ref: '#/components/schemas/IamPolicy'
         '400':
           $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
-        '404':
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
           $ref: '#/components/responses/Error'
     get:
-      operationId: listPolicies
+      operationId: listIamPolicies
       tags: [policy]
-      summary: List an organization's policies. Requires the `admin` role.
+      summary: List an organization's role links, guardrails and permits.
       description: >-
-        Authorized on `iam:policy.read` on the organization. Leaves out each
-        policy whose own `iam:policy.read` the caller is denied.
+        Read from the policy service as the caller, which answers
+        whoever holds `iam:policy.read` on the organization.
       parameters:
         - $ref: '#/components/parameters/org'
       responses:
         '200':
-          description: The organization's policies, in ascending GRN order.
+          description: The organization's policies.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Policy'
+                  $ref: '#/components/schemas/IamPolicy'
         '401':
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/policies/{policy}/versions:
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/iam-policies/{iamPolicy}:
     get:
-      operationId: listPolicyVersions
+      operationId: getIamPolicy
       tags: [policy]
-      summary: List a policy's versions. Requires the `admin` role.
+      summary: Read a role link, guardrail or permit with its versions.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/policy'
+        - $ref: '#/components/parameters/iamPolicy'
       responses:
         '200':
-          description: The policy's versions, oldest first.
+          description: The policy and its versions, oldest first.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PolicyVersion'
+                $ref: '#/components/schemas/IamPolicyDetail'
         '401':
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-    post:
-      operationId: addPolicyVersion
-      tags: [policy]
-      summary: Append a version to a policy. Requires the `admin` role.
-      description: >-
-        Versions are append-only. Appending leaves the policy's default
-        version where it is, so the policy keeps evaluating that version
-        until `rollbackPolicy` makes another stored version, the
-        appended one included, the default.
-      parameters:
-        - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/policy'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PolicyVersionCreate'
-      responses:
-        '201':
-          description: Version appended.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PolicyVersion'
-        '400':
+        '503':
           $ref: '#/components/responses/Error'
-        '401':
+        '504':
           $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-  /orgs/{org}/policies/{policy}/activate:
-    post:
-      operationId: activatePolicy
-      tags: [policy]
-      summary: Activate a policy. Requires the `admin` role.
-      description: >-
-        An active policy contributes its default version to checks.
-        Activation changes the policy's status and leaves its default
-        version where it is.
-      parameters:
-        - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/policy'
-      responses:
-        '200':
-          description: The activated policy.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Policy'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-  /orgs/{org}/policies/{policy}:
     delete:
-      operationId: deletePolicy
+      operationId: deleteIamPolicy
       tags: [policy]
-      summary: Delete a policy. Requires the `admin` role.
+      summary: Delete a role link, guardrail or permit.
       description: >-
-        Removes the policy together with its versions and its
-        attachments, so it contributes to no check from then on. An
-        attached policy is deleted as readily as an unattached one:
-        nothing is left that could apply to the whole organization.
-        Authorized on `iam:policy.delete`.
+        Relayed to the policy service as the caller. The service
+        refuses a writer who may not delete this kind of policy.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/policy'
+        - $ref: '#/components/parameters/iamPolicy'
       responses:
         '204':
           description: Policy deleted.
@@ -2641,21 +2599,83 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/policies/{policy}/rollback:
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/iam-policies/{iamPolicy}/versions:
     post:
-      operationId: rollbackPolicy
+      operationId: createIamPolicyVersion
       tags: [policy]
-      summary: Point a policy at a stored version. Requires the `admin` role.
+      summary: Append a version to a role link, guardrail or permit.
       description: >-
-        Makes any stored version of the policy its default, whether it
-        is older or newer than the current default; an appended version
-        becomes the default this way. The policy's status and versions
-        are unchanged: an active policy evaluates the new default from
-        then on, and a draft one evaluates nothing until it is
-        activated.
+        The body must be of the kind the policy's first version was.
+        A new version is stored and not yet the default.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/policy'
+        - $ref: '#/components/parameters/iamPolicy'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IamPolicyVersionCreate'
+      responses:
+        '201':
+          description: The version stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IamPolicyVersionNumber'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/iam-policies/{iamPolicy}/activate:
+    post:
+      operationId: activateIamPolicy
+      tags: [policy]
+      summary: Activate a role link, guardrail or permit.
+      description: >-
+        An active policy contributes its default version to decisions.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/iamPolicy'
+      responses:
+        '204':
+          description: Policy activated.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/iam-policies/{iamPolicy}/rollback:
+    post:
+      operationId: rollbackIamPolicy
+      tags: [policy]
+      summary: Point a role link, guardrail or permit at a stored version.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/iamPolicy'
       requestBody:
         required: true
         content:
@@ -2663,93 +2683,8 @@ paths:
             schema:
               $ref: '#/components/schemas/PolicyRollback'
       responses:
-        '200':
-          description: The policy at its new default version.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Policy'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-  /orgs/{org}/policies/{policy}/attachments:
-    get:
-      operationId: listPolicyAttachments
-      tags: [policy]
-      summary: List a policy's attachments. Requires the `admin` role.
-      parameters:
-        - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/policy'
-      responses:
-        '200':
-          description: The attachments, in ascending subject GRN order.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PolicyAttachment'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-    post:
-      operationId: attachPolicy
-      tags: [policy]
-      summary: Attach a policy to a subject. Requires the `admin` role.
-      description: >-
-        The policy then applies to that user or group instead of to the
-        whole organization. A policy with no attachment applies
-        organization-wide.
-      parameters:
-        - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/policy'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PolicyAttachmentCreate'
-      responses:
-        '201':
-          description: Policy attached.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PolicyAttachment'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        '409':
-          $ref: '#/components/responses/Error'
-  /orgs/{org}/policies/{policy}/attachments/{subject}:
-    delete:
-      operationId: detachPolicy
-      tags: [policy]
-      summary: Detach a policy from a subject. Requires the `admin` role.
-      description: >-
-        Detaching an active policy's last attachment is refused with
-        409, because a policy left with none would apply org-wide.
-        Delete the policy, or attach another subject first.
-      parameters:
-        - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/policy'
-        - $ref: '#/components/parameters/subject'
-      responses:
         '204':
-          description: Policy detached.
+          description: Policy at its new default version.
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2759,6 +2694,42 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
         '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/audit-records:
+    get:
+      operationId: listAuditRecords
+      tags: [policy]
+      summary: Read an organization's audit records, newest first.
+      description: >-
+        Relayed to the policy service as the caller, which decides, read
+        current, whether the caller holds `iam:audit.read` on the
+        organization (ADR-0148, ADR-0176). A caller it refuses is
+        answered 403. The platform keeps none of the records. A page is
+        read with the token the previous page answered.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/pageToken'
+      responses:
+        '200':
+          description: A page of records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        '504':
           $ref: '#/components/responses/Error'
   /orgs/{org}/consents:
     get:
@@ -3047,12 +3018,14 @@ components:
       x-go-name: MemberGrn
       schema:
         type: string
-    policy:
-      name: policy
+    iamPolicy:
+      name: iamPolicy
       in: path
       required: true
-      description: Policy identifier (the last GRN segment).
-      x-go-name: PolicySlug
+      description: >-
+        Identifier of a role link, guardrail or permit of the policy
+        service (the last GRN segment).
+      x-go-name: IamPolicyId
       schema:
         type: string
     agent:
@@ -3077,14 +3050,6 @@ components:
       required: true
       description: Operator identifier (the last GRN segment).
       x-go-name: OperatorSlug
-      schema:
-        type: string
-    subject:
-      name: subject
-      in: path
-      required: true
-      description: Subject GRN a policy is attached to.
-      x-go-name: SubjectGrn
       schema:
         type: string
     permissionAction:
@@ -3119,6 +3084,23 @@ components:
         minimum: 0
         default: 0
       description: Maximum entries to return; 0 means no limit.
+    pageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        default: 0
+      description: >-
+        Maximum records to return; 0 and anything above the policy
+        service's bound mean the bound.
+    pageToken:
+      name: pageToken
+      in: query
+      schema:
+        type: string
+      description: The previous page's `nextPageToken`; absent for the first.
     offset:
       name: offset
       in: query
@@ -3775,7 +3757,7 @@ components:
       x-enum-varnames: [DecisionAllow, DecisionDeny, DecisionUnknown]
     PermissionExplanation:
       type: object
-      required: [action, decision, basis, statements]
+      required: [action, decision, basis, grounds]
       properties:
         action:
           type: string
@@ -3785,64 +3767,79 @@ components:
           $ref: '#/components/schemas/PermissionDecision'
         basis:
           $ref: '#/components/schemas/PermissionBasis'
-        statements:
+        grounds:
           type: array
           description: >-
-            The statements that decided, where `basis` is `statements`;
-            empty otherwise, and where nothing allows the action.
+            What the policy service names, where `basis` is
+            `policy-service`; empty otherwise, and where nothing permits
+            the action. The order is not stated.
           items:
-            $ref: '#/components/schemas/ExplainedStatement'
+            $ref: '#/components/schemas/ExplainedGround'
     PermissionBasis:
       type: string
       description: >-
-        `statements` is a decision the policy engine reached, explained
-        by `statements`. `operation` is an action the operation decides
-        past the engine's `Check`, explained no further than the
+        `policy-service` is a decision the policy service reached,
+        explained by `grounds`. `operation` is an action the operation
+        decides past the policy service, explained no further than the
         decision. `undefined-action` is a name garam does not define.
-      enum: [statements, operation, undefined-action]
-      x-enum-varnames: [BasisStatements, BasisOperation, BasisUndefinedAction]
-    ExplainedStatement:
+      enum: [policy-service, operation, undefined-action]
+      x-enum-varnames: [BasisPolicyService, BasisOperation, BasisUndefinedAction]
+    ExplainedGround:
       type: object
       description: >-
-        One statement that decided and the path through which it
-        reaches the caller. `source` says which fields are present:
-        `roles` for the three role sources, `group` for `group-role`,
-        `project` for `project-role`, and `sid`, `policy` and
-        `attachment` for `policy` — with `group` where `attachment` is
-        `group`. `unreadable-policy` carries `effect` alone.
-      required: [effect, source]
+        One ground of a decision, as the policy service names it. `kind`
+        says which fields are present: `role`, `path` and, for a team or
+        a project, `team` or `project`, for `role-link`; `name` and
+        `text`, where the caller may read the policy, for `guardrail`
+        and `permit`; `error` for `error`, which is a policy that
+        failed to evaluate, or a question the policy service refused
+        and so names no policy. `policy` names the policy where it is
+        the caller's organization's, or a system policy's file name.
+        `stored-policy` is a policy of the caller's
+        organization, or of a sending organization, whose kind the
+        caller may not be told: the kind is never read off the
+        decision. A role link the platform reserves the identifier of
+        is a `role-link` to every caller.
+      required: [kind]
       properties:
-        effect:
+        kind:
           type: string
-          enum: [Allow, Deny]
-          x-enum-varnames: [StatementEffectAllow, StatementEffectDeny]
-        source:
+          enum: [role-link, guardrail, permit, system-policy, stored-policy, error]
+          x-enum-varnames: [GroundRoleLink, GroundGuardrail, GroundPermit, GroundSystemPolicy, GroundStoredPolicy, GroundError]
+        policy:
           type: string
-          enum: [org-role, group-role, project-role, policy, unreadable-policy]
-          x-enum-varnames: [SourceOrgRole, SourceGroupRole, SourceProjectRole, SourcePolicy, SourceUnreadablePolicy]
-        sid:
+          description: >-
+            The policy's identifier, as `getIamPolicy` addresses it, or
+            the file name of a system policy.
+        role:
+          $ref: '#/components/schemas/Role'
+        path:
           type: string
-        roles:
-          type: array
-          items:
-            type: string
-        group:
+          description: >-
+            How the role link reaches the caller: it is their
+            `organization` role, or the role of the `team` or `project`
+            named beside it. Absent where a team's or a project's link
+            was asked about a resource that is neither, and where a
+            stored link's body does not say.
+          enum: [organization, team, project]
+          x-enum-varnames: [GroundPathOrganization, GroundPathTeam, GroundPathProject]
+        team:
           type: string
-          description: The group's slug.
+          description: The team's slug.
         project:
           type: string
           description: The project's slug.
-        policy:
+        name:
           type: string
-          description: The policy's identifier, as `getPolicy` addresses it.
-        attachment:
+          description: The policy's name, to a caller who may read it.
+        text:
           type: string
           description: >-
-            How the policy reaches the caller: it applies to the whole
-            `organization`, is attached to the `caller`, or is attached
-            to the `group` named beside it.
-          enum: [organization, caller, group]
-          x-enum-varnames: [AttachmentOrganization, AttachmentCaller, AttachmentGroup]
+            The Cedar text of the policy's default version, to a caller
+            who may read it.
+        error:
+          type: string
+          description: Why the policy failed to evaluate.
     OrgSearch:
       type: object
       required: [found]
@@ -4077,83 +4074,92 @@ components:
         expiresAt:
           type: string
           format: date-time
-    PolicyDocument:
-      type: object
-      description: >-
-        An IAM-style policy document: a `Version` string and a
-        `Statement` list of `Sid` / `Effect` / `Action` / `Resource` /
-        `Condition` entries. The authz engine owns the model and
-        validates the document on write, so it travels this API
-        opaquely; it refuses a key the model does not name rather than
-        storing the document without it.
-      x-go-type: json.RawMessage
-      example:
-        Version: '2026-07-25'
-        Statement:
-          - Sid: AllowOrgRead
-            Effect: Allow
-            Action: [iam:org.read]
-            Resource: ['grn:acme/*']
     PolicyStatus:
       type: string
       description: >-
         A policy's lifecycle state. Only an `active` policy contributes
         statements to a check.
       enum: [draft, active]
-    Policy:
+    AuditRecordKind:
+      type: string
+      description: >-
+        What an audit record is: one `write` of a policy, the identical
+        `denial`s of one request collapsed with a count, or the
+        `denial-overflow` of a UTC day.
+      enum: [write, denial, denial-overflow]
+    AuditRecord:
       type: object
-      required: [grn, orgGrn, name, status, defaultVersion, createdAt, updatedAt]
+      description: >-
+        One record of the policy service's audit (ADR-0148). It holds no
+        policy text, no context, no token and no fault text.
+      required: [id, kind, firstAt, lastAt, count, service, subject, action, resource, outcome, policyIds, versionFrom, versionTo]
       properties:
-        grn:
-          type: string
-          example: grn:acme/iam/policy/9f2ac1b40d8e7a35
-        orgGrn:
-          type: string
-        name:
-          type: string
-        status:
-          $ref: '#/components/schemas/PolicyStatus'
-        defaultVersion:
+        id:
           type: integer
-          minimum: 1
-          description: The version evaluated while the policy is active.
-        createdAt:
+          format: int64
+        kind:
+          $ref: '#/components/schemas/AuditRecordKind'
+        firstAt:
           type: string
           format: date-time
-        updatedAt:
+          description: When a write was made or a denial first occurred.
+        lastAt:
           type: string
           format: date-time
-    PolicyCreate:
-      type: object
-      required: [name, document]
-      properties:
-        name:
-          type: string
-          minLength: 1
-        document:
-          $ref: '#/components/schemas/PolicyDocument'
-    PolicyVersion:
-      type: object
-      required: [policyGrn, version, document, createdBy, createdAt]
-      properties:
-        policyGrn:
-          type: string
-        version:
+          description: When a denial last occurred; a write's `firstAt`.
+        count:
           type: integer
-          minimum: 1
-        document:
-          $ref: '#/components/schemas/PolicyDocument'
-        createdBy:
+          format: int64
+          description: How many identical denials the record holds; 1 for a write.
+        service:
           type: string
-        createdAt:
+          description: The service that made the request; empty on an overflow record.
+        subject:
+          type: string
+          description: >-
+            The GRN of who asked or wrote; empty for a write the service
+            made with no writer and on an overflow record.
+        action:
+          type: string
+          description: The action in its qualified form, such as `iam:permit.write`.
+        resource:
+          type: string
+          description: The GRN asked about; for a write, the policy's.
+        outcome:
+          type: string
+          description: >-
+            `deny`, or `created`, `version-added`, `activated`,
+            `rolled-back` or `removed`.
+        policyIds:
+          type: array
+          items:
+            type: string
+          description: >-
+            The policies of a denial's reasons, `fault` for a reason that
+            is an evaluation fault; for a write, the policy.
+        versionFrom:
+          type: integer
+          format: int32
+          description: The default a write moved from, or 0.
+        versionTo:
+          type: integer
+          format: int32
+          description: The version a write wrote or moved to, or 0.
+        day:
           type: string
           format: date-time
-    PolicyVersionCreate:
+          description: The first second of the UTC day an overflow record holds.
+    AuditRecordPage:
       type: object
-      required: [document]
+      required: [records]
       properties:
-        document:
-          $ref: '#/components/schemas/PolicyDocument'
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRecord'
+        nextPageToken:
+          type: string
+          description: Reads the next page; absent at the end.
     PolicyRollback:
       type: object
       required: [version]
@@ -4165,26 +4171,97 @@ components:
           description: >-
             A stored version of the policy, older or newer than its
             current default.
-    PolicyAttachment:
+    IamPolicyKind:
+      type: string
+      enum: [role-link, guardrail, permit]
+    IamRoleLink:
       type: object
-      required: [policyGrn, subjectGrn, createdAt]
+      required: [role, scope, principal, resource]
       properties:
-        policyGrn:
+        role:
+          $ref: '#/components/schemas/Role'
+        scope:
           type: string
-        subjectGrn:
+          enum: [organization, team-or-project]
+        principal:
           type: string
-          example: grn:acme/iam/group/eng
-        createdAt:
+          description: GRN of the user, agent, team or project linked.
+        resource:
           type: string
-          format: date-time
-    PolicyAttachmentCreate:
+          description: GRN of the organization, team or project linked to.
+    IamPolicyBody:
       type: object
-      required: [subjectGrn]
-      description: The user or group the policy applies to.
+      required: [kind]
+      description: >-
+        What one version says: `text` for a guardrail (one Cedar
+        `forbid`) or a permit (one Cedar `permit`), `roleLink` for a
+        role link. The service validates the Cedar text; the platform
+        refuses only the role links it derives from a membership.
       properties:
-        subjectGrn:
+        kind:
+          $ref: '#/components/schemas/IamPolicyKind'
+        text:
           type: string
-          example: grn:acme/iam/group/eng
+        roleLink:
+          $ref: '#/components/schemas/IamRoleLink'
+    IamPolicyCreate:
+      type: object
+      required: [name, body]
+      properties:
+        name:
+          type: string
+        body:
+          $ref: '#/components/schemas/IamPolicyBody'
+    IamPolicyVersionCreate:
+      type: object
+      required: [body]
+      properties:
+        body:
+          $ref: '#/components/schemas/IamPolicyBody'
+    IamPolicyVersionNumber:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+          format: int32
+    IamPolicy:
+      type: object
+      required: [id, name, kind, status, defaultVersion]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/IamPolicyKind'
+        status:
+          $ref: '#/components/schemas/PolicyStatus'
+        defaultVersion:
+          type: integer
+          format: int32
+    IamPolicyVersion:
+      type: object
+      required: [version, body, createdBy]
+      properties:
+        version:
+          type: integer
+          format: int32
+        body:
+          $ref: '#/components/schemas/IamPolicyBody'
+        createdBy:
+          type: string
+    IamPolicyDetail:
+      type: object
+      required: [policy, versions]
+      properties:
+        policy:
+          $ref: '#/components/schemas/IamPolicy'
+        versions:
+          type: array
+          description: Oldest first.
+          items:
+            $ref: '#/components/schemas/IamPolicyVersion'
     AgentProvisioningState:
       type: string
       description: >-
@@ -4889,14 +4966,6 @@ components:
             repeat the request and do not poll; an operator reads the
             set-aside link. It names the organization in `resource`
             as the answer above does.
-            Policy documents, each with `path`:
-            `policy_document_malformed`, `policy_document_trailing_data`,
-            `policy_document_wrong_type`, `policy_document_unknown_key`,
-            `policy_document_version_missing`,
-            `policy_document_statement_empty`,
-            `policy_document_effect_invalid`,
-            `policy_document_action_missing`,
-            `policy_document_resource_missing`.
         path:
           type: string
           description: >-

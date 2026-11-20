@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"slices"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -79,14 +78,7 @@ func (s *Server) ListProjects(w http.ResponseWriter, r *http.Request, orgSlug ap
 		writeError(w, err)
 		return
 	}
-	mine, err := s.orgs.ListProjectsByMember(r.Context(), c.org, u.GRN)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	projects, err = visible(s, r, c, org.ActionProjectRead, projects, func(p *org.Project) BatchObject {
-		return BatchObject{Object: p.GRN, Statements: projectRoleStatements(p, slices.Contains(mine, p.GRN))}
-	})
+	projects, err = visible(s, r, c, org.ActionProjectRead, projects, func(p *org.Project) grn.GRN { return p.GRN })
 	if err != nil {
 		writeError(w, err)
 		return

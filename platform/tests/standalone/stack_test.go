@@ -1,7 +1,7 @@
 // Package standalone_test runs a standalone host end to end (#1180's
 // joint matrix, #1157 scenarios 2 and 5): the shipped `garam` binary
 // prepares, enrolls and runs the host's supervisor, against a real
-// garam built from this tree — its authz, api and machine listener as
+// garam built from this tree — its api and machine listener as
 // containers over a database tests/testprincipal creates — on a real
 // rootless Docker daemon with the pinned Sherlock images.
 //
@@ -14,6 +14,9 @@
 //   - GARAM_TEST_RUNTIME_IMAGE, GARAM_TEST_WORKSPACE_IMAGE: Sherlock's,
 //     which `make -C platform standalone-e2e` names from the Makefile's
 //     pin
+//   - GARAM_TEST_POLICY_CA, GARAM_TEST_POLICY_KEY: the root and the key
+//     of the policy service the compose stack runs, which the api and
+//     the machine listener containers reach at policy:8443
 //   - GARAM_TEST_TEI_IMAGE: the embedding service a real model needs
 //   - GARAM_TEST_MODEL_ENV_FILE: an owner-only KEY=VALUE file holding
 //     the model's credential, for the scenarios a model answers
@@ -29,7 +32,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -226,23 +228,61 @@ func (s *stack) inside() string {
 	return u.String()
 }
 
-// serve starts authz, api and the machine listener from the garam
-// image, and waits until each answers.
+// serve starts the api and the machine listener from the garam image,
+// and waits until each answers.
 func (s *stack) serve() {
 	s.t.Helper()
-	authz := s.prefix + "authz"
-	s.mustDocker("run", "-d", "--name", authz, "--network", s.network,
-		"-e", "GARAM_DATABASE_URL="+s.inside(), s.garam, "serve", "authz")
 	api := s.prefix + "api"
-	s.mustDocker("run", "-d", "--name", api, "--network", s.network, "-p", "127.0.0.1::8080",
-		"-e", "GARAM_DATABASE_URL="+s.inside(), "-e", "GARAM_AUTHZ_ADDR="+authz+":9090",
-		"-e", "GARAM_COOKIE_SECURE=false", s.garam, "serve", "api")
+	// The api refuses to start without the policy service that decides a
+	// user's delegated authority (ADR-0146), and the approval of a
+	// standalone host is one: so it is the stack's own, at policy:8443 on
+	// the network the containers join, and the feed of this database is
+	// turned on before the api starts, so its delivery loop sends the
+	// organization, its members and its grants there (ADR-0140).
+	policyCA, policyKey := s.policyMaterial()
+	s.mustDocker("run", "--rm", "--network", s.network, "-e", "GARAM_DATABASE_URL="+s.inside(),
+		s.garam, "policy-feed", "start")
+	s.mustDocker("create", "--name", api, "--network", s.network, "-p", "127.0.0.1::8080",
+		"-e", "GARAM_DATABASE_URL="+s.inside(),
+		"-e", "GARAM_COOKIE_SECURE=false",
+		"-e", "GARAM_POLICY_ADDR="+policyAddr, "-e", "GARAM_POLICY_CA_FILE=/etc/garam/policy-ca.pem",
+		"-e", "GARAM_POLICY_SIGNING_KEY_FILE=/etc/garam/policy-signing.pem",
+		"-e", "GARAM_POLICY_TOKEN_ISSUER="+policyIssuer,
+		s.garam, "serve", "api")
+	apiFile := func(path string, data []byte) workload.File {
+		return workload.File{Path: path, Data: data, Mode: 0o600, UID: 10001, GID: 10001}
+	}
+	require.NoError(s.t, s.engine.CopyFiles(context.Background(), api, "/etc", []workload.File{
+		{Path: "garam", Mode: 0o700, Dir: true, UID: 10001, GID: 10001},
+		apiFile("garam/policy-ca.pem", policyCA), apiFile("garam/policy-signing.pem", policyKey),
+	}))
+	s.mustDocker("start", api)
 	s.apiURL = "http://" + s.mustDocker("port", api, "8080")
-	s.startMachine(authz)
+	s.startMachine()
 	s.eventually("the api answering", func() bool {
 		status, _ := s.browse(http.MethodGet, "/me", "")
 		return status == http.StatusOK
 	})
+}
+
+// The stack's policy service as a container on its network reaches it,
+// and the issuer it trusts the platform's tokens under.
+const (
+	policyAddr   = "policy:8443"
+	policyIssuer = "https://garam.localhost/api"
+)
+
+// policyMaterial reads the root the stack's policy service is verified
+// by and the key it trusts the platform's calls signed with, which
+// `make -C platform standalone-e2e` names from the files stack-up leaves
+// on the host.
+func (s *stack) policyMaterial() (ca, key []byte) {
+	s.t.Helper()
+	ca, err := os.ReadFile(required(s.t, "GARAM_TEST_POLICY_CA"))
+	require.NoError(s.t, err)
+	key, err = os.ReadFile(required(s.t, "GARAM_TEST_POLICY_KEY"))
+	require.NoError(s.t, err)
+	return ca, key
 }
 
 // startMachine starts the machine listener with key material this
@@ -250,7 +290,7 @@ func (s *stack) serve() {
 // two addresses the listener is reached at, the host's loopback and its
 // bridge address, which is known only once it runs and is then written
 // in place, since the listener reads its certificate per handshake.
-func (s *stack) startMachine(authz string) {
+func (s *stack) startMachine() {
 	s.t.Helper()
 	rootKey, root, rootPEM := mintRoot(s.t)
 	s.rootKey, s.root = rootKey, root
@@ -258,24 +298,19 @@ func (s *stack) startMachine(authz string) {
 	require.NoError(s.t, os.WriteFile(s.rootFile, rootPEM, 0o600))
 	kek := hex.EncodeToString(randomBytes(32))
 	// The listener refuses to start without a policy service to decide
-	// a send (ADR-0168). The connection is made lazily and nothing here
-	// sends, so the address names no service: what it needs is a root
-	// to verify by and a key to sign with.
-	policyKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(s.t, err)
-	policyKeyDER, err := x509.MarshalPKCS8PrivateKey(policyKey)
-	require.NoError(s.t, err)
-	policyKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: policyKeyDER})
+	// a send (ADR-0168) and a supervisor's enrollment asks it for the
+	// approving administrator's authority (ADR-0146): the stack's own.
+	policyCA, policyKeyPEM := s.policyMaterial()
 
 	name := s.prefix + "machine"
 	s.mustDocker("create", "--name", name, "--network", s.network, "-p", "127.0.0.1::8443",
-		"-e", "GARAM_DATABASE_URL="+s.inside(), "-e", "GARAM_AUTHZ_ADDR="+authz+":9090",
+		"-e", "GARAM_DATABASE_URL="+s.inside(),
 		"-e", "GARAM_MACHINE_TLS_CERT_FILE=/etc/garam/tls.crt", "-e", "GARAM_MACHINE_TLS_KEY_FILE=/etc/garam/tls.key",
 		"-e", "GARAM_MACHINE_SERVER_ROOT_FILE=/etc/garam/server-root.pem", "-e", "GARAM_CA_KEY_FILE=/etc/garam/kek",
 		"-e", "GARAM_MACHINE_ISSUER=https://garam.test",
-		"-e", "GARAM_POLICY_ADDR=policy.invalid:8443", "-e", "GARAM_POLICY_CA_FILE=/etc/garam/server-root.pem",
+		"-e", "GARAM_POLICY_ADDR="+policyAddr, "-e", "GARAM_POLICY_CA_FILE=/etc/garam/policy-ca.pem",
 		"-e", "GARAM_POLICY_SIGNING_KEY_FILE=/etc/garam/policy-signing.pem",
-		"-e", "GARAM_POLICY_TOKEN_ISSUER=https://garam.test",
+		"-e", "GARAM_POLICY_TOKEN_ISSUER="+policyIssuer,
 		s.garam, "serve", "machine")
 	s.mustDocker("network", "connect", "bridge", name)
 	place := func(ips ...net.IP) {
@@ -287,7 +322,7 @@ func (s *stack) startMachine(authz string) {
 			{Path: "garam", Mode: 0o700, Dir: true, UID: 10001, GID: 10001},
 			own("garam/tls.crt", certPEM), own("garam/tls.key", keyPEM),
 			own("garam/server-root.pem", rootPEM), own("garam/kek", []byte(kek)),
-			own("garam/policy-signing.pem", policyKeyPEM),
+			own("garam/policy-ca.pem", policyCA), own("garam/policy-signing.pem", policyKeyPEM),
 		}))
 	}
 	place(net.IPv4(127, 0, 0, 1))

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -23,23 +22,16 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/lib/errorx"
-	"github.com/garamsh/garam/lib/grn"
-	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/machine"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // The service name every trace, metric and log line carries, so one
 // stream tells the servers apart.
 const (
 	serviceAPI     = "garam-api"
-	serviceAuthz   = "garam-authz"
 	serviceMachine = "garam-machine"
 	serviceAdapter = "garam-adapter"
 )
@@ -54,17 +46,16 @@ const (
 
 // observability is the telemetry one server constructs at startup:
 // the logger its handlers write through, and the registry its metrics
-// are collected from. It sits in the composition root because api and
-// authz never import each other (ADR-0003).
+// are collected from. It sits in the composition root so each serve
+// command builds its own.
 type observability struct {
 	logger   *slog.Logger
 	registry *prometheus.Registry
 }
 
 // newObservability builds the logger, the metrics registry and the
-// tracer for one server. Metrics are defined by the otelhttp and
-// otelgrpc instrumentation, which finds the providers set here as
-// globals; the registry is the one place they are collected from.
+// tracer for one server. Metrics are defined by the otelhttp
+// instrumentation, which finds the providers set here as globals; the registry is the one place they are collected from.
 func newObservability(service string) (*observability, error) {
 	logger := newLogger(os.Stderr, service)
 	// A line written through the default logger lands in the same
@@ -89,7 +80,7 @@ func newObservability(service string) (*observability, error) {
 
 	// No span exporter: garam has nowhere to ship spans to yet. The
 	// provider still mints the trace_id every line below carries, and
-	// the propagator keeps that id across the api → authz hop.
+	// the propagator keeps that id across a call between processes.
 	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithResource(res)))
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
@@ -235,108 +226,6 @@ func (o *observability) recoverPanics(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
-}
-
-// recoverRPCs is the gRPC counterpart of recoverPanics, which net/http
-// middleware cannot reach. grpc-go carries no recover of its own, so a
-// panicking handler reaches no frame that stops it and ends `serve
-// authz`, where every other listener drops one connection.
-//
-// It is the outermost interceptor, so this line is the only one the
-// call leaves: the stack goes to the line and the caller is told
-// "internal error" (ADR-0003). Unary only — both generated ServiceDescs
-// carry an empty Streams, so one added later registers its own.
-func (o *observability) recoverRPCs(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-	defer func() {
-		v := recover()
-		if v == nil {
-			return
-		}
-		o.logger.LogAttrs(ctx, slog.LevelError, "rpc panic",
-			slog.String("operation", info.FullMethod),
-			slog.String("code", codes.Internal.String()),
-			slog.String("error", fmt.Sprintf("panic: %v\n%s", v, debug.Stack())))
-		resp, err = nil, status.Error(codes.Internal, "internal error")
-	}()
-	return handler(ctx, req)
-}
-
-// logRPCs is the gRPC counterpart of logRequests. The engine's
-// principal is the subject the request asks about. The line takes the
-// cause on a fault of this process, and on any code whose chain
-// reaches an error from outside — wire.MessageOf gave that caller the
-// kind's own sentence, so the line is where the chain survives
-// (runtime-safety.md §Errors reach a handler).
-func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	resp, err := handler(ctx, req)
-
-	subject := ""
-	if named, ok := req.(interface{ GetSubjectGrn() string }); ok {
-		subject = named.GetSubjectGrn()
-	}
-	attrs := []slog.Attr{
-		slog.String("operation", info.FullMethod),
-		slog.String("code", status.Code(err).String()),
-		principalAttr(principalField(subject), subject),
-	}
-	if err != nil && (serverFault(status.Code(err)) || hasForeignCause(err)) {
-		attrs = append(attrs, slog.String("error", causeText(err)))
-	}
-	o.logger.LogAttrs(ctx, levelOf(err != nil), "rpc", attrs...)
-	return resp, err
-}
-
-// causeText is what a fault's line says about the error. The engine
-// answers with the status a caller may read over the chain it holds
-// (runtime-safety.md §Errors reach a handler), so the chain is what
-// this line takes; an error carrying nothing under it reads as its own
-// status message.
-func causeText(err error) string {
-	if cause := errors.Unwrap(err); cause != nil {
-		return cause.Error()
-	}
-	return status.Convert(err).Message()
-}
-
-// hasForeignCause reports whether err carries a chain reaching an
-// error this project did not write. grpcError keeps that chain under
-// the status a peer reads, and wire.MessageOf replaced its text
-// there, so what named the constraint and the SQLSTATE is on this
-// line or nowhere.
-func hasForeignCause(err error) bool {
-	cause := errors.Unwrap(err)
-	return cause != nil && !wire.IsAuthored(cause)
-}
-
-// serverFault reports whether a gRPC code is what the HTTP surfaces
-// answer a 5xx for: the kinds that mean a fault of this process, and
-// the transient ones a caller retries. Kinds are gRPC-aligned
-// (ADR-0003), so the set mirrors statusOf's 5xx half by name.
-func serverFault(code codes.Code) bool {
-	switch code {
-	case codes.Unknown, codes.Internal, codes.DataLoss,
-		codes.Unimplemented, codes.Unavailable, codes.Canceled, codes.DeadlineExceeded:
-		return true
-	}
-	return false
-}
-
-// principalField names the field a subject GRN is logged under. The
-// engine matches subject strings and does not validate that one names a
-// user or a group (ADR-0008), so an agent or the operator that runs it
-// (ADR-0014, ADR-0015) reaches it as readily as a person does, and only
-// the GRN tells them apart. A subject that is no GRN at all names no
-// machine.
-func principalField(subject string) string {
-	g, err := grn.Parse(subject)
-	if err != nil {
-		return fieldUserID
-	}
-	switch g.ServiceType {
-	case agent.ServiceType, agent.ServiceTypeOperator:
-		return fieldMachineID
-	}
-	return fieldUserID
 }
 
 // levelOf grades a finished call: a failure is worth waking someone

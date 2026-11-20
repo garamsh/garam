@@ -94,31 +94,48 @@ function HoldersLine({ holders }: { holders: Holders }) {
 }
 
 /**
- * The grant behind an allowed action, read from the organization down.
- * A denied one names the permission it lacks; its reason is said once,
- * beside the inactive control, and not repeated here (ADR-0116).
+ * The grounds the policy service named for an action, read from the
+ * organization down. A denied action names the permission it lacks, and
+ * beside it any guardrail that forbade it; the reason it is inactive is
+ * said once, beside the inactive control, and not repeated here
+ * (ADR-0116).
  */
 function Grant({ reading }: { reading: Reading }) {
-  if (reading.permission === "denied") {
-    return (
-      <p>
-        Missing{" "}
-        <code className="font-mono text-xs">{reading.action.check.action}</code>
-      </p>
-    );
-  }
   const { explanation } = reading;
-  if (explanation?.basis !== "statements") return null;
-  const lines = grantLines(explanation.statements);
+  const lines =
+    explanation?.basis === "policy-service"
+      ? grantLines(explanation.grounds)
+      : [];
+  const denied = reading.permission === "denied";
+  // The grounds are the policy service's, so what they did is its
+  // decision, not the check's.
+  const forbidden = explanation?.decision === "deny";
   return (
-    <ol className="flex flex-col gap-1">
-      {lines.map((line, index) => (
-        <li key={index}>
-          {line.effect === "Deny" ? "Denied by " : ""}
-          {line.text}
-        </li>
-      ))}
-    </ol>
+    <>
+      {denied && (
+        <p>
+          Missing{" "}
+          <code className="font-mono text-xs">
+            {reading.action.check.action}
+          </code>
+        </p>
+      )}
+      {lines.length > 0 && (
+        <ol className="flex flex-col gap-1">
+          {lines.map((line, index) => (
+            <li key={index}>
+              {forbidden ? "Denied by " : ""}
+              {line.text}
+              {line.detail !== undefined && (
+                <pre className="mt-1 overflow-x-auto font-mono text-xs">
+                  {line.detail}
+                </pre>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
   );
 }
 
@@ -131,7 +148,7 @@ const STATUS = {
 /**
  * Reads what Your access shows for the page's actions: one check for
  * all of them, then each explained, in parallel, and who holds an
- * action only where the engine denied it. A page awaits it beside its
+ * action only where the policy service denied it. A page awaits it beside its
  * own reads, so the panel adds no round trip after them.
  */
 export async function readAccess(
@@ -151,7 +168,8 @@ export async function readAccess(
     actions.map(async (action, index) => {
       const explanation = explanations[index];
       const holders =
-        explanation?.decision === "deny" && explanation.basis === "statements"
+        explanation?.decision === "deny" &&
+        explanation.basis === "policy-service"
           ? await listPermissionHolders(org, action.check)
           : undefined;
       return {
@@ -174,7 +192,7 @@ function listed(labels: readonly string[]): string {
 /**
  * Your access (ADR-0113): one line saying what the caller may not do
  * on this object, and behind an expander (ADR-0116) the grant behind
- * each action, asked of garam's policy engine rather than inferred from
+ * each action, asked of garam's policy service rather than inferred from
  * a role, with who holds a denied one. An explanation that failed
  * leaves the check's answer standing.
  */

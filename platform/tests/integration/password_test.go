@@ -194,7 +194,7 @@ func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
 		authnpg.NewSessionStore(p), nil,
 		authnpg.NewPasswordCredentialStore(p),
 		authnpg.NewPasswordAttemptStore(p),
-		nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
+		nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)
 	register := func(token string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/auth/password/register", strings.NewReader(
@@ -247,7 +247,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 		authnpg.NewSessionStore(p), nil,
 		authnpg.NewPasswordCredentialStore(p),
 		authnpg.NewPasswordAttemptStore(p),
-		nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
+		nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)
 
 	post := func(path, body string) *httptest.ResponseRecorder {

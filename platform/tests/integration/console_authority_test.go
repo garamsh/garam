@@ -18,7 +18,6 @@ import (
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // consoleOperations is every operation a console read or publication is
@@ -67,8 +66,7 @@ func bindingOf(t *testing.T, body string) machinegen.OperationBinding {
 // it differs from in one field.
 func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, consoleOperations...)
 	orgTarget := s.acme.String()
 	const templates = "/prefix/v1/orgs/acme/templates?after=web%20agent"
@@ -132,12 +130,11 @@ func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T
 // answers that binding. Each refusal sits beside an accepted call it
 // differs from in one thing:
 //   - another target, or no request target;
-//   - a member a Deny takes iam:operator.read from, beside the owner;
+//   - a member the policy service denies iam:operator.read, beside the owner;
 //   - a grant that no longer lists the operation.
 func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	d := s.grant(t, "g-1", nil, "iam:operator.read")
 	orgTarget := s.acme.String()
 	const operators = "/v1/orgs/acme/operators"
@@ -160,9 +157,7 @@ func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
 	status, got = s.mintTarget(t, s.member, "iam:operator.read", orgTarget, "operators-4", "")
 	assert.Equal(t, http.StatusBadRequest, status, "the read binds its request target: %s", got)
 
-	denied := activePolicy(t, policies, s.acme, "deny-operator-read",
-		statementDoc("deny-operator-read", wire.EffectDeny, org.ActionOperatorRead, s.acme.String()))
-	attachPolicy(t, policies, denied, s.memberGRN)
+	s.decisions.forbid(s.memberGRN, org.ActionOperatorRead)
 	status, got = s.mintTarget(t, s.member, "iam:operator.read", orgTarget, "operators-5", operators)
 	assert.Equal(t, http.StatusForbidden, status, "a caller without iam:operator.read: %s", got)
 	status, got = s.mintTarget(t, s.owner, "iam:operator.read", orgTarget, "operators-5", operators)
@@ -180,8 +175,7 @@ func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
 // and a publication's request identifier stays bound to its body.
 func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, append([]string{"iam:agent.configure", "iam:agent.recover"}, consoleOperations...)...)
 	agentGRN := s.provisionAgent(t)
 	const target = "/v1/orgs/acme/agents/x/revisions"
@@ -227,8 +221,7 @@ func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
 // control, minting the same request.
 func TestConsoleAuthority_EachReadNeedsItsOwnDelegation(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	d := s.grant(t, "g-1", nil, "iam:agent.create", "iam:agent.configure")
 
 	status, got := s.mintTarget(t, s.owner, "iam:agent-template.read", s.acme.String(), "read-1", "/v1/orgs/acme/templates")
@@ -243,15 +236,14 @@ func TestConsoleAuthority_EachReadNeedsItsOwnDelegation(t *testing.T) {
 // TestConsoleAuthority_RechecksBeforeTheOperatorAnswers holds that a
 // read authority is decided again from current state each time the
 // Operator introspects it, before it may answer: another audience, a
-// removed membership, a policy Deny, an expired delegation and a
+// removed membership, a service denial, an expired delegation and a
 // withdrawn one each refuse. The owner's authority, which the first
 // three do not reach, is the control for them, and each authority
 // answered just before the change that refuses it.
 func TestConsoleAuthority_RechecksBeforeTheOperatorAnswers(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	d := s.grant(t, "g-1", nil, consoleOperations...)
 	minted := func(cookie *http.Cookie, requestID string) string {
 		status, got := s.mintTarget(t, cookie, "iam:agent-template.read", s.acme.String(), requestID, "/v1/orgs/acme/templates")
@@ -275,11 +267,9 @@ func TestConsoleAuthority_RechecksBeforeTheOperatorAnswers(t *testing.T) {
 	status, got = s.introspect(t, s.hostedTLS, byMember)
 	require.Equal(t, http.StatusOK, status, "membership restored, so the refusal above was its: %s", got)
 
-	denied := activePolicy(t, policies, s.acme, "deny-template-read",
-		statementDoc("deny-template-read", wire.EffectDeny, "iam:agent-template.read", s.acme.String()))
-	attachPolicy(t, policies, denied, s.memberGRN)
+	s.decisions.forbid(s.memberGRN, "iam:agent-template.read")
 	status, _ = s.introspect(t, s.hostedTLS, byMember)
-	assert.Equal(t, http.StatusForbidden, status, "a Deny wins over the member default")
+	assert.Equal(t, http.StatusForbidden, status, "the service's denial wins over the member default")
 	status, got = s.introspect(t, s.hostedTLS, byOwner)
 	assert.Equal(t, http.StatusOK, status, "the Deny reaches only the member: %s", got)
 
@@ -314,23 +304,20 @@ func plain(t *testing.T, method, url string, cookie *http.Cookie, body string) (
 
 // TestControlEndpoint_IsTheDelegatingActNotARename holds that the
 // endpoint receiving operation authority moves only under
-// iam:operator.delegate. A member a policy lets rename the operator
+// iam:operator.delegate. A member a permit lets rename the operator
 // renames it, which is the control, and cannot set or clear its
 // endpoint; the rename leaves the endpoint where the owner put it, and
 // moving the endpoint moves no audience an authority already names.
 func TestControlEndpoint_IsTheDelegatingActNotARename(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newAuthorityStack(t, engine, p)
+	s := newAuthorityStack(t, p)
 	s.grant(t, "g-1", nil, consoleOperations...)
 	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
 	operatorPath := s.browser + "/orgs/acme/operators/hosted"
 
-	renamer := activePolicy(t, policies, s.acme, "rename-operators",
-		statementDoc("rename-operators", wire.EffectAllow, org.ActionOperatorUpdate, s.acme.String()))
-	attachPolicy(t, policies, renamer, s.memberGRN)
+	s.decisions.permit(s.memberGRN, org.ActionOperatorUpdate)
 	status, got := plain(t, http.MethodPatch, operatorPath, s.member, `{"name":"Hosted control"}`)
-	require.Equal(t, http.StatusOK, status, "the policy lets the member rename: %s", got)
+	require.Equal(t, http.StatusOK, status, "the permit lets the member rename: %s", got)
 	status, got = call(t, http.DefaultClient, http.MethodPut, endpointPath, s.member, `{"url":"https://evil.example.com"}`)
 	assert.Equal(t, http.StatusForbidden, status, "renaming is not the delegating act: %s", got)
 

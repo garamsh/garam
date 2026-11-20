@@ -5,6 +5,7 @@ import {
   HardDrive,
   House,
   Server,
+  ScrollText,
   Settings,
   ShieldCheck,
   UserRound,
@@ -40,15 +41,7 @@ export type ConsoleSection = {
     /** Pages below an entry's own page, each a segment of its own. */
     pages?: readonly ConsoleItemPage[];
   };
-  /**
-   * Named pages below the section beside its entries, each a view of
-   * the section rather than an entry of it.
-   */
-  views?: readonly ConsoleView[];
 };
-
-/** A named view below a section. */
-export type ConsoleView = { segment: string; label: string };
 
 /** A page below one entry's page, such as an operator's setup. */
 export type ConsoleItemPage = { segment: string; label: string };
@@ -123,8 +116,19 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     label: "Permissions",
     icon: ShieldCheck,
     read: "iam:policy.read",
-    items: { create: "New policy", fallback: "Policy" },
-    views: [{ segment: "attachments", label: "Attachments" }],
+    // A policy's identifier is the platform's `p-` or `link-` one, so
+    // `new` takes none; `new-version` sits below an identifier.
+    items: {
+      create: "New policy",
+      fallback: "Policy",
+      pages: [{ segment: "new-version", label: "New version" }],
+    },
+  },
+  {
+    segment: "audit",
+    label: "Audit",
+    icon: ScrollText,
+    read: "iam:audit.read",
   },
   {
     segment: "settings",
@@ -152,6 +156,7 @@ export const CONSOLE_NAV: readonly NavGroup[] = [
       "agents",
       "teams",
       "permissions",
+      "audit",
       "operators",
       "hosts",
       "settings",
@@ -181,7 +186,7 @@ export function navEntryCurrent(
 /**
  * Where a console pathname sits in the console's structure. `item` is
  * the segment below a section that has item pages: `NEW_ITEM` for its
- * create page, a named view's segment, or an entry's identifier.
+ * create page, or an entry's identifier.
  */
 export type ConsoleLocation =
   | { kind: "orgs" }
@@ -237,13 +242,10 @@ export function parseConsolePath(pathname: string): ConsoleLocation {
   const section = CONSOLE_SECTIONS.find((item) => item.segment === segment);
   if (!section) return { kind: "unknown" };
   if (segments.length === 6) {
-    const isView = section.views?.some(
-      (entry) => entry.segment === segments[4],
-    );
     const itemPage = section.items?.pages?.find(
       (page) => page.segment === segments[5],
     );
-    if (isView || !itemPage) return { kind: "unknown" };
+    if (!itemPage) return { kind: "unknown" };
     return {
       kind: "org",
       org: segments[2],
@@ -290,7 +292,6 @@ export function consoleCrumbs(
       if (item === undefined || !section.items) {
         return [...trail, { label: section.label }];
       }
-      const view = section.views?.find((entry) => entry.segment === item);
       const sectionCrumb: Crumb = {
         label: section.label,
         href: orgHref(location.org, section.segment),
@@ -311,10 +312,9 @@ export function consoleCrumbs(
         sectionCrumb,
         {
           label:
-            view?.label ??
-            (item === NEW_ITEM && section.items.create !== undefined
+            item === NEW_ITEM && section.items.create !== undefined
               ? section.items.create
-              : (itemName ?? section.items.fallback)),
+              : (itemName ?? section.items.fallback),
         },
       ];
     }

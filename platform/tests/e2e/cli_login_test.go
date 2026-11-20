@@ -27,13 +27,10 @@ import (
 func TestCLI_TheBuiltBinaryLogsInByTheDeviceGrant(t *testing.T) {
 	garam, client := buildGaram(t), buildGaramCLI(t)
 	p := prepareDatabase(t, buildPrincipalFixture(t))
-	grpcAddr, metricsAddr, httpAddr := freeAddr(t), freeAddr(t), freeAddr(t)
-	serve(t, garam, "authz", []string{
-		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_GRPC_ADDR=" + grpcAddr, "GARAM_METRICS_ADDR=" + metricsAddr,
-	}, "http://"+metricsAddr+readyPath)
-	stopAPI := serve(t, garam, "api", []string{
-		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + httpAddr, "GARAM_AUTHZ_ADDR=" + grpcAddr,
-	}, "http://"+httpAddr+readyPath)
+	httpAddr := freeAddr(t)
+	stopAPI := serve(t, garam, "api", append([]string{
+		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + httpAddr,
+	}, apiPolicyEnv(t)...), "http://"+httpAddr+readyPath)
 	api, err := url.Parse("http://" + httpAddr)
 	require.NoError(t, err)
 	console := httptest.NewServer(http.StripPrefix("/api", httputil.NewSingleHostReverseProxy(api)))

@@ -4,6 +4,13 @@ For each of the six images, what any deployment must provide and what
 the process does with it, read off the source, so that a deployment that
 is not the Helm chart is written from this document.
 
+`garam serve authz`, the earlier policy engine, is removed
+([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)),
+and with it `GARAM_AUTHZ_ADDR`, `GARAM_GRPC_ADDR` and
+`GARAM_METRICS_ADDR`: no entry below lists them. Entries that cite a
+line of `serve.go`, `machine.go`, `cli.go` or `shutdown.go` cite the
+commit below, and those files have changed since.
+
 Every claim holds at commit
 `210b58da3bcdf9b4e3fd5346dca01a74f9d80e4e`, read from the files cited,
 and is not checked against any later one. The exception is the
@@ -17,7 +24,6 @@ of #1833 (ADR-0152), whose line numbers differ from that commit's in
 - Reading the entries
 - The images
 - garam/server: serve api
-- garam/server: serve authz
 - garam/server: serve machine
 - garam/server: migrate
 - garam/console
@@ -78,7 +84,6 @@ none of this onto any deployment kind.
 | Entry | Settings | Files | Listeners |
 |---|---|---|---|
 | `serve api` | 15 | 2 | 1 |
-| `serve authz` | 3 | 0 | 2 |
 | `serve machine` | 20 | 8 | 2 |
 | `garam migrate` | 2 | 0 | 0 |
 | `garam/console` | 3 (+3 image) | 0 | 1 |
@@ -161,7 +166,6 @@ plaintext HTTP port (`serve.go:51-159`).
 |---|---|---|
 | `GARAM_DATABASE_URL` | yes | exit 1, "GARAM_DATABASE_URL is required" (`connect.go:17-27`) |
 | `GARAM_HTTP_ADDR` | no | `:8080` (`serve.go:153`) |
-| `GARAM_AUTHZ_ADDR` | no | `localhost:9090`; insecure gRPC, connected lazily (`connect.go:34-38`) |
 | `GARAM_SESSION_TTL` | no | `168h`; an unparsable value is refused (`serve.go:81-83`) |
 | `GARAM_COOKIE_SECURE` | no | `true`; an unparsable value is refused (`serve.go:85`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URL` | no | no Google sign-in; the first two are set together or neither (`serve.go:215-234`) |
@@ -200,7 +204,7 @@ Read timeout 30s, a request body bounded at 1 MiB, keep-alives off
 (`cli.go:263,273`, `serve.go:168-176,200`).
 
 **Probes.** `/healthz` and `/readyz` on the same port. Readiness is
-bounded at 2s and reports the database and the authz channel
+bounded at 2s and reports the database
 (`platform/internal/health/health.go:17-72`, `serve.go:156,236-260`).
 What readiness reports is
 [deployment-contract.md](./deployment-contract.md) §What readiness
@@ -214,38 +218,10 @@ process logs "shutdown abandoned work in flight" and still exits 0
 version when `serve api` starts, so what it does against a database not
 migrated is under §Not established.
 
-**Calls.** PostgreSQL (`GARAM_DATABASE_URL`), the authz process
-(`GARAM_AUTHZ_ADDR`), the policy service where configured, and Google
-where configured. It holds one session connection for `LISTEN`, from
-which a goroutine relays turn events
+**Calls.** PostgreSQL (`GARAM_DATABASE_URL`), the policy service where
+configured, and Google where configured. It holds one session
+connection for `LISTEN`, from which a goroutine relays turn events
 (`platform/internal/watch/postgres/postgres_relay.go:152`).
-
-## garam/server: serve authz
-
-`garam serve authz` answers authorization over gRPC for the other
-`garam` processes (`serve.go:274-325`). Issue #1796 is named to remove
-it, and the command exists at this commit, so it is described as it
-stands.
-
-| Setting | Required | If unset |
-|---|---|---|
-| `GARAM_DATABASE_URL` | yes | exit 1 (`connect.go:17-27`) |
-| `GARAM_GRPC_ADDR` | no | `:9090` (`serve.go:299`) |
-| `GARAM_METRICS_ADDR` | no | `:9091` (`serve.go:308`) |
-
-- **Listeners.** `GARAM_GRPC_ADDR`: gRPC, plaintext, no TLS; its callers
-  are `serve api` and `serve machine`. `GARAM_METRICS_ADDR`: HTTP,
-  plaintext, `/healthz`, `/readyz` (database only) and `/metrics`,
-  started after the gRPC port is bound; a failure of it is logged and
-  does not stop the process (`serve.go:305-315`).
-- **Files.** None.
-- **Stop.** As `serve api` for the gRPC port (`shutdown.go:59-77`:
-  graceful stop, then forced after 10s). The probe listener has no
-  graceful stop (`serve.go:312`).
-- **Before start.** `garam migrate` complete; the same absence as above.
-- **Calls.** PostgreSQL only. It holds one session connection for
-  `LISTEN` on the policy-change channel
-  (`platform/internal/authz/postgres/listener.go:71`).
 
 ## garam/server: serve machine
 
@@ -257,7 +233,6 @@ owner's states the rule on what may stand in front of it.
 | Setting | Required | If unset |
 |---|---|---|
 | `GARAM_DATABASE_URL` | yes | exit 1 (`connect.go:17-27`) |
-| `GARAM_AUTHZ_ADDR` | no | `localhost:9090` (`connect.go:38`) |
 | `GARAM_MACHINE_ADDR` | no | `:8443` (`machine.go:142`) |
 | `GARAM_MACHINE_HEALTH_ADDR` | no | `:8444` (`machine.go:146`) |
 | `GARAM_MACHINE_TLS_CERT_FILE` | yes | refused at start (`machine.go:400`) |
@@ -309,7 +284,7 @@ owner's states the rule on what may stand in front of it.
   cowork and codehub at `/oauth/token`, and codehub at
   `/oauth/introspect` (§codehub as a caller).
   `GARAM_MACHINE_HEALTH_ADDR`: HTTP, plaintext, `/healthz`, `/readyz`
-  (database and authz channel) and `/metrics` (`machine.go:146-155`).
+  (database) and `/metrics` (`machine.go:146-155`).
 - **Assertion audience.** A service principal's assertion names as `aud`
   `GARAM_IDENTITY_ISSUER` as the only value, with `typ`
   `client-authentication+jwt` or `JWT`. An `aud` naming the endpoint's
@@ -324,7 +299,7 @@ owner's states the rule on what may stand in front of it.
 - **Stop.** The TLS listener through `serveHTTP`, 10s as `serve api`;
   the health listener has no graceful stop (`machine.go:150,157`).
 - **Before start.** `garam migrate` complete; the same absence.
-- **Calls.** PostgreSQL, the authz process, and Transit where
+- **Calls.** PostgreSQL, the policy service, and Transit where
   `GARAM_TRANSIT_ADDR` is set.
 
 ## garam/server: migrate
@@ -675,7 +650,7 @@ its objects:
 
 | Database | Setting | Read by | Migrated by |
 |---|---|---|---|
-| garam's | `GARAM_DATABASE_URL` | `serve api`, `serve authz`, `serve machine`, `garam migrate` | `garam migrate` |
+| garam's | `GARAM_DATABASE_URL` | `serve api`, `serve machine`, `garam migrate` | `garam migrate` |
 | cowork's | `COWORK_DATABASE_URL` | `cowork serve`, `cowork migrate` | `cowork migrate` |
 | the policy service's | `POLICY_DATABASE_URL` | `policy serve`, `policy migrate` | `policy migrate` |
 
@@ -685,13 +660,10 @@ its objects:
   `cowork/migrations` and `policy/migrations` for `CREATE EXTENSION`
   found nothing.
 - **Session connections.** `LISTEN` holds a connection for the life of
-  the process: `serve authz`
-  (`platform/internal/authz/postgres/listener.go:71`) and `serve api`
-  (`platform/internal/watch/postgres/postgres_relay.go:152`), both on
+  the process: `serve api`
+  (`platform/internal/watch/postgres/postgres_relay.go:152`), on
   garam's database. `pg_notify` is called by `serve api`
-  (`postgres_relay.go:76,101`) and by two triggers in
-  `platform/migrations/000002_policies.up.sql:43` and
-  `000003_policy_attachments.up.sql:44`. A pooler that does not keep a
+  (`postgres_relay.go:76,101`). A pooler that does not keep a
   session for the connection breaks the listeners; whether it does is
   the pooler's. No other process in the six listens.
 - The roles' privileges beyond those the migrations need are not

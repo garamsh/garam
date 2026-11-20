@@ -39,15 +39,9 @@ const CLAIMS: Claim[] = [
     ],
   },
   {
-    prose: [
-      "is a subject of the same policies",
-      "Attaching one to a user, a group, or an agent decides who it reaches",
-    ],
+    prose: ["is a subject of the same policies"],
     pinned: [],
-    facts: [
-      { kind: "adr", id: "0008", status: "accepted" },
-      { kind: "adr", id: "0024", status: "accepted" },
-    ],
+    facts: [{ kind: "adr", id: "0024", status: "accepted" }],
   },
   {
     prose: ["exchanges messages on a listener of its own"],
@@ -159,10 +153,12 @@ const CLAIMS: Claim[] = [
     ],
     pinned: [],
     facts: [
-      { kind: "path", path: "platform/internal/authz", exists: true },
-      { kind: "migration", table: "policies" },
-      { kind: "migration", table: "policy_attachments" },
-      { kind: "migration", table: "policy_versions" },
+      { kind: "path", path: "policy/crates/grant", exists: true },
+      {
+        kind: "path",
+        path: "policy/migrations/000001_policies.up.sql",
+        exists: true,
+      },
     ],
   },
   {

@@ -128,13 +128,6 @@ api:
   podAnnotations: {}
   resources: {}
 
-authz:
-  serviceAccount:
-    name: ""
-    create: false
-    annotations: {}
-  resources: {}
-
 # The policy service (ADR-0146): a process that decides every request
 # the listeners take and stores an organization's policies. Its
 # database is its own, and its image is `image.policy`.

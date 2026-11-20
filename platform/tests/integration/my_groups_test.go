@@ -13,7 +13,6 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/org"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // group creates a group of acme holding members and answers its GRN.
@@ -76,23 +75,22 @@ func TestListGroups_MemberMePages(t *testing.T) {
 	assert.Equal(t, []string{qa.String()}, s.groupsListed(t, s.ada, page))
 }
 
-// TestListGroups_MemberMeIsReadOnGroupRead denies iam:group.read to
-// bob: member=me refuses him as the unfiltered list does. His answer
-// before the Deny is the control, and the owner's after it shows the
-// Deny reached bob alone. A member value other than me is refused.
+// TestListGroups_MemberMeIsReadOnGroupRead has the policy service
+// forbid iam:group.read to bob: member=me refuses him as the
+// unfiltered list does. His answer before the forbid is the control,
+// and the owner's after it shows the
+// forbid reached bob alone. A member value other than me is refused.
 func TestListGroups_MemberMeIsReadOnGroupRead(t *testing.T) {
 	s := newExplainStack(t)
-	require.Equal(t, []string{s.eng.String()}, s.groupsListed(t, s.bob, mine), "control, before the Deny")
+	require.Equal(t, []string{s.eng.String()}, s.groupsListed(t, s.bob, mine), "control, before the forbid")
 
-	denied := activePolicy(t, s.policies, s.acme, "no-group-read",
-		statementDoc("no-group-read", wire.EffectDeny, org.ActionGroupRead, s.acme.String()))
-	attachPolicy(t, s.policies, denied, s.bobGRN)
+	s.decisions.forbid(s.bobGRN, org.ActionGroupRead)
 
 	status, body := s.get(t, "/orgs/acme/groups", mine, s.bob)
 	assert.Equal(t, http.StatusForbidden, status, body)
 	status, body = s.get(t, "/orgs/acme/groups", nil, s.bob)
 	assert.Equal(t, http.StatusForbidden, status, "the unfiltered list refuses him the same way: %s", body)
-	assert.Equal(t, []string{s.eng.String()}, s.groupsListed(t, s.ada, mine), "the owner, whom the Deny does not reach")
+	assert.Equal(t, []string{s.eng.String()}, s.groupsListed(t, s.ada, mine), "the owner, whom the forbid does not reach")
 
 	status, body = s.get(t, "/orgs/acme/groups", url.Values{"member": {s.adaGRN.String()}}, s.ada)
 	assert.Equal(t, http.StatusBadRequest, status, "member names the caller alone: %s", body)

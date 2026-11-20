@@ -129,7 +129,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 	assert.Equal(t,
 		[]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
-			org.ActionAuditRead,
+			org.ActionAuditRead, org.ActionPermitWrite,
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,

@@ -38,15 +38,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
-	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
 	"github.com/garamsh/garam/platform/internal/ca"
 	"github.com/garamsh/garam/platform/internal/cli"
 	"github.com/garamsh/garam/platform/internal/message"
@@ -55,8 +52,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/policydecision"
-	"github.com/garamsh/garam/platform/internal/wire"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/user"
 )
 
 var migrateOnce sync.Once
@@ -139,8 +135,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
 		oauth_states, password_credentials, password_attempts,
-		policies, policy_versions, policy_attachments, agents,
-		agent_assignments, operators, certificate_authorities,
+		agents, agent_assignments, operators, certificate_authorities,
 		operator_assertions,
 		messages, message_consents, message_signing_keys, agent_watches,
 		audit_send_events, policy_outbox CASCADE`)
@@ -264,26 +259,6 @@ func seedAgent(t *testing.T, s *agentpg.Store, orgGRN grn.GRN) grn.GRN {
 
 func ptr[T any](v T) *T { return &v }
 
-// policyDoc builds a one-statement document whose Sid identifies the
-// version it belongs to.
-func policyDoc(sid string, effect wire.Effect) authz.PolicyDocument {
-	return statementDoc(sid, effect, "iam:org.read", "grn:acme/*")
-}
-
-// statementDoc builds a one-statement document over an explicit action
-// and resource pattern.
-func statementDoc(sid string, effect wire.Effect, action, resource string) authz.PolicyDocument {
-	return authz.PolicyDocument{
-		Version: "2026-07-25",
-		Statement: []authz.Statement{{
-			Sid:      sid,
-			Effect:   effect,
-			Action:   []string{action},
-			Resource: []string{resource},
-		}},
-	}
-}
-
 // newPolicyOrg creates the org a policy hangs off and returns its GRN.
 func newPolicyOrg(t *testing.T, p *pgxpool.Pool) grn.GRN {
 	t.Helper()
@@ -303,47 +278,23 @@ func scopedGRN(orgName, serviceType, id string) grn.GRN {
 	return grn.New(orgName, serviceType, id)
 }
 
-// activePolicy creates and activates a policy in orgGRN through the
-// lifecycle service, so the cache is dropped the way a production write
-// drops it. It returns the policy GRN in wire form.
-func activePolicy(t *testing.T, srv *authz.PolicyGRPCServer, orgGRN grn.GRN, name string, doc authz.PolicyDocument) string {
-	t.Helper()
-	ctx := context.Background()
-	raw, err := json.Marshal(doc)
-	require.NoError(t, err)
-	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
-		OrgGrn:    orgGRN.String(),
-		Name:      name,
-		Document:  string(raw),
-		CreatedBy: scopedGRN(orgGRN.Identifier, "user", "ada").String(),
-	})
-	require.NoError(t, err)
-	policyGRN := created.GetPolicy().GetGrn()
-	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
-	require.NoError(t, err)
-	return policyGRN
-}
-
-// attachPolicy attaches policyGRN to subject through the lifecycle
-// service.
-func attachPolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, subject grn.GRN) {
-	t.Helper()
-	_, err := srv.AttachPolicy(context.Background(), &authzv1.AttachPolicyRequest{
-		PolicyGrn:  policyGRN,
-		SubjectGrn: subject.String(),
-	})
-	require.NoError(t, err)
-}
-
 // briefDelivery is the queue's delivery configuration with the waits
 // shortened to what a test can sit through. What each parameter governs
 // is unchanged; `garam serve machine` runs on the defaults.
+//
+// Wait exceeds Lease by a second, which TestMessageStatus_ASender... relies
+// on: it takes a message, lets the lease lapse and polls again, and that
+// poll is the wait. A poll starts after the claim it waits out and its last
+// query can start before the lease lapses, so a Wait equal to Lease leaves
+// the poll only the milliseconds between them and it answers 204 under
+// load (#1982). A second is far past what a loaded machine adds to one
+// request.
 func briefDelivery() message.Config {
 	return message.Config{
 		Lease:        2 * time.Second,
 		LeaseCeiling: 5 * time.Second,
 		Attempts:     2,
-		Wait:         2 * time.Second,
+		Wait:         3 * time.Second,
 		PollInterval: 20 * time.Millisecond,
 	}
 }
@@ -393,38 +344,13 @@ func certificatePEM(c listenerCertificate) []byte {
 	return out
 }
 
-// policyEngine serves the authz engine over gRPC against the policies
-// Postgres holds, and returns the lifecycle service an organization
-// writes them through beside the seam the machine listener asks
-// through. It is the pair of processes `garam serve authz` and `garam
-// serve machine` are, over one database.
-func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, *grpc.ClientConn) {
-	t.Helper()
-	store := authzpg.New(p)
-	cache := authz.NewPolicyCache(store)
-
-	srv := grpc.NewServer()
-	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(srv.Stop)
-
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	// Writes made through this service drop the org's cache entry
-	// directly, as they do in the engine's own process.
-	return authz.NewPolicyGRPCServer(store, cache), conn
-}
-
 // sameOrganizationSends is the policydecision.Service the default
 // suite's machine listener asks about a send, in the place of the
 // policy service this suite does not run (ADR-0168). It answers what
 // the service answers for the pairs the suite sends between: allow
 // where sender and recipient share an organization, deny across the
 // boundary, where no consent relation is held. The suite tagged
-// policymatrix asks the real service instead.
+// policyservice asks the real service instead.
 type sameOrganizationSends struct{ policydecision.Service }
 
 func (sameOrganizationSends) Evaluate(_ context.Context, q policydecision.Question) (policydecision.Decision, error) {
@@ -462,6 +388,227 @@ func (s *sendsRefusing) Evaluate(ctx context.Context, q policydecision.Question)
 	return s.sameOrganizationSends.Evaluate(ctx, q)
 }
 
+// currentDecisions is the policydecision.Service the default suite's
+// listeners and browser-facing authority ask about what a user or an
+// operator may do now (ADR-0146 items 14 and 15), in the place of the
+// policy service this suite does not run. A question of an agent that
+// does not ask read-current is a send, answered as
+// sameOrganizationSends answers it.
+//
+// The browser listener's enforcement asks it too (#1974): a question
+// of a user, current or not, is a decision over the state the service
+// has been delivered, since each test here writes its state through the
+// platform and a writer waits for its marks to be delivered (ADR-0146
+// item 5), and it is answered from the role the membership holds.
+//
+// It answers as the service does for the state the platform feeds it
+// and nothing more: a user is allowed what the role the membership
+// holds now carries, an operator is allowed what the platform has
+// checked its grant covers, and either is denied where a test forbids
+// the pair; a test can also make it fail or stall. What the service
+// itself reads, the fed operations, the guardrails and the role links,
+// is held by the suite tagged policyservice against the real service.
+type currentDecisions struct {
+	policydecision.Service
+	orgs org.Store
+
+	mu        sync.Mutex
+	forbidden map[[2]string]bool
+	forbidOns map[[3]string]bool
+	permitted map[[2]string]bool
+	failure   error
+	held      chan struct{}
+	asked     []policydecision.Question
+	enforced  []policydecision.Question
+}
+
+func newCurrentDecisions(p *pgxpool.Pool) *currentDecisions {
+	return &currentDecisions{Service: sameOrganizationSends{}, orgs: orgpg.New(p)}
+}
+
+// forbid makes every question of subject about action a denial.
+func (c *currentDecisions) forbid(subject grn.GRN, action string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.forbidden == nil {
+		c.forbidden = map[[2]string]bool{}
+	}
+	c.forbidden[[2]string{subject.String(), action}] = true
+}
+
+// permit makes every question of subject about action allowed that no
+// forbid refuses: what a permit the owner wrote adds to the role.
+func (c *currentDecisions) permit(subject grn.GRN, action string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.permitted == nil {
+		c.permitted = map[[2]string]bool{}
+	}
+	c.permitted[[2]string{subject.String(), action}] = true
+}
+
+// forbidOn makes every question of subject about action on resource a
+// denial: the one pair a guardrail would forbid, where forbid forbids
+// the action everywhere.
+func (c *currentDecisions) forbidOn(subject grn.GRN, action string, resource grn.GRN) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.forbidOns == nil {
+		c.forbidOns = map[[3]string]bool{}
+	}
+	c.forbidOns[[3]string{subject.String(), action, resource.String()}] = true
+}
+
+// failWith makes every question of a user, and every read-current one,
+// fail with err.
+func (c *currentDecisions) failWith(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.failure = err
+}
+
+// stall makes every question of a user, and every read-current one,
+// wait, answering nothing, until the function it returns is called or
+// the caller gives up.
+func (c *currentDecisions) stall() func() {
+	held := make(chan struct{})
+	c.mu.Lock()
+	c.held = held
+	c.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			c.mu.Lock()
+			c.held = nil
+			c.mu.Unlock()
+			close(held)
+		})
+	}
+}
+
+// currentQuestions are the read-current questions asked so far.
+func (c *currentDecisions) currentQuestions() []policydecision.Question {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]policydecision.Question(nil), c.asked...)
+}
+
+// questions are every question it decided rather than answered as a
+// send: the read-current ones, and those the browser listener's
+// enforcement, its permission checks, its holders list and the probes
+// of a list or the search ask of a user.
+func (c *currentDecisions) questions() []policydecision.Question {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]policydecision.Question(nil), c.enforced...)
+}
+
+// Evaluations answers each question as Evaluate does, and fails whole
+// on the first that errs, as the service's client does.
+func (c *currentDecisions) Evaluations(ctx context.Context, qs []policydecision.Question) ([]policydecision.Decision, error) {
+	out := make([]policydecision.Decision, len(qs))
+	for i, q := range qs {
+		d, err := c.Evaluate(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = d
+	}
+	return out, nil
+}
+
+func (c *currentDecisions) Evaluate(ctx context.Context, q policydecision.Question) (policydecision.Decision, error) {
+	c.mu.Lock()
+	key := [2]string{q.Subject.String(), q.Action}
+	permitted := c.permitted[key]
+	failure := c.failure
+	forbidden := c.forbidden[key] ||
+		c.forbidOns[[3]string{q.Subject.String(), q.Action, q.Resource.String()}]
+	held := c.held
+	// A question no control names, from an agent, is a send's and is
+	// answered as it is without them. A control a test wrote is read
+	// before that, so it is never ignored.
+	delegated := !q.Current && q.Subject.ServiceType != user.ServiceType &&
+		!permitted && !forbidden && failure == nil && held == nil
+	if !delegated {
+		if q.Current {
+			c.asked = append(c.asked, q)
+		}
+		c.enforced = append(c.enforced, q)
+	}
+	c.mu.Unlock()
+	if delegated {
+		return c.Service.Evaluate(ctx, q)
+	}
+	if held != nil {
+		select {
+		case <-held:
+		case <-ctx.Done():
+			return policydecision.Decision{}, ctx.Err()
+		}
+	}
+	switch {
+	case failure != nil:
+		return policydecision.Decision{}, failure
+	case forbidden:
+		return policydecision.Decision{}, nil
+	case q.Subject.ServiceType != user.ServiceType:
+		return policydecision.Decision{Allowed: true}, nil
+	case permitted:
+		return policydecision.Decision{Allowed: true}, nil
+	}
+	owning := q.Resource.Organization
+	if q.Resource.ServiceType == "org" {
+		owning = q.Resource.Identifier
+	}
+	m, err := c.orgs.GetMember(ctx, grn.Org(owning), q.Subject)
+	if errorx.IsKind(err, errorx.KindNotFound) {
+		return policydecision.Decision{}, nil
+	}
+	if err != nil {
+		return policydecision.Decision{}, err
+	}
+	return policydecision.Decision{Allowed: matchAny(m.Role.Actions(), q.Action) &&
+		matchAny([]string{grn.Org(owning).String(), grn.OrgPattern(owning)}, q.Resource.String())}, nil
+}
+
+// matchAny reports whether value matches one of patterns, where `*`
+// matches any run of characters and `?` any one.
+func matchAny(patterns []string, value string) bool {
+	for _, pattern := range patterns {
+		if matchPattern(pattern, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchPattern(pattern, value string) bool {
+	px, vx := 0, 0
+	star, starV := -1, 0
+	for vx < len(value) {
+		switch {
+		case px < len(pattern) && (pattern[px] == '?' || pattern[px] == value[vx]):
+			px++
+			vx++
+		case px < len(pattern) && pattern[px] == '*':
+			star = px
+			starV = vx
+			px++
+		case star != -1:
+			px = star + 1
+			starV++
+			vx = starV
+		default:
+			return false
+		}
+	}
+	for px < len(pattern) && pattern[px] == '*' {
+		px++
+	}
+	return px == len(pattern)
+}
+
 // refusalText is the body of the refusal garam stores to a sender whose
 // message to recipient the policy service did not allow across the
 // boundary, or whose recipient is no agent (ADR-0168). It names neither
@@ -484,26 +631,26 @@ const testTokenURL = "https://garam.test/oauth/token"
 
 // machineListener serves the server `garam serve machine` builds,
 // over the stores Postgres holds, and returns its URL. What the command
-// reads from its configuration is supplied here instead: the sealer and
-// engine the caller holds, a self-signed listener certificate, and
-// delivery waits shortened to what a test can sit through.
-func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface) string {
+// reads from its configuration is supplied here instead: the sealer the
+// caller holds, a self-signed listener certificate, and delivery waits
+// shortened to what a test can sit through.
+func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer) string {
 	t.Helper()
-	return machineListenerHolding(t, p, sealer, engine, nil)
+	return machineListenerHolding(t, p, sealer, nil)
 }
 
 // machineListenerHolding is machineListener with its message signing
 // keys created in signing, or sealed under sealer where signing is nil
 // (ADR-0104).
-func machineListenerHolding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface, signing message.Custodian) string {
+func machineListenerHolding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, signing message.Custodian) string {
 	t.Helper()
-	return machineListenerDeciding(t, p, sealer, engine, signing, sameOrganizationSends{})
+	return machineListenerDeciding(t, p, sealer, signing, newCurrentDecisions(p))
 }
 
 // machineListenerDeciding is machineListenerHolding with the sends it
 // serves decided by decisions: the double the default suite uses, or
 // the real policy service where the suite runs against one.
-func machineListenerDeciding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface, signing message.Custodian, decisions policydecision.Service) string {
+func machineListenerDeciding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, signing message.Custodian, decisions policydecision.Service) string {
 	t.Helper()
 	presented := loopbackCertificate(t)
 	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
@@ -513,7 +660,6 @@ func machineListenerDeciding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, en
 		Certificate:      presented,
 		ServerRoot:       certificatePEM(presented),
 		Delivery:         briefDelivery(),
-		Engine:           engine,
 		Decisions:        decisions,
 		Logger:           slog.New(slog.NewJSONHandler(io.Discard, nil)),
 		TokenURL:         testTokenURL,

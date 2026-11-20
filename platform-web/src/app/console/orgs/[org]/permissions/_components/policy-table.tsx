@@ -5,13 +5,14 @@ import { ShieldCheck } from "lucide-react";
 
 import { CopyId } from "@/components/copy-id";
 import { DataTable, type ColumnDef } from "@/components/data-table";
-import type { Policy } from "@/features/orgs";
+import type { IamPolicy } from "@/features/orgs";
 
 import { EmptyState } from "../../../../_components/empty-state";
+import { POLICY_KIND_LABEL } from "./policy-kind";
 import { POLICY_STATUS_LABEL, PolicyStatus } from "./policy-status";
 
 /** A policy as its row reads it, with the address its page is at. */
-export type PolicyRow = { policy: Policy; identifier: string; href: string };
+export type PolicyRow = { policy: IamPolicy; href: string };
 
 const COLUMNS: ColumnDef<PolicyRow, unknown>[] = [
   {
@@ -29,11 +30,16 @@ const COLUMNS: ColumnDef<PolicyRow, unknown>[] = [
           {row.original.policy.name}
         </Link>
         <CopyId
-          value={row.original.identifier}
+          value={row.original.policy.id}
           label={row.original.policy.name}
         />
       </div>
     ),
+  },
+  {
+    id: "kind",
+    header: "Kind",
+    accessorFn: (row) => POLICY_KIND_LABEL[row.policy.kind],
   },
   {
     id: "status",
@@ -55,30 +61,18 @@ const COLUMNS: ColumnDef<PolicyRow, unknown>[] = [
 
 /**
  * The organization's policies by name, each opening its own page, with
- * where each stands and the version it evaluates while active.
+ * what each is, where it stands and the version it decides by while
+ * active.
  */
-export function PolicyTable({
-  rows,
-  emptyAction,
-}: {
-  rows: PolicyRow[];
-  /** The page's create action, offered by the empty state. */
-  emptyAction?: React.ReactNode;
-}) {
+export function PolicyTable({ rows }: { rows: PolicyRow[] }) {
   return (
     <DataTable
       label="Policies"
       columns={COLUMNS}
       data={rows}
-      getRowId={(row) => row.identifier}
+      getRowId={(row) => row.policy.id}
       search={{ placeholder: "Search policies" }}
-      empty={
-        <EmptyState
-          icon={ShieldCheck}
-          title="No policies"
-          action={emptyAction}
-        />
-      }
+      empty={<EmptyState icon={ShieldCheck} title="No policies" />}
     />
   );
 }

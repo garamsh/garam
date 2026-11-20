@@ -98,12 +98,10 @@ describe("agent page", () => {
       screen.queryByRole("heading", { name: "Reported" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Nothing holds it yet.")).toBeInTheDocument();
+    // Policies are no longer attached from here (ADR-0169).
     expect(
-      screen.getByRole("link", { name: "Manage policies" }),
-    ).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/permissions/attachments?subject=agent%3A1c3d5e7f90a2b4c6",
-    );
+      screen.queryByRole("link", { name: "Manage policies" }),
+    ).not.toBeInTheDocument();
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "Overview",
       "Execution",

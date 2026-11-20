@@ -487,15 +487,15 @@ export interface paths {
         };
         /**
          * Explain why the signed-in caller may or may not take one action. Requires membership.
-         * @description Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
+         * @description Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the policy service's decision for it, asked as a probe and read as the check reads it, so the `decision` is the one `checkPermissions` answers for the pair.
          *
-         *     Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+         *     Where the policy service decides (`basis` is `policy-service`), `grounds` holds what it names: every policy that permits when the answer is `allow`, every policy that forbids when it is `deny` because one does, an evaluation error where a policy failed to evaluate, and none when it is `deny` because nothing permits. A role link is named by its reserved identifier and the path through which it reaches the caller: their organization role, or the roles of a team or a project, which reach the caller on that team or project alone. A guardrail or a permit is named by its identifier, and a system policy by its file name.
          *
-         *     A policy statement is named only where the caller holds `iam:policy.read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+         *     A guardrail or a permit is named with its `name` and its `text` only where the caller holds `iam:policy.read` on the organization, the check `getIamPolicy` makes. Every other one is named without them. A guardrail of another organization that denies a message to the caller's is named by its kind alone.
          *
-         *     The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
+         *     The actions `checkPermissions` puts to more than the policy service — a delegation grant, or the check delegation writes or standalone host approvals run — are explained no further than its answer: `basis` is `operation`, `grounds` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
          *
-         *     The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403.
+         *     The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403. A policy service that does not answer is 503.
          */
         get: operations["explainPermission"];
         put?: never;
@@ -1117,7 +1117,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/policies": {
+    "/orgs/{org}/iam-policies": {
         parameters: {
             query?: never;
             header?: never;
@@ -1125,84 +1125,44 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List an organization's policies. Requires the `admin` role.
-         * @description Authorized on `iam:policy.read` on the organization. Leaves out each policy whose own `iam:policy.read` the caller is denied.
+         * List an organization's role links, guardrails and permits.
+         * @description Read from the policy service as the caller, which answers whoever holds `iam:policy.read` on the organization.
          */
-        get: operations["listPolicies"];
+        get: operations["listIamPolicies"];
         put?: never;
         /**
-         * Create a policy in an organization. Requires the `admin` role.
-         * @description Stores the document as the policy's first version. The policy is a draft until it is activated.
+         * Write an organization's role link, guardrail or permit.
+         * @description Relayed to the policy service as the caller, which stores the first version as a draft and decides, read current, whether the caller may (ADR-0146 item 3). The platform stores none of the body. The identifier is the platform's. A permit is written by an owner alone. A role link the platform derives from a membership is refused with 400.
          */
-        post: operations["createPolicy"];
+        post: operations["createIamPolicy"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/policies/{policy}/versions": {
+    "/orgs/{org}/iam-policies/{iamPolicy}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List a policy's versions. Requires the `admin` role. */
-        get: operations["listPolicyVersions"];
-        put?: never;
-        /**
-         * Append a version to a policy. Requires the `admin` role.
-         * @description Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
-         */
-        post: operations["addPolicyVersion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/orgs/{org}/policies/{policy}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Activate a policy. Requires the `admin` role.
-         * @description An active policy contributes its default version to checks. Activation changes the policy's status and leaves its default version where it is.
-         */
-        post: operations["activatePolicy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/orgs/{org}/policies/{policy}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
+        /** Read a role link, guardrail or permit with its versions. */
+        get: operations["getIamPolicy"];
         put?: never;
         post?: never;
         /**
-         * Delete a policy. Requires the `admin` role.
-         * @description Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `iam:policy.delete`.
+         * Delete a role link, guardrail or permit.
+         * @description Relayed to the policy service as the caller. The service refuses a writer who may not delete this kind of policy.
          */
-        delete: operations["deletePolicy"];
+        delete: operations["deleteIamPolicy"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/policies/{policy}/rollback": {
+    "/orgs/{org}/iam-policies/{iamPolicy}/versions": {
         parameters: {
             query?: never;
             header?: never;
@@ -1212,38 +1172,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Point a policy at a stored version. Requires the `admin` role.
-         * @description Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
+         * Append a version to a role link, guardrail or permit.
+         * @description The body must be of the kind the policy's first version was. A new version is stored and not yet the default.
          */
-        post: operations["rollbackPolicy"];
+        post: operations["createIamPolicyVersion"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/policies/{policy}/attachments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List a policy's attachments. Requires the `admin` role. */
-        get: operations["listPolicyAttachments"];
-        put?: never;
-        /**
-         * Attach a policy to a subject. Requires the `admin` role.
-         * @description The policy then applies to that user or group instead of to the whole organization. A policy with no attachment applies organization-wide.
-         */
-        post: operations["attachPolicy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/orgs/{org}/policies/{policy}/attachments/{subject}": {
+    "/orgs/{org}/iam-policies/{iamPolicy}/activate": {
         parameters: {
             query?: never;
             header?: never;
@@ -1251,13 +1190,50 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /**
+         * Activate a role link, guardrail or permit.
+         * @description An active policy contributes its default version to decisions.
+         */
+        post: operations["activateIamPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/iam-policies/{iamPolicy}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Point a role link, guardrail or permit at a stored version. */
+        post: operations["rollbackIamPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/audit-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an organization's audit records, newest first.
+         * @description Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
+         */
+        get: operations["listAuditRecords"];
         put?: never;
         post?: never;
-        /**
-         * Detach a policy from a subject. Requires the `admin` role.
-         * @description Detaching an active policy's last attachment is refused with 409, because a policy left with none would apply org-wide. Delete the policy, or attach another subject first.
-         */
-        delete: operations["detachPolicy"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1754,33 +1730,36 @@ export interface components {
             resource?: components["schemas"]["PermissionResource"];
             decision: components["schemas"]["PermissionDecision"];
             basis: components["schemas"]["PermissionBasis"];
-            /** @description The statements that decided, where `basis` is `statements`; empty otherwise, and where nothing allows the action. */
-            statements: components["schemas"]["ExplainedStatement"][];
+            /** @description What the policy service names, where `basis` is `policy-service`; empty otherwise, and where nothing permits the action. The order is not stated. */
+            grounds: components["schemas"]["ExplainedGround"][];
         };
         /**
-         * @description `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
+         * @description `policy-service` is a decision the policy service reached, explained by `grounds`. `operation` is an action the operation decides past the policy service, explained no further than the decision. `undefined-action` is a name garam does not define.
          * @enum {string}
          */
-        PermissionBasis: "statements" | "operation" | "undefined-action";
-        /** @description One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the three role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone. */
-        ExplainedStatement: {
+        PermissionBasis: "policy-service" | "operation" | "undefined-action";
+        /** @description One ground of a decision, as the policy service names it. `kind` says which fields are present: `role`, `path` and, for a team or a project, `team` or `project`, for `role-link`; `name` and `text`, where the caller may read the policy, for `guardrail` and `permit`; `error` for `error`, which is a policy that failed to evaluate, or a question the policy service refused and so names no policy. `policy` names the policy where it is the caller's organization's, or a system policy's file name. `stored-policy` is a policy of the caller's organization, or of a sending organization, whose kind the caller may not be told: the kind is never read off the decision. A role link the platform reserves the identifier of is a `role-link` to every caller. */
+        ExplainedGround: {
             /** @enum {string} */
-            effect: "Allow" | "Deny";
-            /** @enum {string} */
-            source: "org-role" | "group-role" | "project-role" | "policy" | "unreadable-policy";
-            sid?: string;
-            roles?: string[];
-            /** @description The group's slug. */
-            group?: string;
-            /** @description The project's slug. */
-            project?: string;
-            /** @description The policy's identifier, as `getPolicy` addresses it. */
+            kind: "role-link" | "guardrail" | "permit" | "system-policy" | "stored-policy" | "error";
+            /** @description The policy's identifier, as `getIamPolicy` addresses it, or the file name of a system policy. */
             policy?: string;
+            role?: components["schemas"]["Role"];
             /**
-             * @description How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
+             * @description How the role link reaches the caller: it is their `organization` role, or the role of the `team` or `project` named beside it. Absent where a team's or a project's link was asked about a resource that is neither, and where a stored link's body does not say.
              * @enum {string}
              */
-            attachment?: "organization" | "caller" | "group";
+            path?: "organization" | "team" | "project";
+            /** @description The team's slug. */
+            team?: string;
+            /** @description The project's slug. */
+            project?: string;
+            /** @description The policy's name, to a caller who may read it. */
+            name?: string;
+            /** @description The Cedar text of the policy's default version, to a caller who may read it. */
+            text?: string;
+            /** @description Why the policy failed to evaluate. */
+            error?: string;
         };
         OrgSearch: {
             /** @description One entry per kind the caller may list, in the order person, agent, team, policy, project. */
@@ -1899,56 +1878,67 @@ export interface components {
             expiresAt: string;
         };
         /**
-         * @description An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
-         * @example {
-         *       "Version": "2026-07-25",
-         *       "Statement": [
-         *         {
-         *           "Sid": "AllowOrgRead",
-         *           "Effect": "Allow",
-         *           "Action": [
-         *             "iam:org.read"
-         *           ],
-         *           "Resource": [
-         *             "grn:acme/*"
-         *           ]
-         *         }
-         *       ]
-         *     }
-         */
-        PolicyDocument: Record<string, never>;
-        /**
          * @description A policy's lifecycle state. Only an `active` policy contributes statements to a check.
          * @enum {string}
          */
         PolicyStatus: "draft" | "active";
-        Policy: {
-            /** @example grn:acme/iam/policy/9f2ac1b40d8e7a35 */
-            grn: string;
-            orgGrn: string;
-            name: string;
-            status: components["schemas"]["PolicyStatus"];
-            /** @description The version evaluated while the policy is active. */
-            defaultVersion: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
+        /**
+         * @description What an audit record is: one `write` of a policy, the identical `denial`s of one request collapsed with a count, or the `denial-overflow` of a UTC day.
+         * @enum {string}
+         */
+        AuditRecordKind: "write" | "denial" | "denial-overflow";
+        /** @description One record of the policy service's audit (ADR-0148). It holds no policy text, no context, no token and no fault text. */
+        AuditRecord: {
+            /** Format: int64 */
+            id: number;
+            kind: components["schemas"]["AuditRecordKind"];
+            /**
+             * Format: date-time
+             * @description When a write was made or a denial first occurred.
+             */
+            firstAt: string;
+            /**
+             * Format: date-time
+             * @description When a denial last occurred; a write's `firstAt`.
+             */
+            lastAt: string;
+            /**
+             * Format: int64
+             * @description How many identical denials the record holds; 1 for a write.
+             */
+            count: number;
+            /** @description The service that made the request; empty on an overflow record. */
+            service: string;
+            /** @description The GRN of who asked or wrote; empty for a write the service made with no writer and on an overflow record. */
+            subject: string;
+            /** @description The action in its qualified form, such as `iam:permit.write`. */
+            action: string;
+            /** @description The GRN asked about; for a write, the policy's. */
+            resource: string;
+            /** @description `deny`, or `created`, `version-added`, `activated`, `rolled-back` or `removed`. */
+            outcome: string;
+            /** @description The policies of a denial's reasons, `fault` for a reason that is an evaluation fault; for a write, the policy. */
+            policyIds: string[];
+            /**
+             * Format: int32
+             * @description The default a write moved from, or 0.
+             */
+            versionFrom: number;
+            /**
+             * Format: int32
+             * @description The version a write wrote or moved to, or 0.
+             */
+            versionTo: number;
+            /**
+             * Format: date-time
+             * @description The first second of the UTC day an overflow record holds.
+             */
+            day?: string;
         };
-        PolicyCreate: {
-            name: string;
-            document: components["schemas"]["PolicyDocument"];
-        };
-        PolicyVersion: {
-            policyGrn: string;
-            version: number;
-            document: components["schemas"]["PolicyDocument"];
-            createdBy: string;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        PolicyVersionCreate: {
-            document: components["schemas"]["PolicyDocument"];
+        AuditRecordPage: {
+            records: components["schemas"]["AuditRecord"][];
+            /** @description Reads the next page; absent at the end. */
+            nextPageToken?: string;
         };
         PolicyRollback: {
             /**
@@ -1957,17 +1947,52 @@ export interface components {
              */
             version: number;
         };
-        PolicyAttachment: {
-            policyGrn: string;
-            /** @example grn:acme/iam/group/eng */
-            subjectGrn: string;
-            /** Format: date-time */
-            createdAt: string;
+        /** @enum {string} */
+        IamPolicyKind: "role-link" | "guardrail" | "permit";
+        IamRoleLink: {
+            role: components["schemas"]["Role"];
+            /** @enum {string} */
+            scope: "organization" | "team-or-project";
+            /** @description GRN of the user, agent, team or project linked. */
+            principal: string;
+            /** @description GRN of the organization, team or project linked to. */
+            resource: string;
         };
-        /** @description The user or group the policy applies to. */
-        PolicyAttachmentCreate: {
-            /** @example grn:acme/iam/group/eng */
-            subjectGrn: string;
+        /** @description What one version says: `text` for a guardrail (one Cedar `forbid`) or a permit (one Cedar `permit`), `roleLink` for a role link. The service validates the Cedar text; the platform refuses only the role links it derives from a membership. */
+        IamPolicyBody: {
+            kind: components["schemas"]["IamPolicyKind"];
+            text?: string;
+            roleLink?: components["schemas"]["IamRoleLink"];
+        };
+        IamPolicyCreate: {
+            name: string;
+            body: components["schemas"]["IamPolicyBody"];
+        };
+        IamPolicyVersionCreate: {
+            body: components["schemas"]["IamPolicyBody"];
+        };
+        IamPolicyVersionNumber: {
+            /** Format: int32 */
+            version: number;
+        };
+        IamPolicy: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["IamPolicyKind"];
+            status: components["schemas"]["PolicyStatus"];
+            /** Format: int32 */
+            defaultVersion: number;
+        };
+        IamPolicyVersion: {
+            /** Format: int32 */
+            version: number;
+            body: components["schemas"]["IamPolicyBody"];
+            createdBy: string;
+        };
+        IamPolicyDetail: {
+            policy: components["schemas"]["IamPolicy"];
+            /** @description Oldest first. */
+            versions: components["schemas"]["IamPolicyVersion"][];
         };
         /**
          * @description What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
@@ -2319,7 +2344,7 @@ export interface components {
             /** @description errorx kind, e.g. `not_found`, `permission_denied`. */
             kind: string;
             message: string;
-            /** @description A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Role links: `change_not_applied`, on the 503 that answers a request which changed what the policy service decides from (an organization, its membership, a group or project and its members, a registration, an operator) when the policy service has not applied the change within five seconds. The change is stored and stays so; the service decides by the roles it last held until it applies them, so a member added is not yet allowed and a member removed is not yet denied. The answer names the organization in `resource`; do not repeat the request. A registration has signed the person in, and its session cookie is set on this answer. The same reason answers a grant or a withdrawal of an organization's consent when the policy service has not applied it in that time: the half is stored and stays so, and until the service applies it the policy service decides by the consents it last held. Repeating the request changes nothing. The answer names the organization that granted or withdrew in `resource`. `change_refused`, on the same 503 when the policy service refused the member's role link for good: the change is stored, but delivery does not go on, and the service holds no role for the member until the membership is written again or an operator restarts the feed, so the member is denied meanwhile. There is nothing to wait for: do not repeat the request and do not poll; an operator reads the set-aside link. It names the organization in `resource` as the answer above does. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`. */
+            /** @description A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Role links: `change_not_applied`, on the 503 that answers a request which changed what the policy service decides from (an organization, its membership, a group or project and its members, a registration, an operator) when the policy service has not applied the change within five seconds. The change is stored and stays so; the service decides by the roles it last held until it applies them, so a member added is not yet allowed and a member removed is not yet denied. The answer names the organization in `resource`; do not repeat the request. A registration has signed the person in, and its session cookie is set on this answer. The same reason answers a grant or a withdrawal of an organization's consent when the policy service has not applied it in that time: the half is stored and stays so, and until the service applies it the policy service decides by the consents it last held. Repeating the request changes nothing. The answer names the organization that granted or withdrew in `resource`. `change_refused`, on the same 503 when the policy service refused the member's role link for good: the change is stored, but delivery does not go on, and the service holds no role for the member until the membership is written again or an operator restarts the feed, so the member is denied meanwhile. There is nothing to wait for: do not repeat the request and do not poll; an operator reads the set-aside link. It names the organization in `resource` as the answer above does. */
             reason?: string;
             /** @description A JSON Pointer (RFC 6901) into the document the request sent, to the place `reason` is about, e.g. `/Statement/1/Effect`. A key the document's format names is spelled as the format spells it, whatever case the request used: a document accepts `statement` for `Statement`, and the pointer reads `/Statement`. A key the format does not name is spelled as it was sent. Absent where the reason is about the document as a whole or about no document. */
             path?: string;
@@ -2372,16 +2397,14 @@ export interface components {
         project: string;
         /** @description Member GRN of a user or agent. */
         member: string;
-        /** @description Policy identifier (the last GRN segment). */
-        policy: string;
+        /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+        iamPolicy: string;
         /** @description Agent identifier (the last GRN segment). */
         agent: string;
         /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
         kid: string;
         /** @description Operator identifier (the last GRN segment). */
         operator: string;
-        /** @description Subject GRN a policy is attached to. */
-        subject: string;
         /** @description The action asked about. */
         permissionAction: string;
         /** @description The kind of resource asked about. Without it and `resourceId`, the organization itself. */
@@ -2390,6 +2413,10 @@ export interface components {
         permissionResourceId: string;
         /** @description Maximum entries to return; 0 means no limit. */
         limit: number;
+        /** @description Maximum records to return; 0 and anything above the policy service's bound mean the bound. */
+        pageSize: number;
+        /** @description The previous page's `nextPageToken`; absent for the first. */
+        pageToken: string;
         offset: number;
     };
     requestBodies: never;
@@ -3122,6 +3149,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     listPermissionHolders: {
@@ -4498,7 +4526,7 @@ export interface operations {
             409: components["responses"]["ContractError"];
         };
     };
-    listPolicies: {
+    listIamPolicies: {
         parameters: {
             query?: never;
             header?: never;
@@ -4510,21 +4538,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The organization's policies, in ascending GRN order. */
+            /** @description The organization's policies. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Policy"][];
+                    "application/json": components["schemas"]["IamPolicy"][];
                 };
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
-    createPolicy: {
+    createIamPolicy: {
         parameters: {
             query?: never;
             header?: never;
@@ -4536,7 +4566,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PolicyCreate"];
+                "application/json": components["schemas"]["IamPolicyCreate"];
             };
         };
         responses: {
@@ -4546,113 +4576,56 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Policy"];
+                    "application/json": components["schemas"]["IamPolicy"];
                 };
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
-    listPolicyVersions: {
+    getIamPolicy: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Policy identifier (the last GRN segment). */
-                policy: components["parameters"]["policy"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The policy's versions, oldest first. */
+            /** @description The policy and its versions, oldest first. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PolicyVersion"][];
+                    "application/json": components["schemas"]["IamPolicyDetail"];
                 };
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
-    addPolicyVersion: {
+    deleteIamPolicy: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Policy identifier (the last GRN segment). */
-                policy: components["parameters"]["policy"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PolicyVersionCreate"];
-            };
-        };
-        responses: {
-            /** @description Version appended. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyVersion"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    activatePolicy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Policy identifier (the last GRN segment). */
-                policy: components["parameters"]["policy"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The activated policy. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Policy"];
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    deletePolicy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Policy identifier (the last GRN segment). */
-                policy: components["parameters"]["policy"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
             };
             cookie?: never;
         };
@@ -4668,17 +4641,85 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
-    rollbackPolicy: {
+    createIamPolicyVersion: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Policy identifier (the last GRN segment). */
-                policy: components["parameters"]["policy"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IamPolicyVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description The version stored. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IamPolicyVersionNumber"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    activateIamPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy activated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    rollbackIamPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Identifier of a role link, guardrail or permit of the policy service (the last GRN segment). */
+                iamPolicy: components["parameters"]["iamPolicy"];
             };
             cookie?: never;
         };
@@ -4688,100 +4729,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The policy at its new default version. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Policy"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    listPolicyAttachments: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Policy identifier (the last GRN segment). */
-                policy: components["parameters"]["policy"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The attachments, in ascending subject GRN order. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyAttachment"][];
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    attachPolicy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Policy identifier (the last GRN segment). */
-                policy: components["parameters"]["policy"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PolicyAttachmentCreate"];
-            };
-        };
-        responses: {
-            /** @description Policy attached. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyAttachment"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
-        };
-    };
-    detachPolicy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Policy identifier (the last GRN segment). */
-                policy: components["parameters"]["policy"];
-                /** @description Subject GRN a policy is attached to. */
-                subject: components["parameters"]["subject"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Policy detached. */
+            /** @description Policy at its new default version. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -4793,6 +4741,41 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
+        };
+    };
+    listAuditRecords: {
+        parameters: {
+            query?: {
+                /** @description Maximum records to return; 0 and anything above the policy service's bound mean the bound. */
+                pageSize?: components["parameters"]["pageSize"];
+                /** @description The previous page's `nextPageToken`; absent for the first. */
+                pageToken?: components["parameters"]["pageToken"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditRecordPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+            504: components["responses"]["Error"];
         };
     };
     listOrgConsents: {

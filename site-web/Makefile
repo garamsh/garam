@@ -80,7 +80,7 @@ build:
 		GARAM_COWORK_URL=http://cowork.garam.localhost:3100 pnpm build
 
 # The backend the browser suite drives: postgres, the one-shot
-# migration, authz and api.
+# migration, the policy service and api.
 stack-up:
 	@$(MAKE) --no-print-directory -C ../deploy/local backend-up
 

@@ -84,15 +84,28 @@ export {
   type OperatorKey,
 } from "./api/operator-keys";
 export {
-  listPolicies,
-  listPolicyAttachments,
-  listPolicyVersions,
-  type Policy,
-  type PolicyAttachment,
+  listAuditRecords,
+  type AuditRecord,
+  type AuditRecordKind,
+  type AuditRecordPage,
+} from "./api/audit";
+export {
+  getIamPolicy,
+  listIamPolicies,
+  type IamPolicy,
+  type IamPolicyBody,
+  type IamPolicyDetail,
+  type IamPolicyKind,
+  type IamRoleLink,
   type PolicyStatus,
-  type PolicyVersion,
 } from "./api/policies";
 export { parseGrn, slugFromGrn } from "@/lib/grn";
+export {
+  roleLinkChoices,
+  type RoleLinkChoice,
+  type RoleLinkChoices,
+  type RoleLinkSources,
+} from "./role-link-choices";
 export {
   memberLabel,
   memberName,

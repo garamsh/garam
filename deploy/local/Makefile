@@ -36,7 +36,7 @@ db-prune:
 	@../../tooling/db-prune.sh
 
 # backend-up starts what the browser suites drive — postgres, the
-# one-shot migration, authz, the policy service with its feed, and
+# one-shot migration, the policy service with its feed, and
 # api — and returns once api answers; the profile-gated `web` service
 # stays down. It builds first, migrations included, because compose
 # starts an existing image stale and reports it healthy (#297). The feed
@@ -87,7 +87,12 @@ export KUBECONFIG
 
 # Every command names the context, so nothing in this file can reach a
 # cluster that is not the local one, whichever kubeconfig it reads.
-KUBECTL_MINIKUBE := kubectl --context minikube
+# minikube names the context after its profile, so one variable moves
+# the cluster, its daemon and the context together; the key-material
+# scripts take it as an argument.
+MINIKUBE_PROFILE ?= minikube
+KUBECTL_MINIKUBE := kubectl --context $(MINIKUBE_PROFILE)
+MINIKUBE := minikube --profile $(MINIKUBE_PROFILE)
 KUBECTL_LOCAL := $(KUBECTL_MINIKUBE) --namespace garam-local
 MINIKUBE_DIR := minikube
 
@@ -99,11 +104,12 @@ CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg
 
 minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild
 
-# minikube-rebuild is everything a code change touches: the images, the
+# minikube-rebuild is everything a code change touches: the key
+# material the processes mount (kept when present), the images, the
 # migrations the new code expects, and the processes that run it. The
 # bring-up above composes it rather than restating its steps, so the two
 # cannot come apart.
-minikube-rebuild: minikube-images minikube-migrate minikube-apps
+minikube-rebuild: minikube-secret minikube-images minikube-migrate minikube-apps
 
 # Every kubectl recipe needs the apiserver reachable through the project
 # kubeconfig, and `minikube status` does not answer that: a cluster
@@ -113,9 +119,9 @@ minikube-rebuild: minikube-images minikube-migrate minikube-apps
 # with update-context; boot only when the apiserver process is down.
 minikube-context:
 	@$(KUBECTL_MINIKUBE) get --raw=/healthz >/dev/null 2>&1 || { \
-		test "$$(minikube status --format '{{.APIServer}}' 2>/dev/null | head -n 1)" = Running \
-			|| minikube start --driver=docker; \
-		minikube update-context; \
+		test "$$($(MINIKUBE) status --format '{{.APIServer}}' 2>/dev/null | head -n 1)" = Running \
+			|| $(MINIKUBE) start --driver=docker; \
+		$(MINIKUBE) update-context; \
 	}
 
 # minikube-start brings up the cluster and the Postgres operator, and is
@@ -126,16 +132,18 @@ minikube-start: minikube-context
 	$(KUBECTL_MINIKUBE) apply --server-side -f $(CNPG_MANIFEST)
 	$(KUBECTL_MINIKUBE) -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=300s
 
-# minikube-images builds both images (ADR-0020) into the cluster's own
-# daemon, which docker-env points the client at for the length of the
-# recipe. Nothing is pushed, and the manifests pull Never, so what runs
-# is what was built here. Both Dockerfiles sit outside the context they
-# build — `minikube image build` uploads the context and cannot reach
-# them — and this is the same pair of contexts the compose file uses.
+# minikube-images builds the four images (ADR-0020) into the cluster's
+# own daemon, which docker-env points the client at for the length of
+# the recipe. Nothing is pushed, and the manifests pull Never, so what
+# runs is what was built here. The Dockerfiles sit outside the context
+# they build — `minikube image build` uploads the context and cannot
+# reach them — and these are the same contexts the compose file uses.
 minikube-images:
-	eval "$$(minikube docker-env --shell bash)"; \
+	eval "$$($(MINIKUBE) docker-env --shell bash)"; \
 		docker build -t garam:local -f Dockerfile ../.. && \
-		docker build -t garam-web:local -f Dockerfile.web --build-arg APP=platform-web ../..
+		docker build -t garam-web:local -f Dockerfile.web --build-arg APP=platform-web ../.. && \
+		docker build -t garam-site:local -f Dockerfile.web --build-arg APP=site-web ../.. && \
+		docker build -t policy:local -f Dockerfile.policy ../..
 
 # minikube-db creates the namespace everything else lands in and the
 # Postgres cluster CNPG reconciles, and returns once it is reachable.
@@ -150,36 +158,49 @@ minikube-db: minikube-context
 	$(KUBECTL_LOCAL) wait --for=jsonpath='{.endpoints[0].conditions.ready}'=true endpointslice -l kubernetes.io/service-name=postgres-rw --timeout=120s
 
 minikube-secret: minikube-context
-	$(MINIKUBE_DIR)/machine-key-material.sh
+	$(MINIKUBE_DIR)/machine-key-material.sh $(MINIKUBE_PROFILE)
+	$(MINIKUBE_DIR)/policy-key-material.sh $(MINIKUBE_PROFILE)
 
 # minikube-migrate applies pending migrations and waits for them. A
 # Job's pod template is immutable, so the finished one is deleted rather
-# than updated.
+# than updated. postgres.yaml is applied again first: it holds the
+# databases the migrations run against, so a cluster brought up before
+# one was added gets it here.
 minikube-migrate: minikube-context
+	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/postgres.yaml
 	$(KUBECTL_LOCAL) delete job migrate --ignore-not-found
 	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/migrate-job.yaml
 	$(KUBECTL_LOCAL) wait --for=condition=complete job/migrate --timeout=300s
 
-# minikube-apps starts the three serve processes and the web app, and
-# reports what is running rather than that it finished. Each pod
-# template is stamped with the id of the image it runs, so a rebuilt
-# image is a changed Deployment the apply rolls and an unrebuilt one
-# restarts nothing — which a mutable tag alone cannot tell apart.
+# minikube-apps starts the policy service, the three serve processes,
+# the console and the site, and reports what is running rather than
+# that it finished. Each pod template is stamped with the id of the
+# image it runs, so a rebuilt image is a changed Deployment the apply
+# rolls and an unrebuilt one restarts nothing — which a mutable tag
+# alone cannot tell apart.
 minikube-apps: minikube-context
-	@eval "$$(minikube docker-env --shell bash)"; \
+	@eval "$$($(MINIKUBE) docker-env --shell bash)"; \
 		id="$$(docker image inspect --format '{{.Id}}' garam:local)" && \
 		web_id="$$(docker image inspect --format '{{.Id}}' garam-web:local)" && \
-		echo "minikube-apps: garam:local=$$id garam-web:local=$$web_id" && \
-		sed -e "s|GARAM_IMAGE_ID|$$id|" -e "s|GARAM_WEB_IMAGE_ID|$$web_id|" $(MINIKUBE_DIR)/garam.yaml \
+		site_id="$$(docker image inspect --format '{{.Id}}' garam-site:local)" && \
+		policy_id="$$(docker image inspect --format '{{.Id}}' policy:local)" && \
+		echo "minikube-apps: garam:local=$$id garam-web:local=$$web_id garam-site:local=$$site_id policy:local=$$policy_id" && \
+		sed -e "s|GARAM_IMAGE_ID|$$id|" -e "s|GARAM_WEB_IMAGE_ID|$$web_id|" -e "s|GARAM_SITE_IMAGE_ID|$$site_id|" -e "s|GARAM_POLICY_IMAGE_ID|$$policy_id|" $(MINIKUBE_DIR)/garam.yaml \
 		| $(KUBECTL_LOCAL) apply -f -
-	@for d in authz api machine web; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
+	@for d in policy api machine web site; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
 	@$(KUBECTL_LOCAL) get pods
 
-# minikube-forward is how the web app is reached: the Services are
-# cluster-internal and there is no ingress, so nothing leaves the
-# machine without this. It holds the terminal until interrupted.
+# minikube-forward is how the console and the site are reached: the
+# Services are cluster-internal and there is no ingress, so nothing
+# leaves the machine without this. The session cookie is host-only
+# (ADR-0131), so a browser reaches them as console.garam.localhost:3000
+# and garam.localhost:3001, the hosts compose serves them on. It holds
+# the terminal until interrupted.
 minikube-forward: minikube-context
-	$(KUBECTL_LOCAL) port-forward service/web 3000:3000
+	@trap 'kill $$(jobs -p)' EXIT; \
+		$(KUBECTL_LOCAL) port-forward service/web 3000:3000 & \
+		$(KUBECTL_LOCAL) port-forward service/site 3001:3000 & \
+		wait
 
 # minikube-down removes the stack, its database volume and its key
 # material, and leaves the cluster and the operator up.

@@ -44,9 +44,8 @@ repeated. A second copy is a second thing to keep true.
 |---|---|---|---|
 | Browser-facing HTTP | `garam serve api` | `platform/api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
 | Machine | `garam serve machine` | `platform/api/machine.yaml` | an operator, an agent or a standalone host's supervisor presenting a token garam issued (ADR-0100, ADR-0118) |
-| Policy engine | `garam serve authz` | `platform/proto/garam/authz/v1` | one of the two listeners above, over gRPC (ADR-0003) |
 | Probes | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
-| Metrics | `garam serve api` and `garam serve authz`, on the listener each already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
+| Metrics | `garam serve api`, on the listener it already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
 
 The first two are separate processes
 ([ADR-0017](./adr/0017-machine-process.md)), and neither may call the
@@ -345,11 +344,9 @@ branches on these answers, each carrying the header:
 `platform/api/machine.yaml` is authoritative for the wire, and
 [messaging.md](./messaging.md) for what the budget decides.
 
-**Policy engine.** Nothing. Both listeners hold a client of their own,
-and the transport carries no credential because the processes run
-inside one trust boundary
-([ADR-0003](./adr/0003-single-cli-topology.md)). What keeps anything
-else off that port is the deployment's, not garam's.
+**Policy engine.** Removed. The platform no longer serves a decision
+surface; the policy service is a service of its own with its own
+contract ([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
 
 **Probes and metrics.** Nothing, by decision: a probe holds no
 credential, so the answer is served where none is needed
@@ -362,9 +359,19 @@ would otherwise reach a caller that proved nothing.
 Admission says who is calling. What they may do is decided after it,
 and not in the same place on every surface.
 
-- **Browser-facing**: the policy engine decides every org-scoped
-  request ([ADR-0002](./adr/0002-iam-style-policy-model.md)). How it
-  decides is [authz.md](./authz.md).
+- **Browser-facing**: the policy service decides an org-scoped
+  request's enforcement, `checkPermissions` and the holders list, one
+  question per pair and per candidate over delivered state, and the
+  request is answered 503 `unavailable` where it cannot be asked
+  ([ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)).
+  The lists and the search filter are the service's too, each object
+  of a page one probe in one `Evaluations` call
+  ([ADR-0172](./adr/0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md)),
+  and `checkPermissions` answers `iam:permit.write` from it. The
+  explanation is the service's too (ADR-0174). The probes are
+  each `checkPermissions` pair, each holder candidate, each search
+  kind and each object a list filters. How it decides is
+  [authz.md](./authz.md).
 - **Machine**: by construction more often than by policy. A read is
   scoped by the caller's own identity, so there is nothing to authorize
   past the token there. A state report is decided the same way and by a
@@ -382,36 +389,24 @@ and not in the same place on every surface.
   (`machine-identity.md` §Generation and lineage).
 - **What a machine caller may send** is the exception, and the
   recipient's organization decides which of two things answers it. A
-  recipient of the caller's own organization is a policy question: the
-  engine is asked about that recipient
-  ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)). A
-  recipient across the organization boundary is decided by the consent
-  relation the two organizations hold, alone — the engine is not asked
-  a cross-organization question at all
-  ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)).
-  Why no policy may reach past that boundary is
-  [authz.md](./authz.md) §Policy attachment. A restriction meant to
-  bear on a cross-organization send is therefore not something a policy
-  can carry. Decided, not built: [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
-  has the engine decide it, with both organizations' guardrails read.
-- **Asking the engine has a precondition of its own**: a caller may ask
-  only about a subject belonging to the object's organization
-  ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)). The
-  caller is what establishes that membership and names the organization
-  on the call; the engine holds no membership data of its own. What the
-  engine now applies itself is the check on what it was handed — the
-  organization named must be the object's, and a call naming none is
-  refused
-  ([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
+  recipient of the caller's own organization is a policy question the
+  policy service answers, except that a recipient naming no agent garam
+  holds is admitted unasked and stored as a routing failure
+  ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md),
+  [ADR-0168](./adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)).
+  A recipient across the organization boundary that is not an agent is
+  refused unasked, and an agent is asked of the service, whose tenant
+  isolation holds the boundary. The refusal returns to the sender as a
+  message and tells it nothing of the other organization.
+  [authz.md](./authz.md) says how the service decides.
 - **Watching an agent is its own grant**, separate from reading one
   ([ADR-0022](./adr/0022-watching-an-agent.md)).
 - **Delegated operation authority is decided from current state on both
-  listeners**: membership, roles and groups as read for the call, and
-  the organization's persisted policies past the engine's cache, so an
-  allow recorded earlier is never what a later check reads and a
-  decision that cannot be made refuses. A controller proof is decided
-  the same way for the hosted operator, on its groups and current
-  policy beside the Allow its grant contributes
+  listeners**: the policy service is asked the actor, the action and the
+  object read current, so an allow recorded earlier is never what a
+  later check reads and a decision that cannot be made refuses. A
+  controller proof is decided the same way for the hosted operator,
+  once the platform has found its grant covers the operation
   ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
 - **A read describing a write is decided on that write's action.**
   `getOrgDeletionPreview` answers what deleting an organization would
@@ -435,28 +430,52 @@ and not in the same place on every surface.
   No event carries a key, token, credential or certificate
   ([machine-identity.md](./machine-identity.md) §Credential events).
 - **An organization's policy writes and denials are read on
-  `iam:audit.read`.** Unbuilt
-  ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)):
-  no operation serves them yet, and the manifest declares no such
-  action. When built, the platform's browser API and the CLI answer an
-  organization's owners and administrators from a read on the policy
-  service's contract ([audit.md](./audit.md) §The policy service's
-  record).
+  `iam:audit.read`.** `listAuditRecords`
+  (`GET /orgs/{org}/audit-records`, with `pageSize` and `pageToken`)
+  relays the policy service's `ListAuditRecords` as the signed-in
+  user, newest first and paged
+  ([ADR-0176](./adr/0176-the-platform-relays-the-policy-services-audit-record-to-the-console-and-the-cli.md),
+  [ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)).
+  The service decides the read and its refusal is the answer: 403 for
+  a reader it refuses, 400 for a token it never issued, 503 when it
+  cannot be reached and 504 when the call times out. The platform
+  stores and filters nothing
+  ([audit.md](./audit.md) §The policy service's record). The CLI
+  derives `garam audit-records list` from it.
+- **An organization's role links, guardrails and permits are relayed
+  to the policy service.** `/orgs/{org}/iam-policies` serves
+  `createIamPolicy`, `listIamPolicies`, `getIamPolicy`,
+  `deleteIamPolicy`, `createIamPolicyVersion`, `activateIamPolicy` and
+  `rollbackIamPolicy`, the kind (`role-link`, `guardrail`, `permit`)
+  in the body. The platform names the signed-in user as the writer and
+  stores none of the body, so the service's answer is the response:
+  403 for a writer it refuses (only an owner writes a permit), 400 for
+  an invalid body, 404 and 409 as it made them, 503 when it cannot be
+  reached, 504 when the call times out, and a write refused stores
+  nothing. The platform answers 400 itself for a role link it
+  derives from a membership. `listIamPolicies` is the service's read,
+  not filtered here. The `/orgs/{org}/policies*` operations are removed
+  ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)),
+  and the store and tables behind them wait for round 14 of #1796
+  ([ADR-0169](./adr/0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md),
+  [authz.md](./authz.md) §Managing policies over HTTP).
 - **A list answers only the objects its caller may read.**
-  `listGroups`, `listProjects`, `listAgents` and `listPolicies` are
+  `listGroups`, `listProjects` and `listAgents` are
   authorized on their read action on the organization, and then drop
   each object whose own read the caller is denied: the read
-  `getGroup`, `getProject`, `getAgent` and `listPolicyVersions` each
+  `getGroup`, `getProject` and `getAgent` each
   make on the object. A Deny on one object therefore hides it from the
   list as it refuses its read. Every object of a page is asked in one
-  `CheckBatch` call to the engine
-  ([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md),
+  `Evaluations` call to the policy service, as a probe, and an error of
+  the service is a 503 `unavailable`, never an empty page; a policy is
+  asked on its organization, so it is hidden only with the whole list
+  ([ADR-0172](./adr/0172-the-lists-and-search-filter-through-the-policy-services-evaluations-as-probes-and-checkpermissions-answers-permit-write.md),
   [authz.md](./authz.md)). **A short page does not mean the end.** The
   page is filtered as read, so `limit` and `offset` count the stored
   rows, and a page can hold fewer objects than its limit with more
   after it; a client pages until a page comes back empty. Lists gated
-  on a parent object — a group's or project's members, a policy's
-  versions and attachments, an operator's keys — are not filtered: the
+  on a parent object — a group's or project's members, an operator's
+  keys — are not filtered: the
   parent's read is what decides them.
 - **A caller's own teams are one filtered list.** `listGroups` with
   `member=me` answers only the groups the signed-in caller belongs to,
@@ -472,8 +491,9 @@ and not in the same place on every surface.
   is authorized on its list's own check on the organization, and a
   kind the caller fails is left out of the answer. Agents, teams,
   policies and projects then drop each object whose own read is
-  denied, in one `CheckBatch` per kind, as the filtered lists above do
-  (ADR-0115). A person is found by nickname or identifier, and an agent
+  denied, in one `Evaluations` call per kind, as the filtered lists
+  above do (ADR-0172). A person is found by nickname or identifier, and
+  an agent
   by its name or identifier, answered with its name where it has one
   ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)). Each kind answers its
   first `limit` objects (1 to 20, 5 by default) in its list's order,
@@ -481,7 +501,10 @@ and not in the same place on every surface.
   store, so a search reads the rows that match and not the whole list.
   People are the exception: the organization's memberships are read
   whole, and the user store matches among them, since memberships and
-  nicknames are two domains'.
+  nicknames are two domains'. Policies are the other: the policy
+  service stores them and has no search, so the platform reads the
+  organization's list through the relay and matches each name or
+  identifier itself, in identifier order.
 - **A member may ask what it may do, and the answer decides nothing.**
   `checkPermissions` takes up to 50 pairs of an action and a resource
   of the caller's organization, the resource named by its kind and the
@@ -499,10 +522,10 @@ and not in the same place on every surface.
   all eight, and a policy narrows them like any other action
   ([ADR-0127](./adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)).
   Each pair is answered allow, deny or unknown:
-  - **allow or deny**, where enforcement is the engine's `Check` alone:
-    the same statements and groups, put to the same `Check`. It never
-    calls `Explain`, so no answer says why. A missing group or project
-    answers as a denied one, so the answer tells no one what exists.
+  - **allow or deny**, where enforcement is the policy service's
+    decision alone, put as enforcement puts it. No answer says why. A
+    missing group or project answers as a denied one, so the answer
+    tells no one what exists.
   - **deny or unknown** for an action a mint decides together with a
     delegation grant: `iam:agent.create`, `iam:agent.configure`,
     `iam:agent.recover`, `iam:agent.replace`,
@@ -522,7 +545,7 @@ and not in the same place on every surface.
     `AuthorizeDelegation`), and that check is all of their authority.
   - **allow or deny** for `iam:agent.enroll`. It is put to the check
     every approval, withdrawal and revoke of a standalone host runs, on
-    current policy past the engine's cache, through the one function
+    the policy service's current decision, through the one function
     they all call (`platform/internal/agent/standalone_service.go`,
     `AuthorizeEnroll`), and that check is all of their authority. A new
     host is asked on the organization, and an approval, withdrawal or
@@ -535,45 +558,44 @@ and not in the same place on every surface.
     operation checks.
 
   A defined action paired with a resource kind none of its operations
-  address is refused with 400 naming the pair, and one pair the engine
-  cannot decide fails the whole request rather than answering the rest.
+  address is refused with 400 naming the pair, and one pair the policy
+  service cannot decide fails the whole request rather than answering
+  the rest.
 - **A member may ask why, from the inputs enforcement uses.**
   `explainPermission` takes one pair, named as `checkPermissions`
-  names one, and answers the decision `checkPermissions` answers it.
-  Where the engine's `Check` alone decides, the same statements, groups
-  and organization are put to the engine's `Explain`, which decides
-  over the set `Check` decides over
-  ([authz.md](./authz.md) §Explain), and the answer carries the
-  statements that decided: each matching Deny for a deny, each matching
-  Allow for an allow, none where nothing allows. Each is named by its
-  path to the caller — their org role, their own roles, a group's or
-  project's roles, or a policy applying org-wide, attached to them or
-  attached to a group they belong to.
-  - **A policy the caller cannot read is not described.** A policy
-    statement is named only where the caller holds `iam:policy.read` on
-    that policy, the check `getPolicy` makes; every other one is
-    answered once as an unreadable policy with its effect alone, which
-    the decision already gives.
-  - **An action decided past `Check` is explained no further than its
-    decision**: the mint-decided actions, `iam:operator.delegate` and
-    `iam:agent.enroll` answer `checkPermissions`' decision with no
-    statement, since their operation is what decides. An action garam
+  names one, and answers the decision `checkPermissions` answers it,
+  asked of the policy service's `Evaluate` as a probe
+  ([ADR-0174](./adr/0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md)).
+  Its grounds are the service's reasons: a role link, named by its
+  reserved identifier and the path it reaches the caller by (the
+  organization, a team or a project); a guardrail or a permit, named
+  by GRN; a system policy, named by its file name; or an error of
+  evaluation. An allow names each policy that permits, a deny each
+  that forbids, and a deny that nothing forbids names none.
+  - **A policy the caller cannot read is named without content.** A
+    guardrail or a permit carries its name and text only where the
+    caller holds `iam:policy.read` on the organization; otherwise it
+    is named by its identifier alone.
+  - **An action decided past the check is explained no further than
+    its decision**: the mint-decided actions, `iam:operator.delegate`
+    and `iam:agent.enroll` answer `checkPermissions`' decision with no
+    grounds, since their operation is what decides. An action garam
     does not define is answered deny as such.
 - **Who holds an action is a list read on `iam:org.member-list`.**
-  `listPermissionHolders` puts one pair to the engine's `Check` for
-  each member and agent of the organization, each asked as enforcement
-  asks it: a member with its role-derived statements and groups, an
-  agent, which holds no role, with its groups alone. It is authorized
-  on `iam:org.member-list`, the action `listOrgMembers` is, because the
+  `listPermissionHolders` puts one pair to the policy service for each
+  member and agent of the organization, each asked as enforcement asks
+  it: a member with its role-derived statements and groups, an agent,
+  which holds no role, with its groups alone. It is authorized on
+  `iam:org.member-list`, the action `listOrgMembers` is, because the
   answer names members; agents are asked only where the caller also
   holds `iam:agent.read`. A page asks at most fifty candidates —
-  members, then agents, each in GRN order — and answers those the engine
-  allows with the offset of the next page, so one request costs the
-  engine what one `checkPermissions` request does. Its `limit` is
+  members, then agents, each in GRN order — and answers those the
+  service allows with the offset of the next page, so one request costs
+  the service what one `checkPermissions` request does. Its `limit` is
   therefore its own and not the one other lists share: 1 to 50, 50 when
   absent, and 0 refused rather than read as no limit. An action decided
-  past `Check` is refused with 400, since the engine is not what decides
-  who holds it.
+  past the service is refused with 400, since the service is not what
+  decides who holds it.
 
 One of ADR-0036's decisions is a commitment rather than a rule deciding
 anything today: **no surface serves a secret's value**, garam's
@@ -600,7 +622,7 @@ an entity.
   `known: false` with status 200; a string that is no GRN is refused
   with 400.
 - **What admits a caller** is a session, and nothing decides the rest:
-  neither operation asks the engine.
+  neither operation asks the policy service.
 
 ## An agent on the browser-facing listener
 
@@ -614,9 +636,9 @@ and `platform/api/openapi.yaml` declares no scheme for anything else.
   API, presented as `Authorization: Bearer` and read on every request
   beside the agent's assignment and lineage
   ([machine-identity.md](./machine-identity.md) §Browser tokens).
-- **What decides the rest** is the engine, on the agent's GRN and its
-  groups with no role statements ([authz.md](./authz.md) §An agent on
-  the browser-facing listener).
+- **What decides the rest** is the policy service, on the agent's GRN
+  and its groups with no role statements ([authz.md](./authz.md) §An
+  agent on the browser-facing listener).
 - **What it never reaches**, whatever a policy grants: any operation
   outside `/orgs/{org}` for the organization its GRN names — sign-in,
   sessions, the device grant, `/me`, the organization list and
@@ -729,15 +751,15 @@ declared constraint does not.
 
 **A refusal names its rule where the kind cannot.** The browser
 listener's `Error` carries an optional `reason`, a stable code, where
-one status and kind cover refusals a client must tell apart (#1380):
-an invitation used against one that lapsed, and each rule a policy
-document breaks, with `path`, a JSON Pointer into the document. The
-codes are listed in `platform/api/openapi.yaml` `Error.reason`; a client
-branches on them and never on `message`, and one that does not know a
-code reads the kind as before. A reason the engine gives crosses the
-gRPC hop as an `ErrorInfo` status detail
-(`platform/internal/wire/error.go`), so the API answers the engine's
-code unchanged.
+one status and kind cover refusals a client must tell apart (#1380): an
+invitation used against one that lapsed, and each rule a policy document
+breaks, with `path`, a JSON Pointer into the document. The codes are
+listed in `platform/api/openapi.yaml` `Error.reason`; a client branches
+on them and never on `message`, and one that does not know a code reads
+the kind as before. A reason the policy relay's gRPC client reads from
+the service's `ErrorInfo` status detail
+(`platform/internal/wire/error.go`) is the code the API answers
+unchanged.
 
 **A provider sign-in can land on a path of one of garam's apps.**
 `POST /auth/login/{provider}` starts the same flow as `GET` and takes
@@ -755,9 +777,9 @@ callback redirects to it, checked again, or to `/console`, and no answer
 repeats it. A cross-site form can start such a login, and the most it
 decides is where inside one of garam's apps that login lands.
 
-The other three surfaces are fixed differently. The engine's wire
-contract is `platform/proto/garam/authz/v1`, generated and checked the
-same way. The probes have no specification at all: their paths, and the
+The other surfaces are fixed differently. The earlier engine's wire
+contract, `platform/proto/garam/authz/v1`, is removed with it. The
+probes have no specification at all: their paths, and the
 ports they answer on, are interface rather than implementation, so
 changing one supersedes the ADR that set it instead of editing a handler
 (ADR-0021, [ADR-0023](./adr/0023-web-probes.md)). The metrics surface is
@@ -824,7 +846,7 @@ value that does not fit is refused there. So a bound a caller must not
 cross is declared as the field's `format` where the bound is a width,
 and otherwise held by the code that owns the rule.
 `PolicyRollback.version` is both: `format: int32` is the width the
-engine stores a version at, and `minimum: 1` is the engine's own rule,
+policy service stores a version at, and `minimum: 1` is its own rule,
 which it refuses a version below (#865).
 
 ## Where a change to a surface lands
@@ -860,20 +882,19 @@ an author having read this far, which is weaker than a check;
   changes an endpoint now has a responsibility document to be paired
   with — and leaves the half only a rule can. What that rule should say
   is the index's to decide and not this document's.
-- **What decides the metrics surface, on two processes of three.**
-  `/metrics` is served by `garam serve api` and `garam serve authz`
-  (§The surfaces) and decided by no ADR: every ADR that names it treats
-  it as a surface that already exists. ADR-0014 and ADR-0017 name it as
-  the shape a listener of its own follows, ADR-0021 puts the probes on
-  the listener its metrics already use, and ADR-0030 counts it among
-  the paths that write nothing — context and reasoning, never a
-  decision. `garam serve machine` is the exception: it serves
-  `/metrics` on its probe port because ADR-0100's migration plan gated
-  removing the certificate path on a count of the listener's requests
-  by how each authenticated, `garam_machine_requests_total`
+- **What decides the metrics surface.** `/metrics` is served by `garam
+  serve api` and `garam serve machine` (§The surfaces) and decided by no
+  ADR: every ADR that names it treats it as a surface that already
+  exists. ADR-0014 and ADR-0017 name it as the shape a listener of its
+  own follows, ADR-0021 puts the probes on the listener its metrics
+  already use, and ADR-0030 counts it among the paths that write nothing
+  — context and reasoning, never a decision. `garam serve machine` is
+  the exception: it serves `/metrics` on its probe port because
+  ADR-0100's migration plan gated removing the certificate path on a
+  count of the listener's requests by how each authenticated,
+  `garam_machine_requests_total`
   (`platform/internal/cli/machine_token.go`). That decides that this
-  process exposes the count, and nothing about what the other two
-  expose.
+  process exposes the count, and nothing about what `serve api` exposes.
 - **Whether anything outside the cluster reaches any listener.** The
   chart renders four `ClusterIP` Services and refuses to offer a value
   that would expose one (ADR-0042), so exposure is the deployment's
@@ -889,8 +910,8 @@ document owes an update.
 
 - [ADR-0002](./adr/0002-iam-style-policy-model.md) — policies decide
   every org-scoped request
-- [ADR-0003](./adr/0003-single-cli-topology.md) — one binary, and the
-  engine reached over gRPC inside the trust boundary
+- [ADR-0003](./adr/0003-single-cli-topology.md) — one binary; the
+  earlier engine's process is removed (ADR-0177)
 - [ADR-0004](./adr/0004-openapi-first-api.md) —
   `platform/api/openapi.yaml` is the source of truth for what
   `serve api` serves
@@ -920,8 +941,6 @@ document owes an update.
   two probes
 - [ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md) — a
   policy decides what an agent may send
-- [ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md) — a
-  caller asks the engine only inside the object's organization
 - [ADR-0027](./adr/0027-a-watch-crosses-processes-through-postgres.md)
   — the two listeners cross through Postgres and never call each other
 - [ADR-0028](./adr/0028-oauth-state-is-a-server-side-record.md) — a
@@ -932,12 +951,15 @@ document owes an update.
   — a cross-organization message needs both organizations' consent
 - [ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)
   — no surface serves a secret's value
+- [ADR-0176](./adr/0176-the-platform-relays-the-policy-services-audit-record-to-the-console-and-the-cli.md)
+  — `listAuditRecords` relays the policy service's audit record as the
+  signed-in user, the service deciding the read on `iam:audit.read`
+- [ADR-0171](./adr/0171-the-browser-listeners-enforcement-permission-checks-and-holders-list-ask-the-policy-service-delivered-state-suffices.md)
+  — the browser listener's enforcement asks the policy service, and a
+  failure of it is a 503
 - [ADR-0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)
   — a pending invitation is listed by an id that admits no one, and
   revoking deletes it
-- [ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)
-  — the engine checks the organization it was handed against the
-  object's, and refuses a call naming none
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate,
   read per handshake

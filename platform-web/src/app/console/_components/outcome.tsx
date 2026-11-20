@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { createContext, use, useState } from "react";
 
 /** Where on a page a write's success is said. */
-export type OutcomeArea = "lifecycle" | "document" | "versions" | "attachments";
+export type OutcomeArea = "lifecycle" | "versions";
 
 type Reports = Partial<Record<OutcomeArea, string>>;
 

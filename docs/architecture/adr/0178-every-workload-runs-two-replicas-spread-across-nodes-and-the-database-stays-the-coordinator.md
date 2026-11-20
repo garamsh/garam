@@ -1,6 +1,6 @@
 # ADR 0178: Every workload runs two replicas spread across Nodes, the database stays the coordinator, and an upgrade rolls
 
-> Status: proposed, not built (#2015); builds goal #2012 and
+> Status: accepted; not built (#2015); builds goal #2012 and
 > supersedes the "replica safety above one is not established"
 > position of
 > [deployment-contract.md](../deployment-contract.md) §Not established
@@ -328,7 +328,7 @@ unmeasured.
 ## Alternatives rejected
 
 - **Three replicas.** Survives two simultaneous disruptions, which the
-  goal excludes;.
+  goal excludes.
 - **Leader election for the feed.** The row lock already elects per
   pass; a second mechanism adds a lease to lose and no safety.
 - **Running the feed loop in `serve machine`.** More connections and

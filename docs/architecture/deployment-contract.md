@@ -16,6 +16,7 @@ what the binary enforces about key material, and what is not known.
 - cowork's host
 - Termination
 - The PodSecurity level is the deployment's
+- Replicas, spreading and rollout
 - Not established
 - Decisions this rests on
 
@@ -132,8 +133,13 @@ Two sentences a consumer must plan against:
   deploying platform's probe configuration, not by garam. The duration
   of that window is a property of the platform's database topology and
   maintenance procedure, not of garam.
-- A replica whose policy-change listener is reconnecting does **not**
-  leave rotation. Readiness deliberately does not report it
+- No process listens for policy changes: the platform decides through
+  the policy service and the only `LISTEN` left is the watch relay
+  (`platform/internal/watch/postgres/postgres_relay.go:152`;
+  [ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
+  A policy outage therefore does **not** leave rotation either:
+  readiness reports the database alone, what a replica cannot serve
+  without
   ([ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)).
 
 garam takes one position on probe tolerance and no other. The chart
@@ -742,6 +748,40 @@ the kubelet resolves the image's own user only when no numeric
 container start rather than at admission. A manifest that asserts
 `runAsNonRoot` supplies the numeric UID with it.
 
+## Replicas, spreading and rollout
+
+**Unbuilt.** This section describes what
+[ADR-0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
+decides (#2015) and nothing it decides is built: the chart still
+renders one replica and `Recreate` for every Deployment, and the
+policy client and the pool settings below are not yet in the code. What
+holds now, at `0b8a5eb189e5b87309fafbc5311792f5d15fe4ac`, is the
+first bullet.
+
+- **The database is the coordinator.** No leader election exists, and
+  none is needed: the feed pass, the message claim, the signing-key
+  rotation, the policy denial cap and the policy writes each serialize
+  in the database by a row lock, an advisory lock or a guard on a
+  stored sequence, so a second replica of `serve api`, `serve machine`
+  or the policy service does not diverge from the first. A loop added
+  later must join that coordination.
+- **Two replicas per workload, spread across Nodes**, each behind a
+  PodDisruptionBudget of `maxUnavailable: 1`, rolling with
+  `RollingUpdate`, `maxUnavailable: 0`, `maxSurge: 1`. The values
+  belong to the chart.
+- **Version skew.** Two releases run together during a rollout, so
+  what replicas share (outbox mark kinds, claim SQL, lock keys,
+  signing rows, the policy protobuf) must stay readable by the
+  previous release for one release. Review holds it; nothing detects it.
+- **What a deployment still owes.** At least two schedulable Nodes; a
+  database `max_connections` that fits two of each workload.
+- **Limiters are per replica.** The operator key and exchange bounds
+  are per process, so at the balancer they are N times with N
+  replicas.
+- **Not changed by replicas:** a lost replica's queued policy denials
+  are lost and counted, a Watcher count over-reports for up to 45 s,
+  and per-replica metrics are summed by the deployment.
+
 ## Not established
 
 Answers a consumer asked for that the source does not establish. Stated
@@ -758,11 +798,6 @@ that would assert one:
   process runs, so the three serve processes need no writable path. What
   the web runtime writes, if anything, is unverified — so the
   `securityContext` field is the deployment's to set either way.
-- **Replica safety above one.** Not established for `serve api` or
-  `serve machine`. No leader election exists anywhere
-  in the source; whether that makes a second replica safe or unsafe is
-  not answered here. This is why the chart fixes every Deployment at one
-  replica and offers no value for it. (`migrate` is answered above.)
 - **Worst-case time from start to `/readyz` answering ok.** Not
   established; nothing in the source bounds startup. A slow start
   reading as a failed deploy is a function of the deployment's probe
@@ -874,3 +909,6 @@ that would assert one:
 - [ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
   — the certificate path goes, and the sealed authority rows and the
   key-encryption key stay
+- [ADR-0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
+  — every workload runs two replicas spread across Nodes, the database
+  stays the coordinator, and an upgrade rolls (proposed, not built)

@@ -705,12 +705,14 @@ the Transit CA, `GARAM_IDENTITY_SERVICE_KEYS_FILE` and
 Not guessed. Each is what the source read does not state; a deployment
 that depends on one decides it and records it as decided.
 
-- **Replica safety above one**, for every process here. No leader
-  election exists. cowork's hub is in memory
-  (`cowork/internal/cli/serve.go:98`); whether a second cowork
-  replica is safe is not answered. For the three `serve` commands the
-  answer is [deployment-contract.md](./deployment-contract.md)
-  §Not established.
+- **Replica safety above one**, for cowork. No leader election exists.
+  cowork's hub is in memory (`cowork/internal/cli/serve.go:98`);
+  whether a second cowork replica is safe is not answered. For the
+  three `serve` commands and the policy service the answer is
+  [ADR-0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md),
+  proposed and not built, summarized in
+  [deployment-contract.md](./deployment-contract.md) §Replicas,
+  spreading and rollout.
 - **What a process does against a database not migrated.** No start-time
   version check was found in `platform/internal` outside
   `cli/migrate.go`; cowork's and the policy service's were not searched

@@ -1580,3 +1580,10 @@ ADRs:
   `policies`, `policy_versions` and `policy_attachments` by migration
   000081, reversible empty; accepted, built (#2000); builds ADR-0146
   item 1; supersedes 0003 in part
+- [0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
+  — every workload runs two replicas spread across Nodes behind a
+  PodDisruptionBudget, the database stays the coordinator, an upgrade
+  rolls rather than recreates, the policy client detects a lost Node
+  by keepalive, and the measurable run for #2012 is defined; proposed,
+  not built (#2015); supersedes the "replica safety above one is not
+  established" position of the deployment contract

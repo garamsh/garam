@@ -1440,7 +1440,7 @@ type IamPolicy struct {
 	Kind           IamPolicyKind `json:"kind"`
 	Name           string        `json:"name"`
 
-	// Status A policy's lifecycle state. Only an `active` policy contributes statements to a check.
+	// Status A policy's lifecycle state. Only an `active` policy contributes its default version to decisions.
 	Status PolicyStatus `json:"status"`
 }
 
@@ -1826,7 +1826,7 @@ type OrgDeletionCounts struct {
 	// Operators Registered operators, each taking its keys with it.
 	Operators int `json:"operators"`
 
-	// Policies Policies, each taking its versions and its attachments with it (ADR-0008).
+	// Policies Policies, the length of the organization's list that the policy service answers.
 	Policies int `json:"policies"`
 
 	// Projects Projects, each taking its membership rows with it.
@@ -1986,7 +1986,7 @@ type PolicyRollback struct {
 	Version int32 `json:"version"`
 }
 
-// PolicyStatus A policy's lifecycle state. Only an `active` policy contributes statements to a check.
+// PolicyStatus A policy's lifecycle state. Only an `active` policy contributes its default version to decisions.
 type PolicyStatus string
 
 // Project defines model for Project.
@@ -2355,7 +2355,7 @@ type ListPermissionHoldersParams struct {
 	// ResourceId The last segment of the resource's identifier, given with `resourceType`.
 	ResourceId *PermissionResourceId `form:"resourceId,omitempty" json:"resourceId,omitempty"`
 
-	// Limit How many candidates to ask, from 1 to 50; 50 when absent. Unlike the `limit` other lists share, 0 is refused rather than read as no limit, because each candidate costs the engine a check.
+	// Limit How many candidates to ask, from 1 to 50; 50 when absent. Unlike the `limit` other lists share, 0 is refused rather than read as no limit, because each candidate costs the policy service a decision.
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
@@ -2708,7 +2708,7 @@ type ServerInterface interface {
 	// ExplainPermission Explain why the signed-in caller may or may not take one action. Requires membership.
 	// (GET /orgs/{org}/permission-explanation)
 	ExplainPermission(w http.ResponseWriter, r *http.Request, org Org, params ExplainPermissionParams)
-	// ListPermissionHolders List the members and agents the engine allows one action. Requires `iam:org.member-list`.
+	// ListPermissionHolders List the members and agents the policy service allows one action. Requires `iam:org.member-list`.
 	// (GET /orgs/{org}/permission-holders)
 	ListPermissionHolders(w http.ResponseWriter, r *http.Request, org Org, params ListPermissionHoldersParams)
 	// ListProjects List an organization's projects. Requires the `member` role.

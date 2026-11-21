@@ -69,8 +69,7 @@ func (s *tokenStack) identityStatus(t *testing.T, token string) int {
 // route outside its own, beside an identity read as the control.
 func TestStandaloneCredential_ASupervisorRunsItsAgentOnTokensAlone(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s := &tokenStack{executionStack: newExecutionStack(t, p)}
 	h := newStandaloneHost(t)
 	status, body := s.approve(t, s.owner, "acme", h.approval(t, time.Now().Add(time.Hour), nil))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -124,8 +123,7 @@ func (s *tokenStack) supervisorStanding(t *testing.T, g grn.GRN, supervisorToken
 // window: the retry is refused, and so is the current credential.
 func TestStandaloneCredential_ARetryReissuesTheCredentialAndVoidsTheLast(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s := &tokenStack{executionStack: newExecutionStack(t, p)}
 	h := newStandaloneHost(t)
 	status, body := s.approve(t, s.owner, "acme", h.approval(t, time.Now().Add(time.Hour), nil))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -165,8 +163,7 @@ func TestStandaloneCredential_ARetryReissuesTheCredentialAndVoidsTheLast(t *test
 // the two answered credentials exchanges.
 func TestStandaloneCredential_ConcurrentRetriesLeaveOneLiveCredential(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s := &tokenStack{executionStack: newExecutionStack(t, p)}
 	h := newStandaloneHost(t)
 	status, body := s.approve(t, s.owner, "acme", h.approval(t, time.Now().Add(time.Hour), nil))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -209,8 +206,7 @@ func (s *tokenStack) enrolledSupervisor(t *testing.T) (credentialed, string) {
 // same calls at its own agent are the control.
 func TestStandaloneCredential_ASupervisorReachesItsOwnAgentAlone(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s := &tokenStack{executionStack: newExecutionStack(t, p)}
 	mine, token := s.enrolledSupervisor(t)
 	theirs, theirToken := s.enrolledSupervisor(t)
 
@@ -243,8 +239,7 @@ func TestStandaloneCredential_ASupervisorReachesItsOwnAgentAlone(t *testing.T) {
 // replacement has moved the agent to another, which writes nothing.
 func TestStandaloneCredential_AReplacementEndsTheRetryWindow(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s := &tokenStack{executionStack: newExecutionStack(t, p)}
 	h := newStandaloneHost(t)
 	status, body := s.approve(t, s.owner, "acme", h.approval(t, time.Now().Add(time.Hour), nil))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -291,8 +286,7 @@ func TestStandaloneCredential_AReplacementEndsTheRetryWindow(t *testing.T) {
 // all a fresh supervisor could name before.
 func TestStandaloneCredential_AReplacementAnswersTheActivationItsFirstActivationNames(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s := &tokenStack{executionStack: newExecutionStack(t, p)}
 	h := newStandaloneHost(t)
 	status, body := s.approve(t, s.owner, "acme", h.approval(t, time.Now().Add(time.Hour), nil))
 	require.Equal(t, http.StatusCreated, status, body)

@@ -12,13 +12,9 @@ packages:
   github.com/garamsh/garam/platform/internal/agent:
     interfaces:
       StandaloneService: {}
-  github.com/garamsh/garam/platform/internal/api:
-    interfaces:
-      Evaluator: {}
-      PolicyManager: {}
-  github.com/garamsh/garam/platform/internal/authz:
-    interfaces:
-      Store: {}
   github.com/garamsh/garam/platform/internal/operator:
     interfaces:
       AuthorityService: {}
+  github.com/garamsh/garam/platform/internal/policydecision:
+    interfaces:
+      Service: {}

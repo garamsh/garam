@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
 	apigen "github.com/garamsh/garam/platform/api"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
@@ -24,11 +23,10 @@ import (
 // database that serves the agent reads, which the stack's own browser
 // server holds no agent store for. Sessions are rows, so the stack's
 // cookies sign in here too.
-func agentReader(t *testing.T, s *executionStack, engine grpc.ClientConnInterface) string {
+func agentReader(t *testing.T, s *executionStack) string {
 	t.Helper()
 	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), nil, nil, nil,
-		authnpg.NewSessionStore(s.pool), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
+		authnpg.NewSessionStore(s.pool), nil, nil, nil, nil, newCurrentDecisions(s.pool), nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	return browser.URL
@@ -70,9 +68,8 @@ func readAgents(t *testing.T, url string, s *executionStack) (apigen.Agent, map[
 // the control on the list: it carries none.
 func TestAgentRead_AnswersTheGenerationLastActivated(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
-	url := agentReader(t, s, engine)
+	s := newExecutionStack(t, p)
+	url := agentReader(t, s)
 
 	one, all := readAgents(t, url, s)
 	assert.Nil(t, one.Generation, "never activated")

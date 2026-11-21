@@ -14,7 +14,6 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/user"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // enrollmentsListed lists acme's approvals as cookie, at query.
@@ -45,8 +44,7 @@ func (s *executionStack) supervisorsListed(t *testing.T, cookie *http.Cookie, qu
 // fingerprint, no certificate.
 func TestStandaloneListing_ListsApprovalsInEveryStateWithoutWhatSpendsThem(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	spentHost, spent := s.standaloneOf(t)
 	withdrawnHost := newStandaloneHost(t)
 	withdrawn := s.approved(t, withdrawnHost, nil)
@@ -96,8 +94,7 @@ func TestStandaloneListing_ListsApprovalsInEveryStateWithoutWhatSpendsThem(t *te
 // when it ended and no activation. Neither carries a certificate.
 func TestStandaloneListing_ListsSupervisorsActiveAndRevoked(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	_, active := s.standaloneOf(t)
 	got := s.activate(t, active.supervisorTLS, "v-1", generationOf(1), nil, active.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
@@ -122,15 +119,14 @@ func TestStandaloneListing_ListsSupervisorsActiveAndRevoked(t *testing.T) {
 	assert.NotContains(t, raw, "CERTIFICATE")
 }
 
-// TestStandaloneListing_IsReadOnAgentRead attaches a Deny of
-// iam:agent.read to the member: both lists refuse it with 403. The
-// member before the Deny is the control, so what refuses is the Deny on
+// TestStandaloneListing_IsReadOnAgentRead has the policy service deny
+// the member iam:agent.read: both lists refuse it with 403. The member
+// before the denial is the control, so what refuses is the denial of
 // iam:agent.read and not a gate that refuses members; the owner after
-// it is the control that the Deny reached the member alone.
+// it is the control that the denial reached the member alone.
 func TestStandaloneListing_IsReadOnAgentRead(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	s.standaloneOf(t)
 	paths := []string{"/orgs/acme/agent-enrollments", "/orgs/acme/agent-supervisors"}
 	for _, path := range paths {
@@ -138,9 +134,7 @@ func TestStandaloneListing_IsReadOnAgentRead(t *testing.T) {
 		require.Equal(t, http.StatusOK, status, "the control, before the Deny: %s %s", path, body)
 	}
 
-	denied := activePolicy(t, policies, s.acme, "no-agent-read",
-		statementDoc("no-agent-read", wire.EffectDeny, org.ActionAgentRead, s.acme.String()))
-	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, user.ServiceType, "bob"))
+	s.decisions.forbid(grn.New(grn.RootOwner, user.ServiceType, "bob"), org.ActionAgentRead)
 
 	for _, path := range paths {
 		status, body := s.browse(t, http.MethodGet, path, s.member, "")
@@ -155,8 +149,7 @@ func TestStandaloneListing_IsReadOnAgentRead(t *testing.T) {
 // list in order, and a limit the paging columns cannot hold is refused.
 func TestStandaloneListing_Pages(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	_, first := s.standaloneOf(t)
 	_, second := s.standaloneOf(t)
 	third := s.approved(t, newStandaloneHost(t), nil)
@@ -188,8 +181,7 @@ func TestStandaloneListing_Pages(t *testing.T) {
 // agent's activation belongs to the epoch it was made at.
 func TestStandaloneListing_ASupervisorsLastActivationIsAtItsOwnEpoch(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	_, former := s.standaloneOf(t)
 	got := s.activate(t, former.supervisorTLS, "r-1", generationOf(1), nil, former.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)

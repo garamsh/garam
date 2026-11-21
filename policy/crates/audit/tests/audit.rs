@@ -16,7 +16,6 @@ static MIGRATIONS: Migrator = sqlx::migrate!("../../migrations");
 const ACME: &str = "grn:root/iam/org/acme";
 const GLOBEX: &str = "grn:root/iam/org/globex";
 const LEE: &str = "grn:acme/iam/user/lee";
-const KIM: &str = "grn:acme/iam/user/kim";
 const BOT: &str = "grn:acme/iam/agent/bot";
 
 async fn hold(pool: &PgPool, org: &str) {
@@ -321,8 +320,11 @@ async fn a_record_that_blocks_is_given_up_at_its_bound_and_counted_as_lost(pool:
     );
     assert_eq!(recorder.lost(), 1);
     blocker.rollback().await.unwrap();
+    // The blocked record's connection may have been closed, so this
+    // denial can open one: it runs under the default bound, not the
+    // short one.
     assert_eq!(
-        recorder.deny(&denial(LEE, &none)).await,
+        Recorder::new(pool.clone()).deny(&denial(LEE, &none)).await,
         Recorded::Stored,
         "the connection the blocked record held is not left behind"
     );
@@ -333,27 +335,19 @@ async fn a_record_that_blocks_is_given_up_at_its_bound_and_counted_as_lost(pool:
 async fn a_repeated_denial_is_counted_while_the_organization_s_lock_is_held(pool: PgPool) {
     hold(&pool, ACME).await;
     let none = ids(&[]);
-    // Setup runs under the recorder's own bound, and the short bound below
-    // is for the one denial that must not wait on the lock. The blocker
-    // takes one connection and that denial another, so two denials of
-    // another subject run at once first: each leaves a connection open
-    // with the collapsing statement prepared, and the denial under the
-    // short bound pays the lock and nothing else.
+    // The blocker takes its connection first, so the setup denial can
+    // only use another, which it leaves idle with the collapsing
+    // statement prepared. The denial under the short bound reuses it
+    // and pays the lock and nothing else.
+    let mut blocker = pool.begin().await.unwrap();
     let setup = Recorder::new(pool.clone());
-    let kim = denial(KIM, &none);
-    let (one, other) = tokio::join!(setup.deny(&kim), setup.deny(&kim));
-    assert!(matches!(
-        (one, other),
-        (Recorded::Stored, Recorded::Collapsed) | (Recorded::Collapsed, Recorded::Stored)
-    ));
     assert_eq!(setup.deny(&denial(LEE, &none)).await, Recorded::Stored);
     assert!(
-        pool.num_idle() >= 2,
-        "two connections are open before the lock is held, got {}",
-        pool.num_idle()
+        pool.size() >= 2,
+        "a second connection is open beside the blocker's, got {}",
+        pool.size()
     );
     let recorder = Recorder::new(pool.clone()).bounded(Duration::from_millis(300));
-    let mut blocker = pool.begin().await.unwrap();
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(ACME)
         .execute(&mut *blocker)

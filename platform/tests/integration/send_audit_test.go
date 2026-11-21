@@ -71,8 +71,7 @@ func newSendStack(t *testing.T) sendStack {
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
 	decisions := &sendsRefusing{}
-	_, engine := policyEngine(t, p)
-	url := machineListenerDeciding(t, p, sealer, engine, nil, decisions)
+	url := machineListenerDeciding(t, p, sealer, nil, decisions)
 	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	return sendStack{p: p, url: url, decisions: decisions, operator: operator}
 }

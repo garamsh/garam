@@ -70,15 +70,16 @@ describe("team page", () => {
     expect(container.textContent).not.toContain("grn:");
   });
 
-  it("links to the management of the team's policy attachments", async () => {
+  it("offers no link to attach policies to the team", async () => {
     await renderTeam();
 
+    // The control: the page rendered, with its members.
     expect(
-      screen.getByRole("link", { name: "Manage policies" }),
-    ).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/permissions/attachments?subject=team%3Aeng",
-    );
+      screen.getByRole("heading", { level: 1, name: "Engineering" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Manage policies" }),
+    ).not.toBeInTheDocument();
   });
 
   it("offers only the people and agents the team does not hold", async () => {

@@ -82,6 +82,7 @@ impl Evaluation {
             context: self.context.map(structure),
             read: 0,
             probe: self.probe.unwrap_or_default(),
+            without_permits: false,
         })
     }
 }
@@ -111,6 +112,7 @@ impl Evaluations {
                     resource: resource(entry.resource, manifests)?,
                     context: entry.context.map(structure),
                     probe: entry.probe,
+                    without_permits: None,
                 })
             })
             .collect::<Result<_, ServiceError>>()?;
@@ -122,6 +124,7 @@ impl Evaluations {
             read: 0,
             evaluations,
             probe: self.probe.unwrap_or_default(),
+            without_permits: false,
         })
     }
 }

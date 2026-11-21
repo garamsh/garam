@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
-	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 )
 
 // The preview answers what deleting the organization would take. Each
@@ -63,13 +62,15 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// 8 policies. The engine owns them and returns the whole list.
-	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).
-		Return(make([]*api.Policy, 8), nil).Once()
+	// 8 policies. The policy service owns them and the relay returns the
+	// whole list.
+	relay := &storedPolicies{listed: make([]policyrelay.Policy, 8)}
+	f.server.WithPolicyRelay(relay)
 
 	rec := f.do(t, "GET", "/orgs/"+slug+"/deletion-preview", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := decodeBody[apigen.OrgDeletionPreview](t, rec)
+	assert.Equal(t, []grn.GRN{orgGRN}, relay.listedFor, "the policies are read of the organization being deleted")
 
 	assert.Equal(t, 1, body.Counts.Groups)
 	assert.Equal(t, 2, body.Counts.Projects)
@@ -94,8 +95,7 @@ func TestGetOrgDeletionPreview_CertificateAuthority(t *testing.T) {
 	withCA := createOrg(t, f, owner, "acme")
 	withoutCA := createOrg(t, f, owner, "globex")
 	f.authorities.give(orgGRNOf(withCA))
-	f.policies.EXPECT().ListPolicies(mock.Anything, mock.Anything).
-		Return(nil, nil).Twice()
+	f.server.WithPolicyRelay(&storedPolicies{})
 
 	rec := f.do(t, "GET", "/orgs/"+withCA+"/deletion-preview", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -136,7 +136,7 @@ func TestGetOrgDeletionPreview_OwnerOnly(t *testing.T) {
 	rec = f.do(t, "GET", "/orgs/"+slug, "", member)
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).Return(nil, nil).Once()
+	f.server.WithPolicyRelay(&storedPolicies{})
 	rec = f.do(t, "GET", "/orgs/"+slug+"/deletion-preview", "", owner)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
@@ -162,7 +162,7 @@ func TestGetOrgDeletionPreview_MissingOrgIsNotZero(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Equal(t, "permission_denied", decodeBody[apigen.Error](t, rec).Kind)
 
-	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRNOf(slug)).Return(nil, nil).Once()
+	f.server.WithPolicyRelay(&storedPolicies{})
 	rec = f.do(t, "GET", "/orgs/"+slug+"/deletion-preview", "", owner)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
@@ -207,7 +207,7 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, rec.Code,
 		"the caller must genuinely lack iam:agent.read for the count below to prove anything")
 
-	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).Return(nil, nil).Once()
+	f.server.WithPolicyRelay(&storedPolicies{})
 	rec = f.do(t, "GET", "/orgs/"+slug+"/deletion-preview", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := decodeBody[apigen.OrgDeletionPreview](t, rec)

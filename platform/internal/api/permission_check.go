@@ -10,6 +10,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
 // maxPermissionChecks bounds one request, so a page asking what it
@@ -64,6 +65,9 @@ const (
 type actionRule struct {
 	on        []apigen.PermissionResourceType
 	decidedBy decidedBy
+	// withoutPermits asks the service as a write of the action decides
+	// it, leaving the organization's permits out (ADR-0175).
+	withoutPermits bool
 }
 
 // actionRules holds one rule per action org.Actions defines, read off
@@ -95,11 +99,16 @@ var actionRules = map[string]actionRule{
 
 	org.ActionPolicyCreate: {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionPolicyRead:   {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
-	org.ActionPolicyUpdate: {on: []apigen.PermissionResourceType{kindPolicy}},
-	org.ActionPolicyAttach: {on: []apigen.PermissionResourceType{kindPolicy}},
-	org.ActionPolicyDetach: {on: []apigen.PermissionResourceType{kindPolicy}},
-	org.ActionPolicyDelete: {on: []apigen.PermissionResourceType{kindPolicy}},
+	// A policy write is decided on the organization (ADR-0172), so a
+	// policy not yet written can be asked about there.
+	org.ActionPolicyUpdate: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
+	org.ActionPolicyAttach: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
+	org.ActionPolicyDetach: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
+	org.ActionPolicyDelete: {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
 	org.ActionAuditRead:    {on: []apigen.PermissionResourceType{onOrg}},
+	// A permit is written by whoever the service allows without the
+	// permits, so a permit cannot grant the right to write one.
+	org.ActionPermitWrite: {on: []apigen.PermissionResourceType{onOrg}, withoutPermits: true},
 
 	org.ActionConsentRead:     {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionConsentGrant:    {on: []apigen.PermissionResourceType{onOrg}},
@@ -140,7 +149,7 @@ var actionRules = map[string]actionRule{
 
 // CheckPermissions answers, for each pair asked, whether enforcement
 // would allow the signed-in caller the action on the resource: the
-// same statements, groups and engine `Check` authorizeOn uses. It
+// same policy service `Check` authorizeOn asks. It
 // answers allow or deny and never why. An action a delegation grant
 // also decides is denied where its mint's check denies and unknown
 // where only the grant is left. iam:operator.delegate and
@@ -173,6 +182,9 @@ func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
+	// A pair is a question nobody acts on, so each is asked as a probe
+	// (ADR-0148 item 2).
+	r = r.WithContext(policydecision.AsProbe(r.Context()))
 	results := make([]apigen.PermissionCheckResult, len(body.Checks))
 	for i, check := range body.Checks {
 		decision, err := s.decide(r, c, targets[i], check.Action)
@@ -220,7 +232,7 @@ func (s *Server) decideAsMint(r *http.Request, c *caller, target grn.GRN, action
 	if err != nil {
 		return "", err
 	}
-	err = s.authority.AuthorizeOperation(r.Context(), c.user.GRN, c.org, target, op)
+	err = s.authority.AuthorizeOperation(policydecision.AsProbe(r.Context()), c.user.GRN, c.org, target, op)
 	switch {
 	case err == nil:
 		return apigen.DecisionUnknown, nil
@@ -234,7 +246,7 @@ func (s *Server) decideAsMint(r *http.Request, c *caller, target grn.GRN, action
 // write of a delegation runs, for the same actor and organization. That
 // check is all of their authority, so it answers allow or deny.
 func (s *Server) decideAsDelegation(r *http.Request, c *caller) (apigen.PermissionDecision, error) {
-	err := s.authority.AuthorizeDelegation(r.Context(), c.user.GRN, c.org)
+	err := s.authority.AuthorizeDelegation(policydecision.AsProbe(r.Context()), c.user.GRN, c.org)
 	switch {
 	case err == nil:
 		return apigen.DecisionAllow, nil
@@ -249,7 +261,7 @@ func (s *Server) decideAsDelegation(r *http.Request, c *caller) (apigen.Permissi
 // same actor and object. That check is all of their authority, so it
 // answers allow or deny.
 func (s *Server) decideAsEnroll(r *http.Request, c *caller, target grn.GRN) (apigen.PermissionDecision, error) {
-	err := s.standalone.AuthorizeEnroll(r.Context(), c.user.GRN, c.org, target)
+	err := s.standalone.AuthorizeEnroll(policydecision.AsProbe(r.Context()), c.user.GRN, c.org, target)
 	switch {
 	case err == nil:
 		return apigen.DecisionAllow, nil

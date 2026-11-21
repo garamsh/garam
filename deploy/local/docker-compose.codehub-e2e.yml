@@ -11,7 +11,7 @@
 # - policy: trusts the issuer's own keys, fetched from the running api,
 #   in place of the key `policy-keys` made;
 # - ports: the api, the machine listener and the policy service each
-#   take a free loopback port, and postgres and authz publish none.
+#   take a free loopback port, and postgres publishes none.
 # Run without the default file's cowork profile. tooling/codehub-e2e.sh
 # writes the key material this reads, names the project, and removes
 # both at the end.
@@ -38,9 +38,6 @@ services:
     restart: "no"
 
   postgres:
-    ports: !reset []
-
-  authz:
     ports: !reset []
 
   # The delivery loop reaches the policy service over TLS, verifying its
@@ -76,7 +73,6 @@ services:
     command: ["serve", "machine"]
     environment:
       GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
-      GARAM_AUTHZ_ADDR: authz:9090
       GARAM_MACHINE_ADDR: ":8443"
       GARAM_MACHINE_HEALTH_ADDR: ":8444"
       GARAM_MACHINE_TLS_CERT_FILE: /keys/machine.crt
@@ -97,8 +93,6 @@ services:
         condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
-      authz:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "/usr/local/bin/garam", "probe", "http://127.0.0.1:8444/readyz"]
       interval: 2s

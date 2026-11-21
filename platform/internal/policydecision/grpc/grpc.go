@@ -66,11 +66,25 @@ func (c *Client) evaluate(
 		Action:   &policyv1.Action{Name: q.Action},
 		Resource: resource,
 		Probe:    q.Probe,
+		Read:     readOf(q.Current),
+		// Without permits is the question's own.
+		WithoutPermits: q.WithoutPermits,
 	})
 }
 
+// readOf is the read a question states: current when it asks for it,
+// and unspecified otherwise, which the service reads as its default.
+func readOf(current bool) policyv1.Read {
+	if current {
+		return policyv1.Read_READ_CURRENT
+	}
+	return policyv1.Read_READ_UNSPECIFIED
+}
+
 // Evaluations asks the questions in one call. Each carries its own
-// probe, so a mixed batch states each as its caller does.
+// probe and its own without-permits, so a mixed batch states each as
+// its caller does. The read is the request's alone, so a batch in
+// which any question asks for current is read current throughout.
 func (c *Client) Evaluations(
 	ctx context.Context, qs []policydecision.Question,
 ) ([]policydecision.Decision, error) {
@@ -78,22 +92,27 @@ func (c *Client) Evaluations(
 		return nil, errorx.New(errorx.KindInvalidArgument, "no question to ask")
 	}
 	asked := make([]*policyv1.Evaluation, len(qs))
+	current := false
 	for i, q := range qs {
+		current = current || q.Current
 		subject, resource, err := parties(q)
 		if err != nil {
 			return nil, err
 		}
-		probe := q.Probe
+		probe, withoutPermits := q.Probe, q.WithoutPermits
 		asked[i] = &policyv1.Evaluation{
-			Subject:  subject,
-			Action:   &policyv1.Action{Name: q.Action},
-			Resource: resource,
-			Probe:    &probe,
+			Subject:        subject,
+			Action:         &policyv1.Action{Name: q.Action},
+			Resource:       resource,
+			Probe:          &probe,
+			WithoutPermits: &withoutPermits,
 		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, feedgrpc.CallTimeout)
 	defer cancel()
-	resp, err := c.client.Evaluations(ctx, &policyv1.EvaluationsRequest{Evaluations: asked})
+	resp, err := c.client.Evaluations(ctx, &policyv1.EvaluationsRequest{
+		Evaluations: asked, Read: readOf(current),
+	})
 	if err != nil {
 		return nil, wrapCall(err, "Evaluations")
 	}

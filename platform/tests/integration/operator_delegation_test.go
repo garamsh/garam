@@ -24,8 +24,8 @@ import (
 // currentAuthority stands in for the composition's Authorizer: it
 // answers what the test says current state is now, so a decision
 // recorded earlier cannot be what a later call reads. The real
-// adapter, over membership and CheckCurrent, is composed in
-// internal/cli.
+// adapter, over the policy service's read-current decision, is composed
+// in internal/cli.
 type currentAuthority struct {
 	mu  sync.Mutex
 	err error
@@ -550,9 +550,9 @@ func TestReference_RechecksTheActorEveryTime(t *testing.T) {
 	_, err = f.mint(operator.OperationAgentCreate, f.controller, "req-1")
 	require.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "a fresh mint cannot bypass the revocation: %v", err)
 
-	f.authority.set(errorx.New(errorx.KindUnimplemented, "CheckCurrent is not served"))
+	f.authority.set(errorx.New(errorx.KindUnavailable, "the policy service is not answering"))
 	_, err = f.service.Reference(ctx, f.hosted, minted.Ref)
-	require.True(t, errorx.IsKind(err, errorx.KindUnavailable), "an engine that cannot decide currently: %v", err)
+	require.True(t, errorx.IsKind(err, errorx.KindUnavailable), "a service that cannot decide currently: %v", err)
 
 	f.authority.set(nil)
 	_, err = f.service.Reference(ctx, f.hosted, minted.Ref)

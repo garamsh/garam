@@ -200,7 +200,9 @@ func (s *stack) interpose(h *host, certPEM, keyPEM []byte) *interposer {
 			p.mu.Unlock()
 			<-held
 		}
-		req, _ := http.NewRequestWithContext(r.Context(), r.Method, s.machineURL+r.URL.Path, bytes.NewReader(body))
+		// RequestURI keeps the escaped slashes of a GRN in the path,
+		// which URL.Path would decode into more segments.
+		req, _ := http.NewRequestWithContext(r.Context(), r.Method, s.machineURL+r.URL.RequestURI(), bytes.NewReader(body))
 		req.Header = r.Header.Clone()
 		resp, err := upstream.Do(req)
 		if err != nil {

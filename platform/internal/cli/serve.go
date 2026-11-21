@@ -4,16 +4,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -23,8 +19,6 @@ import (
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
-	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
 	"github.com/garamsh/garam/platform/internal/health"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -33,11 +27,10 @@ import (
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
 	"github.com/garamsh/garam/platform/internal/watch"
 	watchpg "github.com/garamsh/garam/platform/internal/watch/postgres"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // newServeAPICommand constructs `garam serve api`: the OpenAPI HTTP
-// backend. It reaches the authz engine over gRPC (ADR-0003 stage 2).
+// backend. Its decisions come from the policy service (ADR-0146).
 func newServeAPICommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "api",
@@ -72,11 +65,13 @@ func serveAPI(cmd *cobra.Command) error {
 		return err
 	}
 
-	conn, err := dialAuthz()
+	// A user's delegated authority is the policy service's decision
+	// (ADR-0146), so a process without one does not start.
+	decisions, relay, closePolicy, err := dialPolicyClients()
 	if err != nil {
 		return err
 	}
-	defer func() { _ = conn.Close() }()
+	defer closePolicy()
 
 	ttl, err := time.ParseDuration(envOr(envSessionTTL, "168h"))
 	if err != nil {
@@ -130,11 +125,10 @@ func serveAPI(cmd *cobra.Command) error {
 		authnpg.NewPasswordCredentialStore(pool),
 		authnpg.NewPasswordAttemptStore(pool),
 		providers,
-		api.NewGRPCEvaluator(conn),
-		api.NewGRPCPolicyManager(conn),
+		decisions,
 		authorityPresence{orgs: orgpg.New(pool)},
-		NewAuthorityService(pool, conn),
-		NewStandaloneService(pool, conn),
+		NewAuthorityService(pool, decisions),
+		NewStandaloneService(pool, decisions),
 		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: cookieSecure,
@@ -142,7 +136,8 @@ func serveAPI(cmd *cobra.Command) error {
 		},
 	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
-		WithIdentity(issuer)
+		WithIdentity(issuer).
+		WithPolicyRelay(relay)
 
 	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger, obs.registry)
 	if err != nil {
@@ -152,9 +147,7 @@ func serveAPI(cmd *cobra.Command) error {
 	srv.WithFeed(gate)
 
 	addr := envOr(envHTTPAddr, ":8080")
-	// A request needs both to be served: rows out of the database, and
-	// the decision that admits it.
-	httpSrv := apiServer(addr, obs.apiHandler(srv, health.Database(pool), authzChannel{conn: conn}))
+	httpSrv := apiServer(addr, obs.apiHandler(srv, health.Database(pool)))
 	obs.logger.Info("serving api", slog.String("addr", addr))
 	return obs.serveHTTP(ctx, shutdownGrace, httpSrv, httpSrv.ListenAndServe)
 }
@@ -232,126 +225,6 @@ func googleProvider(ctx context.Context, cfg authn.GoogleConfig) (authn.Provider
 		return nil, errorx.Wrap(err, "google provider")
 	}
 	return p, nil
-}
-
-// authzChannel is the connection to the policy engine as readiness
-// sees it (health.Dependency). Every org-scoped request is decided
-// there, so a channel that cannot carry a decision is a reason to send
-// requests to another replica.
-type authzChannel struct{ conn *grpc.ClientConn }
-
-func (authzChannel) Name() string { return "authz" }
-
-// Check waits for the channel to reach Ready inside ctx, connecting it
-// when it is idle. The state alone would answer for a channel that has
-// never reached the engine — grpc.NewClient connects on the first call
-// — and answering with an RPC would mean sending the engine one it
-// acts on.
-func (a authzChannel) Check(ctx context.Context) error {
-	for {
-		state := a.conn.GetState()
-		if state == connectivity.Ready {
-			return nil
-		}
-		a.conn.Connect()
-		if !a.conn.WaitForStateChange(ctx, state) {
-			return errorx.New(errorx.KindUnavailable, "authz channel is "+state.String())
-		}
-	}
-}
-
-// newServeAuthzCommand constructs `garam serve authz`: the gRPC policy
-// engine, run as a separate process from the api server (ADR-0003).
-func newServeAuthzCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "authz",
-		Short: "Serve the policy engine over gRPC",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return serveAuthz(cmd)
-		},
-	}
-}
-
-func serveAuthz(cmd *cobra.Command) error {
-	ctx, stop := serveSignalContext(cmd.Context())
-	defer stop()
-
-	obs, err := newObservability(serviceAuthz)
-	if err != nil {
-		return err
-	}
-
-	pool, err := openPool(ctx)
-	if err != nil {
-		return err
-	}
-	defer pool.Close()
-
-	store := authzpg.New(pool)
-	cache := authz.NewPolicyCache(store)
-	// Writes made here invalidate the cache directly; the listener
-	// covers writes made by any other process.
-	go func() {
-		if err := authzpg.ListenPolicyChanges(ctx, pool, cache); err != nil && !errors.Is(err, context.Canceled) {
-			obs.logger.Error("policy change listener stopped", slog.String("error", err.Error()))
-		}
-	}()
-
-	addr := envOr(envGRPCAddr, ":9090")
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		return errorx.Wrap(err, "authz listen", errorx.KindUnavailable)
-	}
-
-	// It starts after the gRPC port is bound, so an answer here means
-	// that port accepts connections. Losing the listener must not take
-	// the engine down.
-	metricsAddr := envOr(envMetricsAddr, ":9091")
-	go func() {
-		// The engine decides from the cache, which fills from the
-		// database and falls back to it on every miss.
-		if err := http.ListenAndServe(metricsAddr, obs.engineProbeHandler(health.Database(pool))); err != nil {
-			obs.logger.Error("metrics listener stopped", slog.String("error", err.Error()))
-		}
-	}()
-
-	srv := obs.engineServer()
-	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
-	authzv1.RegisterPolicyServiceServer(srv, authz.NewPolicyGRPCServer(store, cache))
-	obs.logger.Info("serving authz", slog.String("addr", addr), slog.String("metrics_addr", metricsAddr))
-	if err := obs.serveGRPC(ctx, shutdownGrace, srv, func() error { return srv.Serve(lis) }); err != nil {
-		return errorx.Wrap(err, "authz serve", errorx.KindInternal)
-	}
-	return nil
-}
-
-// engineProbeHandler is what `serve authz` answers on the port beside
-// its gRPC one: the two probes, and /metrics, because the engine speaks
-// gRPC only — a probe carries no gRPC client, and neither does a
-// scraper (api-surface.md §The surfaces). This port carries no
-// credential either.
-//
-// recoverPanics is outermost, as on every listener a serve command
-// runs: a route added to this mux is covered by having been added.
-func (o *observability) engineProbeHandler(deps ...health.Dependency) http.Handler {
-	mux := http.NewServeMux()
-	mux.Handle("GET /metrics", o.metricsHandler())
-	health.Register(mux, deps...)
-	return o.recoverPanics(mux)
-}
-
-// engineServer is the gRPC server `serve authz` serves the policy
-// engine on.
-//
-// The first interceptor is the outermost, so recovery wraps the logging
-// rather than the other way round: a panic is answered before it
-// reaches a frame that would end the process, and the line it leaves is
-// the only one.
-func (o *observability) engineServer() *grpc.Server {
-	return grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.ChainUnaryInterceptor(o.recoverRPCs, o.logRPCs),
-	)
 }
 
 // authorityPresence is whether an organization still holds a retired

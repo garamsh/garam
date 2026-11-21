@@ -172,8 +172,7 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 	p := pool(t)
 	createOrgs(t, p, "acme")
 	_, sealer := keyEncryptionKey(t)
-	_, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	url := machineListener(t, p, sealer)
 	store := operatorpg.New(p)
 
 	// The certificate path is one an earlier release recorded; garam

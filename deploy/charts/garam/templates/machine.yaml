@@ -80,8 +80,6 @@ spec:
               value: ":8443"
             - name: GARAM_MACHINE_HEALTH_ADDR
               value: ":8444"
-            - name: GARAM_AUTHZ_ADDR
-              value: {{ printf "%s:9090" (include "garam.name" (dict "root" $ "word" "authz")) | quote }}
             # These four name files and carry none of their contents.
             #
             # The pair is re-read per handshake, so a replaced one is
@@ -108,6 +106,18 @@ spec:
             - name: GARAM_MACHINE_ISSUER
               value: {{ required "machine.issuer is required" .Values.machine.issuer | quote }}
 {{- include "garam.machineTokenUrlEnv" . }}
+{{- include "garam.identityIssuerEnv" (dict "root" $ "keyFile" .Values.machine.policy.signingKeyFile "keyFileValue" "machine.policy.signingKeyFile") }}
+{{- $serviceKeys := .Values.identity.serviceKeys }}
+{{- if $serviceKeys.secretName }}
+{{- if not (hasSuffix "/oauth/token" .Values.machine.tokenUrl) }}
+{{- fail "identity.serviceKeys.secretName is set and machine.tokenUrl does not end in /oauth/token: serve machine refuses to start holding service keys where the token URL is not the listener's token endpoint (ADR-0129)" }}
+{{- end }}
+            # Public keys only, read at start and again on every
+            # authentication, so the volume below is mounted as a
+            # directory: a Secret mounted by subPath is never updated.
+            - name: GARAM_IDENTITY_SERVICE_KEYS_FILE
+              value: {{ printf "/etc/garam/identity/%s" (required "identity.serviceKeys.key is required beside identity.serviceKeys.secretName" $serviceKeys.key) | quote }}
+{{- end }}
 {{- $policy := .Values.api.policy }}
             # Every send is the policy service's decision (ADR-0168),
             # so the listener refuses to start without it. It reaches
@@ -169,6 +179,11 @@ spec:
               mountPath: /etc/garam/transit
               readOnly: true
 {{- end }}
+{{- if $serviceKeys.secretName }}
+            - name: identity-service-keys
+              mountPath: /etc/garam/identity
+              readOnly: true
+{{- end }}
           resources: {{- toYaml .Values.machine.resources | nindent 12 }}
 {{- $km := .Values.machine.keyMaterial }}
 {{- $secret := required "machine.keyMaterial.secretName is required: it names the Secret holding the listener's certificate and key, the root that signed them, and the key-encryption key, less whichever of the four names a Secret of its own" $km.secretName }}
@@ -226,6 +241,17 @@ spec:
             items:
               - key: {{ $transit.caKey }}
                 path: {{ $transit.caKey }}
+{{- end }}
+{{- if $serviceKeys.secretName }}
+        # The first-party services' public keys. Mounted as a directory,
+        # so a change to the Secret reaches the file the process
+        # re-reads without a restart.
+        - name: identity-service-keys
+          secret:
+            secretName: {{ $serviceKeys.secretName }}
+            items:
+              - key: {{ $serviceKeys.key }}
+                path: {{ $serviceKeys.key }}
 {{- end }}
 ---
 apiVersion: v1

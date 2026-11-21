@@ -48,12 +48,16 @@ test.describe("Home", () => {
 
     const nav = page.getByRole("navigation", { name: "Organization sections" });
     await expect(
-      nav.getByText("Permissions hidden: no policy lets you read it.", {
-        exact: true,
-      }),
+      nav.getByText(
+        "Permissions and Audit hidden: no policy lets you read them.",
+        { exact: true },
+      ),
     ).toBeVisible();
     await expect(
       nav.getByRole("link", { name: "Permissions", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      nav.getByRole("link", { name: "Audit", exact: true }),
     ).toHaveCount(0);
     // The control: what the member role reads is still listed.
     await expect(
@@ -68,6 +72,9 @@ test.describe("Home", () => {
 
     await expect(
       nav.getByRole("link", { name: "Permissions", exact: true }),
+    ).toBeVisible();
+    await expect(
+      nav.getByRole("link", { name: "Audit", exact: true }),
     ).toBeVisible();
     await expect(nav.getByText(/hidden: no policy/)).toHaveCount(0);
   });

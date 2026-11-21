@@ -28,8 +28,7 @@ import (
 func newManagedStack(t *testing.T) *executionStack {
 	t.Helper()
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	s.delegate(t, "iam:agent.create", "iam:agent.activate", "iam:agent.recover", "iam:agent.configure")
 	return s
 }

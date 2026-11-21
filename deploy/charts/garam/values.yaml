@@ -128,12 +128,33 @@ api:
   podAnnotations: {}
   resources: {}
 
-authz:
-  serviceAccount:
-    name: ""
-    create: false
-    annotations: {}
-  resources: {}
+# garam's own OIDC issuer and the first-party services' keys
+# (ADR-0141, ADR-0129). Both are off while empty, as the binary leaves
+# them. No value here carries a secret: the service keys file holds
+# public keys only.
+identity:
+  # The issuer's identity: an https URL with a lowercase host, no empty
+  # port, the path /api and no trailing slash, compared byte for byte by
+  # every verifier, so keep it for the deployment's life. It is the
+  # address the browser listener answers at, such as
+  # https://garam.garam.sh/api. Set, it renders on both `serve api` and
+  # `serve machine`, signed with the key `api.policy.signingKeyFile` and
+  # `machine.policy.signingKeyFile` name, and the render refuses what
+  # the binary refuses at start: another spelling, a value equal to
+  # `machine.issuer`, a value that differs from `api.policy.tokenIssuer`
+  # (the policy service trusts one issuer), or no signing key file. It
+  # is not `machine.issuer`, the message issuer.
+  issuer: ""
+  # Each first-party service's public keys: a JSON object from a service
+  # name to its JWKS, read by `serve machine` on every authentication
+  # (ADR-0129). The Secret holding it and the key it is under. Off while
+  # `secretName` is empty. It holds no secret, and arrives as a Secret
+  # all the same, as every other file this chart mounts does: see the
+  # README, §The identity issuer. Set, `machine.tokenUrl` must end in
+  # /oauth/token, which the binary requires.
+  serviceKeys:
+    secretName: ""
+    key: service-keys.json
 
 # The policy service (ADR-0146): a process that decides every request
 # the listeners take and stores an organization's policies. Its

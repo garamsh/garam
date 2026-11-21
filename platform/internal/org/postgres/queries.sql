@@ -34,9 +34,8 @@ DELETE FROM orgs WHERE grn = $1;
 -- What this organization holds of what DeleteOrg's cascade removes,
 -- counted in one round trip so the four numbers describe one moment.
 -- Each count is of the rows keyed on the organization itself; the rows
--- keyed on those in turn -- group_members, project_members,
--- policy_versions, policy_attachments -- go with their parent and are
--- not counted separately.
+-- keyed on those in turn -- group_members, project_members -- go with
+-- their parent and are not counted separately.
 SELECT
     (SELECT count(*) FROM groups      g WHERE g.org_grn = $1) AS group_count,
     (SELECT count(*) FROM projects    p WHERE p.org_grn = $1) AS project_count,
@@ -93,12 +92,6 @@ DELETE FROM group_members WHERE group_grn = $1 AND member_grn = $2;
 -- name: ListGroupMembers :many
 SELECT member_grn FROM group_members WHERE group_grn = $1 ORDER BY member_grn;
 
--- name: ListGroupsByMember :many
-SELECT g.grn FROM groups g
-JOIN group_members m ON m.group_grn = g.grn
-WHERE g.org_grn = sqlc.arg('org_grn') AND m.member_grn = sqlc.arg('member_grn')
-ORDER BY g.grn;
-
 -- ListMemberGroups pages the org's Groups the member belongs to, in
 -- the order ListGroups pages them all.
 -- name: ListMemberGroups :many
@@ -149,12 +142,6 @@ DELETE FROM project_members WHERE project_grn = $1 AND member_grn = $2;
 
 -- name: ListProjectMembers :many
 SELECT member_grn FROM project_members WHERE project_grn = $1 ORDER BY member_grn;
-
--- name: ListProjectsByMember :many
-SELECT p.grn FROM projects p
-JOIN project_members m ON m.project_grn = p.grn
-WHERE p.org_grn = sqlc.arg('org_grn') AND m.member_grn = sqlc.arg('member_grn')
-ORDER BY p.grn;
 
 -- name: AddOrgMember :exec
 INSERT INTO org_members (org_grn, user_grn, role, created_at)

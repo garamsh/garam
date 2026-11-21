@@ -223,8 +223,7 @@ func activatedProcess(t *testing.T, s *executionStack) *adapterProcess {
 // it follows, under the activation's token, are the control.
 func TestAdapter_ReadsARenewalsConflictAsALapse(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	proc := activatedProcess(t, s)
 
 	s.postTo(t, "hello")
@@ -244,8 +243,7 @@ func TestAdapter_ReadsARenewalsConflictAsALapse(t *testing.T) {
 // same queue under the same execution token is the control.
 func TestAdapter_ReadsAnotherTenantsRefusalAsTheFence(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	foreign, _, _ := lineaged(t, p, registerOperator(t, p, scopedGRN("globex", operator.ServiceType, "controller")))
 	otherToken := newTokenFiles(t, foreign.mintedIn(t).Value, "")
 	proc := activatedProcess(t, s)
@@ -273,8 +271,7 @@ func TestAdapter_ReadsAnotherTenantsRefusalAsTheFence(t *testing.T) {
 // carries the next message.
 func TestAdapter_CarriesAMessageAndAReplacementFencesTheGenerationBefore(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	c := newControlStandIn(t, s)
 	files := s.agentFiles(t)
 
@@ -317,8 +314,7 @@ func TestAdapter_CarriesAMessageAndAReplacementFencesTheGenerationBefore(t *test
 // the same content and no signature member at all.
 func TestAdapter_ForwardsWhatGaramSignedSoTheRuntimeCanVerifyIt(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	c := newControlStandIn(t, s)
 	files := s.agentFiles(t)
 
@@ -359,8 +355,7 @@ func TestAdapter_ForwardsWhatGaramSignedSoTheRuntimeCanVerifyIt(t *testing.T) {
 // retrying.
 func TestAdapter_ReplaysItsActivationAcrossRefreshAndRestart(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	c := newControlStandIn(t, s)
 	rt := newRuntimeDouble(t, s.agent, s.epoch, generationOf(1))
 

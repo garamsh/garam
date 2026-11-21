@@ -32,11 +32,9 @@ go -C platform build -o "$PWD/testprincipal" ./tests/testprincipal
   -server-url 'postgres://garam:garam@localhost:25432/postgres?sslmode=disable'
 ```
 
-Then start `garam serve authz` and `garam serve api`, built from the
-same checkout, with `GARAM_DATABASE_URL` set to `databaseUrl` from the
-output and the api's `GARAM_AUTHZ_ADDR` naming authz's
-`GARAM_GRPC_ADDR`, and send the session as a cookie. When every
-process using the database has stopped:
+Then start `garam serve api`, built from the same checkout, with
+`GARAM_DATABASE_URL` set to `databaseUrl` from the output, and send the
+session as a cookie. When every process using the database has stopped:
 
 ```sh
 ./testprincipal drop -contract 1 -server-url "$SERVER_URL" -database "$DATABASE"

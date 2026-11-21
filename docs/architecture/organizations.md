@@ -40,8 +40,8 @@ The `Store` interface covers CRUD on each plus membership, cascade
 delete on `Organization`, and a count of what that delete would take
 from this domain. Group and project listing is scoped to one
 organization; group listing is scoped in both directions — the groups
-of an org, and the groups of the org a member belongs to, which a check
-sends to the engine to resolve group-attached policies (ADR-0008). A
+of an org, and the groups of the org a member belongs to
+(ADR-0008). A
 project is listed by its organization alone. Orgs grow by invitation and
 acceptance, not open signup.
 
@@ -81,7 +81,7 @@ org-owned GRN names its organization in the organization segment
 (ADR-0001), so the store refuses an add whose member names an
 organization other than the group's or project's, and stores nothing.
 A root-owned GRN — a user's — belongs to no organization and is
-admitted, the line the engine's attachment trigger draws (ADR-0008).
+admitted, the line the removed attachment trigger drew (ADR-0008).
 The check reads the two GRNs and no row, so no concurrent write can
 slip past it. A remove is not refused: no such membership can be added
 now, and one stored before the refusal existed stays removable.
@@ -94,7 +94,7 @@ what performs it.** `DeleteOrg` issues one statement against `orgs`;
 every row that goes does so through a foreign key declared `ON DELETE
 CASCADE`, so what is taken is fixed by the migrations rather than by any
 code path. Directly: this domain's groups, projects, memberships and
-invitations, the policies the engine stores, the agents
+invitations, the agents
 `platform/internal/agent` owns, the operators
 `platform/internal/operator` registers, and the certificate authority an
 earlier release gave the organization, where it has one. Through those:
@@ -124,7 +124,7 @@ authorizes it.
 This domain owns its action constants (`ActionOrgRead`,
 `ActionGroupRead`, `ActionProjectRead`, `ActionPolicyCreate`, …) —
 including the policy management actions, which the api server enforces
-without importing the engine that stores policies, the consent
+before it relays the write to the policy service, the consent
 management actions (ADR-0035), which it enforces over the relation
 `platform/internal/message` stores, and reading an organization's
 agents, which it enforces without `platform/internal/agent` importing
@@ -145,4 +145,4 @@ becomes a role link the platform writes from the membership). Groups and
 projects are addressed under their organization's HTTP paths, and their
 GRNs carry the owning org in the organization segment, so a group or
 project role is scoped to that resource alone ([authz.md](./authz.md)
-§Statement collection).
+§Role-derived statements).

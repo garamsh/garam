@@ -68,8 +68,7 @@ func TestMessageStatus_ASenderReadsItsOwnMessageThroughEveryStateItReaches(t *te
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
 
-	_, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	url := machineListener(t, p, sealer)
 	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	_, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)

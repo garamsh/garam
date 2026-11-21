@@ -175,6 +175,7 @@ fn question(who: Named, name: &str, what: Named) -> EvaluateRequest {
         context: None,
         read: 0,
         probe: false,
+        without_permits: false,
     }
 }
 
@@ -259,6 +260,7 @@ async fn evaluations_with_no_entries_answer_the_question_the_defaults_state(pool
         context: None,
         read: 0,
         probe: false,
+        without_permits: false,
         evaluations: vec![],
     };
 
@@ -298,6 +300,7 @@ async fn a_bad_entry_is_denied_where_it_stands_and_the_rest_are_answered(pool: P
         resource: None,
         context: None,
         probe: None,
+        without_permits: None,
     };
 
     let answers = client
@@ -308,6 +311,7 @@ async fn a_bad_entry_is_denied_where_it_stands_and_the_rest_are_answered(pool: P
             context: None,
             read: 0,
             probe: false,
+            without_permits: false,
             evaluations: vec![
                 entry(LEE),
                 entry(("Nope", "x")),
@@ -338,6 +342,7 @@ async fn a_batch_past_the_bound_is_refused(pool: PgPool) {
         context: None,
         read: 0,
         probe: false,
+        without_permits: false,
         evaluations: vec![
             Evaluation {
                 subject: None,
@@ -345,6 +350,7 @@ async fn a_batch_past_the_bound_is_refused(pool: PgPool) {
                 resource: None,
                 context: None,
                 probe: None,
+                without_permits: None,
             };
             entries
         ],
@@ -407,6 +413,7 @@ async fn mia_may_read(client: &mut PolicyServiceClient<Channel>) -> bool {
             context: None,
             read: 0,
             probe: false,
+            without_permits: false,
         }))
         .await
         .unwrap()
@@ -606,6 +613,7 @@ async fn evaluations_answer_in_order_and_take_the_requests_defaults(pool: PgPool
         resource: None,
         context: None,
         probe: None,
+        without_permits: None,
     };
 
     let answers = client
@@ -616,6 +624,7 @@ async fn evaluations_answer_in_order_and_take_the_requests_defaults(pool: PgPool
             context: None,
             read: 0,
             probe: false,
+            without_permits: false,
             evaluations: vec![entry(MIA), entry(LEE), entry(MIA)],
         }))
         .await

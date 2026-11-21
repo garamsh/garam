@@ -24,16 +24,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -41,7 +36,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
-	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/message"
@@ -49,7 +43,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/pgxerr"
 	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 const testSubject = "grn:acme/iam/user/alice"
@@ -357,108 +350,6 @@ func TestLogServed_NamesAMachinePrincipalAsOne(t *testing.T) {
 	assert.NotContains(t, userLine, fieldMachineID)
 }
 
-func TestLogRPCs_ReportsTheMethodAndTheSubject(t *testing.T) {
-	// Internal: serve authz decides from Postgres and logs to stderr.
-	tests := []struct {
-		name  string
-		err   error
-		code  string
-		level string
-		cause string
-	}{
-		{name: "served", code: codes.OK.String(), level: slog.LevelInfo.String()},
-		{
-			name:  "refused",
-			err:   status.Error(codes.PermissionDenied, "denied"),
-			code:  codes.PermissionDenied.String(),
-			level: slog.LevelError.String(),
-			// A refusal carries its reason to the caller, so the line
-			// takes no cause: the rule names the 5xx case only.
-			cause: "",
-		},
-		{
-			name:  "fault",
-			err:   status.Error(codes.Internal, "policy store: deadlock detected"),
-			code:  codes.Internal.String(),
-			level: slog.LevelError.String(),
-			cause: "policy store: deadlock detected",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var out lines
-			obs := recordingObservability(&out)
-
-			_, err := obs.logRPCs(
-				context.Background(),
-				&authzv1.CheckRequest{SubjectGrn: testSubject},
-				&grpc.UnaryServerInfo{FullMethod: "/garam.authz.v1.AuthzService/Check"},
-				func(context.Context, any) (any, error) { return &authzv1.CheckResponse{}, tt.err },
-			)
-			assert.Equal(t, tt.err, err)
-
-			line := decodeLine(t, &out)
-			assert.Equal(t, "/garam.authz.v1.AuthzService/Check", line["operation"])
-			assert.Equal(t, testSubject, line["user_id"])
-			assert.Equal(t, tt.code, line["code"])
-			assert.Equal(t, tt.level, line["level"])
-			assert.NotEmpty(t, line["trace_id"])
-			if tt.cause == "" {
-				assert.NotContains(t, line, "error")
-			} else {
-				assert.Equal(t, tt.cause, line["error"],
-					"a fault of this process leaves its chain on the line")
-			}
-		})
-	}
-}
-
-// lineForSubject runs one Check about subject through the interceptor
-// and returns the line it logged.
-func lineForSubject(t *testing.T, subject grn.GRN) map[string]any {
-	t.Helper()
-	var out lines
-	obs := recordingObservability(&out)
-	_, err := obs.logRPCs(
-		context.Background(),
-		&authzv1.CheckRequest{SubjectGrn: subject.String()},
-		&grpc.UnaryServerInfo{FullMethod: "/garam.authz.v1.AuthzService/Check"},
-		func(context.Context, any) (any, error) { return &authzv1.CheckResponse{}, nil },
-	)
-	require.NoError(t, err)
-	return decodeLine(t, &out)
-}
-
-// TestLogRPCs_NamesAMachineSubjectAsOne reads the engine's line for a
-// check made on behalf of a machine against its line for one made on
-// behalf of a person. The engine matches subject strings and does not
-// validate that one names a user or a group (ADR-0008), so an agent GRN
-// is a valid subject and a check about it would otherwise be logged as
-// though a person made it — the distinction ADR-0014 rests on.
-//
-// The person's line is asserted beside the machine's, because a machine
-// line without user_id would hold as readily for a line that names no
-// principal at all, and because the two fields have to stay apart in
-// both directions. The person is named by a well-formed user GRN, so
-// what separates the lines is the service type rather than a string the
-// parse rejects.
-func TestLogRPCs_NamesAMachineSubjectAsOne(t *testing.T) {
-	// Internal: serve authz decides from Postgres and logs to stderr.
-	for _, subject := range []grn.GRN{
-		machineGRN("acme", "bot-1"),
-		grn.New("acme", agent.ServiceTypeOperator, "op-1"),
-	} {
-		line := lineForSubject(t, subject)
-		assert.Equal(t, subject.String(), line[fieldMachineID])
-		assert.NotContains(t, line, fieldUserID)
-	}
-
-	person := grn.New("acme", user.ServiceType, "alice")
-	personLine := lineForSubject(t, person)
-	assert.Equal(t, person.String(), personLine[fieldUserID])
-	assert.NotContains(t, personLine, fieldMachineID)
-}
-
 // everyoneHeld is the machineapi.AgentReader of a roster that holds
 // every agent asked for, so a send reaches the policy service.
 type everyoneHeld struct{}
@@ -576,7 +467,7 @@ func (s brokenSessions) Delete(context.Context, string) error { return s.err }
 func TestLogServed_CarriesTheCauseOfAnAPIFailure(t *testing.T) {
 	// Internal: the answer is a held store's; serve api holds Postgres.
 	cause := errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "session delete")
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 	var out lines
 	mux := http.NewServeMux()
@@ -669,7 +560,7 @@ func TestLogServed_CarriesTheCauseAnAPIAnswerWithheld(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: tt.err},
-				nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+				nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 			var out lines
 			mux := http.NewServeMux()
@@ -775,132 +666,6 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 	})
 }
 
-// enginePolicies is an authz.PolicySource answering every read with
-// err. The engine's own error writer is what the interceptor then
-// reads, so what is under test is the shape grpcError produces rather
-// than one assembled here.
-type enginePolicies struct{ err error }
-
-func (p enginePolicies) Statements(context.Context, grn.GRN, []grn.GRN) ([]authz.Grant, error) {
-	return nil, p.err
-}
-
-func (p enginePolicies) CurrentStatements(context.Context, grn.GRN, []grn.GRN) ([]authz.Grant, error) {
-	return nil, p.err
-}
-
-// TestLogRPCs_CarriesTheCauseTheEngineWithheld is the engine's half.
-// It answers with wire.MessageOf too (#877), so a chain reaching
-// outside this project reads to the caller as the kind's sentence and
-// survives on this line alone — for a code that is no fault of this
-// process as much as for one that is.
-//
-// The rows share a route and a kind and differ in who wrote the
-// chain, and the answered check is the control: an interceptor
-// carrying a cause on every call would pass both refusals.
-func TestLogRPCs_CarriesTheCauseTheEngineWithheld(t *testing.T) {
-	// Internal: serve authz decides from Postgres and logs to stderr.
-	object := grn.Org("acme")
-	tests := []struct {
-		name    string
-		err     error
-		code    codes.Code
-		message string
-		cause   string
-	}{
-		{
-			name:    "a conflict the driver raised",
-			err:     driverConflict("delete session"),
-			code:    codes.AlreadyExists,
-			message: "already exists",
-			cause:   driverConflictText,
-		},
-		{
-			name:    "a refusal this project wrote",
-			err:     errorx.New(errorx.KindAlreadyExists, "the policy is already attached"),
-			code:    codes.AlreadyExists,
-			message: "the policy is already attached",
-		},
-		{
-			name: "a decision the engine reached",
-			code: codes.OK,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var out lines
-			engine := authz.NewGRPCServer(enginePolicies{err: tt.err})
-
-			_, err := recordingObservability(&out).logRPCs(
-				context.Background(),
-				&authzv1.CheckRequest{
-					SubjectGrn: testSubject,
-					ObjectGrn:  object.String(),
-					SubjectOrg: object.String(),
-					Action:     "iam:org.read",
-				},
-				&grpc.UnaryServerInfo{FullMethod: "/garam.authz.v1.AuthzService/Check"},
-				func(ctx context.Context, req any) (any, error) {
-					return engine.Check(ctx, req.(*authzv1.CheckRequest))
-				},
-			)
-
-			require.Equal(t, tt.code, status.Code(err))
-			assert.Equal(t, tt.message, status.Convert(err).Message(), "what the peer reads")
-
-			line := decodeLine(t, &out)
-			assert.Equal(t, tt.code.String(), line["code"])
-			if tt.cause == "" {
-				assert.NotContains(t, line, "error")
-				return
-			}
-			assert.Equal(t, tt.cause, line["error"])
-		})
-	}
-}
-
-// stubEngine answers Check so the interceptor has a call to observe.
-type stubEngine struct {
-	authzv1.UnimplementedAuthzServiceServer
-}
-
-func (stubEngine) Check(context.Context, *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
-	return &authzv1.CheckResponse{}, nil
-}
-
-func TestLogRPCs_ReportsTheCallersTraceID(t *testing.T) {
-	// Internal: serve authz decides from Postgres and logs to stderr.
-	// Without the same id on both lines the two halves of a request
-	// cannot be joined, which is the whole reason the id is logged.
-	_, err := newObservability("garam-test")
-	require.NoError(t, err)
-
-	var out lines
-	obs := recordingObservability(&out)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	engine := grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.ChainUnaryInterceptor(obs.logRPCs),
-	)
-	authzv1.RegisterAuthzServiceServer(engine, stubEngine{})
-	go func() { _ = engine.Serve(lis) }()
-	t.Cleanup(engine.Stop)
-
-	conn, err := grpc.NewClient(lis.Addr().String(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-
-	ctx, span := otel.Tracer("garam-test").Start(context.Background(), "call")
-	defer span.End()
-	_, err = authzv1.NewAuthzServiceClient(conn).Check(ctx, &authzv1.CheckRequest{SubjectGrn: testSubject})
-	require.NoError(t, err)
-
-	assert.Equal(t, traceIDOf(ctx), decodeLine(t, &out)["trace_id"])
-}
-
 func TestTraceIDOf_PrefersTheSpan(t *testing.T) {
 	// Internal: serve api writes its lines to stderr, not to a writer.
 	id := trace.TraceID{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
@@ -952,7 +717,7 @@ func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	// Internal: serve api writes its lines to stderr, not to a writer.
 	var out lines
 	obs := recordingObservability(&out)
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 	server := httptest.NewServer(obs.apiHandler(srv))
 	t.Cleanup(server.Close)
 
@@ -1071,7 +836,7 @@ func TestLogRequests_KeepsAnInvitationTokenOffTheLine(t *testing.T) {
 				token: "live-tok-secret",
 				fault: errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "get invitation"),
 			}
-			srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+			srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 			server := httptest.NewServer(recordingObservability(&out).apiHandler(srv))
 			t.Cleanup(server.Close)
 
@@ -1102,7 +867,7 @@ func TestAPIHandler_KeepsAnInvitationTokenOffTheSpan(t *testing.T) {
 
 	var out lines
 	orgs := invitationOrgs{token: "live-tok-secret"}
-	srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 	server := httptest.NewServer(recordingObservability(&out).apiHandler(srv))
 	t.Cleanup(server.Close)
 

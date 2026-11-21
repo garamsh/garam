@@ -294,7 +294,6 @@ describe("people", () => {
           rows={[ALICE_ROW, BOB_ROW]}
           filters={FILTERS}
           teamChoices={[{ value: "eng", label: "Engineering" }]}
-          policyChoices={[]}
           empty={null}
         />
       </TooltipProvider>,

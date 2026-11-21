@@ -136,14 +136,13 @@ to the layout hold.
   explicitly public.
 - `pkg/` is for code other modules import. Most services don't need it.
 
-This project adds seven directories the layout above does not name.
+This project adds six directories the layout above does not name.
 Each bullet names the ADR that owns its directory where one does;
 `migrations/`, `tests/` and `docs/` are owned by none.
 
 - `api/` — the OpenAPI specifications and the servers generated from
   them. There are two, one per surface: `openapi.yaml` for the browser
   (ADR-0004) and `machine.yaml` for the machine listener (ADR-0019).
-- `proto/` — `.proto` sources and generated code (ADR-0003).
 - `migrations/` — SQL migrations; the schema's source of truth. The Go
   file beside them tests the migrations and declares no schema.
 - `tests/` — black-box tests and test-only code, one directory per
@@ -292,10 +291,9 @@ translates, wraps, logs or recovers one.
   HTTP/2 `RST_STREAM` — so the middleware exists to reply 500.
 
 Every error carries a kind, through `lib/errorx`. The rules below
-are this project's own, because ADR-0003 carries `errorx` kinds over
-gRPC as status codes without translation and each transport picks its
-code from the kind; an error whose chain holds no `errorx` error reaches
-a transport as unknown.
+are this project's own, because each transport picks its code from the
+kind; an error whose chain holds no `errorx` error reaches a transport
+as unknown.
 
 - **A sentinel is declared with `errorx.New(kind, msg)`, not
   `errors.New`,** so it carries a kind. It is still read with
@@ -305,9 +303,9 @@ a transport as unknown.
   publishes what it wraps as `%w` does. `%v` and `errors.Join` cut the
   chain `errorx.KindOf` follows, so they never carry an error a
   transport reads.
-- **Do not add kinds.** The kinds are gRPC's status codes, which
-  ADR-0003 carries without translation, so a new kind has no code to
-  travel as.
+- **Do not add kinds.** The kinds are gRPC's status codes
+  (`lib/errorx/errorx.go`), and the table below maps each one, so a
+  new kind is a code that table does not answer.
 - **Both HTTP surfaces read one kind-to-status table, in
   `internal/wire`.** This applies "Each transport translates in one
   place" above: its two examples, an HTTP server and a gRPC service,
@@ -316,7 +314,7 @@ a transport as unknown.
   (`docs/architecture/overview.md` §Non-functional goals,
   `docs/architecture/domains.md` §Shared code below the domains). It
   is stated here because the table is one of `errorx` kinds, which
-  only ADR-0003 gives this project.
+  this file's rules give every error.
 
 ## 5. Logging & observability
 

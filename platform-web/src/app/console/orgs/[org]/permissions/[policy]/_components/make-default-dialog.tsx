@@ -8,21 +8,13 @@ import {
 } from "@/features/orgs/actions";
 
 import { ActionDialog } from "../../../../../_components/action-dialog";
-import type { OutcomeArea } from "../../../../../_components/outcome";
-import { ConditionNotice } from "../../_components/condition-notice";
-import {
-  OrgWideConfirmation,
-  ScopeConfirmationNotice,
-} from "../../_components/org-wide-confirmation";
 
 const initialState: RollbackPolicyState = { status: "idle" };
 
 /**
  * Makes one stored version the policy's default, from a dialog showing
  * what changes against the current one. An older one is a rollback and
- * says so. While the policy is active the change takes effect at once,
- * so the dialog states whom it reaches and, for the whole organization,
- * carries the checkbox activation does.
+ * says so. While the policy is active the change decides at once.
  */
 export function MakeDefaultDialog({
   org,
@@ -32,31 +24,18 @@ export function MakeDefaultDialog({
   target,
   targetText,
   active,
-  reach,
-  orgWide,
-  conditioned,
-  area = "versions",
 }: {
   org: string;
   policy: string;
   current: number;
-  /** The default version's document, or null where it was not read. */
+  /** The default version's text, or null where it holds none. */
   currentText: string | null;
   target: number;
-  targetText: string;
+  /** The chosen version's text, or null where it holds none. */
+  targetText: string | null;
   active: boolean;
-  reach: string;
-  orgWide: boolean;
-  /** Whether the version it would evaluate carries a Condition. */
-  conditioned: boolean;
-  /** Where the page says the change landed. */
-  area?: OutcomeArea;
 }) {
   const rollback = target < current;
-  const everyone = (state: RollbackPolicyState) =>
-    (active && orgWide) ||
-    state.status === "confirm-org-wide" ||
-    state.status === "confirm-unknown-scope";
   return (
     <ActionDialog
       trigger={
@@ -67,7 +46,13 @@ export function MakeDefaultDialog({
       title={
         rollback ? `Roll back to v${target}?` : `Make v${target} the default?`
       }
-      description={<p>{active ? reach : "Nothing applies until activated."}</p>}
+      description={
+        <p>
+          {active
+            ? `v${target} decides for this organization from now on.`
+            : "Nothing applies until activated."}
+        </p>
+      }
       action={rollbackPolicy}
       initialState={initialState}
       fields={{ org, policy, version: target }}
@@ -81,25 +66,19 @@ export function MakeDefaultDialog({
           ? `Rolled back to v${target}.`
           : `v${target} is now the default.`
       }
-      area={area}
+      area="versions"
     >
-      {(state) => (
-        <>
-          {currentText !== null && (
-            <JsonDiff
-              before={currentText}
-              after={targetText}
-              beforeLabel={`v${current} (default)`}
-              afterLabel={`v${target}`}
-            />
-          )}
-          {conditioned && <ConditionNotice />}
-          <ScopeConfirmationNotice state={state} />
-          {everyone(state) && (
-            <OrgWideConfirmation id={`default-${target}-org-wide`} />
-          )}
-        </>
-      )}
+      {() =>
+        currentText !== null &&
+        targetText !== null && (
+          <JsonDiff
+            before={currentText}
+            after={targetText}
+            beforeLabel={`v${current} (default)`}
+            afterLabel={`v${target}`}
+          />
+        )
+      }
     </ActionDialog>
   );
 }

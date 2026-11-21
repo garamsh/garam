@@ -41,7 +41,6 @@ func signedInCLI(t *testing.T) string {
 	ctx := context.Background()
 	p := pool(t)
 	truncate(t, p)
-	policies, engine := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
@@ -55,10 +54,10 @@ func signedInCLI(t *testing.T) string {
 	require.NoError(t, sessions.Create(ctx, token, authn.NewSession(ada, time.Hour)))
 
 	srv := api.NewServer(users, orgs, agentpg.New(p), operatorpg.New(p), messagepg.New(p), nil,
-		sessions, nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), api.NewGRPCPolicyManager(policyService(t, policies)), heldAuthorities{orgs},
-		cli.NewAuthorityService(p, engine), nil,
-		api.Config{SessionTTL: time.Hour, TokenURL: "https://machine.garam.test/oauth/token"})
+		sessions, nil, nil, nil, nil, newCurrentDecisions(p), heldAuthorities{orgs},
+		cli.NewAuthorityService(p, newCurrentDecisions(p)), nil,
+		api.Config{SessionTTL: time.Hour, TokenURL: "https://machine.garam.test/oauth/token"}).
+		WithPolicyRelay(&listedPolicies{})
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError})
 	browser := httptest.NewServer(http.StripPrefix("/api", handler))
 	t.Cleanup(browser.Close)

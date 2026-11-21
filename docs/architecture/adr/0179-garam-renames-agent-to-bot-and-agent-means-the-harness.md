@@ -1,4 +1,4 @@
-# ADR 0178: garam renames "agent" to "bot" and "agent" means the harness a bot uses
+# ADR 0179: garam renames "agent" to "bot" and "agent" means the harness a bot uses
 
 > Status: accepted
 > Date: 2026-11-21

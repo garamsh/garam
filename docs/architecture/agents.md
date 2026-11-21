@@ -1,7 +1,7 @@
 # Agents
 
 **The resource this document describes is being renamed to "bot"
-([ADR-0178](./adr/0178-garam-renames-agent-to-bot-and-agent-means-the-harness.md)).** "Agent" will mean the
+([ADR-0179](./adr/0179-garam-renames-agent-to-bot-and-agent-means-the-harness.md)).** "Agent" will mean the
 harness a bot uses. This document and the code it describes use
 "agent" until the migration lands.
 

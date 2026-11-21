@@ -1583,16 +1583,16 @@ ADRs:
   `policies`, `policy_versions` and `policy_attachments` by migration
   000081, reversible empty; accepted, built (#2000); builds ADR-0146
   item 1; supersedes 0003 in part
-- [0178](./adr/0178-garam-renames-agent-to-bot-and-agent-means-the-harness.md)
+- [0179](./adr/0179-garam-renames-agent-to-bot-and-agent-means-the-harness.md)
   — garam renames the managed resource from "agent" to "bot" in all
   new API resource names, the console, IAM GRN types and
   documentation; "agent" means the harness a bot uses; existing code
   and GRNs stay on "agent" until a later migration; accepted
   (#2025)
-- [0179](./adr/0179-garam-adds-a-workspace-registry-and-how-a-workspace-reaches-models-is-open.md)
+- [0180](./adr/0180-garam-adds-a-workspace-registry-and-how-a-workspace-reaches-models-is-open.md)
   — garam adds a workspace registry (Workspace, WorkspaceClass,
   BotPool) with three declaration paths and no real model key in
   the workspace; how a workspace reaches models is open: a garam
   model gateway with short-lived tokens or a key proxy in garam-bot
-  over MCP; two permission kinds; proposed, would supersede ADR-0126
-  in part (#2025)
+  that forwards model calls; two permission kinds; proposed, would
+  supersede ADR-0126 in part (#2025)

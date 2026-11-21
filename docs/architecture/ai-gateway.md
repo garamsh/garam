@@ -10,10 +10,10 @@ Implementation is filed under #1655 now that ADR-0126 is accepted.
 This document moves to `ai-gateway/docs/` with the service
 ([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)).
 
-[ADR-0179](./adr/0179-garam-adds-a-workspace-registry-and-how-a-workspace-reaches-models-is-open.md)
+[ADR-0180](./adr/0180-garam-adds-a-workspace-registry-and-how-a-workspace-reaches-models-is-open.md)
 (proposed) would supersede ADR-0126 in part: how a workspace reaches
 models becomes an open question under that ADR, with the gateway as
-one of two candidate shapes. Until ADR-0179 is accepted, ADR-0126
+one of two candidate shapes. Until ADR-0180 is accepted, ADR-0126
 governs.
 
 ## Contents

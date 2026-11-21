@@ -1,4 +1,4 @@
-# ADR 0179: garam adds a workspace registry and how a workspace reaches models is open
+# ADR 0180: garam adds a workspace registry and how a workspace reaches models is open
 
 > Status: proposed
 > Date: 2026-11-21
@@ -20,7 +20,7 @@ WorkspaceClass, BotPool — has no garam resource today.
 
 How a workspace reaches models has two proposed shapes, neither
 decided: a garam model gateway issuing short-lived tokens, or a key
-proxy inside garam-bot with tools over MCP. One invariant holds
+proxy inside garam-bot that forwards model calls. One invariant holds
 under either: the workspace holds no real model keys.
 
 ## Decision
@@ -33,7 +33,9 @@ under either: the workspace holds no real model keys.
      type and constraints; a Workspace references a class and is
      exclusive or shared-read.
    - One owner per object named by a `managed-by` annotation.
-   - BotPool as a named collection of workspace slots.
+   - BotPool as a declarative-spec object; its semantics are
+     defined by garam-bot's specification
+     (garamsh/garam-bot#1193).
 
 2. **The workspace holds no real model keys.** What reaches a
    workspace for model access is a short-lived credential. The
@@ -42,12 +44,11 @@ under either: the workspace holds no real model keys.
 3. **How a workspace reaches models is an open question.** Two
    shapes are under consideration; neither is decided here:
    - A garam model gateway that issues short-lived tokens to the
-     workspace. The workspace presents one on each model call.
-     This is the direction ADR-0126 proposed, without committing
-     to OpenRouter or any specific routing.
+     workspace. This is the direction ADR-0126 proposed, without
+     committing to OpenRouter or any specific routing.
    - A key proxy built into garam-bot that holds the real key and
-     exposes tools over MCP. The bot uses those tools rather than
-     calling a provider API directly; the workspace still holds
+     forwards model calls to the provider. Tools reach the agent
+     over MCP as a separate concern; the workspace still holds
      no key.
    Under either shape no real provider key is stored in or
    transmitted to the workspace. The choice is the subject of a

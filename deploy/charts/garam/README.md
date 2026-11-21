@@ -16,6 +16,7 @@ supplies.
 - Message signing keys in OpenBao Transit
 - The policy service
 - Delivering the policy feed
+- The identity issuer
 - Pinning a version
 - What keeps it true
 - What the checks are complete over
@@ -348,8 +349,6 @@ or a name here that the source no longer reads.
 | `GARAM_ADAPTER_OUTBOX_DIR` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_CONTROL_SOCKET` | Same: the adapter's own deployment, which on a standalone host is its supervisor (ADR-0085). |
 | `GARAM_ADAPTER_SIGN_MESSAGES` | Same: the adapter's own deployment, which alone knows whether the runtime beside it accepts a signature (ADR-0101). |
-| `GARAM_IDENTITY_ISSUER` | garam's own OIDC issuer is off until a deployment sets it with a signing key, and the chart does not render it yet (ADR-0141). |
-| `GARAM_IDENTITY_SERVICE_KEYS_FILE` | The public keys of each first-party service, by service name, at most two each, which authenticate its principals (ADR-0129); the chart does not render it yet. |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
 | `GARAM_TRANSIT_IDENTITY_FILE` | The login form of the Transit token (ADR-0152) is for a deployment with no process beside garam to write a token file, such as a MicroVM. A cluster has one, so the chart renders the token-file form alone (ADR-0104). |
 | `GARAM_TRANSIT_AUTH_MOUNT` | Same: it belongs to the login form, which the chart does not render. |
@@ -555,6 +554,54 @@ disagree. Its signing key is the same key at a path of its own,
 `machine.policy.signingKeyFile`, written in the machine pod by what the
 deployment runs (`machine.podAnnotations`) and held to the same arrival
 rule. The render refuses without it, naming it.
+
+## The identity issuer
+
+`identity` turns on garam's OIDC issuer and names the first-party
+services' keys
+([ADR-0141](../../../docs/architecture/adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)).
+Both are off while empty, as the binary leaves them, and
+`docs/architecture/deployment-contract.md` §The identity issuer is off
+until it is named states what each requires.
+
+- **`identity.issuer`** renders `GARAM_IDENTITY_ISSUER` on `serve api`
+  and `serve machine` from one value. It is signed with the key
+  `api.policy.signingKeyFile` and `machine.policy.signingKeyFile` name:
+  the issuer has no key of its own. The render refuses what the binary
+  refuses at start, naming `identity.issuer`:
+  - a spelling other than an https URL with a lowercase host, no empty
+    port, the path `/api` and no trailing slash;
+  - a value equal to `machine.issuer`;
+  - a value that differs from `api.policy.tokenIssuer`, since the
+    policy service trusts one issuer: set both to the same value;
+  - no signing key file on the workload. The binary only logs this and
+    leaves the issuer off, which a deployment that named an issuer has
+    not asked for, so the render refuses it.
+- **`identity.serviceKeys`** renders `GARAM_IDENTITY_SERVICE_KEYS_FILE`
+  on `serve machine` alone, the one process that reads it, and mounts
+  the file there. `secretName` is the Secret and `key` the key it is
+  under, `service-keys.json` by default. Set, `machine.tokenUrl` must
+  end in `/oauth/token`, which the binary requires of a listener
+  holding the file, and the render refuses it otherwise. The principals
+  that file authenticates are answered a token only where the issuer is
+  on too, so a deployment sets both.
+
+**The file is read from a Secret, though it holds no secret.** The
+chart reads every file it mounts from a Secret, the public ones too
+(`policy.jwks`, the policy and Transit CAs), so a cluster owner
+supplies one kind of object and the secret store that already writes
+the others writes this. A ConfigMap would be the one exception and would
+need a second path for the same hand-off. The cost is that a Secret
+suggests the file is sensitive; it is not (`deployment-contract.md`
+§The identity issuer is off until it is named), and nothing in the chart
+treats it so.
+
+**A change reaches the file without a restart.** The binary re-reads it
+on every authentication. The volume is mounted as a directory and not by
+`subPath`, because a Secret mounted by `subPath` never receives an
+update, so a key added or removed in the Secret reaches the running pod
+after the kubelet's next sync. Removing a compromised key refuses it
+from the request after that.
 
 ## Pinning a version
 

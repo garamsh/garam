@@ -48,6 +48,7 @@ spec:
             - name: GARAM_COOKIE_SECURE
               value: {{ .Values.api.cookieSecure | quote }}
 {{- include "garam.machineTokenUrlEnv" . }}
+{{- include "garam.identityIssuerEnv" (dict "root" $ "keyFile" .Values.api.policy.signingKeyFile "keyFileValue" "api.policy.signingKeyFile") }}
             {{- $google := .Values.api.google }}
             {{- if or $google.clientId $google.redirectUrl $google.clientSecret.secretName $google.clientSecret.secretKey }}
             - name: GOOGLE_CLIENT_ID

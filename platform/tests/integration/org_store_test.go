@@ -559,7 +559,7 @@ func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
 }
 
 // TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg runs
-// ListGroupsByMember, RemoveGroupMember and DeleteGroup. One member
+// ListMemberGroups, RemoveGroupMember and DeleteGroup. One member
 // belongs to a group in each org and one org holds a second group, so
 // the org filter and the member filter each have a row to exclude.
 func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
@@ -590,20 +590,20 @@ func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 	require.NoError(t, s.AddGroupMember(ctx, engGlobex, ada))
 
 	t.Run("a member's groups are the ones inside the org asked about", func(t *testing.T) {
-		groups, err := s.ListGroupsByMember(ctx, acme, ada)
+		groups, err := s.ListMemberGroups(ctx, acme, ada, listfilter.Filter{})
 		require.NoError(t, err)
-		assert.Equal(t, []grn.GRN{engAcme}, groups)
+		assert.Equal(t, []grn.GRN{engAcme}, grnsOf(groups))
 
 		// Each group the answer above left out is reached by changing
 		// only the argument that excluded it, so neither absence is a
 		// row the fixture never wrote.
-		groups, err = s.ListGroupsByMember(ctx, globex, ada)
+		groups, err = s.ListMemberGroups(ctx, globex, ada, listfilter.Filter{})
 		require.NoError(t, err)
-		assert.Equal(t, []grn.GRN{engGlobex}, groups, "the org filter is what kept this group out of acme's answer")
+		assert.Equal(t, []grn.GRN{engGlobex}, grnsOf(groups), "the org filter is what kept this group out of acme's answer")
 
-		groups, err = s.ListGroupsByMember(ctx, acme, bob)
+		groups, err = s.ListMemberGroups(ctx, acme, bob, listfilter.Filter{})
 		require.NoError(t, err)
-		assert.Equal(t, []grn.GRN{engAcme, opsAcme}, groups, "the member filter is what kept ops out of ada's answer")
+		assert.Equal(t, []grn.GRN{engAcme, opsAcme}, grnsOf(groups), "the member filter is what kept ops out of ada's answer")
 	})
 
 	t.Run("removing a member leaves the group's other member and the member's other group", func(t *testing.T) {
@@ -613,9 +613,9 @@ func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{bob}, members, "the removal took ada out of eng and left bob in it")
 
-		groups, err := s.ListGroupsByMember(ctx, globex, ada)
+		groups, err := s.ListMemberGroups(ctx, globex, ada, listfilter.Filter{})
 		require.NoError(t, err)
-		assert.Equal(t, []grn.GRN{engGlobex}, groups, "ada's membership of the other org's group is untouched")
+		assert.Equal(t, []grn.GRN{engGlobex}, grnsOf(groups), "ada's membership of the other org's group is untouched")
 
 		// The two refusals, against the removal above as their
 		// control: it matched a row, and neither of these matches

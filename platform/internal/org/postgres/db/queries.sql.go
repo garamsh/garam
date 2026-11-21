@@ -529,38 +529,6 @@ func (q *Queries) ListGroups(ctx context.Context, arg ListGroupsParams) ([]Group
 	return items, nil
 }
 
-const listGroupsByMember = `-- name: ListGroupsByMember :many
-SELECT g.grn FROM groups g
-JOIN group_members m ON m.group_grn = g.grn
-WHERE g.org_grn = $1 AND m.member_grn = $2
-ORDER BY g.grn
-`
-
-type ListGroupsByMemberParams struct {
-	OrgGrn    string
-	MemberGrn string
-}
-
-func (q *Queries) ListGroupsByMember(ctx context.Context, arg ListGroupsByMemberParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, listGroupsByMember, arg.OrgGrn, arg.MemberGrn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var grn string
-		if err := rows.Scan(&grn); err != nil {
-			return nil, err
-		}
-		items = append(items, grn)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listMemberGroups = `-- name: ListMemberGroups :many
 SELECT g.grn, g.org_grn, g.name, g.roles, g.policies, g.created_at, g.updated_at FROM groups g
 JOIN group_members m ON m.group_grn = g.grn

@@ -422,9 +422,6 @@ VALUES ($1, $2, $3, $4, $5);
 -- name: GetSupervisor :one
 SELECT * FROM agent_supervisors WHERE grn = $1;
 
--- name: GetSupervisorByEnrollment :one
-SELECT * FROM agent_supervisors WHERE enrollment_id = $1;
-
 -- name: LockSupervisor :one
 SELECT * FROM agent_supervisors WHERE grn = $1 FOR UPDATE;
 

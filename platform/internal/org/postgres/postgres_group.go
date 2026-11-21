@@ -132,19 +132,6 @@ func (s *Store) ListGroupMembers(ctx context.Context, groupGRN grn.GRN) ([]grn.G
 	return parseGRNs(rows, "group member row")
 }
 
-// ListGroupsByMember returns the GRNs of the org's Groups the member
-// belongs to.
-func (s *Store) ListGroupsByMember(ctx context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error) {
-	rows, err := s.q.ListGroupsByMember(ctx, db.ListGroupsByMemberParams{
-		OrgGrn:    orgGRN.String(),
-		MemberGrn: memberGRN.String(),
-	})
-	if err != nil {
-		return nil, pgxerr.Classify(err, "list groups by member", nil, nil)
-	}
-	return parseGRNs(rows, "group row")
-}
-
 // ListMemberGroups returns the org's Groups the member belongs to,
 // ordered by GRN.
 func (s *Store) ListMemberGroups(ctx context.Context, orgGRN, memberGRN grn.GRN, f listfilter.Filter) ([]*org.Group, error) {

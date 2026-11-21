@@ -1,5 +1,6 @@
 use decision::{
-    Cause, Engine, EntityRef, EntitySource, Evaluation, OrgGrn, OrgPolicies, Outcome, PolicySource,
+    Cause, Decision, Engine, EntityRef, EntitySource, Evaluation, OrgGrn, OrgPolicies, Outcome,
+    PolicySource,
 };
 
 use crate::error::Error;
@@ -28,22 +29,22 @@ impl PermitRight {
         org: &OrgGrn,
         writer: EntityRef<'_>,
     ) -> Result<Self, Error> {
-        let decision = engine
-            .evaluate(
-                &WithoutPermits(policies),
-                entities,
-                &Evaluation {
-                    subject: writer,
-                    action: "iam:permit.write",
-                    resource: EntityRef {
-                        entity_type: "Iam::Org",
-                        id: org.as_str(),
-                    },
-                    context: serde_json::json!({}),
+        let decision = evaluate_without_permits(
+            engine,
+            policies,
+            entities,
+            &Evaluation {
+                subject: writer,
+                action: "iam:permit.write",
+                resource: EntityRef {
+                    entity_type: "Iam::Org",
+                    id: org.as_str(),
                 },
-            )
-            .await
-            .map_err(Error::PermitEvaluation)?;
+                context: serde_json::json!({}),
+            },
+        )
+        .await
+        .map_err(Error::PermitEvaluation)?;
         match decision.outcome {
             Outcome::Allow => Ok(Self {
                 org: org.clone(),
@@ -74,6 +75,22 @@ impl PermitRight {
     pub(crate) fn writer(&self) -> &str {
         &self.writer
     }
+}
+
+/// Decides `evaluation` as the right to write a `permit` is decided
+/// (ADR-0175): against the system tier, the organization's role links
+/// and `forbid` guardrails and its entities, with its `permit`s left
+/// out. Both [`PermitRight::ask`] and a question asked without
+/// permits answer through it.
+pub async fn evaluate_without_permits<P: PolicySource + Sync, E: EntitySource>(
+    engine: &Engine,
+    policies: &P,
+    entities: &E,
+    evaluation: &Evaluation<'_>,
+) -> Result<Decision, decision::Error> {
+    engine
+        .evaluate(&WithoutPermits(policies), entities, evaluation)
+        .await
 }
 
 /// An organization's policies as the right is asked of: no `permit`.

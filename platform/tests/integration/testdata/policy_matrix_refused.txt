@@ -1,7 +1,0 @@
-# Questions the policy service refuses instead of deciding, one key per
-# line: subject, action, resource. None: the one class that was listed,
-# an operator asked an action the schema does not apply to an operator,
-# is named apart by the service and read as a denial by the client
-# (ADR-0167). A question refused for any other reason is not decided,
-# and the suite fails until it is listed here.
-# docs/architecture/policy-matrix.md explains.

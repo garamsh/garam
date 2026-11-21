@@ -5,7 +5,7 @@
 > Date: 2026-11-16
 
 Drafted for #1933, which reserves this number, under #1796. It settles
-the open question of [policy-matrix.md](../policy-matrix.md) §Refused
+the open question of `policy-matrix.md` §Refused, retired by [ADR-0174](./0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md),
 (#1915): what an operator's decision is on an `iam` action the schema
 does not apply to an operator. [authz.md](../authz.md) §Decided and
 not yet built states the rule beside the client it governs.

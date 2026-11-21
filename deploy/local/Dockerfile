@@ -1,6 +1,6 @@
 # Multi-stage build of the platform's server binary, garam (ADR-0003,
-# ADR-0132). The same image runs `migrate`, `serve authz` and
-# `serve api`; the compose file picks the subcommand, and its
+# ADR-0132). The same image runs `migrate`, `serve api` and
+# `serve machine`; the compose file picks the subcommand, and its
 # healthchecks run `probe` — the runtime stage is scratch, so no shell
 # or wget is there to ask instead. Build context is the repository
 # root.

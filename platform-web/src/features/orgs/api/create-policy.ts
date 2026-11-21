@@ -5,78 +5,85 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { garamFetchAuthenticated } from "@/lib/garam";
-import { parsePolicyDocument } from "@/lib/policy-document";
-import type { PolicyDocument } from "@/lib/policy-document";
 import type { components } from "@garam/platform-sdk-ts/api";
 
-import { slugFromGrn } from "@/lib/grn";
-import { documentRefusal, type DocumentRefusal } from "./document-refusal";
-import { PolicyParser, type Policy } from "./policies";
+import { BODY_INCOMPLETE, PolicyBodyForm, wireBody } from "./policy-body-form";
+import { policyWriteRefusal, type PolicyWriteError } from "./policy-refusal";
 
 /**
  * What the create form has to show: nothing yet, or a refusal. There is
- * no created state — a created policy is the page it is sent to.
+ * no created state: a created policy is the page it is sent to.
  */
-export type CreatePolicyState =
-  | { status: "idle" }
-  | DocumentRefusal
-  | { status: "error"; message: string; field: "name" };
+export type CreatePolicyState = { status: "idle" } | PolicyWriteError;
 
 const Schema = z.object({
   org: z.string().min(1),
   name: z.string().trim().min(1),
-  document: z.string(),
 });
 
+const CreatedParser = z.object({ id: z.string().min(1) });
+
 /**
- * Creates a policy of the organization from a name and its first
- * document, and opens the page of the one garam recorded. garam stores
- * it as a draft, which no check evaluates, so creating one grants
- * nothing.
+ * Creates a role link, a guardrail or a permit of the organization and
+ * opens the page of the one the policy service stored, a draft whose
+ * first version is the one written (ADR-0169). The identifier is the
+ * platform's, so none is sent.
+ *
+ * The service decides whether the caller may and whether the body is
+ * one it accepts; its refusal comes back as state, with its own message
+ * at the body it refused.
  */
 export async function createPolicy(
   _state: CreatePolicyState,
   formData: FormData,
 ): Promise<CreatePolicyState> {
-  const parsed = Schema.safeParse({
-    org: formData.get("org"),
-    name: formData.get("name"),
-    document: formData.get("document"),
-  });
-  if (!parsed.success) {
+  const fields = Object.fromEntries(formData);
+  const named = Schema.safeParse(fields);
+  if (!named.success) {
+    return named.error.issues.some((issue) => issue.path[0] === "name")
+      ? { status: "error", at: "name", message: "Name the policy." }
+      : {
+          status: "error",
+          at: "form",
+          message: "The form did not arrive complete.",
+        };
+  }
+  const body = PolicyBodyForm.safeParse(fields);
+  if (!body.success) {
     return {
       status: "error",
-      message: "Give the policy a name.",
-      field: "name",
+      at: "body",
+      message:
+        fields.kind === "role-link"
+          ? BODY_INCOMPLETE
+          : "Write the policy's Cedar text.",
     };
   }
-  const document = parsePolicyDocument(parsed.data.document);
-  if (document.status === "error") return { ...document, field: "document" };
 
-  const { org, name } = parsed.data;
-  let created: Policy;
+  const { org, name } = named.data;
+  let created: z.infer<typeof CreatedParser>;
   try {
     created = await garamFetchAuthenticated(
-      `/orgs/${encodeURIComponent(org)}/policies`,
-      PolicyParser,
+      `/orgs/${encodeURIComponent(org)}/iam-policies`,
+      CreatedParser,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name,
-          document: document.value,
-        } satisfies Omit<components["schemas"]["PolicyCreate"], "document"> & {
-          document: PolicyDocument;
-        }),
+          body: wireBody(body.data),
+        } satisfies components["schemas"]["IamPolicyCreate"]),
       },
     );
   } catch (error) {
-    // A refused document, a refusal or an outage is a state the form
-    // renders, not a throw: the boundary would replace the form and
-    // the document typed into it.
-    return documentRefusal(error, "createPolicy");
+    // A refusal is a state the form renders, not a throw: the boundary
+    // would replace the form and what was typed into it.
+    return policyWriteRefusal(
+      error,
+      body.data.kind === "role-link" ? "create-link" : "create-cedar",
+    );
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");
-  redirect(`/console/orgs/${org}/permissions/${slugFromGrn(created.grn)}`);
+  redirect(`/console/orgs/${org}/permissions/${created.id}`);
 }

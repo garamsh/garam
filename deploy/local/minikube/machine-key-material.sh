@@ -10,7 +10,8 @@ set -eu
 
 namespace=garam-local
 secret=machine-throwaway-key-material
-kubectl="kubectl --context minikube -n $namespace"
+context=${1:?usage: $0 <kubectl context>}
+kubectl="kubectl --context $context -n $namespace"
 
 # A Secret holding everything is kept rather than replaced. Every
 # message signing key in the database is sealed under the

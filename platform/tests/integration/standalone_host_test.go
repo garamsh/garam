@@ -106,8 +106,7 @@ func snapshot(t *testing.T, dir string) map[string]string {
 // is the control.
 func TestStandaloneHost_PrepareWritesNoCredentialItDoesNotOwn(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h := newHostPaths(t, s)
 	request := h.prepare(t)
 	before := snapshot(t, h.agent)
@@ -130,8 +129,7 @@ func TestStandaloneHost_PrepareWritesNoCredentialItDoesNotOwn(t *testing.T) {
 // the same command runs.
 func TestStandaloneHost_CommandsOnOneDirectoryNeverOverlap(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h := newHostPaths(t, s)
 	require.NoError(t, os.MkdirAll(h.supervisor, 0o700))
 	held, err := os.OpenFile(filepath.Join(h.supervisor, ".standalone.lock"), os.O_RDWR|os.O_CREATE, 0o600)
@@ -178,8 +176,7 @@ func (r *receiver) count() int {
 // pinned-root enrollment at the end is the control.
 func TestStandaloneHost_CredentialsTravelOnlyToTheHTTPSEndpoint(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h := newHostPaths(t, s)
 	request := h.prepare(t)
 	approveHost(t, s, request)
@@ -234,8 +231,7 @@ func exchangeCredential(t *testing.T, s *executionStack, credential string) int 
 // the control on the voided one refusing.
 func TestStandaloneHost_EnrollsUnderV2ForACredential(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h := newHostPaths(t, s)
 
 	request := h.prepare(t)

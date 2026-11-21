@@ -79,7 +79,7 @@ build:
 	GARAM_API_URL=http://localhost:8080 GARAM_SITE_URL=http://garam.localhost:3001 pnpm build
 
 # The backend the browser suite drives: postgres, the one-shot
-# migration, authz and api.
+# migration, the policy service and api.
 stack-up:
 	@$(MAKE) --no-print-directory -C ../deploy/local backend-up
 

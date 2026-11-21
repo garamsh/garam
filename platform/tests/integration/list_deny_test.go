@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,8 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
@@ -24,15 +21,13 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/cli"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	"github.com/garamsh/garam/platform/internal/wire"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // listStack is the browser-facing listener over real Postgres and a
@@ -43,18 +38,33 @@ type listStack struct {
 	url            string
 	pool           *pgxpool.Pool
 	acme           grn.GRN
-	policies       *authz.PolicyGRPCServer
 	orgs           *orgpg.Store
 	agents         *agentpg.Store
 	ada, dan       *http.Cookie
 	adaGRN, danGRN grn.GRN
+	decisions      *currentDecisions
+	// relay stands for the policy service's list of policies, which the
+	// search reads through the relay: the service is not started here,
+	// and list_policy_test.go holds the search against the real one.
+	relay *listedPolicies
+}
+
+// listedPolicies is the policy relay as far as a list reads it: the
+// policies a test has had it hold, answered whole. Any other method
+// is not one these tests call and panics on the nil interface.
+type listedPolicies struct {
+	policyrelay.Service
+	held []policyrelay.Policy
+}
+
+func (l *listedPolicies) List(context.Context, grn.GRN, grn.GRN) ([]policyrelay.Policy, error) {
+	return slices.Clone(l.held), nil
 }
 
 func newListStack(t *testing.T) *listStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
@@ -68,36 +78,18 @@ func newListStack(t *testing.T) *listStack {
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
-	s := &listStack{pool: p, acme: acme, policies: policies, orgs: orgs, agents: agentpg.New(p)}
+	decisions := newCurrentDecisions(p)
+	s := &listStack{pool: p, acme: acme, orgs: orgs, agents: agentpg.New(p), decisions: decisions, relay: &listedPolicies{}}
 	s.ada, s.adaGRN = session("ada")
 	s.dan, s.danGRN = session("dan")
 
 	srv := api.NewServer(users, orgs, s.agents, nil, messagepg.New(p), nil,
-		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, engine), nil,
-		api.Config{SessionTTL: time.Hour})
+		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, nil, cli.NewAuthorityService(p, decisions), nil,
+		api.Config{SessionTTL: time.Hour}).WithPolicyRelay(s.relay)
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	s.url = browser.URL
 	return s
-}
-
-// policyService serves policies' lifecycle service, the one
-// listPolicies reads, and answers a connection to it. It is the same
-// server activePolicy and attachPolicy write through, so the list reads
-// what a test wrote.
-func policyService(t *testing.T, policies *authz.PolicyGRPCServer) *grpc.ClientConn {
-	t.Helper()
-	srv := grpc.NewServer()
-	authzv1.RegisterPolicyServiceServer(srv, policies)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(srv.Stop)
-	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	return conn
 }
 
 // get makes one GET as cookie and answers the status and body.
@@ -134,14 +126,15 @@ func (s *listStack) listed(t *testing.T, path string, query url.Values, cookie *
 // listKind is one org-gated list of addressable objects: its path, the
 // read each of its objects is answered on, and how a test seeds one
 // object of it. An object's own read is at the list's path and the
-// object's identifier, followed by readSuffix.
+// object's identifier. The policies list is not here: the service
+// decides a policy's read on the organization (ADR-0171 item 7), so it
+// cannot hide one policy alone, and list_policy_test.go holds it.
 type listKind struct {
-	name       string
-	path       string
-	query      url.Values
-	action     string
-	readSuffix string
-	seed       func(t *testing.T, s *listStack, name string) grn.GRN
+	name   string
+	path   string
+	query  url.Values
+	action string
+	seed   func(t *testing.T, s *listStack, name string) grn.GRN
 }
 
 func listKinds() []listKind {
@@ -152,15 +145,6 @@ func listKinds() []listKind {
 		{name: "projects", path: "/orgs/acme/projects", action: org.ActionProjectRead, seed: seedListProject},
 		{name: "agents", path: "/orgs/acme/agents", action: org.ActionAgentRead,
 			seed: func(t *testing.T, s *listStack, _ string) grn.GRN { return seedAgent(t, s.agents, s.acme) }},
-		// A policy is read by its versions, the one read iam:policy.read
-		// gates on the policy itself.
-		{name: "policies", path: "/orgs/acme/policies", action: org.ActionPolicyRead, readSuffix: "/versions",
-			seed: func(t *testing.T, s *listStack, name string) grn.GRN {
-				g, err := grn.Parse(activePolicy(t, s.policies, s.acme, name,
-					statementDoc(name, wire.EffectAllow, org.ActionOrgRead, s.acme.String())))
-				require.NoError(t, err)
-				return g
-			}},
 	}
 }
 
@@ -187,32 +171,31 @@ func seedListProject(t *testing.T, s *listStack, name string) grn.GRN {
 }
 
 // TestLists_ADenyOnOneObjectHidesThatObjectAlone seeds three objects of
-// each list and denies ada the read of the middle one alone. Her list
-// before the Deny holds all three, which is the setup read back and the
-// control that the list is what narrows. After it, her list is dan's
-// without that object, and dan's still holds it: the Deny hid one
-// object from one caller. Reading the hidden object itself is refused,
-// so the list and the read agree.
+// each list and refuses ada the read of the middle one alone, as the
+// policy service does (ADR-0172). Her list before the refusal holds
+// all three, which is the setup read back and the control that the
+// list is what narrows. After it, her list is dan's without that
+// object, and dan's still holds it: the refusal hid one object from
+// one caller. Reading the hidden object itself is refused, so the list
+// and the read agree.
 func TestLists_ADenyOnOneObjectHidesThatObjectAlone(t *testing.T) {
 	for _, k := range listKinds() {
 		t.Run(k.name, func(t *testing.T) {
 			s := newListStack(t)
 			first, hidden, last := k.seed(t, s, "a-first"), k.seed(t, s, "b-hidden"), k.seed(t, s, "c-last")
 			before := s.listed(t, k.path, k.query, s.ada)
-			require.Subset(t, before, []string{first.String(), hidden.String(), last.String()}, "control, before the Deny")
+			require.Subset(t, before, []string{first.String(), hidden.String(), last.String()}, "control, before the refusal")
 
-			deny := activePolicy(t, s.policies, s.acme, "deny-one",
-				statementDoc("deny-one", wire.EffectDeny, k.action, hidden.String()))
-			attachPolicy(t, s.policies, deny, s.adaGRN)
+			s.decisions.forbidOn(s.adaGRN, k.action, hidden)
 
 			control := s.listed(t, k.path, k.query, s.dan)
-			require.Contains(t, control, hidden.String(), "the Deny does not reach dan")
+			require.Contains(t, control, hidden.String(), "the refusal does not reach dan")
 			want := slices.DeleteFunc(slices.Clone(control), func(g string) bool { return g == hidden.String() })
-			assert.Equal(t, want, s.listed(t, k.path, k.query, s.ada), "ada's list is dan's without the denied object")
+			assert.Equal(t, want, s.listed(t, k.path, k.query, s.ada), "ada's list is dan's without the refused object")
 
-			status, body := s.get(t, k.path+"/"+hidden.Identifier+k.readSuffix, nil, s.ada)
+			status, body := s.get(t, k.path+"/"+hidden.Identifier, nil, s.ada)
 			assert.Equal(t, http.StatusForbidden, status, "the read of the hidden object refuses as the list hides it: %s", body)
-			status, body = s.get(t, k.path+"/"+first.Identifier+k.readSuffix, nil, s.ada)
+			status, body = s.get(t, k.path+"/"+first.Identifier, nil, s.ada)
 			assert.Equal(t, http.StatusOK, status, "control: a sibling reads: %s", body)
 		})
 	}
@@ -229,9 +212,7 @@ func TestLists_AFilteredPageCanBeShortWithMoreAfterIt(t *testing.T) {
 	require.Equal(t, []string{first.String(), hidden.String()}, s.listed(t, "/orgs/acme/groups", page, s.ada),
 		"control, before the Deny: a full page")
 
-	deny := activePolicy(t, s.policies, s.acme, "deny-one",
-		statementDoc("deny-one", wire.EffectDeny, org.ActionGroupRead, hidden.String()))
-	attachPolicy(t, s.policies, deny, s.adaGRN)
+	s.decisions.forbidOn(s.adaGRN, org.ActionGroupRead, hidden)
 
 	assert.Equal(t, []string{first.String()}, s.listed(t, "/orgs/acme/groups", page, s.ada), "a short first page")
 	page.Set("offset", "2")

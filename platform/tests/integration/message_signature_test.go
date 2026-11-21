@@ -19,7 +19,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
@@ -152,7 +151,6 @@ func keySet(t *testing.T, url string) jose.JSONWebKeySet {
 type signingStack struct {
 	pool         *pgxpool.Pool
 	sealer       ca.Sealer
-	engine       grpc.ClientConnInterface
 	url          string
 	sender       *http.Client
 	recipient    *http.Client
@@ -178,12 +176,11 @@ func newSigningStackHolding(t *testing.T, signing message.Custodian) signingStac
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	_, engine := policyEngine(t, p)
-	url := machineListenerHolding(t, p, sealer, engine, signing)
+	url := machineListenerHolding(t, p, sealer, signing)
 	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
-	return signingStack{pool: p, sealer: sealer, engine: engine, url: url, sender: sender, recipient: recipient, senderGRN: senderGRN, recipientGRN: recipientGRN}
+	return signingStack{pool: p, sealer: sealer, url: url, sender: sender, recipient: recipient, senderGRN: senderGRN, recipientGRN: recipientGRN}
 }
 
 // post stores one message from the sender to the recipient.
@@ -313,8 +310,7 @@ func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	_, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	url := machineListener(t, p, sealer)
 	acmeOperator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	globexOperator := operatorClient(t, p, url, scopedGRN("globex", agent.ServiceTypeOperator, "one"))
 	recipientGRN, _ := provisioned(t, url, acmeOperator)

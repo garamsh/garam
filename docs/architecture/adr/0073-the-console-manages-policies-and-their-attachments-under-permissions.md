@@ -1,6 +1,9 @@
 # ADR 0073: The console manages policies and their attachments under Permissions
 
-> Status: accepted — the archive and "no delete" are superseded by
+> Status: superseded in part by
+> [ADR-0169](./0169-the-platform-relays-an-organizations-role-links-guardrails-and-permits-to-the-policy-service.md)
+> and #1975: the console no longer manages attachments or creates
+> old-engine documents. The archive and "no delete" were superseded by
 > [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md), which deletes a policy
 > Date: 2026-09-27
 

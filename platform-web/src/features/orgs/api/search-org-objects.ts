@@ -11,8 +11,15 @@ import type { components } from "@garam/platform-sdk-ts/api";
 
 import { GrnParser, orgPath } from "./orgs";
 
-/** What the palette finds by name. */
-export type FoundKind = components["schemas"]["FoundKind"]["kind"];
+/**
+ * What the palette finds by name. garam also finds policies of the
+ * earlier engine, whose identifiers the permissions pages no longer
+ * open (ADR-0169), so the palette does not list them.
+ */
+export type FoundKind = Exclude<
+  components["schemas"]["FoundKind"]["kind"],
+  "policy"
+>;
 
 /** One thing found: what it is, its name, and the identifier it is at. */
 export type FoundObject = { name: string; identifier: string };
@@ -37,6 +44,13 @@ const Query = z.object({
   query: z.string().trim().min(1).max(100),
 });
 
+/** Whether the palette lists what this kind finds. */
+function isListed<T extends { kind: string }>(
+  found: T,
+): found is T & { kind: FoundKind } {
+  return found.kind !== "policy";
+}
+
 const OrgSearchParser = parserFor<components["schemas"]["OrgSearch"]>()(
   z.object({
     found: z.array(
@@ -52,8 +66,8 @@ const OrgSearchParser = parserFor<components["schemas"]["OrgSearch"]>()(
 );
 
 /**
- * Finds the organization's people, agents, teams, policies and
- * projects whose name or identifier holds what was typed, case aside,
+ * Finds the organization's people, agents, teams and projects whose
+ * name or identifier holds what was typed, case aside,
  * for the command palette (ADR-0113). garam matches them
  * (`searchOrg`), so only the first few of each kind cross to the web
  * server, and a page the palette is never searched on asks nothing.
@@ -75,7 +89,7 @@ export async function searchOrgObjects(
     );
     return {
       status: "ok",
-      found: answer.found.map(({ kind, objects, more }) => ({
+      found: answer.found.filter(isListed).map(({ kind, objects, more }) => ({
         kind,
         objects: objects.map((object) => ({
           // An agent the organization calls nothing is shown by its

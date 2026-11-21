@@ -7,8 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"google.golang.org/grpc"
 )
 
 // shutdownGrace bounds how long a serve command lets in-flight work
@@ -46,32 +44,9 @@ func (o *observability) serveHTTP(ctx context.Context, grace time.Duration, srv 
 		// held. Neither this error nor Close's is returned: the stop
 		// was requested, and abandoning what did not finish is this
 		// function's decision rather than a failure of it, so the
-		// process exits 0 as serveGRPC does below
-		// (deployment-contract.md §Termination).
+		// process exits 0 (deployment-contract.md §Termination).
 		_ = srv.Close()
 		o.logAbandoned(ctx, grace, err)
-	}
-	return nil
-}
-
-// serveGRPC is serveHTTP for the engine: GracefulStop lets in-flight
-// RPCs finish, and past grace Stop abandons them.
-func (o *observability) serveGRPC(ctx context.Context, grace time.Duration, srv *grpc.Server, serve func() error) error {
-	errCh := make(chan error, 1)
-	go func() { errCh <- serve() }()
-	select {
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-	}
-	stopped := make(chan struct{})
-	go func() { srv.GracefulStop(); close(stopped) }()
-	select {
-	case <-stopped:
-	case <-time.After(grace):
-		srv.Stop()
-		<-stopped
-		o.logAbandoned(ctx, grace, nil)
 	}
 	return nil
 }

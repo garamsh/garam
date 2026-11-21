@@ -1,109 +1,121 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { FormField } from "@garam/design/components/form-field";
 import { Refusal } from "@garam/design/components/refusal";
 import { Button } from "@garam/design/ui/button";
 import { Input } from "@garam/design/ui/input";
+import type { IamPolicyKind, RoleLinkChoices } from "@/features/orgs";
 import { createPolicy, type CreatePolicyState } from "@/features/orgs/actions";
-import { useHydrated } from "@/hooks/use-hydrated";
-import { projectsPattern } from "@/lib/grn";
-import {
-  formatPolicyDocument,
-  parsePolicyDocument,
-  type DocumentProblem,
-} from "@/lib/policy-document";
 
-import { PolicyEditor } from "../../_components/policy-editor";
+import { orgHref } from "../../../../../_components/navigation";
+import { CedarEditor } from "../../_components/cedar-editor";
+import { POLICY_KIND_LABEL } from "../../_components/policy-kind";
+import { RoleLinkFields } from "./role-link-fields";
 
 const initialState: CreatePolicyState = { status: "idle" };
 
+/** What each kind is, said beside its choice. */
+const KIND_NOTE: Record<IamPolicyKind, string> = {
+  guardrail: "Cedar that forbids, whoever else permits.",
+  permit: "Cedar that permits. Only an owner writes one.",
+  "role-link": "Who holds a role over the organization, a team or a project.",
+};
+
 /**
- * Creates a policy from a name and its first document. garam stores it
- * as a draft, so what is typed here grants nothing until the policy is
- * activated. Both are held by the form, so a refusal leaves them as
- * typed, and it is not sent before it can hold them. The starting
- * document names the resource the API authorizes a project write
- * against, so it matches what it says.
+ * Creates a policy of a kind the caller is offered and opens it. It is
+ * stored as a draft, so it decides nothing until activated on its own
+ * page. A refusal is said where it belongs: the name's at the name, the
+ * Cedar text's at the editor, a role link's above the buttons.
+ * The fields are controlled, and the role form's choices, the kind and
+ * the scope are sent from hidden inputs: the reset React runs after the
+ * action returns a radio to its first state and keeps a hidden input as
+ * it was.
  */
-export function CreatePolicyForm({ org }: { org: string }) {
-  const hydrated = useHydrated();
-  const [name, setName] = useState("");
-  const [document, setDocument] = useState(() =>
-    formatPolicyDocument({
-      Version: "2026-07-25",
-      Statement: [
-        {
-          Effect: "Deny",
-          Action: ["iam:project.update"],
-          Resource: [projectsPattern(org)],
-        },
-      ],
-    }),
-  );
-  // The text a refusal was about: once edited, the refusal is stale.
-  const [sent, setSent] = useState<string | null>(null);
+export function CreatePolicyForm({
+  org,
+  orgGrn,
+  offered,
+  choices,
+}: {
+  org: string;
+  orgGrn: string;
+  /** The kinds the caller is not known to be denied, in order. */
+  offered: readonly IamPolicyKind[];
+  choices: RoleLinkChoices;
+}) {
   const [state, formAction, pending] = useActionState(
-    (previous: CreatePolicyState, formData: FormData) => {
-      setSent(String(formData.get("document")));
-      return createPolicy(previous, formData);
-    },
+    createPolicy,
     initialState,
   );
-  const documentProblem: DocumentProblem | null =
-    state.status === "error" && state.field === "document" && sent === document
-      ? { message: state.message, path: state.path }
-      : null;
-  const formProblem =
-    state.status === "error" && state.field === undefined
-      ? state.message
-      : null;
-  const parsed = parsePolicyDocument(document);
+  const [kind, setKind] = useState<IamPolicyKind>(offered[0] ?? "guardrail");
+  const [name, setName] = useState("");
+  const [text, setText] = useState("");
+  const at = state.status === "error" ? state.at : undefined;
+  const message = state.status === "error" ? state.message : undefined;
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="org" value={org} />
-      <input type="hidden" name="document" value={document} />
-      <FormField
-        label="Policy name"
-        hint="What people will know it by, such as “Deny project deletion”."
-        error={
-          state.status === "error" && state.field === "name"
-            ? state.message
-            : undefined
-        }
-        className="max-w-sm"
-      >
+      <input type="hidden" name="kind" value={kind} />
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 font-medium">Kind</legend>
+        {offered.map((option) => (
+          <label
+            key={option}
+            className="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 has-checked:border-primary"
+          >
+            <input
+              type="radio"
+              name="kind-choice"
+              value={option}
+              checked={kind === option}
+              onChange={() => setKind(option)}
+              className="mt-0.5 size-4 accent-primary"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-medium">{POLICY_KIND_LABEL[option]}</span>
+              <span className="text-muted-foreground">{KIND_NOTE[option]}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <FormField label="Name" error={at === "name" ? message : undefined}>
         {(control) => (
           <Input
             {...control}
             name="name"
             required
-            autoComplete="off"
             value={name}
             onChange={(event) => setName(event.target.value)}
+            placeholder="Deny project deletion"
+            className="max-w-sm"
           />
         )}
       </FormField>
-      <PolicyEditor
-        value={document}
-        onChange={setDocument}
-        problem={documentProblem}
-        hint="Statements of Effect, Action and Resource. An explicit Deny wins over every Allow; a Condition is stored and not evaluated."
-      />
-      <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-        <Button
-          type="submit"
-          disabled={!hydrated || pending || parsed.status === "error"}
-        >
-          {pending ? "Creating…" : "Create draft"}
+      {kind === "role-link" ? (
+        <>
+          <RoleLinkFields orgGrn={orgGrn} choices={choices} />
+          {at === "body" && <Refusal>{message}</Refusal>}
+        </>
+      ) : (
+        <CedarEditor
+          value={text}
+          onChange={setText}
+          error={at === "body" ? message : undefined}
+        />
+      )}
+      {at === "form" && <Refusal>{message}</Refusal>}
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={pending}>
+          {pending ? "Creating…" : "Create policy"}
         </Button>
-        <p className="text-sm text-muted-foreground">
-          A draft grants no access until you activate it.
-        </p>
+        <Button asChild variant="ghost">
+          <Link href={orgHref(org, "permissions")}>Cancel</Link>
+        </Button>
       </div>
-      {formProblem !== null && <Refusal>{formProblem}</Refusal>}
     </form>
   );
 }

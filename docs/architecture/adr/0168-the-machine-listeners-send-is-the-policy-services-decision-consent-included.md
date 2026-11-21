@@ -103,7 +103,7 @@ do not bind.
   stored as before.
 - **The matrix counts fall by seven.** The seven platform send rows are
   gone, so it asks 1716 questions, 1706 agree and 10 differ, as the
-  ten of [policy-matrix.md](../policy-matrix.md) §Differences do.
+  ten of `policy-matrix.md` §Differences, retired by [ADR-0174](./0174-the-explanation-comes-from-the-policy-service-the-old-policy-endpoints-go-and-the-parity-matrix-is-retired.md), do.
 - **Tests of the attached policy move.** What an attached policy or a
   group attachment decides for a send is the service's and is held by
   its suites; the listener's tests hold what the listener does with an

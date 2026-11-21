@@ -8,9 +8,9 @@ import { ActionDialog } from "../../../../../_components/action-dialog";
 const initialState: DeletePolicyState = { status: "idle" };
 
 /**
- * Deletes the policy once its name is typed. Its versions and
- * attachments go with it and garam brings none back, so one click is
- * not enough. A deleted policy opens the list.
+ * Deletes the policy once its name is typed. Its versions go with it
+ * and garam brings none back, so one click is not enough. A deleted
+ * policy opens the list.
  */
 export function DeletePolicyDialog({
   org,
@@ -31,8 +31,8 @@ export function DeletePolicyDialog({
       title={`Delete ${policyName}?`}
       description={
         <p>
-          This removes the policy with its versions and attachments, so it takes
-          part in no check. garam cannot bring it back.
+          This removes the policy with its versions, so it takes part in no
+          decision. garam cannot bring it back.
         </p>
       }
       action={deletePolicy}
@@ -41,7 +41,7 @@ export function DeletePolicyDialog({
       typed={{ phrase: policyName }}
       command={{
         label: "Delete policy",
-        consequence: "Removes the policy, its versions and attachments.",
+        consequence: "Removes the policy and its versions.",
       }}
       confirmLabel="Delete policy"
       pendingLabel="Deleting…"

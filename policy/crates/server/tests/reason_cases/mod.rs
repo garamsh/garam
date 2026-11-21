@@ -68,6 +68,7 @@ impl Platform {
             context: None,
             read: 0,
             probe: true,
+            without_permits: false,
         });
         let single = answer(self.grpc.evaluate(single).await.unwrap().into_inner());
         let batch = self.request(pb::EvaluationsRequest {
@@ -81,6 +82,7 @@ impl Platform {
                 ..pb::Evaluation::default()
             }],
             probe: true,
+            without_permits: false,
         });
         let [entry]: [pb::EvaluateResponse; 1] = self
             .grpc
@@ -316,6 +318,7 @@ async fn a_fault_is_a_deny_naming_only_what_failed_and_a_refused_entry_names_no_
             },
         ],
         probe: true,
+        without_permits: false,
     });
     let answers = service.grpc.evaluations(batch).await.unwrap().into_inner();
     let [fine, bad] = answers.evaluations.try_into().unwrap();

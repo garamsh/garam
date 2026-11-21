@@ -1,5 +1,5 @@
 // Package policydecision asks the policy service for a decision
-// (ADR-0146). Nothing in serve api or serve machine calls it yet.
+// (ADR-0146). Both serve api and serve machine call it.
 package policydecision
 
 import (
@@ -10,12 +10,35 @@ import (
 
 // Question is one thing the platform asks: may Subject perform Action
 // on Resource. Probe states that the caller is deciding what to show,
-// so a denial is not recorded as an attempt (ADR-0148 item 2).
+// so a denial is not recorded as an attempt (ADR-0148 item 2). Current
+// states that the answer must read the policies and facts as they are
+// now, past the service's cache, which ADR-0146 item 12 reserves for
+// the decisions whose earlier allow must not stand in for it.
+// WithoutPermits states that the organization's permits are left out of
+// the decision, as the write of a permit decides it (ADR-0175), which
+// is how a question about writing one is answered.
 type Question struct {
-	Subject  grn.GRN
-	Action   string
-	Resource grn.GRN
-	Probe    bool
+	Subject        grn.GRN
+	Action         string
+	Resource       grn.GRN
+	Probe          bool
+	Current        bool
+	WithoutPermits bool
+}
+
+type probeKey struct{}
+
+// AsProbe marks ctx as one a caller decides what to show in, so a check
+// that runs beneath it on the way to asking the service asks as a probe
+// (Question.Probe) without every layer between carrying the flag.
+func AsProbe(ctx context.Context) context.Context {
+	return context.WithValue(ctx, probeKey{}, true)
+}
+
+// IsProbe reports whether ctx was marked by AsProbe.
+func IsProbe(ctx context.Context) bool {
+	probe, _ := ctx.Value(probeKey{}).(bool)
+	return probe
 }
 
 // Reason is one ground of a decision. PolicyID is empty when the

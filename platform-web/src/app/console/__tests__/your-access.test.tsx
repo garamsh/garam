@@ -46,14 +46,9 @@ describe("Your access", () => {
     server.use(
       answerExplanations(() => ({
         decision: "allow",
-        basis: "statements",
-        statements: [
-          {
-            effect: "Allow",
-            source: "policy",
-            policy: "platform-admins",
-            attachment: "caller",
-          },
+        basis: "policy-service",
+        grounds: [
+          { kind: "permit", policy: "p-admins", name: "platform-admins" },
         ],
       })),
     );
@@ -62,7 +57,56 @@ describe("Your access", () => {
 
     const rename = row(panel, "Rename it");
     expect(rename).toHaveTextContent("Allowed");
-    expect(rename).toHaveTextContent("Policy platform-admins, attached to you");
+    expect(rename).toHaveTextContent("Permit platform-admins");
+    expect(rename).not.toHaveTextContent("Denied by");
+  });
+
+  it("names the guardrail that forbade a denied action beside the permission it lacks", async () => {
+    server.use(
+      answerPermissionChecks(() => "deny"),
+      answerExplanations(() => ({
+        decision: "deny",
+        basis: "policy-service",
+        grounds: [
+          {
+            kind: "guardrail",
+            policy: "p-1",
+            name: "no-renames",
+            text: "forbid (principal, action, resource);",
+          },
+        ],
+      })),
+      http.get(`${API_URL}/orgs/acme/permission-holders`, () =>
+        HttpResponse.json({ holders: [] }),
+      ),
+    );
+
+    const panel = await renderPanel(ACTIONS.slice(0, 1));
+
+    const rename = row(panel, "Rename it");
+    expect(rename).toHaveTextContent("Missing iam:agent.rename");
+    expect(rename).toHaveTextContent("Denied by Guardrail no-renames");
+    expect(rename).toHaveTextContent("forbid (principal, action, resource);");
+  });
+
+  it("says denied by from the policy service's decision and not the check's", async () => {
+    server.use(
+      answerPermissionChecks(() => "deny"),
+      answerExplanations(() => ({
+        decision: "allow",
+        basis: "policy-service",
+        grounds: [{ kind: "stored-policy", policy: "p-9" }],
+      })),
+      http.get(`${API_URL}/orgs/acme/permission-holders`, () =>
+        HttpResponse.json({ holders: [] }),
+      ),
+    );
+
+    const panel = await renderPanel(ACTIONS.slice(0, 1));
+
+    const rename = row(panel, "Rename it");
+    expect(rename).toHaveTextContent("Policy p-9");
+    expect(rename).not.toHaveTextContent("Denied by");
   });
 
   it("names a denied action once in its summary, and behind Details only the permission it lacks and who holds it", async () => {
@@ -70,8 +114,8 @@ describe("Your access", () => {
       answerPermissionChecks(() => "deny"),
       answerExplanations(() => ({
         decision: "deny",
-        basis: "statements",
-        statements: [],
+        basis: "policy-service",
+        grounds: [],
       })),
       http.get(`${API_URL}/orgs/acme/permission-holders`, () =>
         HttpResponse.json({
@@ -105,8 +149,8 @@ describe("Your access", () => {
       answerPermissionChecks(() => "deny"),
       answerExplanations(() => ({
         decision: "deny",
-        basis: "statements",
-        statements: [],
+        basis: "policy-service",
+        grounds: [],
       })),
       http.get(`${API_URL}/orgs/acme/permission-holders`, () =>
         HttpResponse.json(
@@ -121,22 +165,22 @@ describe("Your access", () => {
     expect(row(panel, "Rename it")).toHaveTextContent("Holders not shown.");
   });
 
-  it("names a granting policy the caller cannot read only as such", async () => {
+  it("names a granting policy the caller cannot read by its identifier alone", async () => {
     server.use(
       answerPermissionChecks(() => "allow"),
       answerExplanations(() => ({
         decision: "allow",
-        basis: "statements",
-        statements: [{ effect: "Allow", source: "unreadable-policy" }],
+        basis: "policy-service",
+        grounds: [{ kind: "permit", policy: "p-secret" }],
       })),
     );
 
     const panel = await renderPanel(ACTIONS.slice(0, 1));
 
     expect(panel).toHaveTextContent("You can do everything.");
-    expect(row(panel, "Rename it")).toHaveTextContent(
-      "A policy you can't read",
-    );
+    const rename = row(panel, "Rename it");
+    expect(rename).toHaveTextContent("Permit p-secret");
+    expect(rename).not.toHaveTextContent("forbid");
   });
 
   it("leaves an action the operation decides to the operation, and asks no holders", async () => {
@@ -147,12 +191,12 @@ describe("Your access", () => {
       ),
       answerExplanations((action) =>
         action === "iam:agent.replace"
-          ? { decision: "unknown", basis: "operation", statements: [] }
+          ? { decision: "unknown", basis: "operation", grounds: [] }
           : {
               decision: "allow",
-              basis: "statements",
-              statements: [
-                { effect: "Allow", source: "org-role", roles: ["owner"] },
+              basis: "policy-service",
+              grounds: [
+                { kind: "role-link", role: "owner", path: "organization" },
               ],
             },
       ),

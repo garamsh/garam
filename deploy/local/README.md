@@ -1,8 +1,8 @@
 # Local stack
 
 Runs the whole garam stack on one machine with Docker Compose:
-Postgres, migrations, the authz engine, the policy service with the
-feed that fills it, the API, the machine listener, and — behind
+Postgres, migrations, the policy service with the feed that fills it,
+the API, the machine listener, and — behind
 profiles — the web frontend and cowork.
 
 This compose file is also what the test gates run against. `make db-up`
@@ -220,9 +220,9 @@ host trusts `ca.pem` and signs with `signing.pem`, both in
 leaves the copies there, owned by the account that ran make, the key at
 mode 600. The directory is ignored by git and holds only this stack's
 throwaway material; no suite reads a container for either file.
-`make -C platform stack-up policy-matrix` brings the backend up and runs
-the platform's policy matrix against that address. `make -C platform
-stack-up suites` runs it with the other suites, as CI does.
+`make -C platform stack-up policy-service` brings the backend up and
+runs the platform's real-service suites against that address. `make -C
+platform stack-up suites` runs it with the other suites, as CI does.
 
 The certificate is made once, so a stack whose volume predates the two
 extra names keeps a certificate that does not name `localhost`: bring it
@@ -233,9 +233,12 @@ certificate `policy-tls` made as its CA, and signs its tokens with the
 key `policy-keys` made, under the issuer `https://garam.localhost/api`
 (`GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
 `GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER`; ADR-0146).
-The same name is `GARAM_IDENTITY_ISSUER` on the api and on the machine
-listener, so the identity issuer is on in both, signing with the same
-key.
+A user's and an operator's delegated operation authority and the
+controller proof are the service's decision too, read current, so the
+api refuses to start without `GARAM_POLICY_ADDR` and waits for a
+healthy `policy`. The same name is `GARAM_IDENTITY_ISSUER` on the api
+and on the machine listener, so the identity issuer is on in both,
+signing with the same key.
 `policy-feed` turns the feed on once `migrate` has applied the api's
 schema and the service is healthy, and backfills the outbox, so what the
 api wrote before is delivered as well. Running it again changes nothing
@@ -272,8 +275,8 @@ certificate `policy-tls` made, signing each call with the key
 `policy-keys` made under the issuer `https://garam.localhost/api`
 (`GARAM_POLICY_ADDR`, `GARAM_POLICY_CA_FILE`,
 `GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER`). It
-refuses to start without `GARAM_POLICY_ADDR`, so unlike the api it
-waits for a healthy `policy`. The run file that swaps its keys
+refuses to start without `GARAM_POLICY_ADDR` and waits for a healthy
+`policy`, as the api does. The run file that swaps its keys
 (`codehub-e2e`) leaves the address and the certificate as they are.
 
 Both scripts run on first start and generate what they hold:
@@ -358,19 +361,18 @@ grant the garam CLI uses, approved with the owner's session.
 
 ## Startup order
 
-`migrate` runs once against a healthy Postgres and exits; `authz` and
-`api` wait for it to have exited successfully. `api` additionally waits
-for `authz`, `policy-tls` and `policy-keys`, and `web` and `site` for
-`api`. `machine` waits for `migrate`, a healthy `authz` and a healthy
+`migrate` runs once against a healthy Postgres and exits; `api`
+waits for it to have exited successfully. `api` additionally waits
+for `policy-tls` and `policy-keys`, and `web` and `site` for
+`api`. `machine` waits for `migrate` and a healthy
 `policy`, and the four one-shots that write its files,
 `machine-material`, `policy-tls`, `policy-keys` and `cowork-keys`. `cowork-migrate` waits for `cowork-db`, `cowork` for it,
 `rustfs`, `api`, `cowork-keys`, a healthy `machine` and a healthy
 `policy`, `cowork-web` for `cowork`, and `cowork-gateway` for
 `cowork-web`. `policy-migrate` waits
 for `policy-db`, `policy` for it, `policy-tls` and `policy-keys`, and
-`policy-feed` for `migrate` and a healthy `policy`. `api` does not wait
-for `policy`: a policy service that is down delays a write by the gate's
-five seconds and never keeps the api from starting. Every server's
+`policy-feed` for `migrate` and a healthy `policy`. `api` waits for a
+healthy `policy` too, as `machine` does. Every server's
 healthcheck is its own readiness probe, so a service is healthy here
 when it can serve a request and not merely when it has bound its port.
 
@@ -378,14 +380,12 @@ when it can serve a request and not merely when it has bound its port.
 
 Every garam process answers two probes on a port that asks for no
 credential: `/healthz`, which reports the process alone, and `/readyz`,
-which reports the dependencies a request needs — the database for each
-of them, and the engine channel for the api. `/healthz` reads nothing
-outside its process, so a database outage does not restart the stack.
+which reports the dependencies a request needs. `/healthz` reads
+nothing outside its process, so a database outage does not restart the
+stack.
 
 - `http://localhost:8080/healthz`, `/readyz` — the api, on the port it
   already serves the HTTP API on.
-- `http://localhost:9091/healthz`, `/readyz` — the authz engine, on the
-  listener its metrics use.
 - `http://localhost:3000/healthz`, `/readyz` and
   `http://localhost:3001/healthz`, `/readyz` — the console and the
   site, each on the port it serves on. Neither reads the api, so both
@@ -399,27 +399,21 @@ nothing.
 
 ## Metrics
 
-Both servers export Prometheus metrics, and the stack publishes both
-endpoints on the host:
+The api exports Prometheus metrics, and the stack publishes the endpoint
+on the host:
 
 - `http://localhost:8080/metrics` — the api, on the port it already
   serves the HTTP API on (`GARAM_LOCAL_API_PORT`).
-- `http://localhost:9091/metrics` — the authz engine. It speaks gRPC
-  only, so its metrics and its probes share a listener of their own:
-  `GARAM_METRICS_ADDR`, fixed at `:9091` in the compose file, published
-  on `GARAM_LOCAL_METRICS_PORT`.
 
-Nothing in this stack scrapes them. Point a Prometheus at both URLs, or
-`curl` one directly. Spans are not exported: the tracer mints the
+Nothing in this stack scrapes it. Point a Prometheus at the URL, or
+`curl` it directly. Spans are not exported: the tracer mints the
 `trace_id` the logs carry and stops there, because there is nowhere to
 ship spans to yet.
 
 ## Configuration
 
-Every variable is documented in `.env.example`. Three notes:
+Every variable is documented in `.env.example`. Two notes:
 
-- `GARAM_AUTHZ_ADDR` is fixed to `authz:9090` in the compose file: it is
-  the internal service address and is not meant to be reconfigured.
 - The first account is not something this stack mints. `/login` takes
   Google, which needs real credentials in `.env`, or a username and a
   password, which `/register` mints only from an invitation an org

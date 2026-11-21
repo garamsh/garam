@@ -14,7 +14,6 @@ import (
 	"net/http/httptrace"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,9 +21,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
@@ -33,8 +31,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	"github.com/garamsh/garam/platform/internal/authz"
-	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
 	"github.com/garamsh/garam/platform/internal/cli"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
@@ -42,7 +38,6 @@ import (
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // executionStack is both listeners as the serve commands compose them,
@@ -93,10 +88,13 @@ type executionStack struct {
 	// grant is the hosted control service's current grant, which the
 	// next delegation replaces.
 	grant *string
+	// decisions is the policy service every listener here asks about
+	// what a user or an operator may do now.
+	decisions *currentDecisions
 }
 
 // newExecutionStack is the stack before any activation of its agent.
-func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterface) *executionStack {
+func newExecutionStack(t *testing.T, p *pgxpool.Pool) *executionStack {
 	t.Helper()
 	ctx := context.Background()
 	orgs := orgpg.New(p)
@@ -114,9 +112,9 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 		return &http.Cookie{Name: "garam_session", Value: token}
 	}
 
+	decisions := newCurrentDecisions(p)
 	browserSrv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
-		authnpg.NewSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), cli.NewStandaloneService(p, engine),
+		authnpg.NewSessionStore(p), nil, nil, nil, nil, decisions, nil, cli.NewAuthorityService(p, decisions), cli.NewStandaloneService(p, decisions),
 		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(browserSrv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
@@ -124,10 +122,10 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 	_, sealer := keyEncryptionKey(t)
 	presented := loopbackCertificate(t)
 	s := &executionStack{
-		pool: p, browser: browser.URL,
+		pool: p, browser: browser.URL, decisions: decisions,
 		config: cli.MachineConfig{
 			Sealer: sealer, Issuer: testIssuer, Certificate: presented, ServerRoot: certificatePEM(presented),
-			Delivery: briefDelivery(), Engine: engine, Decisions: sameOrganizationSends{},
+			Delivery: briefDelivery(), Decisions: decisions,
 			Logger:   slog.New(slog.NewJSONHandler(io.Discard, nil)),
 			TokenURL: testTokenURL,
 		},
@@ -489,8 +487,7 @@ func generationOf(n int) agent.Generation {
 // token each step supersedes and admits the one it issues.
 func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	s.open(t, s.agentTLS)
 
 	// An agent never activated writes nothing: not without a token, and
@@ -572,8 +569,7 @@ func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(
 // execution token.
 func TestExecutionFence_RecoveryFencesTheOldLineageOnAnOpenConnection(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	s.open(t, s.agentTLS)
 	first := s.activated(t, "r-1", generationOf(1), nil, s.forwarded)
 
@@ -661,8 +657,7 @@ func TestExecutionFence_AMutationQueuedBehindItsReplacementCannotCommit(t *testi
 			}
 			t.Run(order, func(t *testing.T) {
 				p := pool(t)
-				_, engine := policyEngine(t, p)
-				s := newExecutionStack(t, p, engine)
+				s := newExecutionStack(t, p)
 				activated := s.activated(t, "r-1", generationOf(1), nil, s.forwarded)
 				current, token := &activated, activated.Token
 				r := s.prepareRecovery(t, "rec-1")
@@ -760,8 +755,7 @@ func (s *executionStack) stored(t *testing.T, key string) int {
 // names is the control.
 func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	introspection, err := json.Marshal(map[string]any{"token": s.forwarded, "generation": nil})
 	require.NoError(t, err)
 
@@ -796,30 +790,20 @@ func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 }
 
 // TestExecutionFence_UnknownFreshnessRefusesAsUnavailable holds that an
-// engine unable to answer from current policy, and a database that
-// stopped answering, refuse activation as unavailable rather than
-// admit it. The restored engine is the control.
+// policy service unable to answer, and a database that stopped
+// answering, refuse activation as unavailable rather than admit it.
+// The restored service is the control.
 func TestExecutionFence_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 	p := pool(t)
-	srv := grpc.NewServer()
-	gate := &engineGate{current: authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p)))}
-	authzv1.RegisterAuthzServiceServer(srv, gate)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(srv.Stop)
-	engine, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = engine.Close() })
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 
-	gate.checkOnly()
+	s.decisions.failWith(errorx.New(errorx.KindInternal, "the policy service is down"))
 	got := s.activate(t, s.hostedTLS, "r-1", generationOf(1), nil, s.forwarded)
-	assert.Equal(t, http.StatusServiceUnavailable, got.status, "an engine without CheckCurrent: %s", got.body)
+	assert.Equal(t, http.StatusServiceUnavailable, got.status, "a policy service that fails: %s", got.body)
 	got = s.introspect(t, s.hostedTLS, s.forwarded, nil)
-	assert.Equal(t, http.StatusServiceUnavailable, got.status, "an engine without CheckCurrent: %s", got.body)
+	assert.Equal(t, http.StatusServiceUnavailable, got.status, "a policy service that fails: %s", got.body)
 
-	gate.restore()
+	s.decisions.failWith(nil)
 	a := s.activated(t, "r-1", generationOf(1), nil, s.forwarded)
 	p.Close()
 	got = s.activate(t, s.hostedTLS, "r-2", generationOf(2), &a.ActivationId, s.forwarded)
@@ -868,8 +852,7 @@ func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.
 	for _, a := range acts {
 		t.Run(a.name, func(t *testing.T) {
 			p := pool(t)
-			_, engine := policyEngine(t, p)
-			s := newExecutionStack(t, p, engine)
+			s := newExecutionStack(t, p)
 			var current *machinegen.Activation
 			if a.activated {
 				activated := s.activated(t, "r-0", generationOf(1), nil, s.forwarded)
@@ -898,24 +881,14 @@ func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.
 }
 
 // TestExecutionFence_AnAuthorityThatDoesNotAnswerIsBoundedByTheServersDeadline
-// holds the policy engine's current check unanswered, before any lock
-// is taken. The activation is answered unavailable at the server's
-// deadline; the engine answering is the control.
+// holds the policy service's current decision unanswered, before any
+// lock is taken. The activation is answered unavailable at the server's
+// deadline; the service answering is the control.
 func TestExecutionFence_AnAuthorityThatDoesNotAnswerIsBoundedByTheServersDeadline(t *testing.T) {
 	p := pool(t)
-	srv := grpc.NewServer()
-	engineSrv := &stalledEngine{current: authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p)))}
-	authzv1.RegisterAuthzServiceServer(srv, engineSrv)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(srv.Stop)
-	engine, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = engine.Close() })
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 
-	release := engineSrv.stall()
+	release := s.decisions.stall()
 	got, elapsed := s.boundedBy(t, func() (reply, error) {
 		return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations"), agent.TokenExecutionContractVersion, "",
 			activationBodyOf("r-1", s.epoch, generationOf(1), nil, s.forwarded))
@@ -954,47 +927,4 @@ func (s *executionStack) boundedBy(t *testing.T, send func() (reply, error), rel
 	elapsed := time.Since(start)
 	require.NoError(t, got.err)
 	return got.r, elapsed
-}
-
-// stalledEngine serves the current engine, except that once stalled
-// its current check answers nothing until released or abandoned.
-type stalledEngine struct {
-	authzv1.UnimplementedAuthzServiceServer
-	current authzv1.AuthzServiceServer
-	mu      sync.Mutex
-	held    chan struct{}
-}
-
-func (e *stalledEngine) stall() func() {
-	held := make(chan struct{})
-	e.mu.Lock()
-	e.held = held
-	e.mu.Unlock()
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			e.mu.Lock()
-			e.held = nil
-			e.mu.Unlock()
-			close(held)
-		})
-	}
-}
-
-func (e *stalledEngine) Check(ctx context.Context, r *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
-	return e.current.Check(ctx, r)
-}
-
-func (e *stalledEngine) CheckCurrent(ctx context.Context, r *authzv1.CheckCurrentRequest) (*authzv1.CheckCurrentResponse, error) {
-	e.mu.Lock()
-	held := e.held
-	e.mu.Unlock()
-	if held != nil {
-		select {
-		case <-held:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-	return e.current.CheckCurrent(ctx, r)
 }

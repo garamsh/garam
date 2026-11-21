@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/errorx"
@@ -18,6 +16,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
@@ -151,13 +150,12 @@ func TestServer_TellsAnEngineThatIsNotThereFromADecisionThatRefused(t *testing.T
 	// The engine answers as it does in every other test until it stops
 	// being there, which is the third call below.
 	var unreachable error
-	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			if unreachable != nil {
-				return false, unreachable
-			}
-			return in.Subject == ownerGRN && in.Action == org.ActionOrgRead, nil
-		})
+	f.answers(func(q policydecision.Question) (bool, error) {
+		if unreachable != nil {
+			return false, unreachable
+		}
+		return q.Subject == ownerGRN && q.Action == org.ActionOrgRead, nil
+	})
 	slug := createOrg(t, f, owner, "acme")
 
 	rec := f.do(t, "GET", "/orgs/"+slug, "", owner)

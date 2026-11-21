@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import { Button } from "@garam/design/ui/button";
 import {
   KIND_LABEL,
   getGroup,
@@ -17,7 +15,6 @@ import {
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../_components/item-crumb";
-import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
@@ -184,15 +181,6 @@ export default async function TeamPage({ params }: Params) {
         name={name}
         idLabel="Team identifier"
         id={team}
-        actions={
-          <Button asChild variant="outline">
-            <Link
-              href={`${orgHref(org, "permissions")}/attachments?subject=${encodeURIComponent(`team:${team}`)}`}
-            >
-              Manage policies
-            </Link>
-          </Button>
-        }
         tabs={[
           { value: "overview", label: "Overview", content: overview },
           ...(settings || deletable

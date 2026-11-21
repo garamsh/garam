@@ -199,7 +199,7 @@ func kidOf(t *testing.T, signature string) string {
 // whose message signing keys are created in signing.
 func (s signingStack) listenerHolding(t *testing.T, signing message.Custodian) string {
 	t.Helper()
-	return machineListenerHolding(t, s.pool, s.sealer, s.engine, signing)
+	return machineListenerHolding(t, s.pool, s.sealer, signing)
 }
 
 // TestTransitSigning_AHandOutVerifiesUnderThePublishedSetAndNoPrivateKeyIsStored

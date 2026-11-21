@@ -122,16 +122,6 @@ func NewWithReason(kind Kind, reason Reason, message string) Error {
 	return &errorx{kind: kind, message: message, reason: reason}
 }
 
-// WrapWithReason is [Wrap] with an explicit kind and a reason, for a
-// refusal whose cause is text this project did not write: the cause
-// stays on the chain for the log, and the reason is what a client reads.
-func WrapWithReason(err error, message string, kind Kind, reason Reason) Error {
-	if err == nil {
-		return nil
-	}
-	return &errorx{kind: kind, message: message, cause: err, reason: reason}
-}
-
 // ReasonOf returns the reason the first error in the chain carrying one
 // was constructed with, and false where none does.
 func ReasonOf(err error) (Reason, bool) {

@@ -12,15 +12,16 @@ import type {
   Group,
   GroupMember,
   InvitationPreview,
+  AuditRecord,
+  AuditRecordPage,
   Member,
   Operator,
   OperatorKey,
   OrgConsent,
   OrgDeletionPreview,
   Organization,
-  Policy,
-  PolicyAttachment,
-  PolicyVersion,
+  IamPolicy,
+  IamPolicyDetail,
   Project,
 } from "@/features/orgs";
 
@@ -128,56 +129,189 @@ export const engineeringMembers: GroupMember[] = [
   { memberGrn: reportedAgent.grn },
 ];
 
-/**
- * An active policy of Acme attached to Engineering, evaluating the
- * first of its two versions.
- */
-export const denyDeletes: Policy = {
-  grn: "grn:acme/iam/policy/d1e2f3a4b5c6d7e8",
-  orgGrn: acme.grn,
-  name: "Deny project deletion",
-  status: "active",
-  defaultVersion: 1,
-  createdAt: "2026-01-02T03:04:05Z",
-  updatedAt: "2026-01-02T03:04:05Z",
+/** The identifier of `denyDeletes`, as the policy service issues it. */
+export const DENY_DELETES_ID = "p-d1e2f3a4b5c6d7e8d1e2f3a4b5c6d7e8";
+
+/** The identifier of `engineeringAdmins`. */
+export const ENGINEERING_ADMINS_ID = "p-0a1b2c3d4e5f60710a1b2c3d4e5f6071";
+
+/** An active guardrail of Acme, deciding by its first of two versions. */
+export const denyDeletes: IamPolicyDetail = {
+  policy: {
+    id: DENY_DELETES_ID,
+    name: "Deny project deletion",
+    kind: "guardrail",
+    status: "active",
+    defaultVersion: 1,
+  },
+  versions: [1, 2].map((version) => ({
+    version,
+    body: {
+      kind: "guardrail",
+      text: `forbid (principal, action == Action::"${
+        version === 1 ? "iam:project.delete" : "iam:project.update"
+      }", resource);`,
+    },
+    createdBy: alice.grn,
+  })),
 };
 
-/** The two versions `denyDeletes` holds, oldest first. */
-export const denyDeletesVersions: PolicyVersion[] = [1, 2].map((version) => ({
-  policyGrn: denyDeletes.grn,
-  version,
-  document: {
-    Version: "2026-07-25",
-    Statement: [
-      {
-        Effect: "Deny",
-        Action: version === 1 ? ["iam:project.delete"] : ["iam:project.*"],
-        Resource: ["grn:acme/*"],
+const POLICY_GRN = `grn:acme/iam/policy/${DENY_DELETES_ID}`;
+
+/**
+ * A write as the policy service records it: its own `platform` service,
+ * the writer, the policy as resource and policy id, and the versions its
+ * step carries (`policy/crates/grant/tests/write_record.rs`).
+ */
+function recordedWrite(
+  id: number,
+  outcome: string,
+  action: string,
+  versionFrom: number,
+  versionTo: number,
+): AuditRecord {
+  const at = `2026-05-02T09:${String(10 + id).padStart(2, "0")}:00Z`;
+  return {
+    id,
+    kind: "write",
+    firstAt: at,
+    lastAt: at,
+    count: 1,
+    service: "platform",
+    subject: alice.grn,
+    action,
+    resource: POLICY_GRN,
+    outcome,
+    policyIds: [POLICY_GRN],
+    versionFrom,
+    versionTo,
+  };
+}
+
+/** A guardrail's creation: its first version, under the create action. */
+export const guardrailCreated = recordedWrite(
+  1,
+  "created",
+  "iam:policy.create",
+  0,
+  1,
+);
+
+/** A version appended to a policy: the version, no default moved from. */
+export const versionAdded = recordedWrite(
+  2,
+  "version-added",
+  "iam:policy.update",
+  0,
+  2,
+);
+
+/** The default moved from version 2 back to version 1. */
+export const rolledBack = recordedWrite(
+  3,
+  "rolled-back",
+  "iam:policy.update",
+  2,
+  1,
+);
+
+/** A policy removed: the record names no version. */
+export const policyRemoved = recordedWrite(
+  4,
+  "removed",
+  "iam:policy.delete",
+  0,
+  0,
+);
+
+/** A member's refused delete, collapsed with its repeats. */
+export const collapsedDenial: AuditRecord = {
+  id: 5,
+  kind: "denial",
+  firstAt: "2026-05-02T09:00:00Z",
+  lastAt: "2026-05-02T09:10:00Z",
+  count: 3,
+  service: "platform",
+  subject: "grn:root/iam/user/bob",
+  action: "iam:project.delete",
+  resource: "grn:acme/iam/project/frontend",
+  outcome: "deny",
+  policyIds: [POLICY_GRN],
+  versionFrom: 0,
+  versionTo: 0,
+};
+
+/**
+ * The denials of a UTC day the cap stored no row for: it names no
+ * service, subject, action, resource or outcome (`policy.proto`).
+ */
+export const overflowedDay: AuditRecord = {
+  id: 6,
+  kind: "denial-overflow",
+  firstAt: "2026-05-01T00:00:00Z",
+  lastAt: "2026-05-01T23:00:00Z",
+  count: 40,
+  service: "",
+  subject: "",
+  action: "",
+  resource: "",
+  outcome: "",
+  policyIds: [],
+  versionFrom: 0,
+  versionTo: 0,
+  day: "2026-05-01T00:00:00Z",
+};
+
+/** The audit records Acme holds, newest first. */
+export const acmeAuditPage: AuditRecordPage = {
+  records: [
+    overflowedDay,
+    collapsedDenial,
+    policyRemoved,
+    rolledBack,
+    versionAdded,
+    guardrailCreated,
+  ],
+};
+
+/** A draft role link: Engineering is admin of the frontend project. */
+export const engineeringAdmins: IamPolicyDetail = {
+  policy: {
+    id: ENGINEERING_ADMINS_ID,
+    name: "Engineering admins",
+    kind: "role-link",
+    status: "draft",
+    defaultVersion: 1,
+  },
+  versions: [
+    {
+      version: 1,
+      body: {
+        kind: "role-link",
+        roleLink: {
+          role: "admin",
+          scope: "team-or-project",
+          principal: engineering.grn,
+          resource: frontend.grn,
+        },
       },
-    ],
-  },
-  createdBy: alice.grn,
-  createdAt: "2026-01-02T03:04:05Z",
-}));
+      createdBy: alice.grn,
+    },
+  ],
+};
 
-/** `denyDeletes`'s one attachment, to Engineering. */
-export const denyDeletesAttachments: PolicyAttachment[] = [
-  {
-    policyGrn: denyDeletes.grn,
-    subjectGrn: engineering.grn,
-    createdAt: "2026-01-02T03:04:05Z",
-  },
-];
+/** Every policy Acme holds, read through the list. */
+export const acmePolicies: IamPolicy[] = [denyDeletes, engineeringAdmins].map(
+  ({ policy }) => policy,
+);
 
-/** An active policy of Acme with no attachment: it reaches everyone. */
-export const baselineRead: Policy = {
-  grn: "grn:acme/iam/policy/0a1b2c3d4e5f6071",
-  orgGrn: acme.grn,
-  name: "Baseline read",
-  status: "active",
-  defaultVersion: 1,
-  createdAt: "2026-01-02T03:04:05Z",
-  updatedAt: "2026-01-02T03:04:05Z",
+/**
+ * A policy of the earlier engine, which the search still finds and the
+ * permissions pages no longer open.
+ */
+const earlierEnginePolicy = {
+  grn: "grn:acme/iam/policy/d1e2f3a4b5c6d7e8",
+  name: "Deny project deletion",
 };
 
 /**
@@ -311,31 +445,13 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
     body: [pendingApproval],
   },
   { path: "/orgs/acme/agent-supervisors", guarded: true, body: [buildHost] },
-  {
-    path: "/orgs/acme/policies",
+  { path: "/orgs/acme/iam-policies", guarded: true, body: acmePolicies },
+  { path: "/orgs/acme/audit-records", guarded: true, body: acmeAuditPage },
+  ...[denyDeletes, engineeringAdmins].map((detail) => ({
+    path: `/orgs/acme/iam-policies/${detail.policy.id}`,
     guarded: true,
-    body: [denyDeletes, baselineRead],
-  },
-  {
-    path: "/orgs/acme/policies/d1e2f3a4b5c6d7e8/versions",
-    guarded: true,
-    body: denyDeletesVersions,
-  },
-  {
-    path: "/orgs/acme/policies/d1e2f3a4b5c6d7e8/attachments",
-    guarded: true,
-    body: denyDeletesAttachments,
-  },
-  {
-    path: "/orgs/acme/policies/0a1b2c3d4e5f6071/versions",
-    guarded: true,
-    body: [{ ...denyDeletesVersions[0], policyGrn: baselineRead.grn }],
-  },
-  {
-    path: "/orgs/acme/policies/0a1b2c3d4e5f6071/attachments",
-    guarded: true,
-    body: [],
-  },
+    body: detail,
+  })),
 ];
 
 const PermissionCheckRequest = z.object({
@@ -348,8 +464,16 @@ const PermissionCheckRequest = z.object({
 });
 
 /**
+ * The action the platform answers only on the organization and refuses
+ * on a policy (permission_check.go), with the whole request. Every
+ * other policy write it answers on either.
+ */
+const ON_THE_ORGANIZATION_ONLY = ["iam:permit.write"];
+
+/**
  * Answers Acme's permission checks with `decide(action)` for each pair,
- * in the order asked, as the server does.
+ * in the order asked, as the server does, and refuses a request that
+ * pairs `iam:permit.write` with a resource, 400.
  */
 export function answerPermissionChecks(
   decide: (action: string) => "allow" | "deny" | "unknown",
@@ -358,6 +482,20 @@ export function answerPermissionChecks(
     `${API_URL}/orgs/acme/permission-checks`,
     async ({ request }) => {
       const { checks } = PermissionCheckRequest.parse(await request.json());
+      const misplaced = checks.find(
+        (check) =>
+          ON_THE_ORGANIZATION_ONLY.includes(check.action) &&
+          check.resource !== undefined,
+      );
+      if (misplaced) {
+        return HttpResponse.json(
+          {
+            kind: "invalid_argument",
+            message: `${misplaced.action} is not checked on a ${misplaced.resource?.type}`,
+          },
+          { status: 400 },
+        );
+      }
       return HttpResponse.json({
         results: checks.map((check) => ({
           ...check,
@@ -389,8 +527,15 @@ export function answerExplanations(
 /** Alice's owner role allows an action, as garam explains it. */
 export const ownerAllows: Omit<PermissionExplanation, "action" | "resource"> = {
   decision: "allow",
-  basis: "statements",
-  statements: [{ effect: "Allow", source: "org-role", roles: ["owner"] }],
+  basis: "policy-service",
+  grounds: [
+    {
+      kind: "role-link",
+      policy: "link-owner-0123456789abcdef0123456789abcdef",
+      role: "owner",
+      path: "organization",
+    },
+  ],
 };
 
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */
@@ -408,7 +553,7 @@ function searchFixtures(org: string, q: string, limit: number): OrgSearch {
     ],
     ["agent", [{ grn: reportedAgent.grn }]],
     ["team", [engineering]],
-    ["policy", [denyDeletes, baselineRead]],
+    ["policy", [earlierEnginePolicy]],
     ["project", [frontend]],
   ];
   const needle = q.trim().toLowerCase();
@@ -434,6 +579,61 @@ function searchFixtures(org: string, q: string, limit: number): OrgSearch {
   };
 }
 
+/** The identifier the mock issues to the policy a test creates. */
+export const CREATED_POLICY_ID = "p-c0ffee00c0ffee00c0ffee00c0ffee00";
+
+const PolicyWrite = z.object({
+  name: z.string().optional(),
+  body: z.object({
+    kind: z.enum(["guardrail", "permit", "role-link"]),
+    text: z.string().optional(),
+    roleLink: z
+      .object({
+        role: z.string(),
+        scope: z.enum(["organization", "team-or-project"]),
+        principal: z.string(),
+        resource: z.string(),
+      })
+      .optional(),
+  }),
+});
+
+function invalid(message: string) {
+  return HttpResponse.json(
+    { kind: "invalid_argument", message },
+    { status: 400 },
+  );
+}
+
+/**
+ * What the platform refuses of a body (ADR-0169), 400 with the reason:
+ * Cedar the service cannot parse, a role link its membership derives, a
+ * link whose principal is its resource, and a body missing its half.
+ */
+function refusedBody(body: z.infer<typeof PolicyWrite>["body"]) {
+  if (body.kind === "role-link") {
+    const link = body.roleLink;
+    if (link === undefined) return "a role link carries its roleLink";
+    if (
+      link.scope === "organization" &&
+      parseGrn(link.principal)?.serviceType === "user"
+    ) {
+      return "a user's organization role is its membership's and is not written here";
+    }
+    if (link.scope === "team-or-project" && link.principal === link.resource) {
+      return "a team's or project's own scoped link is derived from it and is not written here";
+    }
+    return null;
+  }
+  if (body.text === undefined || body.text.trim() === "") {
+    return "a guardrail or a permit carries its Cedar text";
+  }
+  if (!body.text.includes("(")) {
+    return "unexpected token at line 1: expected a policy";
+  }
+  return null;
+}
+
 export const handlers = [
   ...routes.map(({ path, body }) =>
     http.get(`${API_URL}${path}`, () => HttpResponse.json(body)),
@@ -448,6 +648,49 @@ export const handlers = [
       ),
     );
   }),
+  http.post(`${API_URL}/orgs/acme/iam-policies`, async ({ request }) => {
+    const { name, body } = PolicyWrite.parse(await request.json());
+    const refusal = refusedBody(body);
+    if (name === undefined || name.trim() === "")
+      return invalid("a policy is named");
+    if (refusal !== null) return invalid(refusal);
+    return HttpResponse.json(
+      {
+        id: CREATED_POLICY_ID,
+        name,
+        kind: body.kind,
+        status: "draft",
+        defaultVersion: 1,
+      } satisfies IamPolicy,
+      { status: 201 },
+    );
+  }),
+  http.post(
+    `${API_URL}/orgs/acme/iam-policies/:policy/versions`,
+    async ({ params, request }) => {
+      const detail = [denyDeletes, engineeringAdmins].find(
+        ({ policy }) => policy.id === params.policy,
+      );
+      if (detail === undefined) {
+        return HttpResponse.json(
+          { kind: "not_found", message: "no such policy" },
+          { status: 404 },
+        );
+      }
+      const { body } = PolicyWrite.parse(await request.json());
+      if (body.kind !== detail.policy.kind) {
+        return invalid(
+          `a ${detail.policy.kind} takes a ${detail.policy.kind} body`,
+        );
+      }
+      const refusal = refusedBody(body);
+      if (refusal !== null) return invalid(refusal);
+      return HttpResponse.json(
+        { version: detail.versions.length + 1 },
+        { status: 201 },
+      );
+    },
+  ),
   // An owner may take every action, by the owner role.
   answerPermissionChecks(() => "allow"),
   answerExplanations(() => ownerAllows),

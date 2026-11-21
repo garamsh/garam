@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"slices"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -88,9 +87,7 @@ func (s *Server) ListGroups(w http.ResponseWriter, r *http.Request, orgSlug apig
 		writeError(w, err)
 		return
 	}
-	groups, err = visible(s, r, c, org.ActionGroupRead, groups, func(gr *org.Group) BatchObject {
-		return BatchObject{Object: gr.GRN, Statements: groupRoleStatements(gr, slices.Contains(c.groups, gr.GRN))}
-	})
+	groups, err = visible(s, r, c, org.ActionGroupRead, groups, func(gr *org.Group) grn.GRN { return gr.GRN })
 	if err != nil {
 		writeError(w, err)
 		return

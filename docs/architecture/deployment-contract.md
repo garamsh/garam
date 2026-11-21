@@ -101,18 +101,18 @@ Dependencies each process reports (`platform/internal/cli/serve.go`,
 
 | Process | Readiness dependencies |
 |---|---|
-| `serve api` | the database, and the channel to the engine |
-| `serve authz` | the database alone |
-| `serve machine` | the database, and the channel to the engine |
+| `serve api` | the database alone |
+| `serve machine` | the database alone |
 | `policy serve` | the database alone, on a plaintext port of its own (`policy/crates/server/src/probes.rs`) |
 | web | none — it reads nothing, so an API outage takes no replica out of rotation ([ADR-0023](./adr/0023-web-probes.md)) |
 
-The chart deploys the policy service beside `serve authz`, with its own
-database and its own migration (§The migrate job). Decided, not built:
-[ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) removes
-`serve authz`, makes the policy service a required part of every
-deployment and its address required, and has a listener that cannot
-have a request decided refuse it.
+The chart deploys the policy service with its own database and its own
+migration (§The migrate job), and no `serve authz`: neither the chart,
+the local compose files nor the minikube manifests run that process,
+and no listener dials it
+([ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)).
+The command itself is removed
+([ADR-0177](./adr/0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)).
 
 The semantics, fixed in `platform/internal/health/health.go`:
 
@@ -137,7 +137,7 @@ Two sentences a consumer must plan against:
   ([ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)).
 
 garam takes one position on probe tolerance and no other. The chart
-sets `timeoutSeconds: 3` on the readiness probe of `api`, `authz`,
+sets `timeoutSeconds: 3` on the readiness probe of `api`,
 `machine` and `policy`, because a readiness answer is bounded at two
 seconds (inside `policy serve` too, `probes.rs`) and a
 probe timing out at the platform's one-second default would report its
@@ -698,11 +698,11 @@ below ten seconds truncates in-flight work, and nothing the process does
 at shutdown outlasts it.
 
 A request carries a bound of its own, thirty seconds to arrive, on two
-of the four HTTP listeners garam starts: the browser-facing one and the
-machine one (`requestReadTimeout` in `platform/internal/cli/cli.go`, and
-on the machine listener it covers the handshake read too). The other two
-carry no such bound — the machine process's probe and metrics port and
-the authz process's — and each of those is reachable on a Service the
+of the three HTTP listeners the chart's Go workloads start: the
+browser-facing one and the machine one (`requestReadTimeout` in
+`platform/internal/cli/cli.go`, and on the machine listener it covers
+the handshake read too). The third carries no such bound — the machine
+process's probe and metrics port — and it is reachable on a Service the
 chart renders. It bounds reading rather than a handler — a watch stream
 and a message claim both outlive it by design — so what it disconnects
 is a client that has stopped sending, which would otherwise hold a
@@ -758,8 +758,8 @@ that would assert one:
   process runs, so the three serve processes need no writable path. What
   the web runtime writes, if anything, is unverified — so the
   `securityContext` field is the deployment's to set either way.
-- **Replica safety above one.** Not established for `serve api`,
-  `serve authz`, or `serve machine`. No leader election exists anywhere
+- **Replica safety above one.** Not established for `serve api` or
+  `serve machine`. No leader election exists anywhere
   in the source; whether that makes a second replica safe or unsafe is
   not answered here. This is why the chart fixes every Deployment at one
   replica and offers no value for it. (`migrate` is answered above.)

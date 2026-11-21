@@ -1,8 +1,8 @@
 {{/*
 The base name every object takes, and the labels every object carries.
 Kept here because a workload's Service name is what another workload
-dials: `serve api` and `serve machine` reach the engine at the authz
-Service, so the name has one definition rather than four.
+dials: `serve api` and `serve machine` reach the policy service at its
+Service, so the name has one definition rather than several.
 */}}
 
 {{- define "garam.fullname" -}}
@@ -118,6 +118,47 @@ so an unset value leaves no blank line behind.
 {{- end }}
             - name: GARAM_MACHINE_TOKEN_URL
               value: {{ . | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
+garam's OIDC issuer (ADR-0141), read by `serve api` and `serve machine`
+from one value, so the two cannot disagree. Unset renders nothing and
+the issuer stays off.
+
+Set, it is held to what `identityIssuer` in platform/internal/cli
+refuses at start, in the order it refuses: a value that differs from
+the policy token issuer, no signing key file, a spelling other than
+`ParseIssuer`'s one, and a value equal to the machine issuer. The
+caller passes the signing key file it renders and the value that names
+it, since the two workloads take theirs from different values.
+
+`ParseIssuer` accepts only a string equal to `https://<host>/api` for
+the host it parses, so that comparison covers user information, query,
+fragment and a trailing slash; the other terms name the cases it lists.
+
+Indented for a container's env list, the one depth both callers use,
+so an unset value leaves no blank line behind.
+*/}}
+{{- define "garam.identityIssuerEnv" -}}
+{{- $issuer := .root.Values.identity.issuer }}
+{{- if $issuer }}
+{{- $feed := .root.Values.api.policy.tokenIssuer }}
+{{- if and $feed (ne $feed $issuer) }}
+{{- fail (printf "identity.issuer %q and api.policy.tokenIssuer %q are both set and differ: the policy service trusts one issuer, so set both to one value (deployment-contract.md §The identity issuer is off until it is named)" $issuer $feed) }}
+{{- end }}
+{{- if not .keyFile }}
+{{- fail (printf "identity.issuer is set and %s is not, so the issuer is off: the issuer signs with the policy signing key, and serve api and serve machine serve it only with both (deployment-contract.md §The identity issuer is off until it is named)" .keyFileValue) }}
+{{- end }}
+{{- $u := urlParse $issuer }}
+{{- if or (ne $u.scheme "https") (not $u.host) (ne $u.host (lower $u.host)) (hasSuffix ":" $u.host) (ne $u.path "/api") (ne $issuer (printf "https://%s/api" $u.host)) }}
+{{- fail (printf "identity.issuer %q is refused: it must be https, a lowercase host with no empty port, the path /api and no trailing slash, the one spelling serve api and serve machine accept at startup (ADR-0141)" $issuer) }}
+{{- end }}
+{{- if eq $issuer .root.Values.machine.issuer }}
+{{- fail (printf "identity.issuer %q is machine.issuer: a token of one must never verify as the other, so serve refuses to start where the two are equal (ADR-0141)" $issuer) }}
+{{- end }}
+            - name: GARAM_IDENTITY_ISSUER
+              value: {{ $issuer | quote }}
 {{- end }}
 {{- end -}}
 

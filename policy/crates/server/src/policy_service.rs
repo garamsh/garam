@@ -105,7 +105,7 @@ impl<P, E> Service<P, E> {
     }
 }
 
-impl<P: PolicySource, E: EntitySource> Service<P, E> {
+impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
     /// Answers one question: what both transports' single evaluation
     /// reaches.
     pub(crate) async fn evaluate_one(
@@ -121,6 +121,7 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
                 resource: request.resource.as_ref(),
                 context: request.context.as_ref(),
                 probe: request.probe,
+                without_permits: request.without_permits,
             },
         )
         .await
@@ -135,10 +136,19 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
         if !principal.asks(evaluation.action, &evaluation.resource) {
             return Err(ServiceError::OutOfScope("a question"));
         }
-        let decision = self
-            .engine
-            .evaluate(&self.policies, &self.entities, &evaluation)
-            .await?;
+        let decision = if question.without_permits {
+            grant::evaluate_without_permits(
+                &self.engine,
+                &self.policies,
+                &self.entities,
+                &evaluation,
+            )
+            .await?
+        } else {
+            self.engine
+                .evaluate(&self.policies, &self.entities, &evaluation)
+                .await?
+        };
         if decision.outcome == Outcome::Deny && !question.probe {
             self.note_denial(principal, &evaluation, &decision);
         }
@@ -408,6 +418,9 @@ struct Question<'a> {
     /// Whether the caller states it is deciding what to show, so a
     /// denial is not recorded (ADR-0148 item 2).
     probe: bool,
+    /// Whether the caller asks as a write decides, leaving the
+    /// organization's `permit`s out (ADR-0175).
+    without_permits: bool,
 }
 
 impl<'a> Question<'a> {
@@ -418,6 +431,7 @@ impl<'a> Question<'a> {
             resource: request.resource.as_ref(),
             context: request.context.as_ref(),
             probe: request.probe,
+            without_permits: request.without_permits,
         }
     }
 
@@ -428,6 +442,7 @@ impl<'a> Question<'a> {
             resource: entry.resource.as_ref().or(request.resource.as_ref()),
             context: entry.context.as_ref().or(request.context.as_ref()),
             probe: entry.probe.unwrap_or(request.probe),
+            without_permits: entry.without_permits.unwrap_or(request.without_permits),
         }
     }
 

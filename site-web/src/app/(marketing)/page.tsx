@@ -10,7 +10,7 @@ import { SectionHeading } from "./_components/section-heading";
 /**
  * Every claim on this page has to exist in the product: organizations
  * and invitations, groups and projects, versioned policy documents
- * attached to identities, and GRNs. It names no sign-in provider: which
+ * kept per organization, and GRNs. It names no sign-in provider: which
  * ones a deployment offers is the backend's answer at runtime, and this
  * page is the same for every deployment.
  */
@@ -27,8 +27,8 @@ const CAPABILITIES = [
   },
   {
     icon: FileStack,
-    title: "Policies attached to identities",
-    body: "IAM-style documents, stored per organization and versioned append-only. Attaching one to a user, a group, or an agent decides who it reaches, and a matching Deny anywhere in the set ends the decision.",
+    title: "Policies per organization",
+    body: "IAM-style documents, stored per organization and versioned append-only. A role link grants, a guardrail forbids, and a matching forbid anywhere in the set ends the decision.",
   },
   {
     icon: Fingerprint,

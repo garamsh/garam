@@ -62,8 +62,7 @@ var (
 
 // ActionSend is the action a policy names to decide what one identity
 // may send to another. The constant is declared here because this
-// package defines sending; the engine matches the string only
-// (authz.md §Policy document).
+// package defines sending; the policy service matches the string only.
 const ActionSend = "iam:message.send"
 
 const (

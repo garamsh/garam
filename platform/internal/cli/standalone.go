@@ -5,39 +5,30 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
-	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
-	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
 // NewStandaloneService composes how an administrator approves,
 // withdraws and revokes a standalone host (ADR-0082) over the database
-// and the policy engine, which decides the administrator's authority
+// and the policy service, which decides the administrator's authority
 // from current state. The browser-facing listener serves it, and it
 // signs nothing.
-func NewStandaloneService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) agent.StandaloneService {
-	return agent.NewStandaloneService(agentpg.New(pool), memberAuthorization(pool, engine), nil)
+func NewStandaloneService(pool *pgxpool.Pool, decisions policydecision.Service) agent.StandaloneService {
+	return agent.NewStandaloneService(agentpg.New(pool), currentDecision{decisions: decisions}, nil)
 }
 
 // newSupervisorService composes how a standalone host's supervisor
 // enrolls and exchanges its credential over the database and the policy
-// engine, which decides the approving administrator's authority again;
+// service, which decides the approving administrator's authority again;
 // serverRoot is answered beside the credential.
-func newSupervisorService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, serverRoot []byte, now func() time.Time) agent.SupervisorService {
+func newSupervisorService(pool *pgxpool.Pool, decisions policydecision.Service, serverRoot []byte, now func() time.Time) agent.SupervisorService {
 	store := agentpg.New(pool)
-	return agent.NewSupervisorService(store, store, memberAuthorization(pool, engine), serverRoot, now)
-}
-
-// memberAuthorization is a user's authority decided from current
-// state, as delegated operation authority decides it.
-func memberAuthorization(pool *pgxpool.Pool, engine grpc.ClientConnInterface) currentAuthorization {
-	return currentAuthorization{orgs: orgpg.New(pool),
-		engine: authzv1.NewAuthzServiceClient(engine)}
+	return agent.NewSupervisorService(store, store, currentDecision{decisions: decisions}, serverRoot, now)
 }
 
 // identityRegistrations reads whether an organization still holds the

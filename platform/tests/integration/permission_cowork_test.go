@@ -10,7 +10,6 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/org"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // coworkPage is a pair asking action on the cowork page id.
@@ -54,19 +53,18 @@ func TestCheckPermissions_RefusesANonMemberCoworkPages(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, outsiderStatus, got)
 }
 
-// TestCheckPermissions_NarrowsACoworkPageByPolicy holds that a policy
-// decides a cowork page like any other resource: a Deny on one page,
-// attached to the member, turns that page's write to deny and leaves
+// TestCheckPermissions_NarrowsACoworkPageByTheServicesForbid holds
+// that the policy service decides a cowork page like any other
+// resource: its forbid of one page
+// to the member turns that page's write to deny and leaves
 // another page, the control, allowed.
-func TestCheckPermissions_NarrowsACoworkPageByPolicy(t *testing.T) {
+func TestCheckPermissions_NarrowsACoworkPageByTheServicesForbid(t *testing.T) {
 	s := newCheckStack(t)
 	locked := grn.New(s.acme.Identifier, org.ServiceTypeCoworkPage, "locked")
 	require.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow},
 		checkedDecisions(t, s.url, s.member, coworkPage(org.ActionCoworkPageWrite, "locked")))
 
-	deny := activePolicy(t, s.policies, s.acme, "lock-page",
-		statementDoc("lock-page", wire.EffectDeny, org.ActionCoworkPageWrite, locked.String()))
-	attachPolicy(t, s.policies, deny, s.memberGRN)
+	s.decisions.forbidOn(s.memberGRN, org.ActionCoworkPageWrite, locked)
 
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionAllow},
 		checkedDecisions(t, s.url, s.member,
@@ -83,8 +81,8 @@ func coworkChannel(action, id string) apigen.PermissionCheck {
 
 // TestCheckPermissions_AllowsAMemberCoworkChannels holds the default
 // for messaging over the real engine (ADR-0128): a member reads and
-// posts in the organization's channels by role alone, and a Deny on
-// one channel, attached to the member, turns that channel's post to
+// posts in the organization's channels by role alone, and the service's
+// forbid of one channel to the member turns that channel's post to
 // deny while another channel, the control, stays allowed.
 func TestCheckPermissions_AllowsAMemberCoworkChannels(t *testing.T) {
 	s := newCheckStack(t)
@@ -97,9 +95,7 @@ func TestCheckPermissions_AllowsAMemberCoworkChannels(t *testing.T) {
 		))
 
 	locked := grn.New(s.acme.Identifier, org.ServiceTypeCoworkChannel, "announcements")
-	deny := activePolicy(t, s.policies, s.acme, "read-only-announcements",
-		statementDoc("read-only-announcements", wire.EffectDeny, org.ActionCoworkChannelPost, locked.String()))
-	attachPolicy(t, s.policies, deny, s.memberGRN)
+	s.decisions.forbidOn(s.memberGRN, org.ActionCoworkChannelPost, locked)
 
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionAllow, apigen.DecisionAllow},
 		checkedDecisions(t, s.url, s.member,
@@ -117,9 +113,9 @@ func coworkTask(action, id string) apigen.PermissionCheck {
 
 // TestCheckPermissions_AllowsAMemberCoworkTasks holds the default for
 // tasks over the real engine (ADR-0127): a member reads and writes the
-// organization's tasks by role alone, and a Deny on one task, attached
-// to the member, turns that task's write to deny while another task,
-// the control, stays allowed.
+// organization's tasks by role alone, and the service's forbid of one
+// task to the member turns that task's write to deny while another
+// task, the control, stays allowed.
 func TestCheckPermissions_AllowsAMemberCoworkTasks(t *testing.T) {
 	s := newCheckStack(t)
 	require.Equal(t,
@@ -131,9 +127,7 @@ func TestCheckPermissions_AllowsAMemberCoworkTasks(t *testing.T) {
 		))
 
 	locked := grn.New(s.acme.Identifier, org.ServiceTypeCoworkTask, "audit")
-	deny := activePolicy(t, s.policies, s.acme, "read-only-audit",
-		statementDoc("read-only-audit", wire.EffectDeny, org.ActionCoworkTaskWrite, locked.String()))
-	attachPolicy(t, s.policies, deny, s.memberGRN)
+	s.decisions.forbidOn(s.memberGRN, org.ActionCoworkTaskWrite, locked)
 
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionAllow, apigen.DecisionAllow},
 		checkedDecisions(t, s.url, s.member,
@@ -145,8 +139,8 @@ func TestCheckPermissions_AllowsAMemberCoworkTasks(t *testing.T) {
 
 // TestCheckPermissions_AllowsAMemberCoworkArtifacts holds the default
 // for artifacts over the real engine (ADR-0127): a member reads and
-// writes them by role alone, and a Deny on one artifact turns its
-// write to deny while another, the control, stays allowed.
+// writes them by role alone, and the service's forbid of one artifact
+// turns its write to deny while another, the control, stays allowed.
 func TestCheckPermissions_AllowsAMemberCoworkArtifacts(t *testing.T) {
 	s := newCheckStack(t)
 	artifact := func(action, id string) apigen.PermissionCheck {
@@ -154,9 +148,7 @@ func TestCheckPermissions_AllowsAMemberCoworkArtifacts(t *testing.T) {
 			Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkArtifact, Id: id}}
 	}
 	locked := grn.New(s.acme.Identifier, org.ServiceTypeCoworkArtifact, "brand")
-	deny := activePolicy(t, s.policies, s.acme, "read-only-brand",
-		statementDoc("read-only-brand", wire.EffectDeny, org.ActionCoworkArtifactWrite, locked.String()))
-	attachPolicy(t, s.policies, deny, s.memberGRN)
+	s.decisions.forbidOn(s.memberGRN, org.ActionCoworkArtifactWrite, locked)
 
 	assert.Equal(t,
 		[]apigen.PermissionDecision{apigen.DecisionAllow, apigen.DecisionDeny, apigen.DecisionAllow, apigen.DecisionAllow},

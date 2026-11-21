@@ -4,7 +4,10 @@
 > [ADR-0017](./0017-machine-process.md), and the binary's path by
 > [ADR-0125](./0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md),
 > and the engine's binary by
-> [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
+> [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md);
+> `garam serve authz` and the gRPC contract between the processes are
+> removed by
+> [ADR-0177](./0177-the-earlier-policy-engine-its-serve-command-its-protobuf-module-and-its-tables-are-removed.md)
 > Date: 2026-07-25
 
 ## Context

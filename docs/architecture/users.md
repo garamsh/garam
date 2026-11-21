@@ -5,8 +5,8 @@ PostgreSQL store is `platform/internal/user/postgres`.
 
 **The `Policies` field is built in part.** A user's directly assigned
 policies are stored and carried on the aggregate, and nothing collects
-them into a decision: a policy reaches a subject through an attachment
-the authz engine owns (ADR-0008), not through this list.
+them into a decision: a policy reaches a subject as the policy service
+holds it, not through this list.
 
 `User`'s fields are exported and it has no accessors: every one of them
 is a value the store writes and reads back, and the aggregate holds no

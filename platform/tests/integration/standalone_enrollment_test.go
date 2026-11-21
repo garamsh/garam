@@ -176,8 +176,7 @@ func (s *executionStack) standaloneOf(t *testing.T) (standaloneHost, standaloneA
 // its supervisor, with no operator record, grant or managed creation.
 func TestStandalone_AnApprovedHostEnrollsWithoutAnOperator(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h := newStandaloneHost(t)
 	operatorsBefore := countRows(t, s.pool, `SELECT count(*) FROM operators`)
 
@@ -244,8 +243,7 @@ func TestStandalone_AnApprovedHostEnrollsWithoutAnOperator(t *testing.T) {
 // supervisor over another agent or for a recovery.
 func TestStandalone_TheSupervisorActivatesItsOwnAgentAndNothingElse(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	legacy := s.agent
 	_, e := s.standaloneOf(t)
 
@@ -303,8 +301,7 @@ func TestStandalone_TheSupervisorActivatesItsOwnAgentAndNothingElse(t *testing.T
 // withdrawal, and the approving administrator losing iam:agent.enroll.
 func TestStandalone_BootstrapRefusals(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	ctx := context.Background()
 
 	expired := newStandaloneHost(t)
@@ -354,8 +351,7 @@ func TestStandalone_BootstrapRefusals(t *testing.T) {
 // newer one, and the first enrollment no longer replays.
 func TestStandalone_ReplacementFencesTheFormerHolderAndLineage(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	h, e := s.standaloneOf(t)
 	got := s.activate(t, e.supervisorTLS, "r-1", generationOf(1), nil, e.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
@@ -407,8 +403,7 @@ func TestStandalone_ReplacementFencesTheFormerHolderAndLineage(t *testing.T) {
 // connections already open.
 func TestStandalone_RevocationEndsTheSupervisorAndItsActivation(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	_, e := s.standaloneOf(t)
 	got := s.activate(t, e.supervisorTLS, "v-1", generationOf(1), nil, e.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
@@ -471,8 +466,7 @@ func (s *executionStack) browsing(method, path string, cookie *http.Cookie) func
 // refused rather than committing from what it read before.
 func TestStandalone_AWithdrawalAndASpendingNeverBothTakeEffect(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	anonymous := anonymousMachineClient(t)
 	lock := `SELECT 1 FROM agent_enrollments WHERE id = $1 FOR UPDATE`
 
@@ -502,8 +496,7 @@ func TestStandalone_AWithdrawalAndASpendingNeverBothTakeEffect(t *testing.T) {
 // current.
 func TestStandalone_ARevocationAndAReplacementLeaveOneOutcome(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	anonymous := anonymousMachineClient(t)
 
 	for _, revokeFirst := range []bool{true, false} {
@@ -535,8 +528,7 @@ func TestStandalone_ARevocationAndAReplacementLeaveOneOutcome(t *testing.T) {
 // it. Either way no token admits anything afterwards.
 func TestStandalone_ARevocationLeavesNoActivationInEitherOrder(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	current := `SELECT count(*) FROM agent_executions WHERE agent_grn = $1 AND activation_id IS NOT NULL`
 
 	for _, revokeFirst := range []bool{true, false} {
@@ -576,8 +568,7 @@ func TestStandalone_ARevocationLeavesNoActivationInEitherOrder(t *testing.T) {
 // then spent is the control on.
 func TestStandalone_IdenticalFirstSpendingsCreateOneAgent(t *testing.T) {
 	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	anonymous := anonymousMachineClient(t)
 	lock := `SELECT 1 FROM agent_enrollments WHERE id = $1 FOR UPDATE`
 

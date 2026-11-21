@@ -12,7 +12,6 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/user"
-	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // enrollOn is the iam:agent.enroll pair on the organization, or on
@@ -31,15 +30,13 @@ func enrollOn(agent *grn.GRN) apigen.PermissionCheck {
 // on the organization and on an agent, and both approvals succeed; the
 // member, whose role holds no iam:agent.enroll, is answered deny and
 // refused, which is the control that the check is not answering allow
-// to everyone. A Deny on one agent then turns the owner's answer on
-// that agent to deny while the organization stays allow, and the
-// replacement it describes is refused while a new host is approved.
-// iam:agent.create, which a delegation grant also decides, is still
-// answered unknown.
+// to everyone. The policy service then denying the owner the action
+// turns both answers to deny, and the replacement and a new host are
+// each refused. iam:agent.create, which a delegation grant also
+// decides, is still answered unknown.
 func TestCheckPermissions_AnswersAgentEnrollAsAnApprovalDecides(t *testing.T) {
 	p := pool(t)
-	policies, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
+	s := newExecutionStack(t, p)
 	_, held := s.standaloneOf(t)
 	replace := map[string]any{"agentGrn": held.agent.String(), "assigneeGrn": held.supervisor.String(), "epoch": held.epoch}
 	approveAs := func(cookie *http.Cookie, replaces map[string]any) int {
@@ -55,14 +52,12 @@ func TestCheckPermissions_AnswersAgentEnrollAsAnApprovalDecides(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, approveAs(s.owner, nil), "the approval the check allowed")
 
 	ada := grn.New(grn.RootOwner, user.ServiceType, "ada")
-	deny := activePolicy(t, policies, s.acme, "no-enroll-held",
-		statementDoc("no-enroll-held", wire.EffectDeny, org.ActionAgentEnroll, held.agent.String()))
-	attachPolicy(t, policies, deny, ada)
+	s.decisions.forbid(ada, org.ActionAgentEnroll)
 
-	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow, apigen.DecisionDeny},
-		checkedDecisions(t, s.browser, s.owner, enrollOn(nil), enrollOn(&held.agent)), "the Deny reaches the agent alone")
-	assert.Equal(t, http.StatusForbidden, approveAs(s.owner, replace), "the replacement of the denied agent is refused")
-	assert.Equal(t, http.StatusCreated, approveAs(s.owner, nil), "a new host is still approved")
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionDeny},
+		checkedDecisions(t, s.browser, s.owner, enrollOn(nil), enrollOn(&held.agent)), "the service's denial reaches the owner")
+	assert.Equal(t, http.StatusForbidden, approveAs(s.owner, replace), "the replacement is refused")
+	assert.Equal(t, http.StatusForbidden, approveAs(s.owner, nil), "a new host is refused")
 
 	require.Equal(t, []apigen.PermissionDecision{apigen.DecisionUnknown},
 		checkedDecisions(t, s.browser, s.owner, apigen.PermissionCheck{Action: org.ActionAgentCreate}),

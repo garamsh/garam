@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"crypto/x509"
 	"log/slog"
 	"net/http"
@@ -12,10 +11,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/lib/errorx"
-	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
@@ -34,7 +31,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/message/transit"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
-	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	policyfeedpg "github.com/garamsh/garam/platform/internal/policyfeed/postgres"
@@ -47,10 +43,8 @@ import (
 // a token (ADR-0100, ADR-0118). It terminates TLS itself and takes
 // neither the browser API's proxy nor its cookie, and it runs as a
 // process of its own so the browser-facing one never holds the key
-// the message signing keys are sealed under (ADR-0017). Like the
-// browser-facing one it reaches the policy engine over gRPC, which is
-// what decides the rest, while the policy service decides the messages
-// it accepts.
+// the message signing keys are sealed under (ADR-0017). The policy
+// service decides what it accepts (ADR-0146).
 func newServeMachineCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "machine",
@@ -122,14 +116,6 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	defer closeDecisions()
 
-	// What else this surface decides is the policy engine's, which runs
-	// as a process of its own and is reached over gRPC (ADR-0003).
-	conn, err := dialAuthz()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
 	srv, err := NewMachineServer(pool, MachineConfig{
 		Sealer:           keys.sealer,
 		SigningCustodian: signingCustodian,
@@ -144,7 +130,6 @@ func serveMachine(cmd *cobra.Command) error {
 		TokenURL:           tokenURL,
 		Identity:           idIssuer,
 		ServiceKeys:        idKeys,
-		Engine:             conn,
 		Decisions:          decisions,
 		Feed:               policyfeed.NewObservingGate(policyfeedpg.NewStore(pool), policyfeed.Bound),
 		Logger:             obs.logger,
@@ -159,10 +144,9 @@ func serveMachine(cmd *cobra.Command) error {
 	// listener, and losing this one must not take that one down.
 	healthAddr := envOr(envMachineHealthAddr, ":8444")
 	go func() {
-		// The tokens and the agents this surface answers for are rows;
-		// the decision admitting a message comes from the engine.
+		// The tokens and the agents this surface answers for are rows.
 		if err := http.ListenAndServe(healthAddr,
-			obs.machineProbeHandler(health.Database(pool), authzChannel{conn: conn})); err != nil {
+			obs.machineProbeHandler(health.Database(pool))); err != nil {
 			obs.logger.Error("health listener stopped", slog.String("error", err.Error()))
 		}
 	}()
@@ -196,12 +180,11 @@ type MachineConfig struct {
 	ServerRoot []byte
 	// Delivery governs the message queue (ADR-0018).
 	Delivery message.Config
-	// Engine is the policy engine, which decides, from current state,
-	// the operations a hosted operator reads back (ADR-0078).
-	Engine grpc.ClientConnInterface
 	// Decisions is the policy service, which decides every message
-	// the listener accepts, consent included (ADR-0168). Nil answers
-	// each send as unavailable.
+	// the listener accepts, consent included (ADR-0168), and, read
+	// current, the operations a hosted operator reads back and the
+	// authority a user delegates (ADR-0146). Nil answers each as
+	// unavailable.
 	Decisions policydecision.Service
 	// Logger takes one line per served request and every recovered
 	// panic.
@@ -328,12 +311,12 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// reaches the spec
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
-	authority := NewAuthorityService(pool, cfg.Engine)
+	authority := NewAuthorityService(pool, cfg.Decisions)
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, watches,
-			authority, recheck, newProofService(pool, cfg.Engine, cfg.Now),
-			newExecutionService(pool, cfg.Engine, authority, cfg.Now),
-			newSupervisorService(pool, cfg.Engine, cfg.ServerRoot, cfg.Now),
+			authority, recheck, newProofService(pool, cfg.Decisions, cfg.Now),
+			newExecutionService(pool, cfg.Decisions, authority, cfg.Now),
+			newSupervisorService(pool, cfg.Decisions, cfg.ServerRoot, cfg.Now),
 			newAdmissionService(pool, authority, cfg.Now), keyring).
 			WithCredentialAudit(auditpg.NewCredentialStore(pool)).
 			WithSendPolicy(cfg.Decisions, agentStore).
@@ -373,8 +356,8 @@ func (o *observability) machineServer(tokens machine.Tokens, evidence *machine.E
 // machineProbeHandler is what `serve machine` answers on the port
 // beside its TLS one, because the listener above answers a probe on no
 // route: what it serves is the machine specification's operations. It
-// carries /metrics beside the probes, as `serve authz`'s does: the
-// count of requests by how they authenticated (ADR-0100). recoverPanics
+// carries /metrics beside the probes: the count of requests by how
+// they authenticated (ADR-0100). recoverPanics
 // is outermost, as on every listener a serve command runs.
 func (o *observability) machineProbeHandler(deps ...health.Dependency) http.Handler {
 	mux := http.NewServeMux()
@@ -476,17 +459,6 @@ func transitCustodian() (message.Custodian, error) {
 		return nil, errorx.Wrap(err, "GARAM_TRANSIT_*")
 	}
 	return custodian, nil
-}
-
-// memberGroups reads the groups an identity belongs to, which decide
-// whether a policy attached to a group reaches what a hosted operator
-// may do (audienceAuthorization). Organizations are root-owned, so the
-// organization segment of the identity's own GRN names the one whose
-// groups can hold it (ADR-0001, ADR-0014).
-type memberGroups struct{ store org.Store }
-
-func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, error) {
-	return m.store.ListGroupsByMember(ctx, grn.Org(subject.Organization), subject)
 }
 
 // tokenBackdate is how far garam backdates an agent token's issue

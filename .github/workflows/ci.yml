@@ -27,13 +27,15 @@ on:
 permissions: read-all
 
 # A push that supersedes a head cancels the run reading the old one.
-# `pull_request` is the only trigger, so `github.ref` is the pull
-# request's merge ref: one value per pull request, unchanged by a push
-# to it. `github.workflow` keeps this group apart from images.yml's, a
-# group being scoped to the repository.
+# `pull_request` is the only trigger, so the group is the pull request's
+# number: one value per pull request, unchanged by a push to it. The
+# `github.ref` fallback and the event-name condition keep a push run,
+# should one be added on the default or a `goal/**` branch, from being
+# cancelled. `github.workflow` keeps this group apart from images.yml's,
+# a group being scoped to the repository.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Which modules this change can affect, by the entry point a

@@ -92,12 +92,6 @@ DELETE FROM group_members WHERE group_grn = $1 AND member_grn = $2;
 -- name: ListGroupMembers :many
 SELECT member_grn FROM group_members WHERE group_grn = $1 ORDER BY member_grn;
 
--- name: ListGroupsByMember :many
-SELECT g.grn FROM groups g
-JOIN group_members m ON m.group_grn = g.grn
-WHERE g.org_grn = sqlc.arg('org_grn') AND m.member_grn = sqlc.arg('member_grn')
-ORDER BY g.grn;
-
 -- ListMemberGroups pages the org's Groups the member belongs to, in
 -- the order ListGroups pages them all.
 -- name: ListMemberGroups :many

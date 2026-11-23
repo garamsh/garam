@@ -458,33 +458,19 @@ func (s *fakeOrgStore) DeleteGroup(ctx context.Context, g grn.GRN) error {
 	return nil
 }
 
-func (s *fakeOrgStore) ListGroupsByMember(_ context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error) {
+// ListMemberGroups ignores paging, as ListGroups here does.
+func (s *fakeOrgStore) ListMemberGroups(_ context.Context, orgGRN, memberGRN grn.GRN, _ listfilter.Filter) ([]*org.Group, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := []grn.GRN{}
+	out := []*org.Group{}
 	for key, members := range s.groupMembers {
 		gr, ok := s.groups[key]
 		if !ok || gr.Organization != orgGRN || !slices.Contains(members, memberGRN) {
 			continue
 		}
-		out = append(out, gr.GRN)
+		out = append(out, gr)
 	}
-	slices.SortFunc(out, func(a, b grn.GRN) int { return strings.Compare(a.String(), b.String()) })
-	return out, nil
-}
-
-// ListMemberGroups ignores paging, as ListGroups here does.
-func (s *fakeOrgStore) ListMemberGroups(ctx context.Context, orgGRN, memberGRN grn.GRN, _ listfilter.Filter) ([]*org.Group, error) {
-	grns, err := s.ListGroupsByMember(ctx, orgGRN, memberGRN)
-	if err != nil {
-		return nil, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]*org.Group, 0, len(grns))
-	for _, g := range grns {
-		out = append(out, s.groups[g.String()])
-	}
+	slices.SortFunc(out, func(a, b *org.Group) int { return strings.Compare(a.GRN.String(), b.GRN.String()) })
 	return out, nil
 }
 

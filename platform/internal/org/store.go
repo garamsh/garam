@@ -60,9 +60,6 @@ type Store interface {
 	// names no membership, which a Group that does not exist does too.
 	RemoveGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
 	ListGroupMembers(ctx context.Context, groupGRN grn.GRN) ([]grn.GRN, error)
-	// ListGroupsByMember returns the org's Groups the member belongs
-	// to; a check reads it to resolve group-attached policies.
-	ListGroupsByMember(ctx context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error)
 	// ListMemberGroups pages the org's Groups the member belongs to,
 	// ordered by GRN as ListGroups orders them.
 	ListMemberGroups(ctx context.Context, orgGRN, memberGRN grn.GRN, f listfilter.Filter) ([]*Group, error)

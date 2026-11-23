@@ -678,11 +678,14 @@ covered and fails when a count is zero:
 - `chart-guards` — each value file under `ci/refused/` rendered on top
   of `minimal-values.yaml`, and refused by the guard it is named after:
   the failure must be an `execution error` from a template, opening with
-  the value the file is named for. A refusal for any other reason — a
-  values file helm cannot parse, a template that stopped somewhere else
-  — is not that guard firing. `minimal-values.yaml` must still render,
-  so a chart that refused everything fails here instead of passing every
-  case above.
+  the value the file is named for. A value refused for several reasons
+  has a file per reason, `<value>--<case>.yaml`, each with a line
+  `# expects: <fragment>` that the message must also contain, so two
+  refusals of one value are told apart. A refusal for any other reason —
+  a values file helm cannot parse, a template that stopped somewhere
+  else — is not that guard firing. `minimal-values.yaml` must still
+  render, so a chart that refused everything fails here instead of
+  passing every case above.
 - `chart-security` — the PodSecurity `restricted` comparison against
   every workload §Workload identities declares. The pod spec sets
   `runAsNonRoot: true` and a `seccompProfile` type, every container
@@ -744,9 +747,10 @@ print.
   image either.
 - `chart-guards` is complete over **the values named by the files in
   `ci/refused/`**: each must refuse the render and name the value its
-  filename names, and `minimal-values.yaml` must still render. It reads
-  no other value — a value documented as guarded and given no file
-  there passes, which is why a new guard lands with its file.
+  filename names, with the fragment its `# expects:` line gives, and
+  `minimal-values.yaml` must still render. It reads no other value — a
+  value documented as guarded and given no file there passes, which is
+  why a new guard lands with its file.
 - `chart-security` is complete over **the PodSecurity `restricted`
   fields of a rendered pod spec**: `runAsNonRoot: true` and a
   `seccompProfile` type of `RuntimeDefault` or `Localhost` on the pod,

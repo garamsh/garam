@@ -197,25 +197,46 @@ chart-names:
 # matched rather than the status or the file's path, which carries the
 # same string (#864). The last render is the control:
 # minimal-values.yaml must still render.
+#
+# A value can be refused for more than one reason, so a file is one
+# case: `<value>.yaml`, or `<value>--<case>.yaml` where the value has
+# several (a value name holds no `--`). A case names the part of the
+# message that tells its refusal from the value's others on a line
+# `# expects: <fragment>`, matched literally beside the value; a value
+# with more than one case needs one on every case, since two refusals of
+# one value that both open with it are otherwise not told apart (#2017).
 CHART_REFUSED = $(wildcard $(CHART_DIR)/ci/refused/*.yaml)
+CHART_REFUSED_VALUES = $(sort $(foreach f,$(CHART_REFUSED),$(firstword $(subst --, ,$(basename $(notdir $f))))))
 
 chart-guards:
-	@echo 'chart-guards: $(words $(CHART_REFUSED)) values files that must be refused, each naming the value it is named after'
+	@echo 'chart-guards: $(words $(CHART_REFUSED)) cases that must be refused, for $(words $(CHART_REFUSED_VALUES)) values, each naming the value it is named after'
 	@test -n '$(CHART_REFUSED)' || { echo 'chart-guards: nothing to check — $(CHART_DIR)/ci/refused holds no values file'; exit 1; }
 	@set -e; \
 		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		fragments=0; \
 		for v in $(CHART_REFUSED); do \
-			want="$$(basename "$$v" .yaml)"; \
+			case="$$(basename "$$v" .yaml)"; \
+			want="$${case%%--*}"; \
+			expects="$$(sed -n 's/^\# expects: //p' "$$v")"; \
+			cases="$$(ls $(CHART_DIR)/ci/refused/"$$want".yaml $(CHART_DIR)/ci/refused/"$$want"--*.yaml 2>/dev/null | wc -l)"; \
+			if [ "$$cases" -gt 1 ] && [ -z "$$expects" ]; then \
+				echo "chart-guards: $$v is one of $$cases cases for $$want and names no fragment: add a line '# expects: <part of the message>', which is what tells its refusal from the others'"; exit 1; \
+			fi; \
 			if $(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml --values "$$v" >/dev/null 2>"$$out/err"; then \
 				echo "chart-guards: $$v rendered, and the guard for $$want did not fire"; exit 1; \
 			fi; \
 			key="$$(printf %s "$$want" | sed 's/\./\\./g')"; \
 			grep -qE "execution error at \([^)]*\): $$key( |\$$)" "$$out/err" \
 				|| { echo "chart-guards: $$v was refused, but not by the guard for $$want — a refusal for another reason, or one whose message does not open with the value:"; cat "$$out/err"; exit 1; }; \
+			if [ -n "$$expects" ]; then \
+				grep -qF -- "$$expects" "$$out/err" \
+					|| { echo "chart-guards: $$v was refused with $$want named, but the message lacks '$$expects': another of its guards fired:"; cat "$$out/err"; exit 1; }; \
+				fragments=$$((fragments + 1)); \
+			fi; \
 		done; \
 		$(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml >/dev/null \
 			|| { echo 'chart-guards: the control render was refused too — the guards refuse a chart that should install'; exit 1; }; \
-		echo "chart-guards: $(words $(CHART_REFUSED)) refused as named, and minimal-values.yaml still renders"
+		echo "chart-guards: $(words $(CHART_REFUSED)) cases refused as named, $$fragments of them by the fragment their file names, and minimal-values.yaml still renders"
 
 chart-security:
 	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' \

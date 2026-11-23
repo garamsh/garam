@@ -300,69 +300,116 @@ name they sit under (`value`, such as `api.policy`).
 {{- fail (printf "%s.signingKey.secretName and %s.signingKeyFile are both set: the pod copies the key from the Secret to its own file, so name one source" .value .value) -}}
 {{- end -}}
 {{- if $k.secretName -}}
-{{- printf "/run/garam/policy-signing/%s" (required (printf "%s.signingKey.key is required beside %s.signingKey.secretName" .value .value) $k.key) -}}
+{{- printf "%s/%s" (include "garam.policySigningDir" .) (required (printf "%s.signingKey.key is required beside %s.signingKey.secretName" .value .value) $k.key) -}}
 {{- else -}}
 {{- .policy.signingKeyFile -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-The init container that gives the process its signing key as a file it
-owns: a projected Secret is root-owned, and the process refuses a key
-file it does not own or that any group or other bit is set on
-(ADR-0015). It copies the file as the pod's own account, mode 0400, onto
-a memory-backed emptyDir, so the copy never reaches the node's disk. The
-pod's fsGroup is what lets it read the 0440 projection. Takes `policy`
-and `resources`, and the root as `root`. Indented for an initContainers
-list.
+The directory the signing key's copy lands in, in the api and the
+machine container alike.
 */}}
-{{- define "garam.policySigningKeyInit" -}}
-{{- $k := .policy.signingKey }}
-        - name: policy-signing-key
+{{- define "garam.policySigningDir" -}}
+/run/garam/policy-signing
+{{- end -}}
+
+{{/*
+The signing key as the files an owner-only copy is made of: one entry
+when `signingKey.secretName` is set, none when it is not, as a YAML
+list. This is the one place that decides whether a pod copies the key;
+the helpers below render nothing for an empty list. Takes `policy`.
+*/}}
+{{- define "garam.policySigningKeySources" -}}
+{{- $k := .policy.signingKey -}}
+{{- if $k.secretName -}}
+{{- list (dict "secretName" $k.secretName "key" $k.key) | toYaml -}}
+{{- else -}}
+[]
+{{- end -}}
+{{- end -}}
+
+{{/*
+A process that refuses a key file it does not own, or that any group or
+other bit is set on (ADR-0015), cannot read a projected Secret, which is
+root-owned. These three helpers give it a copy: a projected volume of
+exactly the keys named, an init container that copies each with
+`install -m <mode>` as the pod's own account onto a memory-backed
+`emptyDir`, so the copy never reaches the node's disk, and the mount of
+that directory in the container that reads it. The pod's `fsGroup` is
+what lets the copy read the `0440` projection.
+
+Each takes `name` (the init container and the directory's volume; the
+Secret's volume is `<name>-secret`), `dest` (where the container reads
+the copy), `sources` (a list of `secretName` and `key`, one file each,
+so a Secret carrying more projects only what is named) and, for the
+init container, `source` (where it reads the projection), `mode`,
+`root` and `resources`. All three render nothing for an empty `sources`,
+which is how a copy that is switched off by a value vanishes from a
+pod; with `header`, the init container also writes the pod's
+`initContainers:` key, for a pod with no other.
+
+The mode is the consumer's: the machine listener's key material and the
+policy service's pair are installed 0600, as they were before these
+helpers, and the token signing key 0400, which a process that only
+reads the key once at start needs no more than. Nothing in the binary
+asks for a mode beyond ADR-0015's no group or other bit, so this is a
+choice of each caller rather than a rule of this helper.
+
+Indented for a pod's initContainers list, a container's volumeMounts
+list and a pod's volumes list respectively.
+*/}}
+{{- define "garam.ownerOnlyInit" -}}
+{{- if .sources }}
+{{- if .header }}
+      initContainers:
+{{- end }}
+{{- $keys := list }}
+{{- range .sources }}{{ $keys = append $keys .key }}{{ end }}
+        - name: {{ .name }}
           image: {{ required "machine.copyImage is required" .root.Values.machine.copyImage }}
 {{- include "garam.containerSecurityContext" .root }}
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              install -m 0400 "/etc/garam/policy-signing-secret/{{ $k.key }}" "/run/garam/policy-signing/{{ $k.key }}"
-              ls -l /run/garam/policy-signing
+              for f in {{ join " " $keys }}; do
+                install -m {{ .mode }} "{{ .source }}/$f" "{{ .dest }}/$f"
+              done
+              ls -l {{ .dest }}
           volumeMounts:
-            - name: policy-signing-secret
-              mountPath: /etc/garam/policy-signing-secret
+            - name: {{ .name }}-secret
+              mountPath: {{ .source }}
               readOnly: true
-            - name: policy-signing
-              mountPath: /run/garam/policy-signing
+            - name: {{ .name }}
+              mountPath: {{ .dest }}
           resources: {{- toYaml .resources | nindent 12 }}
+{{- end }}
 {{- end -}}
 
-{{/*
-The container's mount of that copy. Indented for a container's
-volumeMounts list.
-*/}}
-{{- define "garam.policySigningKeyMount" }}
-            - name: policy-signing
-              mountPath: /run/garam/policy-signing
+{{- define "garam.ownerOnlyMount" }}
+{{- if .sources }}
+            - name: {{ .name }}
+              mountPath: {{ .dest }}
               readOnly: true
+{{- end }}
 {{- end -}}
 
-{{/*
-The two volumes behind it: the Secret, projecting the one key it names
-and nothing else it carries, and the memory-backed directory the copy
-lands in. Indented for a pod's volumes list.
-*/}}
-{{- define "garam.policySigningKeyVolumes" -}}
-{{- $k := .signingKey }}
-        - name: policy-signing-secret
+{{- define "garam.ownerOnlyVolumes" }}
+{{- if .sources }}
+        - name: {{ .name }}-secret
           projected:
             defaultMode: 0440
             sources:
+{{- range .sources }}
               - secret:
-                  name: {{ $k.secretName }}
+                  name: {{ .secretName }}
                   items:
-                    - key: {{ $k.key }}
-                      path: {{ $k.key }}
-        - name: policy-signing
+                    - key: {{ .key }}
+                      path: {{ .key }}
+{{- end }}
+        - name: {{ .name }}
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
+{{- end }}
 {{- end -}}

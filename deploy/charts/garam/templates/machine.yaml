@@ -39,40 +39,21 @@ spec:
       # which the copy cannot open its source. It is the server image's
       # group because both containers here run under that account.
 {{- include "garam.podSecurityContext" (dict "root" $ "name" "server" "fsGroup" .Values.image.server.runAsGroup) }}
-{{- $signing := .Values.machine.policy }}
-{{- $keyFile := include "garam.policySigningKeyFile" (dict "policy" $signing "value" "machine.policy") }}
+{{- $km := .Values.machine.keyMaterial }}
+{{- $secret := required "machine.keyMaterial.secretName is required: it names the Secret holding the listener's certificate and key, the root that signed them, and the key-encryption key, less whichever of the four names a Secret of its own" $km.secretName }}
+{{- $keyMaterial := dict "name" "key-material" "source" "/etc/garam/key-material" "dest" "/run/garam/key-material" "mode" "0600" "sources" (list (dict "secretName" (default $secret $km.certSecretName) "key" $km.certKey) (dict "secretName" (default $secret $km.keySecretName) "key" $km.keyKey) (dict "secretName" (default $secret $km.kekSecretName) "key" $km.kekKey) (dict "secretName" (default $secret $km.serverRootSecretName) "key" $km.serverRootKey)) }}
+{{- $machinePolicy := .Values.machine.policy }}
+{{- $keyFile := include "garam.policySigningKeyFile" (dict "policy" $machinePolicy "value" "machine.policy") }}
+{{- $signing := dict "name" "policy-signing" "source" "/etc/garam/policy-signing-secret" "dest" (include "garam.policySigningDir" .) "mode" "0400" "sources" (include "garam.policySigningKeySources" (dict "policy" $machinePolicy) | fromYamlArray) }}
       initContainers:
-        # A projected Secret is root-owned and group-readable, and the
-        # process refuses a key file it does not own or that any group
-        # or other bit is set on (ADR-0015). This copies it as the same
-        # UID: the copy runs under the pod's account, which is the one
-        # the machine container beside it reads under.
-        - name: key-material
-          image: {{ required "machine.copyImage is required" .Values.machine.copyImage }}
-{{- include "garam.containerSecurityContext" . }}
-          command: ["/bin/sh", "-ec"]
-          args:
-            - |
-              for f in {{ .Values.machine.keyMaterial.certKey }} {{ .Values.machine.keyMaterial.keyKey }} {{ .Values.machine.keyMaterial.kekKey }} {{ .Values.machine.keyMaterial.serverRootKey }}; do
-                install -m 0600 "/etc/garam/key-material/$f" "/run/garam/key-material/$f"
-              done
-              ls -l /run/garam/key-material
-          volumeMounts:
-            - name: key-material-secret
-              mountPath: /etc/garam/key-material
-              readOnly: true
-            - name: key-material
-              mountPath: /run/garam/key-material
-          # The machine container's figure reaches this one too. A quota
-          # admits a pod only when every container carries the resource
-          # it bounds and a QoS class is read across every container, and
-          # the pod's effective request is the max of its init containers
-          # and the sum of the rest — so the copy reserves nothing beyond
-          # the figure below.
-          resources: {{- toYaml .Values.machine.resources | nindent 12 }}
-{{- if $signing.signingKey.secretName }}
-{{- include "garam.policySigningKeyInit" (dict "root" $ "policy" $signing "resources" .Values.machine.resources) }}
-{{- end }}
+        # The machine container's figure reaches each copy too. A quota
+        # admits a pod only when every container carries the resource it
+        # bounds and a QoS class is read across every container, and the
+        # pod's effective request is the max of its init containers and
+        # the sum of the rest, so the copies reserve nothing beyond the
+        # figure below.
+{{- include "garam.ownerOnlyInit" (merge (dict "root" $ "resources" .Values.machine.resources) $keyMaterial) }}
+{{- include "garam.ownerOnlyInit" (merge (dict "root" $ "resources" .Values.machine.resources) $signing) }}
       containers:
         - name: machine
           image: {{ include "garam.image" (dict "root" $ "name" "server") }}
@@ -173,12 +154,8 @@ spec:
               port: 8444
             timeoutSeconds: 3
           volumeMounts:
-            - name: key-material
-              mountPath: /run/garam/key-material
-              readOnly: true
-{{- if $signing.signingKey.secretName }}
-{{- include "garam.policySigningKeyMount" . }}
-{{- end }}
+{{- include "garam.ownerOnlyMount" $keyMaterial }}
+{{- include "garam.ownerOnlyMount" $signing }}
             - name: policy-ca
               mountPath: /etc/garam/policy
               readOnly: true
@@ -193,8 +170,6 @@ spec:
               readOnly: true
 {{- end }}
           resources: {{- toYaml .Values.machine.resources | nindent 12 }}
-{{- $km := .Values.machine.keyMaterial }}
-{{- $secret := required "machine.keyMaterial.secretName is required: it names the Secret holding the listener's certificate and key, the root that signed them, and the key-encryption key, less whichever of the four names a Secret of its own" $km.secretName }}
       volumes:
         # One source per file, so material a deployment holds in more
         # than one Secret arrives in one directory: what issues the
@@ -202,39 +177,8 @@ spec:
         # systems, and neither is this chart's to move. Each source
         # names one key, so nothing else its Secret carries is
         # projected.
-        - name: key-material-secret
-          projected:
-            defaultMode: 0440
-            sources:
-              - secret:
-                  name: {{ default $secret $km.certSecretName }}
-                  items:
-                    - key: {{ $km.certKey }}
-                      path: {{ $km.certKey }}
-              - secret:
-                  name: {{ default $secret $km.keySecretName }}
-                  items:
-                    - key: {{ $km.keyKey }}
-                      path: {{ $km.keyKey }}
-              - secret:
-                  name: {{ default $secret $km.serverRootSecretName }}
-                  items:
-                    - key: {{ $km.serverRootKey }}
-                      path: {{ $km.serverRootKey }}
-              - secret:
-                  name: {{ default $secret $km.kekSecretName }}
-                  items:
-                    - key: {{ $km.kekKey }}
-                      path: {{ $km.kekKey }}
-        # Memory-backed, so the copy the process owns never reaches the
-        # node's disk.
-        - name: key-material
-          emptyDir:
-            medium: Memory
-            sizeLimit: 1Mi
-{{- if $signing.signingKey.secretName }}
-{{- include "garam.policySigningKeyVolumes" $signing }}
-{{- end }}
+{{- include "garam.ownerOnlyVolumes" $keyMaterial }}
+{{- include "garam.ownerOnlyVolumes" $signing }}
         # The root the policy service is verified against. It is public,
         # so it is projected as it is.
         - name: policy-ca

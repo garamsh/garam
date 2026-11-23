@@ -709,13 +709,17 @@ covered and fails when a count is zero:
   sets none, which is the rule the kubelet applies and the one most
   containers here rely on. The line it prints counts how many took the
   pod's.
-- `chart-signing-key` — the render of `ci/full-values.yaml`, which
+- `chart-owner-files` — the render of `ci/full-values.yaml`, which
   names the signing key's Secret for api and machine alike, read for
-  how the key reaches each container: copied with `install -m 0400` by
-  an init container that sets no `runAsUser` of its own, so the file is
-  owned by the pod's account; a pod that names a non-root `runAsUser`
-  and an `fsGroup`; a memory-backed directory; and the process reading
-  the path the copy wrote, from a read-only mount.
+  how a Secret's files reach the process as files it owns, in each of
+  the four copies the chart makes: the machine listener's key material
+  and the policy service's pair, installed 0600, and the signing key of
+  api and machine, installed 0400. Each is made by an init container
+  that sets no `runAsUser` of its own, so the file is owned by the
+  pod's account, in a pod that names a non-root `runAsUser` and an
+  `fsGroup`, onto a memory-backed directory the process mounts
+  read-only; the signing key's process also reads the path the copy
+  wrote.
 - `chart-package` — `helm package`, then a search of the unpacked
   artifact for `cpu` and `memory` as keys. Every file not excluded
   ships, `ci/` included, so a value file reaches a consumer without
@@ -733,7 +737,7 @@ discovered by a deployment.
 A check that fires correctly says nothing about what it never reads, so
 what each is complete over is recorded here rather than inferred.
 `chart-render`, `chart-identity`, `chart-names`,
-`chart-security`, `chart-signing-key` and `chart-package` each point
+`chart-security`, `chart-owner-files` and `chart-package` each point
 here in the line they print.
 
 - `chart-lint` and `chart-render` are complete over **templates that
@@ -785,8 +789,8 @@ here in the line they print.
   no pod spec carries stays outside it — which user an image actually
   runs as is the image's fact, not this render's, and nothing here reads
   it.
-- `chart-signing-key` is complete over **the signing key's mode,
-  owner and directory on api and machine** as the render states them:
+- `chart-owner-files` is complete over **the mode, owner and directory
+  of the four copies** as the render states them:
   the mode is what the copy's command installs and the owner is the
   account the copy runs as. It reads no running pod, so a runtime that
   ignored `fsGroup` would pass it.

@@ -34,15 +34,12 @@ spec:
 {{- include "garam.imagePullSecrets" . }}
 {{- $policy := .Values.api.policy }}
 {{- $keyFile := include "garam.policySigningKeyFile" (dict "policy" $policy "value" "api.policy") }}
-{{- if $policy.signingKey.secretName }}
-      # The signing key is projected 0440, so the pod's group decides
-      # who reads it: fsGroup makes that group the init container's.
+{{- $signing := dict "name" "policy-signing" "source" "/etc/garam/policy-signing-secret" "dest" (include "garam.policySigningDir" .) "mode" "0400" "sources" (include "garam.policySigningKeySources" (dict "policy" $policy) | fromYamlArray) }}
+      # The signing key, where a Secret names it, is projected 0440, so
+      # the pod's group decides who reads it: fsGroup makes that group
+      # the copy's.
 {{- include "garam.podSecurityContext" (dict "root" $ "name" "server" "fsGroup" .Values.image.server.runAsGroup) }}
-      initContainers:
-{{- include "garam.policySigningKeyInit" (dict "root" $ "policy" $policy "resources" .Values.api.resources) }}
-{{- else }}
-{{- include "garam.podSecurityContext" (dict "root" $ "name" "server") }}
-{{- end }}
+{{- include "garam.ownerOnlyInit" (merge (dict "root" $ "header" true "resources" .Values.api.resources) $signing) }}
       containers:
         - name: api
           image: {{ include "garam.image" (dict "root" $ "name" "server") }}
@@ -97,17 +94,13 @@ spec:
               port: 8080
             timeoutSeconds: 3
           volumeMounts:
-{{- if $policy.signingKey.secretName }}
-{{- include "garam.policySigningKeyMount" . }}
-{{- end }}
+{{- include "garam.ownerOnlyMount" $signing }}
             - name: policy-ca
               mountPath: /etc/garam/policy
               readOnly: true
           resources: {{- toYaml .Values.api.resources | nindent 12 }}
       volumes:
-{{- if $policy.signingKey.secretName }}
-{{- include "garam.policySigningKeyVolumes" $policy }}
-{{- end }}
+{{- include "garam.ownerOnlyVolumes" $signing }}
         # The root the policy service is verified against. It is public,
         # so it is projected as it is.
         - name: policy-ca

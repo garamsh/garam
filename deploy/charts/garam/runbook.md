@@ -70,22 +70,28 @@ Between two releases, `v0.1.0-dev.N` to `v0.1.0-dev.M`:
 2. **Check the release is healthy first.** `helm -n garam status
    garam` prints `STATUS: deployed` and `helm -n garam history garam`
    names the revision to roll back to.
-3. **Check out the new tag, render, upgrade.** `git checkout
+3. **One step, only from before chart 0.18.0.** An upgrade from a
+   release whose policy Service is `ClusterIP` first runs
+   `kubectl -n garam delete svc garam-policy`: `spec.clusterIP` is
+   immutable, so `helm upgrade` fails on the headless Service
+   otherwise. It is run by hand and not as a hook. A first install and
+   an upgrade between releases that both render the headless Service
+   need none.
+4. **Check out the new tag, render, upgrade.** `git checkout
    v0.1.0-dev.M`; `helm template` as in Install step 4; then
    `helm upgrade garam deploy/charts/garam -n garam -f
    <cluster-values.yaml> --wait --timeout 10m`. Migrations run first:
    both Jobs are `pre-upgrade` hooks, so the new images do not start
    until each has completed. `kubectl -n garam get job` shows both at
    `1/1`.
-4. **Check the result.** `helm -n garam status garam` prints
+5. **Check the result.** `helm -n garam status garam` prints
    `STATUS: deployed`, and `kubectl -n garam get deploy` shows every
    Deployment `READY` equal to `UP-TO-DATE`. Each Deployment is
    `RollingUpdate` with `maxUnavailable: 0` and `maxSurge: 1`
    (`templates/*.yaml`), so a new pod is ready before an old one goes
    and `kubectl -n garam rollout status deploy/garam-api` prints
-   `successfully rolled out`. An upgrade from a release that rendered a
-   `ClusterIP` policy Service recreates it as headless.
-5. **A failed migration.** The upgrade stops before any Deployment
+   `successfully rolled out`.
+6. **A failed migration.** The upgrade stops before any Deployment
    changes: the running release still serves, on the old images against
    the old schema. `kubectl -n garam logs job/garam-migrate` holds the
    only copy of the real error, and the Job is kept (its delete policy
@@ -111,18 +117,16 @@ named.
   1. `kubectl -n garam scale deploy garam-api garam-machine
      --replicas=0` (and `garam-policy` if the policy database is the
      one restored), so nothing writes while the schema is wrong. This
-     is a gap in service on purpose. Record each Deployment's replica
-     count first: `kubectl -n garam get deploy` shows it under `READY`.
+     is a gap in service on purpose.
   2. `helm upgrade garam deploy/charts/garam -n garam -f
      <cluster-values.yaml> --wait`. The migration Jobs run again and
      apply whatever the backup predates; `kubectl -n garam logs
      job/garam-migrate` reports no pending or an applied-to-latest
      result and no error.
-  3. Scale back: `kubectl -n garam scale deploy garam-api
-     garam-machine garam-policy --replicas=<recorded count>`, then
-     `kubectl -n garam rollout status deploy/garam-api` prints
-     `successfully rolled out`. The check is that sign-in answers and
-     a policy decision is made.
+  3. The `helm upgrade` restores `replicas` to the chart's value, 2,
+     so no scale-up is run. `kubectl -n garam rollout status
+     deploy/garam-api` prints `successfully rolled out`, and the check
+     is that sign-in answers and a policy decision is made.
 - **The key material restored from the secret store.** The store holds
   the directory `key-material.sh` wrote and the lines it printed
   (Install step 2).

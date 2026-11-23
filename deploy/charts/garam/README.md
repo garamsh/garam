@@ -87,10 +87,14 @@ decides:
   fallback.
 - **A headless policy Service**, `clusterIP: None` under the same name,
   so DNS answers with every ready policy pod and a caller can balance
-  over them. `clusterIP` is immutable, so an upgrade from a release with
-  a `ClusterIP` policy Service recreates the Service: its address
-  changes and a caller that resolved it once sees the new set at its
-  next resolution.
+  over them. `spec.clusterIP` is immutable, so `helm upgrade` from a
+  release that rendered a `ClusterIP` policy Service, one from before
+  chart 0.18.0, fails on it. That upgrade needs one step first, run by
+  hand and not as a hook: `kubectl delete svc <release>-policy`
+  (`garam-policy` for release `garam`), after which the upgrade
+  creates the headless Service. Callers resolve the name again at their
+  next resolution. A first install, and an upgrade between releases
+  that both render the headless Service, need no step.
 
 A deployment owes two things the chart cannot render. **At least two
 schedulable Nodes**, or `replicas: 1` on each workload: with fewer, the

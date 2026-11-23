@@ -757,9 +757,10 @@ container start rather than at admission. A manifest that asserts
 [ADR-0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
 decides (#2015). The chart renders it: two replicas, the budget, the
 spread and the rolling update, and the headless policy Service
-(#2022). The policy client and the pool settings below are not yet in
-the code. What holds in the code now, at
-`0b8a5eb189e5b87309fafbc5311792f5d15fe4ac`, is the first bullet.
+(#2022). The policy client is in the code (#2020): keepalive,
+`round_robin` over the Service's addresses, and one retry of the
+read-only decision calls on `UNAVAILABLE`. The pool setting below is
+not yet in the code.
 
 - **The database is the coordinator.** No leader election exists, and
   none is needed: the feed pass, the message claim, the signing-key

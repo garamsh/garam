@@ -21,9 +21,9 @@
 # `helm push` printed.
 #
 # HELM names the helm command, CHART_DIR the chart, INSPECT the command
-# that reads a reference's digest back (default `docker buildx imagetools
-# inspect --format {{.Manifest.Digest}}`), and the registry and the
-# version are the two arguments. The digest is appended to
+# that reads a reference's digest back (default `docker buildx
+# imagetools inspect --format {{.Manifest.Digest}}`), and the registry
+# and the version are the two arguments. The digest is appended to
 # $GITHUB_OUTPUT as `chart-digest` and to $GITHUB_STEP_SUMMARY, each
 # when set.
 set -eu

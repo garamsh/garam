@@ -225,6 +225,38 @@ jobs:
           POLICY: ${{ steps.ecr.outputs.registry }}/garam/policy:${{ steps.version.outputs.version }}
         run: tooling/image-push.sh "server=$SERVER" "console=$CONSOLE" "site=$SITE" "cowork=$COWORK" "cowork-web=$COWORK_WEB" "policy=$POLICY"
 
+  # The chart is published beside the images, under the release's
+  # version, to the repository the infrastructure repository creates
+  # (README §Pinning a version). A job of its own, and `release` does
+  # not wait for it: the repository may not exist yet, and a missing
+  # repository must not hold back the release. Its failure is the whole
+  # report of that, and re-running the job once the repository exists
+  # publishes the chart. The push role is the images' own.
+  chart:
+    needs: images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: tooling/record-runner-image.sh
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: platform/go.mod
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::486152169996:role/github-actions-garam
+          aws-region: ap-northeast-2
+      # helm pushes with the credential this step leaves in the docker
+      # config.
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - id: push
+        env:
+          CHART_REGISTRY: ${{ needs.images.outputs.registry }}
+          CHART_VERSION: ${{ needs.images.outputs.version }}
+        run: make -C deploy/charts chart-publish
+
   release:
     needs: images
     runs-on: ubuntu-24.04

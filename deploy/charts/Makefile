@@ -7,7 +7,7 @@
 
 include ../../tooling/make/go.mk
 
-.PHONY: ci chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
+.PHONY: ci chart-publish chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
 
 # helm is not a tool directive: helm.sh/helm/v4 requires a
 # google.golang.org/protobuf newer than protoc-gen-go's, and merging its
@@ -240,6 +240,14 @@ chart-owner-files:
 # the script against a throwaway directory.
 chart-key-material:
 	@sh cluster/key-material-test.sh
+
+# chart-publish is not part of ci: it writes to a registry. release.yml
+# runs it with the registry and the release's version, and it packages
+# the chart under that version and pushes it (tooling/chart-push.sh).
+chart-publish:
+	@test -n '$(CHART_REGISTRY)' && test -n '$(CHART_VERSION)' \
+		|| { echo 'chart-publish: CHART_REGISTRY and CHART_VERSION are required; nothing pushed'; exit 1; }
+	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' ../../tooling/chart-push.sh '$(CHART_REGISTRY)' '$(CHART_VERSION)'
 
 # chart-package searches the artifact `helm package` produces, which no
 # other check opens, for a resource name set as a key: no figure is one

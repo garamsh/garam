@@ -14,8 +14,16 @@
 # so, which is what a re-run of the job after the repository is created
 # repairs; nothing else about the release depends on this job.
 #
-# HELM names the helm command, CHART_DIR the chart, and the registry and
-# the version are the two arguments. The digest is appended to
+# The digest is read back from the registry after the push, as
+# tooling/image-push.sh reads an image's, with `docker buildx imagetools
+# inspect` (which needs BatchGetImage and not ecr:DescribeImages, which
+# the push role lacks), and the run fails if it differs from the one
+# `helm push` printed.
+#
+# HELM names the helm command, CHART_DIR the chart, INSPECT the command
+# that reads a reference's digest back (default `docker buildx imagetools
+# inspect --format {{.Manifest.Digest}}`), and the registry and the
+# version are the two arguments. The digest is appended to
 # $GITHUB_OUTPUT as `chart-digest` and to $GITHUB_STEP_SUMMARY, each
 # when set.
 set -eu
@@ -53,6 +61,15 @@ sha256:????????????????????????????????????????????????????????????????) ;;
 	exit 1
 	;;
 esac
+# What a consumer resolves is the manifest the registry stores, so the
+# digest is read from it and not taken from the push's own report.
+if [ -n "${INSPECT:-}" ]; then
+	stored="$($INSPECT "$reference:$version")"
+else
+	stored="$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$reference:$version")"
+fi
+test "$stored" = "$digest" \
+	|| { echo "chart-push: $reference:$version holds $stored in the registry, and helm push printed $digest" >&2; exit 1; }
 echo "chart-push: $reference:$version $digest"
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
 	echo "chart-digest=$digest" >>"$GITHUB_OUTPUT"

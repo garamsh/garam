@@ -75,10 +75,14 @@ returns.
   artifact's. README §Pinning a version states both, and a reader
   comparing `Chart.yaml` with a published artifact's `version` finds
   them different by design.
-- The first run of the job is the first check of the digest format:
-  `tooling/chart-push.sh` reads the `Digest:` line of `helm push` and
-  fails on an answer without a `sha256:` digest, which its test covers
-  with a stand-in for helm and not with helm's own output.
+- The digest `helm push` prints is read back from the registry with
+  `docker buildx imagetools inspect`, as `tooling/image-push.sh` does
+  for an image, and the job fails if the two differ. The push role has
+  `BatchGetImage` and not `ecr:DescribeImages`, so the read-back cannot
+  use the latter. That `imagetools inspect` answers for a chart's
+  manifest, which is not an image, is unverified until the first run
+  of the job; `tooling/chart-push-test.sh` covers the comparison with a
+  stand-in for the command and not with the registry's answer.
 
 ## Signs the decision was wrong
 

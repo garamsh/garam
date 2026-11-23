@@ -36,7 +36,9 @@ func (e *Exceeded) RetryAfterSeconds() int {
 // exchange or be issued a key inside one process (ADR-0102): a fixed
 // window per key over a bounded set of keys, so neither the count nor
 // the memory grows with what callers send. It holds no shared state,
-// so its bound is per replica.
+// so its bound is per replica: behind a balancer in front of N
+// replicas the ceiling is N times it (ADR-0178 §The per-replica rate
+// limiters).
 type Limiter struct {
 	limit   int
 	window  time.Duration

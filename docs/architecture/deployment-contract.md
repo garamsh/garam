@@ -753,14 +753,15 @@ container start rather than at admission. A manifest that asserts
 
 ## Replicas, spreading and rollout
 
-**Partly built.** This section describes what
+**Built.** This section describes what
 [ADR-0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
 decides (#2015). The chart renders it: two replicas, the budget, the
 spread and the rolling update, and the headless policy Service
 (#2022). The policy client is in the code (#2020): keepalive,
 `round_robin` over the Service's addresses, and one retry of the
-read-only decision calls on `UNAVAILABLE`. The pool setting below is
-not yet in the code.
+read-only decision calls on `UNAVAILABLE`. The pool setting is in
+the code too (#2021): `idle_in_transaction_session_timeout` of 60 s on
+every connection of `openPool`.
 
 - **The database is the coordinator.** No leader election exists, and
   none is needed: the feed pass, the message claim, the signing-key

@@ -1603,3 +1603,8 @@ ADRs:
   model gateway with short-lived tokens or a key proxy in garam-bot
   that forwards model calls; two permission kinds; proposed, would
   supersede ADR-0126 in part (#2025)
+- [0181](./adr/0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)
+  — a release publishes the chart as an OCI artifact to
+  `garam/charts/garam` under the release version, in a job the release
+  does not wait for, and a consumer pins it by digest; accepted, built
+  (#2033); amends ADR-0042 on how a consumer pins the chart

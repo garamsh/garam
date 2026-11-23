@@ -95,21 +95,21 @@ ends by itself, the first the moment a run is dispatched and the second
 the moment a `branches:` line names the base, and (iv) is owed again by
 every pull request merged under it rather than settled once.
 
-**A pull request into a goal branch merges on its review, until the
-first `0.1.0-rc`.** The owner set this for the development stage
+**In the development stage a goal's pull requests defer the heavier
+checks.** The owner set this for the stage before the first `0.1.0-rc`
 (`garamsh/discussions#6`, comment 19780300). A goal's pull requests
-target its goal branch, `goal/<issue>-<name>`, which no workflow
-watches, and the PM merges one on a review that marks every check it
-did not run `deferred to final check`; no local run is owed for it.
-The deferred checks all run, and each failure is traced to the pull
-request that caused it, before three points: a release; the goal
-branch's own pull request into `dev`, whose run is its verdict as any
-pull request's is; and an intermediate report. Three kinds of change
-are still verified per pull request, by targeting `dev` or by a local
-run under (i) to (iv): a release, an apply that changes a real
-cluster, and a change to a security boundary (authentication,
-cryptography or isolation). The permission ends when the first
-`0.1.0-rc` is cut.
+target its goal branch, `goal/<issue>-<name>`, which `ci.yml` watches,
+so each one has a run, and that run is the verdict on it. Lint and
+format are never deferred. The tests the change carries are written
+with it, and tests, build and end-to-end runs it does not run locally
+are marked `deferred to final check` in the pull request. The deferred
+checks all run, and each failure is traced to the pull request that
+caused it, before three points: a release; the goal branch's own pull
+request into `dev`, whose run is its verdict as any pull request's is;
+and an intermediate report. Three kinds of change are verified per pull
+request in full: a release, an apply that changes a real cluster, and a
+change to a security boundary (authentication, cryptography or
+isolation). The stage ends when the first `0.1.0-rc` is cut.
 
 **A rule you could follow and do not is debt; a rule you cannot follow
 is a gap in the rule.** Which of the two a case is gets measured and not

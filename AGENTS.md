@@ -50,8 +50,8 @@ the rules do not relax when it does.
   commits behind the pull request's base, having taken the run that
   followed bringing it up to date: where `ci.yml` triggers, it reads
   the branch merged into that base as the base then stood, and nothing
-  recomputes that when the base moves before the merge. The exceptions
-  are stated below.
+  recomputes that when the base moves before the merge. One exception,
+  stated below.
   Decides the convention questions a pull request raises. Proposes a
   change to a convention rather than making it alone. Owns moving a
   pinned dependency that names no other mover. Does not implement.
@@ -98,21 +98,18 @@ ends by itself, the first the moment a run is dispatched and the second
 the moment a `branches:` line names the base, and (iv) is owed again by
 every pull request merged under it rather than settled once.
 
-**In the development stage a goal's pull requests defer the heavier
-checks.** The owner set this for the stage before the first `0.1.0-rc`
-(`garamsh/discussions#6`, comment 19780300). A goal's pull requests
-target its goal branch, `goal/<issue>-<name>`, which `ci.yml` watches,
-so each one has a run, and that run is the verdict on it. Lint and
-format are never deferred. The tests the change carries are written
-with it, and tests, build and end-to-end runs it does not run locally
-are marked `deferred to final check` in the pull request. The deferred
-checks all run, and each failure is traced to the pull request that
-caused it, before three points: a release; the goal branch's own pull
-request into `dev`, whose run is its verdict as any pull request's is;
-and an intermediate report. Three kinds of change are verified per pull
-request in full: a release, an apply that changes a real cluster, and a
-change to a security boundary (authentication, cryptography or
-isolation). The stage ends when the first `0.1.0-rc` is cut.
+**In the development stage a goal's pull requests may defer the
+heavier checks.** The owner set this for the stage before the first
+`0.1.0-rc` (`garamsh/discussions#6`, comment 19780300). Lint and format
+are never deferred. The tests a change carries are written with it, and
+tests, build and end-to-end runs it does not run locally are marked
+`deferred to final check` in the pull request. The final check runs the
+whole set once, on the tree it covers, at a release or at a landing on
+`dev`, the default branch; each failure is traced to the pull request
+that caused it. A release, a change applied to a running environment and
+a change to a security boundary (authentication, cryptography or
+isolation) are verified on every pull request, with no exception. The
+stage ends when the first `0.1.0-rc` is cut.
 
 **A rule you could follow and do not is debt; a rule you cannot follow
 is a gap in the rule.** Which of the two a case is gets measured and not

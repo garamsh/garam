@@ -22,7 +22,7 @@ info:
     working, and is not the complete set of statuses it can return. No
     operation declares a 5xx, because a 5xx belongs to the listener
     rather than to a route (ADR-0050): every operation can answer
-    `500`, and one that reaches the policy engine, the database or a
+    `500`, and one that reaches the policy service, the database or a
     sign-in provider answers `503` when that dependency is unreachable.
     Both carry the `Error` schema with `message` set to `internal
     error` — a 5xx names no cause, and what a caller does next is on
@@ -765,9 +765,9 @@ paths:
         The counts are of the resources keyed on the organization
         itself. What is keyed on those in turn goes with its parent and
         is not counted apart from it — a group's members with the
-        group, a project's members with the project, a policy's
-        versions and attachments with the policy, an agent's assignment
-        with the agent, and an operator's keys with the operator.
+        group, a project's members with the project, an agent's
+        assignment with the agent, and an operator's keys with the
+        operator.
 
 
         `certificateAuthority` is outside `counts` because it is the
@@ -797,16 +797,16 @@ paths:
       summary: Ask whether the signed-in caller may take each of a list of actions. Requires membership.
       description: >-
         Answers each pair with the decision enforcement would reach for
-        the same caller, action and resource: the same role statements,
-        groups and attached policies, asked of the policy engine's
-        `Check` one pair at a time. The answer is `allow` or `deny` and
-        never why, so no statement or policy is named. It reads a
+        the same caller, action and resource: the policy service's
+        decision, asked of it one pair at a time. The answer is `allow`
+        or `deny` and never why, so no policy is named. It reads a
         decision and grants nothing: every write is checked again when
         it arrives, and a decision can change between this answer and
         that write.
 
 
-        Some actions are decided by more than that `Check`.
+        Some actions are decided by more than the policy service's
+        decision.
         `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`,
         `iam:agent.replace`, `iam:agent-template.publish`,
         `iam:execution-profile.read` and `iam:agent.execution-read` are minted
@@ -814,7 +814,8 @@ paths:
         to the operator (ADR-0078), holds the operation against it, and
         decides the caller's authority last. Each is put to that last
         check, with the same caller, action and resource, on the
-        organization's current policy read past the engine's cache.
+        organization's current policy read past the policy service's
+        cache.
         Where it denies, the answer is `deny`, and the mint would
         refuse. Where it allows, the answer is `unknown`: this operation
         reads no grant, so the grant is left to decide.
@@ -845,8 +846,8 @@ paths:
 
         A caller who is not a member of the organization is refused
         with 403, as every operation inside it refuses one. A pair the
-        engine cannot decide fails the whole request, so no answer is
-        partial.
+        policy service cannot decide fails the whole request, so no
+        answer is partial.
       parameters:
         - $ref: '#/components/parameters/org'
       requestBody:
@@ -937,14 +938,11 @@ paths:
     get:
       operationId: listPermissionHolders
       tags: [org]
-      summary: List the members and agents the engine allows one action. Requires `iam:org.member-list`.
+      summary: List the members and agents the policy service allows one action. Requires `iam:org.member-list`.
       description: >-
-        Answers which principals of the organization the policy engine
-        allows `action` on the resource, each asked as enforcement asks
-        it: a member with their org role, the roles of the target group
-        or project they belong to, their groups and the policies
-        reaching them; an agent, which holds no
-        role, with its groups and the policies reaching it.
+        Answers which principals of the organization the policy service
+        allows `action` on the resource, each asked of it as enforcement
+        asks it: one decision per member or agent.
 
 
         It requires `iam:org.member-list` on the organization, the check
@@ -957,14 +955,15 @@ paths:
         The candidates are the organization's members in ascending GRN
         order followed by its agents in ascending GRN order. A page asks
         `limit` of them from `offset`, at most fifty, and answers those
-        the engine allows, so a page may hold fewer holders than it asked
-        candidates, none at all among them. `nextOffset` is where the next
-        page starts, and absent on the last.
+        the policy service allows, so a page may hold fewer holders than
+        it asked candidates, none at all among them. `nextOffset` is
+        where the next page starts, and absent on the last.
 
 
-        Only actions the engine's `Check` alone decides are answered.
-        One `checkPermissions` puts to more than that is refused with
-        400, since the engine is not what decides who holds it. An
+        Only actions the policy service's decision alone decides are
+        answered. One `checkPermissions` puts to more than that is
+        refused with 400, since the policy service is not what decides
+        who holds it. An
         action garam does not define is held by no one. The resource is
         named and refused as `explainPermission` names and refuses it.
       parameters:
@@ -978,7 +977,7 @@ paths:
             How many candidates to ask, from 1 to 50; 50 when absent.
             Unlike the `limit` other lists share, 0 is refused rather
             than read as no limit, because each candidate costs the
-            engine a check.
+            policy service a decision.
           schema:
             type: integer
             minimum: 1
@@ -3951,8 +3950,8 @@ components:
           type: integer
           minimum: 0
           description: >-
-            Policies, each taking its versions and its attachments with
-            it (ADR-0008).
+            Policies, the length of the organization's list that the
+            policy service answers.
         agents:
           type: integer
           minimum: 0
@@ -4078,7 +4077,7 @@ components:
       type: string
       description: >-
         A policy's lifecycle state. Only an `active` policy contributes
-        statements to a check.
+        its default version to decisions.
       enum: [draft, active]
     AuditRecordKind:
       type: string

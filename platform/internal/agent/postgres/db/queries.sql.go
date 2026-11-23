@@ -854,24 +854,6 @@ func (q *Queries) GetSupervisor(ctx context.Context, grn string) (AgentSuperviso
 	return i, err
 }
 
-const getSupervisorByEnrollment = `-- name: GetSupervisorByEnrollment :one
-SELECT grn, agent_grn, enrollment_id, host_name, registered_at, ended_at FROM agent_supervisors WHERE enrollment_id = $1
-`
-
-func (q *Queries) GetSupervisorByEnrollment(ctx context.Context, enrollmentID pgtype.UUID) (AgentSupervisor, error) {
-	row := q.db.QueryRow(ctx, getSupervisorByEnrollment, enrollmentID)
-	var i AgentSupervisor
-	err := row.Scan(
-		&i.Grn,
-		&i.AgentGrn,
-		&i.EnrollmentID,
-		&i.HostName,
-		&i.RegisteredAt,
-		&i.EndedAt,
-	)
-	return i, err
-}
-
 const getSupervisorCredentialHolder = `-- name: GetSupervisorCredentialHolder :one
 SELECT c.id, c.supervisor_grn
 FROM supervisor_credentials c

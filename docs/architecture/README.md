@@ -491,6 +491,9 @@ Responsibility documents:
 - [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
   gateway, the keys it holds, how it routes and what it records; not
   yet built
+- [workspace.md](./workspace.md) — the workspace a bot runs in,
+  its WorkspaceClass and BotPool resources, the declaration paths,
+  and how a workspace reaches models; not yet built
 - [cowork.md](../../cowork/docs/cowork.md) — where people and agents
   co-edit pages, message each other and keep the record of their work,
   through tools an AI can use: its binary, its ports and what it asks
@@ -1587,3 +1590,16 @@ ADRs:
   by keepalive, and the measurable run for #2012 is defined; proposed,
   not built (#2015); supersedes the "replica safety above one is not
   established" position of the deployment contract
+- [0179](./adr/0179-garam-renames-agent-to-bot-and-agent-means-the-harness.md)
+  — garam renames the managed resource from "agent" to "bot" in all
+  new API resource names, the console, IAM GRN types and
+  documentation; "agent" means the harness a bot uses; existing code
+  and GRNs stay on "agent" until a later migration; accepted
+  (#2025)
+- [0180](./adr/0180-garam-adds-a-workspace-registry-and-how-a-workspace-reaches-models-is-open.md)
+  — garam adds a workspace registry (Workspace, WorkspaceClass,
+  BotPool) with three declaration paths and no real model key in
+  the workspace; how a workspace reaches models is open: a garam
+  model gateway with short-lived tokens or a key proxy in garam-bot
+  that forwards model calls; two permission kinds; proposed, would
+  supersede ADR-0126 in part (#2025)

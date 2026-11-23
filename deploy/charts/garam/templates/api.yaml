@@ -7,17 +7,7 @@ metadata:
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "api") | nindent 4 }}
 spec:
-  # Fixed at one, as on every workload here: replica safety above one is
-  # not established.
-  replicas: 1
-  # Recreate, not the default RollingUpdate: at one replica the default
-  # brings the new pod up before taking the old one down, so an upgrade
-  # runs two of a workload whose safety above one replica is not
-  # established (docs/architecture/deployment-contract.md §Not
-  # established). Terminating first holds the count `replicas` fixes
-  # across an upgrade as well as at rest.
-  strategy:
-    type: Recreate
+{{- include "garam.replicasAndRollout" (dict "root" $ "workload" "api") }}
   selector:
     matchLabels:
       {{- include "garam.selectorLabels" (dict "root" $ "component" "api") | nindent 6 }}
@@ -32,6 +22,7 @@ spec:
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "api") }}
 {{- include "garam.imagePullSecrets" . }}
+{{- include "garam.topologySpread" (dict "root" $ "component" "api") }}
 {{- $policy := .Values.api.policy }}
 {{- $keyFile := include "garam.policySigningKeyFile" (dict "policy" $policy "value" "api.policy") }}
 {{- $signing := dict "name" "policy-signing" "source" "/etc/garam/policy-signing-secret" "dest" (include "garam.policySigningDir" .) "mode" "0400" "sources" (include "garam.policySigningKeySources" (dict "policy" $policy) | fromYamlArray) }}
@@ -125,3 +116,5 @@ spec:
       port: 8080
       targetPort: http
 {{- include "garam.serviceAccount" (dict "root" $ "component" "api") }}
+---
+{{ include "garam.podDisruptionBudget" (dict "root" $ "component" "api") }}

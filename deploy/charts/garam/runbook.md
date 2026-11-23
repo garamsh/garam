@@ -80,8 +80,11 @@ Between two releases, `v0.1.0-dev.N` to `v0.1.0-dev.M`:
 4. **Check the result.** `helm -n garam status garam` prints
    `STATUS: deployed`, and `kubectl -n garam get deploy` shows every
    Deployment `READY` equal to `UP-TO-DATE`. Each Deployment is
-   `Recreate` in this chart (`templates/*.yaml`), so the upgrade is a
-   gap in service, not a handover.
+   `RollingUpdate` with `maxUnavailable: 0` and `maxSurge: 1`
+   (`templates/*.yaml`), so a new pod is ready before an old one goes
+   and `kubectl -n garam rollout status deploy/garam-api` prints
+   `successfully rolled out`. An upgrade from a release that rendered a
+   `ClusterIP` policy Service recreates it as headless.
 5. **A failed migration.** The upgrade stops before any Deployment
    changes: the running release still serves, on the old images against
    the old schema. `kubectl -n garam logs job/garam-migrate` holds the
@@ -102,8 +105,7 @@ named.
   the Deployment owns it. Within the Deployment's readiness probes
   (README §The policy service for the policy service's) the new Pod is
   `1/1 Ready`; `kubectl -n garam rollout status deploy/<name>` prints
-  `successfully rolled out`. At one replica the gap is the Pod's start
-  time.
+  `successfully rolled out`. The other replica serves meanwhile.
 - **A database restored from a backup.** Restore it with the database
   provider's own procedure, then:
   1. `kubectl -n garam scale deploy garam-api garam-machine

@@ -750,13 +750,13 @@ container start rather than at admission. A manifest that asserts
 
 ## Replicas, spreading and rollout
 
-**Unbuilt.** This section describes what
+**Partly built.** This section describes what
 [ADR-0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
-decides (#2015) and nothing it decides is built: the chart still
-renders one replica and `Recreate` for every Deployment, and the
-policy client and the pool settings below are not yet in the code. What
-holds now, at `0b8a5eb189e5b87309fafbc5311792f5d15fe4ac`, is the
-first bullet.
+decides (#2015). The chart renders it: two replicas, the budget, the
+spread and the rolling update, and the headless policy Service
+(#2022). The policy client and the pool settings below are not yet in
+the code. What holds in the code now, at
+`0b8a5eb189e5b87309fafbc5311792f5d15fe4ac`, is the first bullet.
 
 - **The database is the coordinator.** No leader election exists, and
   none is needed: the feed pass, the message claim, the signing-key

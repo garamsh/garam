@@ -9,17 +9,7 @@ metadata:
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "machine") | nindent 4 }}
 spec:
-  # Fixed at one, as on every workload here: replica safety above one is
-  # not established.
-  replicas: 1
-  # Recreate, not the default RollingUpdate: at one replica the default
-  # brings the new pod up before taking the old one down, so an upgrade
-  # runs two of a workload whose safety above one replica is not
-  # established (docs/architecture/deployment-contract.md §Not
-  # established). Terminating first holds the count `replicas` fixes
-  # across an upgrade as well as at rest.
-  strategy:
-    type: Recreate
+{{- include "garam.replicasAndRollout" (dict "root" $ "workload" "machine") }}
   selector:
     matchLabels:
       {{- include "garam.selectorLabels" (dict "root" $ "component" "machine") | nindent 6 }}
@@ -34,6 +24,7 @@ spec:
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "machine") }}
 {{- include "garam.imagePullSecrets" . }}
+{{- include "garam.topologySpread" (dict "root" $ "component" "machine") }}
       # The volume below is projected 0440, so its group owner decides
       # who reads it. fsGroup makes that group the containers', without
       # which the copy cannot open its source. It is the server image's
@@ -227,3 +218,5 @@ spec:
       port: 8444
       targetPort: health
 {{- include "garam.serviceAccount" (dict "root" $ "component" "machine") }}
+---
+{{ include "garam.podDisruptionBudget" (dict "root" $ "component" "machine") }}

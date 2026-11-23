@@ -135,6 +135,7 @@ machine:
   podAnnotations:
     vault.hashicorp.com/agent-inject: "true"
 web:
+  replicas: 3
   serviceAccount:
     name: garam-web
     create: true

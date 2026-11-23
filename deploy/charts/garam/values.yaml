@@ -82,6 +82,9 @@ database:
   secretKey: uri
 
 api:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false
@@ -168,6 +171,9 @@ identity:
 # the listeners take and stores an organization's policies. Its
 # database is its own, and its image is `image.policy`.
 policy:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false
@@ -205,6 +211,9 @@ policyMigrate:
   resources: {}
 
 machine:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false
@@ -316,6 +325,9 @@ machine:
   resources: {}
 
 web:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false
@@ -334,6 +346,9 @@ web:
 # The landing page and the way in (ADR-0131), a Next.js app beside the
 # console.
 site:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false

@@ -4,7 +4,7 @@
 > `tooling/chart-push.sh` and `deploy/charts/Makefile`; supersedes in
 > part
 > [ADR-0042](./0042-a-chart-is-the-description-of-a-garam-deployment.md)
-> §Consequences' "Nothing packages or publishes the chart" and its
+> §Decision's "Nothing packages or publishes the chart" and its
 > pinning of the chart by a git ref alone
 > Date: 2026-11-23
 

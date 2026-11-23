@@ -39,10 +39,11 @@ held nothing of this chart when it was read on 2026-08-25.
 
 ## What it renders
 
-Seven workloads, a `ClusterIP` Service in front of each of the five that
-listen, and a `ServiceAccount` for each workload a deployment names one
-for (§Workload identities). Each workload's file renders all of its own
-objects:
+Seven workloads, a `ClusterIP` Service in front of each of the five
+that listen (the policy service's headless), a PodDisruptionBudget for
+each of the five that run as Deployments, and a `ServiceAccount` for
+each workload a deployment names one for (§Workload identities). Each
+workload's file renders all of its own objects:
 
 - `templates/api.yaml` — `serve api`, port 8080.
 - `templates/machine.yaml` — `serve machine`, mTLS on 8443, probes on
@@ -61,19 +62,47 @@ objects:
   renders with `helm template` receives the Job as an ordinary manifest
   and orders it itself (helm v4.2.4, the version `deploy/charts/Makefile` pins).
 
-Every Deployment is `replicas: 1` and the chart offers no value for it.
-Replica safety above one is not established
-(`docs/architecture/deployment-contract.md` §Not established), and a
-chart value would assert what garam does not know. Establishing it is an
-ADR, then a value.
+Every workload but the two migration Jobs runs two replicas, a value
+each (`api.replicas`, `machine.replicas`, `policy.replicas`,
+`web.replicas`, `site.replicas`), and the chart renders around that
+count what
+[ADR-0178](../../../docs/architecture/adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
+decides:
 
-Each also sets `strategy: type: Recreate`, so that count holds across an
-upgrade and not only at rest. The default `RollingUpdate` brings the new
-pod up before taking the old one down, which at one replica runs two of
-the workload for the length of the rollout — the state `replicas: 1`
-exists to avoid. The cost is that an upgrade is a gap in service rather
-than a handover, which is the same trade `replicas: 1` already makes for
-a node failure.
+- **A PodDisruptionBudget** per workload, `maxUnavailable: 1`. It
+  covers a voluntary eviction, a drain, and not the loss of a Node.
+  `maxUnavailable` rather than `minAvailable: 1`, so a deployment that
+  sets one replica does not have every drain blocked.
+- **A spread over Nodes**: `topologySpreadConstraints` of `maxSkew: 1`
+  on `kubernetes.io/hostname`, `DoNotSchedule`, selecting the workload's
+  own pods. With two Nodes and one lost, the replacement stays Pending
+  and the survivor serves; on one Node there is one domain and both
+  pods schedule.
+- **`RollingUpdate`**, `maxUnavailable: 0` and `maxSurge: 1`, in place
+  of `Recreate`, so an upgrade brings a new pod up before an old one
+  goes and is a handover and not a gap. Two releases then run together
+  for the length of the rollout, which is the version-skew rule of
+  ADR-0178 §Version skew during a rollout; the console's and the site's
+  skew is unmeasured, and `Recreate` for the console is that ADR's
+  fallback.
+- **A headless policy Service**, `clusterIP: None` under the same name,
+  so DNS answers with every ready policy pod and a caller can balance
+  over them. `spec.clusterIP` is immutable, so `helm upgrade` from a
+  release that rendered a `ClusterIP` policy Service, one from before
+  chart 0.18.0, fails on it. That upgrade needs one step first, run by
+  hand and not as a hook: `kubectl delete svc <release>-policy`
+  (`garam-policy` for release `garam`), after which the upgrade
+  creates the headless Service. Callers resolve the name again at their
+  next resolution. A first install, and an upgrade between releases
+  that both render the headless Service, need no step.
+
+A deployment owes two things the chart cannot render. **At least two
+schedulable Nodes**, or `replicas: 1` on each workload: with fewer, the
+second pod of a workload stays Pending under `DoNotSchedule`. And a
+**database `max_connections` that fits two of each workload**: the pool
+is at the pgx default (ADR-0178 item 7), each of `serve api`, `serve
+machine` and the policy service holds its own pool against each of its
+replicas, and the figure is the deployment's, not measured here.
 
 ## Choosing a release name
 
@@ -412,6 +441,7 @@ below; this section records what each item is and how to check it.
 | An ordinary TLS-terminating route from `garam.garam.sh` to `garam-web` on 3000 (the console proxies `/api/*` to `web.apiUrl`, §Choosing a release name) and from `www.garam.garam.sh` to `garam-site` on 3000 | both hosts answer over https; the chart renders no route (§Exposure is the cluster owner's) |
 | Pull of the four images from ECR, through `image.pullSecrets` (`ecr-pull`) or a node or account credential | a pod of each workload reaches `Running`; an `ImagePullBackOff` names the registry |
 | The Secrets in the table under §Producing the Secrets for a cluster, filled before the first install | `kubectl -n garam get secret` lists each name |
+| At least two schedulable Nodes, and a `max_connections` on each database that fits two replicas of every workload that uses it (§What it renders) | `kubectl get nodes` lists two `Ready` Nodes that the workloads can run on; the database's `SHOW max_connections` is read against the pools |
 | A namespace whose PodSecurity level admits `restricted` Pods, which the chart's pods meet (`chart-security`, §What keeps it true) | every Pod is admitted |
 
 The release is installed in the namespace the release names; the
@@ -810,6 +840,13 @@ covered and fails when a count is zero:
   sets none, which is the rule the kubelet applies and the one most
   containers here rely on. The line it prints counts how many took the
   pod's.
+- `chart-replicas` — the default render and `ci/full-values.yaml`,
+  whose `web.replicas` is 3, read for what ADR-0178 asks of each of the
+  five workloads: the count, a PodDisruptionBudget of `maxUnavailable:
+  1`, a spread of `maxSkew: 1` over `kubernetes.io/hostname` with
+  `DoNotSchedule` selecting the workload's own pods, a `RollingUpdate`
+  of `maxUnavailable: 0` and `maxSurge: 1` and no `Recreate`, and a
+  policy Service with `clusterIP: None`.
 - `chart-owner-files` — the render of `ci/full-values.yaml`, which
   names the signing key's Secret for api and machine alike, read for
   how a Secret's files reach the process as files it owns, in each of
@@ -831,7 +868,7 @@ covered and fails when a count is zero:
 - `chart-package` — `helm package`, then a search of the unpacked
   artifact for `cpu` and `memory` as keys. Every file not excluded
   ships, `ci/` included, so a value file reaches a consumer without
-  passing the nine above, each of which reads the source tree instead.
+  passing the ten above, each of which reads the source tree instead.
   This file ships in the artifact too, so it names the two as words
   rather than as keys.
 
@@ -845,8 +882,8 @@ discovered by a deployment.
 A check that fires correctly says nothing about what it never reads, so
 what each is complete over is recorded here rather than inferred.
 `chart-render`, `chart-identity`, `chart-names`,
-`chart-security`, `chart-owner-files` and `chart-package` each point
-here in the line they print.
+`chart-security`, `chart-replicas`, `chart-owner-files` and
+`chart-package` each point here in the line they print.
 
 - `chart-lint` and `chart-render` are complete over **templates that
   produce YAML**: one that cannot render fails. Neither asks an
@@ -897,6 +934,11 @@ here in the line they print.
   no pod spec carries stays outside it — which user an image actually
   runs as is the image's fact, not this render's, and nothing here reads
   it.
+- `chart-replicas` is complete over **the replica count, budget, spread,
+  rollout and the policy Service's headlessness** as the two renders
+  state them. It reads no scheduler: whether a pod is placed, or
+  whether a drain is refused, is not read, and a Node count the cluster
+  lacks passes it.
 - `chart-owner-files` is complete over **the mode, owner and directory
   of the four copies** as the render states them:
   the mode is what the copy's command installs and the owner is the
@@ -912,8 +954,8 @@ here in the line they print.
 `chart-package` reaches one thing §Not established in
 `docs/architecture/deployment-contract.md` says garam does not publish:
 a resource figure. Nothing stops the chart from publishing an answer to
-the rest — a read-only root filesystem, replica safety above one, a
-bound on startup — and each of those stays reviewed rather than checked.
+the rest — a read-only root filesystem, a bound on startup — and each
+of those stays reviewed rather than checked.
 
 Nothing checks the rest of what a pod carries — volumes and mounts,
 probe paths and ports, the security-context fields `chart-security` does

@@ -413,3 +413,65 @@ list and a pod's volumes list respectively.
             sizeLimit: 1Mi
 {{- end }}
 {{- end -}}
+
+{{/*
+How many replicas a workload runs, and how an upgrade replaces them
+(ADR-0178). Takes the workload's values key (`workload`: api, machine,
+policy, web or site). The count is a value so that a deployment with one
+schedulable Node sets one; zero is refused, since a Deployment that runs
+no pod is not one this chart describes. `RollingUpdate` with
+`maxUnavailable: 0` and `maxSurge: 1` brings a new pod up before an old
+one goes, so an upgrade is a handover and not a gap, at the price of the
+version-skew rule the ADR states. Indented for a Deployment spec.
+*/}}
+{{- define "garam.replicasAndRollout" -}}
+{{- $n := int (index .root.Values .workload).replicas -}}
+{{- if lt $n 1 }}
+{{- fail (printf "%s.replicas %d is refused: a workload runs at least one replica (ADR-0178)" .workload $n) }}
+{{- end }}
+  replicas: {{ $n }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+{{- end -}}
+
+{{/*
+Spreads a workload's pods over Nodes: no Node holds more than one pod
+more than another (`maxSkew: 1`), and a pod that cannot be placed stays
+Pending rather than doubling up (`DoNotSchedule`), so the loss of one
+Node leaves the other's pod serving (ADR-0178). On one Node there is one
+domain and both pods schedule. Takes `root` and `component`. Indented for
+a pod spec.
+*/}}
+{{- define "garam.topologySpread" }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              {{- include "garam.selectorLabels" . | nindent 14 }}
+{{- end -}}
+
+{{/*
+A PodDisruptionBudget that lets one pod of the workload be drained at a
+time. `maxUnavailable: 1` and not `minAvailable: 1`: a deployment that
+sets one replica would otherwise have every drain blocked for good
+(ADR-0178). It covers a voluntary eviction only. Takes `root` and
+`component`, which is also the word the object is named after.
+*/}}
+{{- define "garam.podDisruptionBudget" -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "garam.name" (dict "root" .root "word" .component) }}
+  labels:
+    {{- include "garam.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "garam.selectorLabels" . | nindent 6 }}
+{{- end -}}

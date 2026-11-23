@@ -7,7 +7,7 @@
 
 include ../../tooling/make/go.mk
 
-.PHONY: ci chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-owner-files chart-key-material chart-package
+.PHONY: ci chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
 
 # helm is not a tool directive: helm.sh/helm/v4 requires a
 # google.golang.org/protobuf newer than protoc-gen-go's, and merging its
@@ -64,7 +64,7 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-owner-files chart-key-material chart-package
+ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
 	@test -n '$(CHART_TEMPLATES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/templates holds no template'; exit 1; }
@@ -225,6 +225,11 @@ chart-security:
 # The value file that names the signing key's Secret on api and machine,
 # whose render chart-owner-files reads.
 CHART_FULL_VALUES = $(CHART_DIR)/ci/full-values.yaml
+
+# The default render and the full one, whose `web.replicas` is 3.
+chart-replicas:
+	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' CHART_DEFAULT_VALUES='$(CHART_DEFAULT_VALUES)' CHART_FULL_VALUES='$(CHART_FULL_VALUES)' \
+		../../tooling/chart-replicas.sh
 
 chart-owner-files:
 	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' CHART_FULL_VALUES='$(CHART_FULL_VALUES)' \

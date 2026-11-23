@@ -98,6 +98,19 @@ ends by itself, the first the moment a run is dispatched and the second
 the moment a `branches:` line names the base, and (iv) is owed again by
 every pull request merged under it rather than settled once.
 
+**In the development stage a goal's pull requests may defer the
+heavier checks.** The owner set this for the stage before the first
+`0.1.0-rc` (`garamsh/discussions#6`, comment 19780300). Lint and format
+are never deferred. The tests a change carries are written with it, and
+tests, build and end-to-end runs it does not run locally are marked
+`deferred to final check` in the pull request. The final check runs the
+whole set once, on the tree it covers, at a release or at a landing on
+`dev`, the default branch; each failure is traced to the pull request
+that caused it. A release, a change applied to a running environment and
+a change to a security boundary (authentication, cryptography or
+isolation) are verified on every pull request, with no exception. The
+stage ends when the first `0.1.0-rc` is cut.
+
 **A rule you could follow and do not is debt; a rule you cannot follow
 is a gap in the rule.** Which of the two a case is gets measured and not
 read, because "cannot" is the verdict that ends the work: the

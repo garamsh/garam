@@ -225,8 +225,17 @@ garam's retired templates and the browser's `operatorGrn`
   What is out of scope is the whole of it: no resource, no store, no
   surface, and the `secret` service type stands in the catalogue as
   planned ([grn-model.md](./grn-model.md)).
-- Clusters as a resource an organization connects. Named in the intended
-  structure and explicitly unplanned.
+- Clusters as a resource an organization connects. Decided and
+  unbuilt: a connected cluster is a machine identity,
+  `grn:<org>/iam/cluster/<id>`, that registers once by spending a
+  one-time token with a key it generated, and serves as the target of
+  the bots and workspaces declared for it. Its registration route will
+  take no token, as a standalone host's enrollment does, and spends the
+  one-time token instead
+  ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
+  The wire between garam and the connector in that cluster is
+  `garamsh/garam-bot-operator`'s interface
+  `interfaces/cluster-connection/v1alpha1/`, whose server garam owes.
 - A first account on an empty database. `/register` mints one only from
   an invitation (ADR-0006) and an invitation comes from an org admin, so
   a database holding neither is reached with real Google credentials or

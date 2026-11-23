@@ -821,10 +821,17 @@ covered and fails when a count is zero:
   `fsGroup`, onto a memory-backed directory the process mounts
   read-only; the signing key's process also reads the path the copy
   wrote.
+- `chart-key-material` — `cluster/key-material-test.sh`, which runs
+  `cluster/key-material.sh` (§Producing the Secrets for a cluster)
+  against a throwaway directory and holds the files it writes, their
+  modes, that the certificates chain to the root and name the Services,
+  that the JWKS is the signing key's public half, that nothing it wrote
+  reaches the terminal, and that a second run into the same directory is
+  refused.
 - `chart-package` — `helm package`, then a search of the unpacked
   artifact for `cpu` and `memory` as keys. Every file not excluded
   ships, `ci/` included, so a value file reaches a consumer without
-  passing the eight above, each of which reads the source tree instead.
+  passing the nine above, each of which reads the source tree instead.
   This file ships in the artifact too, so it names the two as words
   rather than as keys.
 

@@ -17,12 +17,14 @@ name: ci
 # `dev` is the default branch and every pull request but the
 # promotion pull request targets it (`docs/convention/git.md`
 # §Promotion). Both are named, so every pull request into either is
-# verified on the forge before it lands (#1657). A pull request into
-# any other branch starts nothing.
+# verified on the forge before it lands (#1657). `goal/**` names the
+# goal branches a goal's pull requests merge into, so each of those is
+# verified the same way. A pull request into any other branch starts
+# nothing.
 
 on:
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, "goal/**"]
 
 permissions: read-all
 

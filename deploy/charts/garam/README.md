@@ -206,14 +206,17 @@ fails without them:
   once at start (ADR-0138).
 - `policy.tls.secretName` — the Secret holding the policy service's
   certificate and key (§The policy service).
-- `api.policy.tokenIssuer`, `api.policy.caSecretName` and
-  `api.policy.signingKeyFile` — the feed is always delivered, so what
+- `api.policy.tokenIssuer`, `api.policy.caSecretName` and one of
+  `api.policy.signingKey.secretName` or `api.policy.signingKeyFile` —
+  the feed is always delivered, so what
   it needs is always required (§Delivering the policy feed).
   `api.policy.tokenIssuer` is also what `policy serve` trusts as
   `POLICY_TOKEN_ISSUER`: one value renders both sides, so they cannot
   disagree.
-- `machine.policy.signingKeyFile` — where in the machine container the
-  token signing key is read from. The listener asks the policy service
+- `machine.policy.signingKey.secretName` or
+  `machine.policy.signingKeyFile` — the Secret the machine container's
+  token signing key is copied from, or where in the container it is
+  read from when the deployment writes it. The listener asks the policy service
   to decide every send
   ([ADR-0168](../../../docs/architecture/adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)),
   so it renders the `api.policy` address, issuer and root and refuses
@@ -539,21 +542,36 @@ to start holding part of the setting.
 
 - **The CA** is read from the Secret `caSecretName` names, under
   `caKey`, and projected as it is: it is public.
-- **The signing key is not in this chart.** `signingKeyFile` names where
-  in the api container the binary reads the RSA key, once at startup,
-  and whatever writes it is the deployment's. The file is held to the
-  arrival rule above: owned by `image.server.runAsUser`, no group or
-  other bit. `api.podAnnotations` is how a writer that injects itself
-  into the pod is asked for; the chart renders no writer and no volume
-  for one.
+- **The signing key reaches the api container one of two ways.**
+  `signingKey.secretName` names a Secret and `signingKey.key` the key
+  it is under (`signing.pem` by default); the chart projects that key
+  alone, and an init container running the image `machine.copyImage`
+  names copies it with `install -m 0400` onto a memory-backed
+  `emptyDir`, as the account the pod runs as, so the file the binary
+  reads at `/run/garam/policy-signing/<key>` is owned by
+  `image.server.runAsUser` with no group or other bit (ADR-0015). The
+  pod's `fsGroup`, `image.server.runAsGroup`, is what lets the copy
+  read the `0440` projection. The key is read once at startup, so a
+  replaced key is a rollout. The other way is `signingKeyFile`, where
+  in the container the binary reads the key when something the
+  deployment runs writes it there: `api.podAnnotations` is how a writer
+  that injects itself into the pod is asked for, and the chart renders
+  no volume for it. Naming both is refused, naming
+  `api.policy.signingKey.secretName`. The key itself is not in this
+  chart, which creates no Secret.
 
 `serve machine` delivers nothing, but it asks the same service to
 decide every send, with the same address, root and issuer, which it
 reads from `api.policy` so that the two callers and the service cannot
-disagree. Its signing key is the same key at a path of its own,
+disagree. Its signing key is the same key at a path of its own: either
+`machine.policy.signingKey`, copied from a Secret by an init container
+on the terms above into the same `/run/garam/policy-signing/` directory
+(the machine pod already has the `fsGroup` the copy needs), or
 `machine.policy.signingKeyFile`, written in the machine pod by what the
 deployment runs (`machine.podAnnotations`) and held to the same arrival
-rule. The render refuses without it, naming it.
+rule. The render refuses with neither, naming
+`machine.policy.signingKeyFile`, and with both, naming
+`machine.policy.signingKey.secretName`.
 
 ## The identity issuer
 
@@ -691,10 +709,21 @@ covered and fails when a count is zero:
   sets none, which is the rule the kubelet applies and the one most
   containers here rely on. The line it prints counts how many took the
   pod's.
+- `chart-owner-files` — the render of `ci/full-values.yaml`, which
+  names the signing key's Secret for api and machine alike, read for
+  how a Secret's files reach the process as files it owns, in each of
+  the four copies the chart makes: the machine listener's key material
+  and the policy service's pair, installed 0600, and the signing key of
+  api and machine, installed 0400. Each is made by an init container
+  that sets no `runAsUser` of its own, so the file is owned by the
+  pod's account, in a pod that names a non-root `runAsUser` and an
+  `fsGroup`, onto a memory-backed directory the process mounts
+  read-only; the signing key's process also reads the path the copy
+  wrote.
 - `chart-package` — `helm package`, then a search of the unpacked
   artifact for `cpu` and `memory` as keys. Every file not excluded
   ships, `ci/` included, so a value file reaches a consumer without
-  passing the seven above, each of which reads the source tree instead.
+  passing the eight above, each of which reads the source tree instead.
   This file ships in the artifact too, so it names the two as words
   rather than as keys.
 
@@ -708,8 +737,8 @@ discovered by a deployment.
 A check that fires correctly says nothing about what it never reads, so
 what each is complete over is recorded here rather than inferred.
 `chart-render`, `chart-identity`, `chart-names`,
-`chart-security` and `chart-package` each point here in the line they
-print.
+`chart-security`, `chart-owner-files` and `chart-package` each point
+here in the line they print.
 
 - `chart-lint` and `chart-render` are complete over **templates that
   produce YAML**: one that cannot render fails. Neither asks an
@@ -760,6 +789,11 @@ print.
   no pod spec carries stays outside it — which user an image actually
   runs as is the image's fact, not this render's, and nothing here reads
   it.
+- `chart-owner-files` is complete over **the mode, owner and directory
+  of the four copies** as the render states them:
+  the mode is what the copy's command installs and the owner is the
+  account the copy runs as. It reads no running pod, so a runtime that
+  ignored `fsGroup` would pass it.
 - `chart-package` is complete over **two resource names in the published
   artifact**: no file `helm package` ships sets `cpu` or `memory` as a
   key. It reads no third name, so a figure under `ephemeral-storage` or

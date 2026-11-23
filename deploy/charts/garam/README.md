@@ -756,8 +756,8 @@ from the request after that.
 
 A release also publishes this chart as an OCI artifact
 ([ADR-0181](../../../docs/architecture/adr/0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)),
-to the repository `garam/charts/garam` of the registry the images go to, under
-the release's version: `release.yml`'s `chart` job packages it with
+to the repository `garam/charts/garam` of the registry the images go
+to, under the release's version: `release.yml`'s `chart` job packages it with
 `--version` and `--app-version` set to the release version, so the
 chart and the images carry one version, and pushes it with
 `make -C deploy/charts chart-publish`. The job records the digest the

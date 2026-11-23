@@ -1,0 +1,13 @@
+# expects: is machine.issuer
+# An issuer equal to machine.issuer, beside a policy token issuer of the
+# same value so that no other guard refuses first. The render must
+# refuse and name identity.issuer: a token of one must never verify as
+# the other, so serve refuses to start where the two are equal
+# (ADR-0141).
+identity:
+  issuer: https://garam.example/api
+api:
+  policy:
+    tokenIssuer: https://garam.example/api
+machine:
+  issuer: https://garam.example/api

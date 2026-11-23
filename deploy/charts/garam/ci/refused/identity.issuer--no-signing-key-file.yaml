@@ -1,0 +1,13 @@
+# expects: so the issuer is off
+# An issuer, and a policy token issuer of the same value so that no
+# other guard refuses first, with no signing key file on the api. The
+# render must refuse and name identity.issuer: the binary only logs
+# this and leaves the issuer off, which a deployment that named one has
+# not asked for (deployment-contract.md §The identity issuer is off
+# until it is named).
+identity:
+  issuer: https://garam.example/api
+api:
+  policy:
+    tokenIssuer: https://garam.example/api
+    signingKeyFile: ""

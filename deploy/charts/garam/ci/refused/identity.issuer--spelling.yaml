@@ -1,3 +1,4 @@
+# expects: is refused: it must be https
 # An issuer spelled with a trailing slash, beside a policy token issuer
 # of the same value so that no other guard refuses first. The render
 # must refuse and name identity.issuer: serve api and serve machine

@@ -12,6 +12,8 @@ supplies.
 - Values a deployment must supply
 - Not set by this chart
 - Exposure is the cluster owner's
+- What a cluster must provide
+- Producing the Secrets for a cluster
 - Key material and secrets
 - Message signing keys in OpenBao Transit
 - The policy service
@@ -391,6 +393,105 @@ listener:
 The other listeners carry no such constraint: `serve api` and the web
 app sit behind an ordinary TLS-terminating proxy — the session cookie's
 `Secure` flag assumes one — and the policy service is cluster-internal.
+
+## What a cluster must provide
+
+What this chart asks of a cluster, as obligations an owner can check.
+The names are the ones agreed for the naru cluster
+([discussions#6, comment 19779853](https://github.com/garamsh/discussions/discussions/6#discussioncomment-19779853)):
+namespace and release `garam`, hosts `garam.garam.sh` (console),
+`machine.garam.garam.sh` (machine listener) and `www.garam.garam.sh`
+(site). That discussion also records which party provides each item
+below; this section records what each item is and how to check it.
+
+| Obligation | Check |
+|---|---|
+| A PostgreSQL database for garam, its connection string in the Secret `database.secretName` names, under `database.secretKey` (`uri`) | `kubectl -n garam get secret garam-db -o jsonpath='{.data.uri}'` is non-empty, and the Secret is present before the first install: the migration Job is a `pre-install` hook and runs before any ordinary object |
+| A second database for the policy service, in the Secret `policy.database.secretName` names, under `policy.database.secretKey` (`uri`). It is a database of its own (ADR-0130) | the same command on `garam-policy-db` |
+| TLS passthrough from `machine.garam.garam.sh` to the Service `garam-machine` on 8443. Nothing that terminates TLS may stand in front of it (§Exposure is the cluster owner's) | `openssl s_client -connect machine.garam.garam.sh:<port> -showcerts`, on the port the cluster publishes the passthrough on, presents a certificate that chains to `server-root.pem` from §Producing the Secrets for a cluster |
+| An ordinary TLS-terminating route from `garam.garam.sh` to `garam-web` on 3000 (the console proxies `/api/*` to `web.apiUrl`, §Choosing a release name) and from `www.garam.garam.sh` to `garam-site` on 3000 | both hosts answer over https; the chart renders no route (§Exposure is the cluster owner's) |
+| Pull of the four images from ECR, through `image.pullSecrets` (`ecr-pull`) or a node or account credential | a pod of each workload reaches `Running`; an `ImagePullBackOff` names the registry |
+| The Secrets in the table under §Producing the Secrets for a cluster, filled before the first install | `kubectl -n garam get secret` lists each name |
+| A namespace whose PodSecurity level admits `restricted` Pods, which the chart's pods meet (`chart-security`, §What keeps it true) | every Pod is admitted |
+
+The release is installed in the namespace the release names; the
+chart renders no Namespace.
+
+## Producing the Secrets for a cluster
+
+The chart creates no Secret and holds no value
+(§Key material and secrets). Which Secret each value names, and what it
+holds:
+
+| Secret | Key and what it holds | Read by | Produced by |
+|---|---|---|---|
+| `garam-db` | `uri`: the connection string | `database.secretName` | the cluster's database provider |
+| `garam-policy-db` | `uri`: the policy service's connection string | `policy.database.secretName` | the cluster's database provider |
+| `garam-machine-key-material` | `ca-kek.hex`: the key-encryption key, 64 hex digits. `tls.crt`, `tls.key`: the machine listener's pair. `server-root.pem`: the root that signed it | `machine.keyMaterial.secretName` | the script below |
+| `garam-policy-tls` | `tls.crt`, `tls.key`: the policy service's pair | `policy.tls.secretName` | the script below |
+| `garam-policy-ca` | `ca.crt`: the root the callers verify the policy service against | `api.policy.caSecretName` | the script below |
+| `garam-policy-jwks` | `jwks.json`: the public half of the token signing key | `policy.jwks.secretName` | the script below |
+| `garam-policy-signing-key` | `signing.pem`: the RSA private key the api and the machine listener sign their calls to the policy service with | `api.policy.signingKey.secretName` and `machine.policy.signingKey.secretName` | the script below |
+| `ecr-pull` | the registry credential | `image.pullSecrets` | the cluster's registry federation |
+| `garam-service-keys`, optional | `service-keys.json`: the first-party services' public keys, no secret (§The identity issuer) | `identity.serviceKeys.secretName` | the service that owns the keys |
+
+The Secret names are this section's proposal, as the discussion above
+agreed `garam-db`, `garam-policy-db` and `ecr-pull` only; a deployment
+that names another sets the value that reads it. The optional Google
+sign-in secret and the Transit token and CA are named by their own
+values (`api.google`, `machine.transit`) and produced by whoever owns
+those systems.
+
+`cluster/key-material.sh <new-directory>`, beside this chart, produces
+the five rows it is named for as files, and nothing else. It needs
+`openssl` and nothing from this repository's tooling, so an operator
+runs it from a checkout of the release being installed. It writes into
+a directory it creates with mode 0700, every file at 0600, one
+subdirectory per Secret named as the row names it, one file per key. It
+prints the file names, their modes and a fingerprint of each, and never
+a value: a certificate is fingerprinted as a certificate, a private key
+by the SHA-256 of its public key, the JWKS by its own SHA-256 and the
+key-encryption key by the first 16 hex digits of its SHA-256, enough to
+tell a restored file from another and too few to help recover it. Its
+options name the release's chart fullname, namespace and the machine
+listener's external host, whose defaults are the ones above, and the
+certificates' validity.
+
+- **The key-encryption key (`ca-kek.hex`) is never regenerated in
+  place.** Every message signing key is sealed under it and opens under
+  no other (`docs/architecture/deployment-contract.md` §The
+  key-encryption key cannot be regenerated). The script refuses a
+  directory that exists, so a second run cannot overwrite one; and a
+  directory it creates is the only copy until it is stored, so
+  storing it (below) is part of the procedure. This cluster's
+  key-encryption key, CA and server root are its own, never those of
+  another installation.
+- **`offline/server-root.key` belongs where garam cannot reach it.** It
+  is not a row above and no Secret carries it: a certificate is renewed
+  by signing a new one with it. The listener's certificate and the
+  policy service's are valid 365 days from the run, so a renewal is on
+  the calendar; the machine pod copies its pair at start, so a replaced
+  pair is a rollout (§Key material and secrets).
+- **The JWKS and the signing key are one pair.** Replacing one without
+  the other leaves every call refused until the policy service restarts
+  (it reads the JWKS once at start, ADR-0138), so they are produced
+  together and replaced together.
+
+What to keep: the whole directory goes to the secret store, from which
+the Secrets are filled, and the printed lines are recorded beside it, so
+a restore is checked against them (`runbook.md` §Recover). Writing to
+the store is the operator's: the script's output is files and the store
+reads files.
+
+The script and its test, `cluster/key-material-test.sh`, run in
+`make -C deploy/charts ci` as `chart-key-material`. The two scripts
+under `deploy/local/minikube/` write throwaway material straight into a
+Secret and share no code with it: they put the result where this one
+does not, and the local ones keep an existing Secret where this one
+refuses an existing directory.
+
+Installing, upgrading and recovering the release is `runbook.md`,
+beside this file.
 
 ## Key material and secrets
 

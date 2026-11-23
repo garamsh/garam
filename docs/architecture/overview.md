@@ -229,7 +229,9 @@ garam's retired templates and the browser's `operatorGrn`
   unbuilt: a connected cluster is a machine identity,
   `grn:<org>/iam/cluster/<id>`, that registers once by spending a
   one-time token with a key it generated, and serves as the target of
-  the bots and workspaces declared for it
+  the bots and workspaces declared for it. Its registration route will
+  take no token, as a standalone host's enrollment does, and spends the
+  one-time token instead
   ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
   The wire between garam and the connector in that cluster is
   `garamsh/garam-bot-operator`'s interface

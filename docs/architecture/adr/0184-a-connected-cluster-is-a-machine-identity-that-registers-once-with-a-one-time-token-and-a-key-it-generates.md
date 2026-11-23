@@ -53,10 +53,14 @@ What garam holds today:
 ## Decision
 
 1. **A connected cluster is a machine identity of its own,
-   `grn:<org>/iam/cluster/<id>`.** It sits beside `operator`,
-   `supervisor` and `bot` in `iam`, as every machine identity does. It
-   is not an operator: an operator's record carries delegation grants
-   and a control endpoint, and nothing of either applies to a cluster.
+   `grn:<org>/iam/cluster/<id>`.** It sits in `iam` with `operator`,
+   `supervisor` and `bot`. garam mints the identifier, as it does a
+   supervisor's, and answers it at registration, because the connector
+   learns its identity there and is configured with none before it. The
+   organization's name and description for the record are not its
+   identity. It is not an operator: an operator's record carries
+   delegation grants and a control endpoint, and nothing of either
+   applies to a cluster.
 2. **One cluster record belongs to one organization, and one connector
    release authenticates as one record.**
 3. **A cluster registers once, by spending a one-time token, with a key
@@ -66,9 +70,12 @@ What garam holds today:
    - The token is answered once, when a member creates the record, or
      when a member re-registers it under `iam:cluster.reissue`.
    - It carries at least 128 bits from a cryptographically secure
-     source. It lives one hour and is good for one attempt: presenting
-     it spends it whatever the outcome, and a spent, expired or unknown
-     token gets one answer.
+     source.
+   - Registration is throttled per source address before the token is
+     read, so a throttled request (429) spends no token.
+   - It lives one hour and is good for one attempt: presenting it spends
+     it whatever the outcome, and a spent, expired or unknown token gets
+     one answer.
    - garam stores its hash only, and deletes that hash once the token is
      spent or expired.
    - The connector presents the token with the public JWK of an RSA key
@@ -98,7 +105,8 @@ What garam holds today:
    credential and no address of the cluster.** What it does store is
    garam-bot-operator ADR 0088 decision 8: the record, a registration
    token's hash, public keys, token hashes, the declarations placed on
-   the cluster with their tombstones, and the cluster's latest report.
+   the cluster with their tombstones and how far those tombstones have
+   been purged, and the cluster's latest report.
 9. **Actions:** `iam:cluster.register`, `iam:cluster.read`,
    `iam:cluster.update`, `iam:cluster.reissue` and `iam:cluster.delete`,
    named action by action for the reason the operator's are. Which roles
@@ -114,7 +122,8 @@ What garam holds today:
   [overview.md](../overview.md) names a token-less route as what leaves
   "a standalone host's enrollment and the token exchanges reachable to a
   caller that holds none". Registration joins them, behind its own rate
-  limit.
+  limit, once it is built. Until then overview.md's sentence describes
+  what is built, and its §Out of scope entry names the route.
 - The cluster-connection interface's server suite is what holds garam's
   implementation to the wire, run in garam's CI.
 - Re-registering is how a lost key is recovered, and nothing is read

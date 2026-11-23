@@ -39,6 +39,8 @@ spec:
       # which the copy cannot open its source. It is the server image's
       # group because both containers here run under that account.
 {{- include "garam.podSecurityContext" (dict "root" $ "name" "server" "fsGroup" .Values.image.server.runAsGroup) }}
+{{- $signing := .Values.machine.policy }}
+{{- $keyFile := include "garam.policySigningKeyFile" (dict "policy" $signing "value" "machine.policy") }}
       initContainers:
         # A projected Secret is root-owned and group-readable, and the
         # process refuses a key file it does not own or that any group
@@ -68,6 +70,9 @@ spec:
           # and the sum of the rest — so the copy reserves nothing beyond
           # the figure below.
           resources: {{- toYaml .Values.machine.resources | nindent 12 }}
+{{- if $signing.signingKey.secretName }}
+{{- include "garam.policySigningKeyInit" (dict "root" $ "policy" $signing "resources" .Values.machine.resources) }}
+{{- end }}
       containers:
         - name: machine
           image: {{ include "garam.image" (dict "root" $ "name" "server") }}
@@ -106,7 +111,7 @@ spec:
             - name: GARAM_MACHINE_ISSUER
               value: {{ required "machine.issuer is required" .Values.machine.issuer | quote }}
 {{- include "garam.machineTokenUrlEnv" . }}
-{{- include "garam.identityIssuerEnv" (dict "root" $ "keyFile" .Values.machine.policy.signingKeyFile "keyFileValue" "machine.policy.signingKeyFile") }}
+{{- include "garam.identityIssuerEnv" (dict "root" $ "keyFile" $keyFile "keyFileValue" "machine.policy.signingKeyFile") }}
 {{- $serviceKeys := .Values.identity.serviceKeys }}
 {{- if $serviceKeys.secretName }}
 {{- if not (hasSuffix "/oauth/token" .Values.machine.tokenUrl) }}
@@ -124,15 +129,15 @@ spec:
             # the service as the api does, by the values the api
             # takes, so the issuer the service trusts, the address and
             # the root are one value each for both callers. Only the
-            # path of the signing key is its own: the file is written
-            # in this pod by what the deployment runs, as the api's is
-            # in its.
+            # path of the signing key is its own: the file is the copy
+            # this pod makes of a Secret or the one the deployment
+            # writes, as the api's is in its.
             - name: GARAM_POLICY_ADDR
               value: {{ default (printf "%s:8443" (include "garam.name" (dict "root" $ "word" "policy"))) $policy.address | quote }}
             - name: GARAM_POLICY_CA_FILE
               value: {{ printf "/etc/garam/policy/%s" (required "api.policy.caKey is required" $policy.caKey) | quote }}
             - name: GARAM_POLICY_SIGNING_KEY_FILE
-              value: {{ required "machine.policy.signingKeyFile is required: it names the file the token signing key is read from in the machine container" .Values.machine.policy.signingKeyFile | quote }}
+              value: {{ required "machine.policy.signingKeyFile is required unless machine.policy.signingKey.secretName names the Secret to copy it from: it names the file the token signing key is read from in the machine container" $keyFile | quote }}
             - name: GARAM_POLICY_TOKEN_ISSUER
               value: {{ required "api.policy.tokenIssuer is required: it is the issuer the policy service trusts" $policy.tokenIssuer | quote }}
 {{- $transit := .Values.machine.transit }}
@@ -171,6 +176,9 @@ spec:
             - name: key-material
               mountPath: /run/garam/key-material
               readOnly: true
+{{- if $signing.signingKey.secretName }}
+{{- include "garam.policySigningKeyMount" . }}
+{{- end }}
             - name: policy-ca
               mountPath: /etc/garam/policy
               readOnly: true
@@ -224,6 +232,9 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
+{{- if $signing.signingKey.secretName }}
+{{- include "garam.policySigningKeyVolumes" $signing }}
+{{- end }}
         # The root the policy service is verified against. It is public,
         # so it is projected as it is.
         - name: policy-ca

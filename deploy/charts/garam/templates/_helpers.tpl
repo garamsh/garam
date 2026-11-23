@@ -285,3 +285,84 @@ metadata:
   {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/*
+Where the token signing key is read from, in the api or the machine
+container: the file the deployment writes (`signingKeyFile`), or the copy
+this chart makes from the Secret `signingKey` names. Both is refused,
+since a file the deployment writes and one the pod copies would disagree
+on what the process reads. Takes the policy values (`policy`) and the
+name they sit under (`value`, such as `api.policy`).
+*/}}
+{{- define "garam.policySigningKeyFile" -}}
+{{- $k := .policy.signingKey -}}
+{{- if and $k.secretName .policy.signingKeyFile -}}
+{{- fail (printf "%s.signingKey.secretName and %s.signingKeyFile are both set: the pod copies the key from the Secret to its own file, so name one source" .value .value) -}}
+{{- end -}}
+{{- if $k.secretName -}}
+{{- printf "/run/garam/policy-signing/%s" (required (printf "%s.signingKey.key is required beside %s.signingKey.secretName" .value .value) $k.key) -}}
+{{- else -}}
+{{- .policy.signingKeyFile -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The init container that gives the process its signing key as a file it
+owns: a projected Secret is root-owned, and the process refuses a key
+file it does not own or that any group or other bit is set on
+(ADR-0015). It copies the file as the pod's own account, mode 0400, onto
+a memory-backed emptyDir, so the copy never reaches the node's disk. The
+pod's fsGroup is what lets it read the 0440 projection. Takes `policy`
+and `resources`, and the root as `root`. Indented for an initContainers
+list.
+*/}}
+{{- define "garam.policySigningKeyInit" -}}
+{{- $k := .policy.signingKey }}
+        - name: policy-signing-key
+          image: {{ required "machine.copyImage is required" .root.Values.machine.copyImage }}
+{{- include "garam.containerSecurityContext" .root }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              install -m 0400 "/etc/garam/policy-signing-secret/{{ $k.key }}" "/run/garam/policy-signing/{{ $k.key }}"
+              ls -l /run/garam/policy-signing
+          volumeMounts:
+            - name: policy-signing-secret
+              mountPath: /etc/garam/policy-signing-secret
+              readOnly: true
+            - name: policy-signing
+              mountPath: /run/garam/policy-signing
+          resources: {{- toYaml .resources | nindent 12 }}
+{{- end -}}
+
+{{/*
+The container's mount of that copy. Indented for a container's
+volumeMounts list.
+*/}}
+{{- define "garam.policySigningKeyMount" }}
+            - name: policy-signing
+              mountPath: /run/garam/policy-signing
+              readOnly: true
+{{- end -}}
+
+{{/*
+The two volumes behind it: the Secret, projecting the one key it names
+and nothing else it carries, and the memory-backed directory the copy
+lands in. Indented for a pod's volumes list.
+*/}}
+{{- define "garam.policySigningKeyVolumes" -}}
+{{- $k := .signingKey }}
+        - name: policy-signing-secret
+          projected:
+            defaultMode: 0440
+            sources:
+              - secret:
+                  name: {{ $k.secretName }}
+                  items:
+                    - key: {{ $k.key }}
+                      path: {{ $k.key }}
+        - name: policy-signing
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+{{- end -}}

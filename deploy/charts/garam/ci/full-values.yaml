@@ -65,7 +65,9 @@ api:
     address: policy.garam.example:8443
     tokenIssuer: https://garam.example/api
     caSecretName: garam-policy-ca
-    signingKeyFile: /vault/secrets/policy-signing-key
+    signingKey:
+      secretName: garam-policy-signing-key
+      key: signing.pem
   podAnnotations:
     vault.hashicorp.com/agent-inject: "true"
 # The issuer turned on, so it renders on api and machine alike, with the
@@ -116,7 +118,9 @@ machine:
     kekSecretName: garam-machine-ca-kek
   issuer: https://machine.garam.example
   policy:
-    signingKeyFile: /vault/secrets/policy-signing-key
+    signingKey:
+      secretName: garam-policy-signing-key
+      key: signing.pem
   # The operator exchange turned on, rendered on api and machine alike.
   # The minimal file leaves it unset, so the env renders on both sides.
   tokenUrl: https://machine.garam.example/oauth/token
@@ -131,6 +135,7 @@ machine:
   podAnnotations:
     vault.hashicorp.com/agent-inject: "true"
 web:
+  replicas: 3
   serviceAccount:
     name: garam-web
     create: true

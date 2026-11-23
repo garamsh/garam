@@ -1,0 +1,5 @@
+# A workload that runs no pod. The render must refuse and name
+# api.replicas: a Deployment of zero replicas serves nothing, and a
+# deployment that means one sets one (ADR-0178).
+api:
+  replicas: 0

@@ -8,11 +8,13 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/lib/errorx"
@@ -33,6 +35,56 @@ const (
 	Subject  = "platform"
 	Audience = "policy"
 )
+
+// keepaliveParams is what keeps a connection to a lost Node from
+// waiting for the operating system: a blackholed TCP connection fails
+// after about Time plus Timeout, 13 s, and the feed's connection, idle
+// between passes, notices at all only because PermitWithoutStream is
+// set (ADR-0178 §The policy-service client after a lost Node, item 1).
+// Time is grpc-go's minimum: a smaller one is raised to it, and a zero
+// one is how dial leaves the keepalive out, as the control of the test
+// that shows what it buys does.
+var keepaliveParams = keepalive.ClientParameters{
+	Time:                10 * time.Second,
+	Timeout:             3 * time.Second,
+	PermitWithoutStream: true,
+}
+
+// retriedMethods are the read-only decision calls. Only these are
+// attempted twice on UNAVAILABLE: a write or a mutating relay call is
+// attempted once, since a call that reached a lost Node may have been
+// applied there, and the feed is idempotent by sequence and not by
+// retry (ADR-0178 item 3).
+var retriedMethods = []string{
+	policyv1.PolicyService_Evaluate_FullMethodName,
+	policyv1.PolicyService_Evaluations_FullMethodName,
+}
+
+// serviceConfig balances over every address the target resolves to and
+// retries retriedMethods once on UNAVAILABLE (2 attempts in all). The
+// deadlines are the callers' and are not set here.
+func serviceConfig() string {
+	names := make([]string, len(retriedMethods))
+	for i, full := range retriedMethods {
+		service, method, _ := strings.Cut(strings.TrimPrefix(full, "/"), "/")
+		names[i] = fmt.Sprintf(`{"service":%q,"method":%q}`, service, method)
+	}
+	return `{"loadBalancingConfig":[{"round_robin":{}}],"methodConfig":[{"name":[` +
+		strings.Join(names, ",") +
+		`],"retryPolicy":{"maxAttempts":2,"initialBackoff":"0.1s","maxBackoff":"1s",` +
+		`"backoffMultiplier":2,"retryableStatusCodes":["UNAVAILABLE"]}}]}`
+}
+
+// target is addr resolved through DNS, which returns every pod's
+// address of a headless Service, unless addr names a resolver already.
+// With the default `passthrough` the whole name would be one address
+// and nothing would balance.
+func target(addr string) string {
+	if strings.Contains(addr, "://") {
+		return addr
+	}
+	return "dns:///" + addr
+}
 
 // Sender implements policyfeed.Sender over a policy service client.
 type Sender struct {
@@ -109,10 +161,22 @@ func ref(e policyfeed.Entity) *policyv1.EntityRef {
 }
 
 // Dial connects to the policy service at addr, trusting the CA in
-// caFile and presenting a token signed by key on each call. opts are
-// added to the connection's own options.
+// caFile and presenting a token signed by key on each call. The
+// connection balances over every address addr resolves to, detects a
+// lost peer by keepalive, and retries the read-only decision calls once
+// on UNAVAILABLE (ADR-0178). opts are added to the connection's own
+// options.
 func Dial(
 	addr, caFile, issuer string, key *signer.Key, opts ...grpc.DialOption,
+) (*grpc.ClientConn, error) {
+	return dial(addr, caFile, issuer, key, keepaliveParams, opts...)
+}
+
+// dial is Dial with the keepalive named, which is what lets a test
+// dial without it.
+func dial(
+	addr, caFile, issuer string, key *signer.Key, params keepalive.ClientParameters,
+	opts ...grpc.DialOption,
 ) (*grpc.ClientConn, error) {
 	pem, err := os.ReadFile(caFile)
 	if err != nil {
@@ -122,10 +186,15 @@ func Dial(
 	if !pool.AppendCertsFromPEM(pem) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "policy CA file holds no certificate")
 	}
-	conn, err := grpc.NewClient(addr, append([]grpc.DialOption{
+	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(pool, "")),
 		grpc.WithPerRPCCredentials(&bearer{key: key, issuer: issuer, now: time.Now}),
-	}, opts...)...)
+		grpc.WithDefaultServiceConfig(serviceConfig()),
+	}
+	if params.Time > 0 {
+		dialOpts = append(dialOpts, grpc.WithKeepaliveParams(params))
+	}
+	conn, err := grpc.NewClient(target(addr), append(dialOpts, opts...)...)
 	if err != nil {
 		return nil, errorx.Wrap(err, "dial policy service", errorx.KindInvalidArgument)
 	}

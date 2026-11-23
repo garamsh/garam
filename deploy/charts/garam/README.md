@@ -12,6 +12,8 @@ supplies.
 - Values a deployment must supply
 - Not set by this chart
 - Exposure is the cluster owner's
+- What a cluster must provide
+- Producing the Secrets for a cluster
 - Key material and secrets
 - Message signing keys in OpenBao Transit
 - The policy service
@@ -37,10 +39,11 @@ held nothing of this chart when it was read on 2026-08-25.
 
 ## What it renders
 
-Seven workloads, a `ClusterIP` Service in front of each of the five that
-listen, and a `ServiceAccount` for each workload a deployment names one
-for (§Workload identities). Each workload's file renders all of its own
-objects:
+Seven workloads, a `ClusterIP` Service in front of each of the five
+that listen (the policy service's headless), a PodDisruptionBudget for
+each of the five that run as Deployments, and a `ServiceAccount` for
+each workload a deployment names one for (§Workload identities). Each
+workload's file renders all of its own objects:
 
 - `templates/api.yaml` — `serve api`, port 8080.
 - `templates/machine.yaml` — `serve machine`, mTLS on 8443, probes on
@@ -59,19 +62,47 @@ objects:
   renders with `helm template` receives the Job as an ordinary manifest
   and orders it itself (helm v4.2.4, the version `deploy/charts/Makefile` pins).
 
-Every Deployment is `replicas: 1` and the chart offers no value for it.
-Replica safety above one is not established
-(`docs/architecture/deployment-contract.md` §Not established), and a
-chart value would assert what garam does not know. Establishing it is an
-ADR, then a value.
+Every workload but the two migration Jobs runs two replicas, a value
+each (`api.replicas`, `machine.replicas`, `policy.replicas`,
+`web.replicas`, `site.replicas`), and the chart renders around that
+count what
+[ADR-0178](../../../docs/architecture/adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
+decides:
 
-Each also sets `strategy: type: Recreate`, so that count holds across an
-upgrade and not only at rest. The default `RollingUpdate` brings the new
-pod up before taking the old one down, which at one replica runs two of
-the workload for the length of the rollout — the state `replicas: 1`
-exists to avoid. The cost is that an upgrade is a gap in service rather
-than a handover, which is the same trade `replicas: 1` already makes for
-a node failure.
+- **A PodDisruptionBudget** per workload, `maxUnavailable: 1`. It
+  covers a voluntary eviction, a drain, and not the loss of a Node.
+  `maxUnavailable` rather than `minAvailable: 1`, so a deployment that
+  sets one replica does not have every drain blocked.
+- **A spread over Nodes**: `topologySpreadConstraints` of `maxSkew: 1`
+  on `kubernetes.io/hostname`, `DoNotSchedule`, selecting the workload's
+  own pods. With two Nodes and one lost, the replacement stays Pending
+  and the survivor serves; on one Node there is one domain and both
+  pods schedule.
+- **`RollingUpdate`**, `maxUnavailable: 0` and `maxSurge: 1`, in place
+  of `Recreate`, so an upgrade brings a new pod up before an old one
+  goes and is a handover and not a gap. Two releases then run together
+  for the length of the rollout, which is the version-skew rule of
+  ADR-0178 §Version skew during a rollout; the console's and the site's
+  skew is unmeasured, and `Recreate` for the console is that ADR's
+  fallback.
+- **A headless policy Service**, `clusterIP: None` under the same name,
+  so DNS answers with every ready policy pod and a caller can balance
+  over them. `spec.clusterIP` is immutable, so `helm upgrade` from a
+  release that rendered a `ClusterIP` policy Service, one from before
+  chart 0.18.0, fails on it. That upgrade needs one step first, run by
+  hand and not as a hook: `kubectl delete svc <release>-policy`
+  (`garam-policy` for release `garam`), after which the upgrade
+  creates the headless Service. Callers resolve the name again at their
+  next resolution. A first install, and an upgrade between releases
+  that both render the headless Service, need no step.
+
+A deployment owes two things the chart cannot render. **At least two
+schedulable Nodes**, or `replicas: 1` on each workload: with fewer, the
+second pod of a workload stays Pending under `DoNotSchedule`. And a
+**database `max_connections` that fits two of each workload**: the pool
+is at the pgx default (ADR-0178 item 7), each of `serve api`, `serve
+machine` and the policy service holds its own pool against each of its
+replicas, and the figure is the deployment's, not measured here.
 
 ## Choosing a release name
 
@@ -206,14 +237,17 @@ fails without them:
   once at start (ADR-0138).
 - `policy.tls.secretName` — the Secret holding the policy service's
   certificate and key (§The policy service).
-- `api.policy.tokenIssuer`, `api.policy.caSecretName` and
-  `api.policy.signingKeyFile` — the feed is always delivered, so what
+- `api.policy.tokenIssuer`, `api.policy.caSecretName` and one of
+  `api.policy.signingKey.secretName` or `api.policy.signingKeyFile` —
+  the feed is always delivered, so what
   it needs is always required (§Delivering the policy feed).
   `api.policy.tokenIssuer` is also what `policy serve` trusts as
   `POLICY_TOKEN_ISSUER`: one value renders both sides, so they cannot
   disagree.
-- `machine.policy.signingKeyFile` — where in the machine container the
-  token signing key is read from. The listener asks the policy service
+- `machine.policy.signingKey.secretName` or
+  `machine.policy.signingKeyFile` — the Secret the machine container's
+  token signing key is copied from, or where in the container it is
+  read from when the deployment writes it. The listener asks the policy service
   to decide every send
   ([ADR-0168](../../../docs/architecture/adr/0168-the-machine-listeners-send-is-the-policy-services-decision-consent-included.md)),
   so it renders the `api.policy` address, issuer and root and refuses
@@ -389,6 +423,106 @@ The other listeners carry no such constraint: `serve api` and the web
 app sit behind an ordinary TLS-terminating proxy — the session cookie's
 `Secure` flag assumes one — and the policy service is cluster-internal.
 
+## What a cluster must provide
+
+What this chart asks of a cluster, as obligations an owner can check.
+The names are the ones agreed for the naru cluster
+([discussions#6, comment 19779853](https://github.com/garamsh/discussions/discussions/6#discussioncomment-19779853)):
+namespace and release `garam`, hosts `garam.garam.sh` (console),
+`machine.garam.garam.sh` (machine listener) and `www.garam.garam.sh`
+(site). That discussion also records which party provides each item
+below; this section records what each item is and how to check it.
+
+| Obligation | Check |
+|---|---|
+| A PostgreSQL database for garam, its connection string in the Secret `database.secretName` names, under `database.secretKey` (`uri`) | `kubectl -n garam get secret garam-db -o jsonpath='{.data.uri}'` is non-empty, and the Secret is present before the first install: the migration Job is a `pre-install` hook and runs before any ordinary object |
+| A second database for the policy service, in the Secret `policy.database.secretName` names, under `policy.database.secretKey` (`uri`). It is a database of its own (ADR-0130) | the same command on `garam-policy-db` |
+| TLS passthrough from `machine.garam.garam.sh` to the Service `garam-machine` on 8443. Nothing that terminates TLS may stand in front of it (§Exposure is the cluster owner's) | `openssl s_client -connect machine.garam.garam.sh:<port> -showcerts`, on the port the cluster publishes the passthrough on, presents a certificate that chains to `server-root.pem` from §Producing the Secrets for a cluster |
+| An ordinary TLS-terminating route from `garam.garam.sh` to `garam-web` on 3000 (the console proxies `/api/*` to `web.apiUrl`, §Choosing a release name) and from `www.garam.garam.sh` to `garam-site` on 3000 | both hosts answer over https; the chart renders no route (§Exposure is the cluster owner's) |
+| Pull of the four images from ECR, through `image.pullSecrets` (`ecr-pull`) or a node or account credential | a pod of each workload reaches `Running`; an `ImagePullBackOff` names the registry |
+| The Secrets in the table under §Producing the Secrets for a cluster, filled before the first install | `kubectl -n garam get secret` lists each name |
+| At least two schedulable Nodes, and a `max_connections` on each database that fits two replicas of every workload that uses it (§What it renders) | `kubectl get nodes` lists two `Ready` Nodes that the workloads can run on; the database's `SHOW max_connections` is read against the pools |
+| A namespace whose PodSecurity level admits `restricted` Pods, which the chart's pods meet (`chart-security`, §What keeps it true) | every Pod is admitted |
+
+The release is installed in the namespace the release names; the
+chart renders no Namespace.
+
+## Producing the Secrets for a cluster
+
+The chart creates no Secret and holds no value
+(§Key material and secrets). Which Secret each value names, and what it
+holds:
+
+| Secret | Key and what it holds | Read by | Produced by |
+|---|---|---|---|
+| `garam-db` | `uri`: the connection string | `database.secretName` | the cluster's database provider |
+| `garam-policy-db` | `uri`: the policy service's connection string | `policy.database.secretName` | the cluster's database provider |
+| `garam-machine-key-material` | `ca-kek.hex`: the key-encryption key, 64 hex digits. `tls.crt`, `tls.key`: the machine listener's pair. `server-root.pem`: the root that signed it | `machine.keyMaterial.secretName` | the script below |
+| `garam-policy-tls` | `tls.crt`, `tls.key`: the policy service's pair | `policy.tls.secretName` | the script below |
+| `garam-policy-ca` | `ca.crt`: the root the callers verify the policy service against | `api.policy.caSecretName` | the script below |
+| `garam-policy-jwks` | `jwks.json`: the public half of the token signing key | `policy.jwks.secretName` | the script below |
+| `garam-policy-signing-key` | `signing.pem`: the RSA private key the api and the machine listener sign their calls to the policy service with | `api.policy.signingKey.secretName` and `machine.policy.signingKey.secretName` | the script below |
+| `ecr-pull` | the registry credential | `image.pullSecrets` | the cluster's registry federation |
+| `garam-service-keys`, optional | `service-keys.json`: the first-party services' public keys, no secret (§The identity issuer) | `identity.serviceKeys.secretName` | the service that owns the keys |
+
+The Secret names are this section's proposal, as the discussion above
+agreed `garam-db`, `garam-policy-db` and `ecr-pull` only; a deployment
+that names another sets the value that reads it. The optional Google
+sign-in secret and the Transit token and CA are named by their own
+values (`api.google`, `machine.transit`) and produced by whoever owns
+those systems.
+
+`cluster/key-material.sh <new-directory>`, beside this chart, produces
+the five rows it is named for as files, and nothing else. It needs
+`openssl` and nothing from this repository's tooling, so an operator
+runs it from a checkout of the release being installed. It writes into
+a directory it creates with mode 0700, every file at 0600, one
+subdirectory per Secret named as the row names it, one file per key. It
+prints the file names, their modes and a fingerprint of each, and never
+a value: a certificate is fingerprinted as a certificate, a private key
+by the SHA-256 of its public key, the JWKS by its own SHA-256 and the
+key-encryption key by the first 16 hex digits of its SHA-256, enough to
+tell a restored file from another and too few to help recover it. Its
+options name the release's chart fullname, namespace and the machine
+listener's external host, whose defaults are the ones above, and the
+certificates' validity.
+
+- **The key-encryption key (`ca-kek.hex`) is never regenerated in
+  place.** Every message signing key is sealed under it and opens under
+  no other (`docs/architecture/deployment-contract.md` §The
+  key-encryption key cannot be regenerated). The script refuses a
+  directory that exists, so a second run cannot overwrite one; and a
+  directory it creates is the only copy until it is stored, so
+  storing it (below) is part of the procedure. This cluster's
+  key-encryption key, CA and server root are its own, never those of
+  another installation.
+- **`offline/server-root.key` belongs where garam cannot reach it.** It
+  is not a row above and no Secret carries it: a certificate is renewed
+  by signing a new one with it. The listener's certificate and the
+  policy service's are valid 365 days from the run, so a renewal is on
+  the calendar; the machine pod copies its pair at start, so a replaced
+  pair is a rollout (§Key material and secrets).
+- **The JWKS and the signing key are one pair.** Replacing one without
+  the other leaves every call refused until the policy service restarts
+  (it reads the JWKS once at start, ADR-0138), so they are produced
+  together and replaced together.
+
+What to keep: the whole directory goes to the secret store, from which
+the Secrets are filled, and the printed lines are recorded beside it, so
+a restore is checked against them (`runbook.md` §Recover). Writing to
+the store is the operator's: the script's output is files and the store
+reads files.
+
+The script and its test, `cluster/key-material-test.sh`, run in
+`make -C deploy/charts ci` as `chart-key-material`. The two scripts
+under `deploy/local/minikube/` write throwaway material straight into a
+Secret and share no code with it: they put the result where this one
+does not, and the local ones keep an existing Secret where this one
+refuses an existing directory.
+
+Installing, upgrading and recovering the release is `runbook.md`,
+beside this file.
+
 ## Key material and secrets
 
 **No value in this chart is a secret, and none may become one.** Every
@@ -539,21 +673,36 @@ to start holding part of the setting.
 
 - **The CA** is read from the Secret `caSecretName` names, under
   `caKey`, and projected as it is: it is public.
-- **The signing key is not in this chart.** `signingKeyFile` names where
-  in the api container the binary reads the RSA key, once at startup,
-  and whatever writes it is the deployment's. The file is held to the
-  arrival rule above: owned by `image.server.runAsUser`, no group or
-  other bit. `api.podAnnotations` is how a writer that injects itself
-  into the pod is asked for; the chart renders no writer and no volume
-  for one.
+- **The signing key reaches the api container one of two ways.**
+  `signingKey.secretName` names a Secret and `signingKey.key` the key
+  it is under (`signing.pem` by default); the chart projects that key
+  alone, and an init container running the image `machine.copyImage`
+  names copies it with `install -m 0400` onto a memory-backed
+  `emptyDir`, as the account the pod runs as, so the file the binary
+  reads at `/run/garam/policy-signing/<key>` is owned by
+  `image.server.runAsUser` with no group or other bit (ADR-0015). The
+  pod's `fsGroup`, `image.server.runAsGroup`, is what lets the copy
+  read the `0440` projection. The key is read once at startup, so a
+  replaced key is a rollout. The other way is `signingKeyFile`, where
+  in the container the binary reads the key when something the
+  deployment runs writes it there: `api.podAnnotations` is how a writer
+  that injects itself into the pod is asked for, and the chart renders
+  no volume for it. Naming both is refused, naming
+  `api.policy.signingKey.secretName`. The key itself is not in this
+  chart, which creates no Secret.
 
 `serve machine` delivers nothing, but it asks the same service to
 decide every send, with the same address, root and issuer, which it
 reads from `api.policy` so that the two callers and the service cannot
-disagree. Its signing key is the same key at a path of its own,
+disagree. Its signing key is the same key at a path of its own: either
+`machine.policy.signingKey`, copied from a Secret by an init container
+on the terms above into the same `/run/garam/policy-signing/` directory
+(the machine pod already has the `fsGroup` the copy needs), or
 `machine.policy.signingKeyFile`, written in the machine pod by what the
 deployment runs (`machine.podAnnotations`) and held to the same arrival
-rule. The render refuses without it, naming it.
+rule. The render refuses with neither, naming
+`machine.policy.signingKeyFile`, and with both, naming
+`machine.policy.signingKey.secretName`.
 
 ## The identity issuer
 
@@ -605,10 +754,25 @@ from the request after that.
 
 ## Pinning a version
 
-Nothing packages or publishes this chart, so it is referenced by a git
-ref of `garamsh/garam` — a tag, or a commit SHA, which cannot come to
-mean something else. `Chart.yaml`'s `version` moves when the chart
-changes and names no garam version.
+A release also publishes this chart as an OCI artifact
+([ADR-0181](../../../docs/architecture/adr/0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)),
+to the repository `garam/charts/garam` of the registry the images go
+to, under the release's version: `release.yml`'s `chart` job packages
+it with `--version` and `--app-version` set to the release version, so
+the chart and the images carry one version, and pushes it with
+`make -C deploy/charts chart-publish`. The job records the digest the
+registry answers with in its step summary, and a deployment pins the
+chart by that digest. The job runs beside the release and the release
+does not wait for it, so a release exists whose chart is not yet
+published: the repository is created by the infrastructure repository,
+and a run of the job before it exists fails with the repository not
+found, which re-running the job after it exists repairs. The chart is
+also referenced by a git ref of `garamsh/garam` — a tag, or a commit
+SHA, which cannot come to mean something else.
+
+`Chart.yaml`'s `version` moves when the chart changes and names no
+garam version; the published artifact's version is the release's, set
+when it is packaged, so the two are different numbers by design.
 
 The images are pinned separately, through `image.server.tag`,
 `image.web.tag`, `image.site.tag` and `image.policy.tag`. A release is a
@@ -678,11 +842,14 @@ covered and fails when a count is zero:
 - `chart-guards` — each value file under `ci/refused/` rendered on top
   of `minimal-values.yaml`, and refused by the guard it is named after:
   the failure must be an `execution error` from a template, opening with
-  the value the file is named for. A refusal for any other reason — a
-  values file helm cannot parse, a template that stopped somewhere else
-  — is not that guard firing. `minimal-values.yaml` must still render,
-  so a chart that refused everything fails here instead of passing every
-  case above.
+  the value the file is named for. A value refused for several reasons
+  has a file per reason, `<value>--<case>.yaml`, each with a line
+  `# expects: <fragment>` that the message must also contain, so two
+  refusals of one value are told apart. A refusal for any other reason —
+  a values file helm cannot parse, a template that stopped somewhere
+  else — is not that guard firing. `minimal-values.yaml` must still
+  render, so a chart that refused everything fails here instead of
+  passing every case above.
 - `chart-security` — the PodSecurity `restricted` comparison against
   every workload §Workload identities declares. The pod spec sets
   `runAsNonRoot: true` and a `seccompProfile` type, every container
@@ -691,10 +858,35 @@ covered and fails when a count is zero:
   sets none, which is the rule the kubelet applies and the one most
   containers here rely on. The line it prints counts how many took the
   pod's.
+- `chart-replicas` — the default render and `ci/full-values.yaml`,
+  whose `web.replicas` is 3, read for what ADR-0178 asks of each of the
+  five workloads: the count, a PodDisruptionBudget of `maxUnavailable:
+  1`, a spread of `maxSkew: 1` over `kubernetes.io/hostname` with
+  `DoNotSchedule` selecting the workload's own pods, a `RollingUpdate`
+  of `maxUnavailable: 0` and `maxSurge: 1` and no `Recreate`, and a
+  policy Service with `clusterIP: None`.
+- `chart-owner-files` — the render of `ci/full-values.yaml`, which
+  names the signing key's Secret for api and machine alike, read for
+  how a Secret's files reach the process as files it owns, in each of
+  the four copies the chart makes: the machine listener's key material
+  and the policy service's pair, installed 0600, and the signing key of
+  api and machine, installed 0400. Each is made by an init container
+  that sets no `runAsUser` of its own, so the file is owned by the
+  pod's account, in a pod that names a non-root `runAsUser` and an
+  `fsGroup`, onto a memory-backed directory the process mounts
+  read-only; the signing key's process also reads the path the copy
+  wrote.
+- `chart-key-material` — `cluster/key-material-test.sh`, which runs
+  `cluster/key-material.sh` (§Producing the Secrets for a cluster)
+  against a throwaway directory and holds the files it writes, their
+  modes, that the certificates chain to the root and name the Services,
+  that the JWKS is the signing key's public half, that nothing it wrote
+  reaches the terminal, and that a second run into the same directory is
+  refused.
 - `chart-package` — `helm package`, then a search of the unpacked
   artifact for `cpu` and `memory` as keys. Every file not excluded
   ships, `ci/` included, so a value file reaches a consumer without
-  passing the seven above, each of which reads the source tree instead.
+  passing the ten above, each of which reads the source tree instead.
   This file ships in the artifact too, so it names the two as words
   rather than as keys.
 
@@ -708,8 +900,8 @@ discovered by a deployment.
 A check that fires correctly says nothing about what it never reads, so
 what each is complete over is recorded here rather than inferred.
 `chart-render`, `chart-identity`, `chart-names`,
-`chart-security` and `chart-package` each point here in the line they
-print.
+`chart-security`, `chart-replicas`, `chart-owner-files` and
+`chart-package` each point here in the line they print.
 
 - `chart-lint` and `chart-render` are complete over **templates that
   produce YAML**: one that cannot render fails. Neither asks an
@@ -744,9 +936,10 @@ print.
   image either.
 - `chart-guards` is complete over **the values named by the files in
   `ci/refused/`**: each must refuse the render and name the value its
-  filename names, and `minimal-values.yaml` must still render. It reads
-  no other value — a value documented as guarded and given no file
-  there passes, which is why a new guard lands with its file.
+  filename names, with the fragment its `# expects:` line gives, and
+  `minimal-values.yaml` must still render. It reads no other value — a
+  value documented as guarded and given no file there passes, which is
+  why a new guard lands with its file.
 - `chart-security` is complete over **the PodSecurity `restricted`
   fields of a rendered pod spec**: `runAsNonRoot: true` and a
   `seccompProfile` type of `RuntimeDefault` or `Localhost` on the pod,
@@ -760,6 +953,16 @@ print.
   no pod spec carries stays outside it — which user an image actually
   runs as is the image's fact, not this render's, and nothing here reads
   it.
+- `chart-replicas` is complete over **the replica count, budget, spread,
+  rollout and the policy Service's headlessness** as the two renders
+  state them. It reads no scheduler: whether a pod is placed, or
+  whether a drain is refused, is not read, and a Node count the cluster
+  lacks passes it.
+- `chart-owner-files` is complete over **the mode, owner and directory
+  of the four copies** as the render states them:
+  the mode is what the copy's command installs and the owner is the
+  account the copy runs as. It reads no running pod, so a runtime that
+  ignored `fsGroup` would pass it.
 - `chart-package` is complete over **two resource names in the published
   artifact**: no file `helm package` ships sets `cpu` or `memory` as a
   key. It reads no third name, so a figure under `ephemeral-storage` or
@@ -770,8 +973,8 @@ print.
 `chart-package` reaches one thing §Not established in
 `docs/architecture/deployment-contract.md` says garam does not publish:
 a resource figure. Nothing stops the chart from publishing an answer to
-the rest — a read-only root filesystem, replica safety above one, a
-bound on startup — and each of those stays reviewed rather than checked.
+the rest — a read-only root filesystem, a bound on startup — and each
+of those stays reviewed rather than checked.
 
 Nothing checks the rest of what a pod carries — volumes and mounts,
 probe paths and ports, the security-context fields `chart-security` does

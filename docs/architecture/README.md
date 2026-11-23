@@ -616,7 +616,8 @@ ADRs:
   minted by an invitation
 - [0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
   — a chart at `deploy/charts/garam/` describes the deployment,
-  superseding ADR-0020
+  superseding ADR-0020; its "nothing publishes the chart" and pinning
+  by git ref are superseded in part by 0181
 - [0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)
   — a workload's account is named by a value the deployment sets, and
   the chart creates none by default
@@ -1583,6 +1584,13 @@ ADRs:
   `policies`, `policy_versions` and `policy_attachments` by migration
   000081, reversible empty; accepted, built (#2000); builds ADR-0146
   item 1; supersedes 0003 in part
+- [0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
+  — every workload runs two replicas spread across Nodes behind a
+  PodDisruptionBudget, the database stays the coordinator, an upgrade
+  rolls rather than recreates, the policy client detects a lost Node
+  by keepalive, and the measurable run for #2012 is defined; proposed,
+  not built (#2015); supersedes the "replica safety above one is not
+  established" position of the deployment contract
 - [0179](./adr/0179-garam-renames-agent-to-bot-and-agent-means-the-harness.md)
   — garam renames the managed resource from "agent" to "bot" in all
   new API resource names, the console, IAM GRN types and
@@ -1596,3 +1604,9 @@ ADRs:
   model gateway with short-lived tokens or a key proxy in garam-bot
   that forwards model calls; two permission kinds; proposed, would
   supersede ADR-0126 in part (#2025)
+- [0181](./adr/0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)
+  — a release publishes the chart as an OCI artifact to
+  `garam/charts/garam` under the release version, in a job the release
+  does not wait for, and a consumer pins it by digest; accepted, built
+  (#2033); supersedes ADR-0042 in part on whether a release publishes the
+  chart and how a consumer pins it

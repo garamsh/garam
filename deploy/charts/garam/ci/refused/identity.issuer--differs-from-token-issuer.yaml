@@ -1,0 +1,7 @@
+# expects: are both set and differ
+# An issuer beside the minimal values' policy token issuer, which it
+# does not equal. The render must refuse and name identity.issuer: the
+# policy service trusts one issuer, so the two are set to one value
+# (deployment-contract.md §One issuer, so one `iss`).
+identity:
+  issuer: https://garam.example/api

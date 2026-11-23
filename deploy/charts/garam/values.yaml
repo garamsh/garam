@@ -82,6 +82,9 @@ database:
   secretKey: uri
 
 api:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false
@@ -121,7 +124,15 @@ api:
     # is verified against, and its key.
     caSecretName: ""
     caKey: ca.crt
-    # Where in the api container the RSA signing key is read from.
+    # The RSA signing key, one of two ways. `signingKey` names the
+    # Secret holding it and the key it is under, and the pod copies it
+    # to an owner-only file in memory (README §Delivering the policy
+    # feed).
+    # `signingKeyFile` is where in the api container the key is read
+    # from when the deployment writes it there instead. Set one.
+    signingKey:
+      secretName: ""
+      key: signing.pem
     signingKeyFile: ""
   # Annotations on the api pod, for whatever the deployment uses to put
   # the signing key file there, such as OpenBao Agent's injector.
@@ -160,6 +171,9 @@ identity:
 # the listeners take and stores an organization's policies. Its
 # database is its own, and its image is `image.policy`.
 policy:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false
@@ -197,6 +211,9 @@ policyMigrate:
   resources: {}
 
 machine:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false
@@ -253,11 +270,15 @@ machine:
   # Every send is the policy service's decision (ADR-0168), so this
   # listener reaches it as `serve api` does, by `api.policy`'s address,
   # issuer and root. Only the signing key's path is its own: where in
-  # the machine container the RSA key is read from, written there by
-  # something the deployment runs (`machine.podAnnotations` asks an
-  # injector for it). Required; the listener refuses to start without
-  # it.
+  # the machine container the RSA key is read from: copied there from
+  # the Secret `signingKey` names, as `api.policy.signingKey` is, or
+  # written there by something the deployment runs
+  # (`machine.podAnnotations` asks an injector for it). Set one; the
+  # listener refuses to start without a key.
   policy:
+    signingKey:
+      secretName: ""
+      key: signing.pem
     signingKeyFile: ""
   # Runs the copy that gives the process a file it owns, here and in
   # the policy service's pod. The garam image is scratch and carries no
@@ -304,6 +325,9 @@ machine:
   resources: {}
 
 web:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false
@@ -322,6 +346,9 @@ web:
 # The landing page and the way in (ADR-0131), a Next.js app beside the
 # console.
 site:
+  # Two, spread over Nodes behind a PodDisruptionBudget (ADR-0178). A
+  # deployment with one schedulable Node sets one; zero is refused.
+  replicas: 2
   serviceAccount:
     name: ""
     create: false

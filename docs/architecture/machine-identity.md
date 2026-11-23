@@ -188,8 +188,12 @@ for the exchange's wire and refusals, and §machineBearer for the alias.
 - **One process answers at most 60 exchanges per client address and 10
   authenticated ones per operator per minute**
   (`platform/internal/operator` `ExchangesPerSource`,
-  `ExchangesPerClient`), 429 with `Retry-After` past either. Each
-  exchange holds the operator's registration, which is what the bound
+  `ExchangesPerClient`), 429 with `Retry-After` past either. Each bound
+  is per replica, so at the balancer in front of N replicas the ceiling
+  is N times it: 60N per address and 10N per operator
+  ([ADR-0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
+  §The per-replica rate limiters). Each exchange holds the operator's
+  registration, which is what the bound
   keeps a writer from waiting on for long. The address's count is taken
   before anything is read, so a flood from one address holds back no
   other; the operator's starts once its key verified, so a stranger

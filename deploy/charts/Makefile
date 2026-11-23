@@ -7,7 +7,7 @@
 
 include ../../tooling/make/go.mk
 
-.PHONY: ci chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
+.PHONY: ci chart-publish chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
 
 # helm is not a tool directive: helm.sh/helm/v4 requires a
 # google.golang.org/protobuf newer than protoc-gen-go's, and merging its
@@ -64,7 +64,7 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
+ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
 	@test -n '$(CHART_TEMPLATES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/templates holds no template'; exit 1; }
@@ -197,30 +197,78 @@ chart-names:
 # matched rather than the status or the file's path, which carries the
 # same string (#864). The last render is the control:
 # minimal-values.yaml must still render.
+#
+# A value can be refused for more than one reason, so a file is one
+# case: `<value>.yaml`, or `<value>--<case>.yaml` where the value has
+# several (a value name holds no `--`). A case names the part of the
+# message that tells its refusal from the value's others on a line
+# `# expects: <fragment>`, matched literally beside the value; a value
+# with more than one case needs one on every case, since two refusals of
+# one value that both open with it are otherwise not told apart (#2017).
 CHART_REFUSED = $(wildcard $(CHART_DIR)/ci/refused/*.yaml)
+CHART_REFUSED_VALUES = $(sort $(foreach f,$(CHART_REFUSED),$(firstword $(subst --, ,$(basename $(notdir $f))))))
 
 chart-guards:
-	@echo 'chart-guards: $(words $(CHART_REFUSED)) values files that must be refused, each naming the value it is named after'
+	@echo 'chart-guards: $(words $(CHART_REFUSED)) cases that must be refused, for $(words $(CHART_REFUSED_VALUES)) values, each naming the value it is named after'
 	@test -n '$(CHART_REFUSED)' || { echo 'chart-guards: nothing to check — $(CHART_DIR)/ci/refused holds no values file'; exit 1; }
 	@set -e; \
 		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		fragments=0; \
 		for v in $(CHART_REFUSED); do \
-			want="$$(basename "$$v" .yaml)"; \
+			case="$$(basename "$$v" .yaml)"; \
+			want="$${case%%--*}"; \
+			expects="$$(sed -n 's/^\# expects: //p' "$$v")"; \
+			cases="$$(ls $(CHART_DIR)/ci/refused/"$$want".yaml $(CHART_DIR)/ci/refused/"$$want"--*.yaml 2>/dev/null | wc -l)"; \
+			if [ "$$cases" -gt 1 ] && [ -z "$$expects" ]; then \
+				echo "chart-guards: $$v is one of $$cases cases for $$want and names no fragment: add a line '# expects: <part of the message>', which is what tells its refusal from the others'"; exit 1; \
+			fi; \
 			if $(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml --values "$$v" >/dev/null 2>"$$out/err"; then \
 				echo "chart-guards: $$v rendered, and the guard for $$want did not fire"; exit 1; \
 			fi; \
 			key="$$(printf %s "$$want" | sed 's/\./\\./g')"; \
 			grep -qE "execution error at \([^)]*\): $$key( |\$$)" "$$out/err" \
 				|| { echo "chart-guards: $$v was refused, but not by the guard for $$want — a refusal for another reason, or one whose message does not open with the value:"; cat "$$out/err"; exit 1; }; \
+			if [ -n "$$expects" ]; then \
+				grep -qF -- "$$expects" "$$out/err" \
+					|| { echo "chart-guards: $$v was refused with $$want named, but the message lacks '$$expects': another of its guards fired:"; cat "$$out/err"; exit 1; }; \
+				fragments=$$((fragments + 1)); \
+			fi; \
 		done; \
 		$(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml >/dev/null \
 			|| { echo 'chart-guards: the control render was refused too — the guards refuse a chart that should install'; exit 1; }; \
-		echo "chart-guards: $(words $(CHART_REFUSED)) refused as named, and minimal-values.yaml still renders"
+		echo "chart-guards: $(words $(CHART_REFUSED)) cases refused as named, $$fragments of them by the fragment their file names, and minimal-values.yaml still renders"
 
 chart-security:
 	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' \
 		CHART_IDENTITIES='$(CHART_IDENTITIES)' CHART_VALUES='$(CHART_VALUES)' \
 		../../tooling/chart-security.sh
+
+# The value file that names the signing key's Secret on api and machine,
+# whose render chart-owner-files reads.
+CHART_FULL_VALUES = $(CHART_DIR)/ci/full-values.yaml
+
+# The default render and the full one, whose `web.replicas` is 3.
+chart-replicas:
+	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' CHART_DEFAULT_VALUES='$(CHART_DEFAULT_VALUES)' CHART_FULL_VALUES='$(CHART_FULL_VALUES)' \
+		../../tooling/chart-replicas.sh
+
+chart-owner-files:
+	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' CHART_FULL_VALUES='$(CHART_FULL_VALUES)' \
+		../../tooling/chart-owner-files.sh
+
+# The cluster's key-material procedure, which the chart's README names
+# and a chart that renders a Secret's name cannot check. Its test runs
+# the script against a throwaway directory.
+chart-key-material:
+	@sh cluster/key-material-test.sh
+
+# chart-publish is not part of ci: it writes to a registry. release.yml
+# runs it with the registry and the release's version, and it packages
+# the chart under that version and pushes it (tooling/chart-push.sh).
+chart-publish:
+	@test -n '$(CHART_REGISTRY)' && test -n '$(CHART_VERSION)' \
+		|| { echo 'chart-publish: CHART_REGISTRY and CHART_VERSION are required; nothing pushed'; exit 1; }
+	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' ../../tooling/chart-push.sh '$(CHART_REGISTRY)' '$(CHART_VERSION)'
 
 # chart-package searches the artifact `helm package` produces, which no
 # other check opens, for a resource name set as a key: no figure is one

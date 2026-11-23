@@ -8,17 +8,7 @@ metadata:
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "web") | nindent 4 }}
 spec:
-  # Fixed at one, as on every workload here: replica safety above one is
-  # not established.
-  replicas: 1
-  # Recreate, not the default RollingUpdate: at one replica the default
-  # brings the new pod up before taking the old one down, so an upgrade
-  # runs two of a workload whose safety above one replica is not
-  # established (docs/architecture/deployment-contract.md §Not
-  # established). Terminating first holds the count `replicas` fixes
-  # across an upgrade as well as at rest.
-  strategy:
-    type: Recreate
+{{- include "garam.replicasAndRollout" (dict "root" $ "workload" "web") }}
   selector:
     matchLabels:
       {{- include "garam.selectorLabels" (dict "root" $ "component" "web") | nindent 6 }}
@@ -29,6 +19,7 @@ spec:
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "web") }}
 {{- include "garam.imagePullSecrets" . }}
+{{- include "garam.topologySpread" (dict "root" $ "component" "web") }}
 {{- include "garam.podSecurityContext" (dict "root" $ "name" "web") }}
       containers:
         - name: web
@@ -73,3 +64,5 @@ spec:
       port: 3000
       targetPort: http
 {{- include "garam.serviceAccount" (dict "root" $ "component" "web") }}
+---
+{{ include "garam.podDisruptionBudget" (dict "root" $ "component" "web") }}

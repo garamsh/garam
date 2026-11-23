@@ -285,3 +285,193 @@ metadata:
   {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/*
+Where the token signing key is read from, in the api or the machine
+container: the file the deployment writes (`signingKeyFile`), or the copy
+this chart makes from the Secret `signingKey` names. Both is refused,
+since a file the deployment writes and one the pod copies would disagree
+on what the process reads. Takes the policy values (`policy`) and the
+name they sit under (`value`, such as `api.policy`).
+*/}}
+{{- define "garam.policySigningKeyFile" -}}
+{{- $k := .policy.signingKey -}}
+{{- if and $k.secretName .policy.signingKeyFile -}}
+{{- fail (printf "%s.signingKey.secretName and %s.signingKeyFile are both set: the pod copies the key from the Secret to its own file, so name one source" .value .value) -}}
+{{- end -}}
+{{- if $k.secretName -}}
+{{- printf "%s/%s" (include "garam.policySigningDir" .) (required (printf "%s.signingKey.key is required beside %s.signingKey.secretName" .value .value) $k.key) -}}
+{{- else -}}
+{{- .policy.signingKeyFile -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The directory the signing key's copy lands in, in the api and the
+machine container alike.
+*/}}
+{{- define "garam.policySigningDir" -}}
+/run/garam/policy-signing
+{{- end -}}
+
+{{/*
+The signing key as the files an owner-only copy is made of: one entry
+when `signingKey.secretName` is set, none when it is not, as a YAML
+list. This is the one place that decides whether a pod copies the key;
+the helpers below render nothing for an empty list. Takes `policy`.
+*/}}
+{{- define "garam.policySigningKeySources" -}}
+{{- $k := .policy.signingKey -}}
+{{- if $k.secretName -}}
+{{- list (dict "secretName" $k.secretName "key" $k.key) | toYaml -}}
+{{- else -}}
+[]
+{{- end -}}
+{{- end -}}
+
+{{/*
+A process that refuses a key file it does not own, or that any group or
+other bit is set on (ADR-0015), cannot read a projected Secret, which is
+root-owned. These three helpers give it a copy: a projected volume of
+exactly the keys named, an init container that copies each with
+`install -m <mode>` as the pod's own account onto a memory-backed
+`emptyDir`, so the copy never reaches the node's disk, and the mount of
+that directory in the container that reads it. The pod's `fsGroup` is
+what lets the copy read the `0440` projection.
+
+Each takes `name` (the init container and the directory's volume; the
+Secret's volume is `<name>-secret`), `dest` (where the container reads
+the copy), `sources` (a list of `secretName` and `key`, one file each,
+so a Secret carrying more projects only what is named) and, for the
+init container, `source` (where it reads the projection), `mode`,
+`root` and `resources`. All three render nothing for an empty `sources`,
+which is how a copy that is switched off by a value vanishes from a
+pod; with `header`, the init container also writes the pod's
+`initContainers:` key, for a pod with no other.
+
+The mode is the consumer's: the machine listener's key material and the
+policy service's pair are installed 0600, as they were before these
+helpers, and the token signing key 0400, which a process that only
+reads the key once at start needs no more than. Nothing in the binary
+asks for a mode beyond ADR-0015's no group or other bit, so this is a
+choice of each caller rather than a rule of this helper.
+
+Indented for a pod's initContainers list, a container's volumeMounts
+list and a pod's volumes list respectively.
+*/}}
+{{- define "garam.ownerOnlyInit" -}}
+{{- if .sources }}
+{{- if .header }}
+      initContainers:
+{{- end }}
+{{- $keys := list }}
+{{- range .sources }}{{ $keys = append $keys .key }}{{ end }}
+        - name: {{ .name }}
+          image: {{ required "machine.copyImage is required" .root.Values.machine.copyImage }}
+{{- include "garam.containerSecurityContext" .root }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              for f in {{ join " " $keys }}; do
+                install -m {{ .mode }} "{{ .source }}/$f" "{{ .dest }}/$f"
+              done
+              ls -l {{ .dest }}
+          volumeMounts:
+            - name: {{ .name }}-secret
+              mountPath: {{ .source }}
+              readOnly: true
+            - name: {{ .name }}
+              mountPath: {{ .dest }}
+          resources: {{- toYaml .resources | nindent 12 }}
+{{- end }}
+{{- end -}}
+
+{{- define "garam.ownerOnlyMount" }}
+{{- if .sources }}
+            - name: {{ .name }}
+              mountPath: {{ .dest }}
+              readOnly: true
+{{- end }}
+{{- end -}}
+
+{{- define "garam.ownerOnlyVolumes" }}
+{{- if .sources }}
+        - name: {{ .name }}-secret
+          projected:
+            defaultMode: 0440
+            sources:
+{{- range .sources }}
+              - secret:
+                  name: {{ .secretName }}
+                  items:
+                    - key: {{ .key }}
+                      path: {{ .key }}
+{{- end }}
+        - name: {{ .name }}
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+{{- end }}
+{{- end -}}
+
+{{/*
+How many replicas a workload runs, and how an upgrade replaces them
+(ADR-0178). Takes the workload's values key (`workload`: api, machine,
+policy, web or site). The count is a value so that a deployment with one
+schedulable Node sets one; zero is refused, since a Deployment that runs
+no pod is not one this chart describes. `RollingUpdate` with
+`maxUnavailable: 0` and `maxSurge: 1` brings a new pod up before an old
+one goes, so an upgrade is a handover and not a gap, at the price of the
+version-skew rule the ADR states. Indented for a Deployment spec.
+*/}}
+{{- define "garam.replicasAndRollout" -}}
+{{- $n := int (index .root.Values .workload).replicas -}}
+{{- if lt $n 1 }}
+{{- fail (printf "%s.replicas %d is refused: a workload runs at least one replica (ADR-0178)" .workload $n) }}
+{{- end }}
+  replicas: {{ $n }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+{{- end -}}
+
+{{/*
+Spreads a workload's pods over Nodes: no Node holds more than one pod
+more than another (`maxSkew: 1`), and a pod that cannot be placed stays
+Pending rather than doubling up (`DoNotSchedule`), so the loss of one
+Node leaves the other's pod serving (ADR-0178). On one Node there is one
+domain and both pods schedule. Takes `root` and `component`. Indented for
+a pod spec.
+*/}}
+{{- define "garam.topologySpread" }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              {{- include "garam.selectorLabels" . | nindent 14 }}
+{{- end -}}
+
+{{/*
+A PodDisruptionBudget that lets one pod of the workload be drained at a
+time. `maxUnavailable: 1` and not `minAvailable: 1`: a deployment that
+sets one replica would otherwise have every drain blocked for good
+(ADR-0178). It covers a voluntary eviction only. Takes `root` and
+`component`, which is also the word the object is named after.
+*/}}
+{{- define "garam.podDisruptionBudget" -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "garam.name" (dict "root" .root "word" .component) }}
+  labels:
+    {{- include "garam.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "garam.selectorLabels" . | nindent 6 }}
+{{- end -}}

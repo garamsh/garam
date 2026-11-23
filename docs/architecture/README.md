@@ -616,7 +616,8 @@ ADRs:
   minted by an invitation
 - [0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
   — a chart at `deploy/charts/garam/` describes the deployment,
-  superseding ADR-0020
+  superseding ADR-0020; its "nothing publishes the chart" and pinning
+  by git ref are superseded in part by 0181
 - [0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)
   — a workload's account is named by a value the deployment sets, and
   the chart creates none by default
@@ -1607,4 +1608,5 @@ ADRs:
   — a release publishes the chart as an OCI artifact to
   `garam/charts/garam` under the release version, in a job the release
   does not wait for, and a consumer pins it by digest; accepted, built
-  (#2033); amends ADR-0042 on how a consumer pins the chart
+  (#2033); supersedes ADR-0042 in part on whether a release publishes the
+  chart and how a consumer pins it

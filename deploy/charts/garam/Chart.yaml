@@ -8,7 +8,7 @@ type: application
 # digest or this source by a git ref of garamsh/garam, and pins the
 # images separately through image.*.tag (ADR-0042).
 version: 0.19.0
-# No appVersion. ADR-0042 records that the change publishing the first
-# release sets it; `v0.1.0-dev.1` (then `v0.1.0`) published on
-# 2026-09-01 and this change does not set it, so the field is still
-# absent and nothing here decides whether it stays that way.
+# No appVersion in the source. The published artifact's appVersion is
+# the release's version, set when `make chart-publish` packages it
+# (ADR-0181), so the source names no garam version and the artifact
+# does.

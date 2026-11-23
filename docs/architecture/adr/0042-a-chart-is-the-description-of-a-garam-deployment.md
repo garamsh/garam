@@ -1,6 +1,9 @@
 # ADR 0042: A chart is the description of a garam deployment, and the contract keeps what a chart cannot carry
 
-> Status: accepted
+> Status: accepted; §Consequences' "Nothing packages or publishes the
+> chart" and its pinning of the chart by a git ref alone are superseded
+> in part by
+> [ADR-0181](./0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)
 > Date: 2026-08-25
 
 ## Contents

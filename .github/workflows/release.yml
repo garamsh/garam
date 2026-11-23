@@ -235,6 +235,9 @@ jobs:
   chart:
     needs: images
     runs-on: ubuntu-24.04
+    outputs:
+      chart-tag: ${{ needs.images.outputs.version }}
+      chart-digest: ${{ steps.push.outputs.chart-digest }}
     permissions:
       contents: read
       id-token: write

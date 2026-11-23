@@ -1,10 +1,12 @@
 # ADR 0181: A release publishes the chart as an OCI artifact under the release version, and a consumer pins it by digest
 
 > Status: accepted; built in `.github/workflows/release.yml`,
-> `tooling/chart-push.sh` and `deploy/charts/Makefile`; amends
+> `tooling/chart-push.sh` and `deploy/charts/Makefile`; supersedes in
+> part
 > [ADR-0042](./0042-a-chart-is-the-description-of-a-garam-deployment.md)
-> on how a consumer pins the chart
-> Date: 2026-11-24
+> §Consequences' "Nothing packages or publishes the chart" and its
+> pinning of the chart by a git ref alone
+> Date: 2026-11-23
 
 ## Context
 
@@ -52,8 +54,14 @@ returns.
    in the job's step summary and as the job's `chart-digest` output. It
    is not in the GitHub release's notes, which the `release` job writes
    without waiting for the chart.
-4. **A git ref of `garamsh/garam` remains a way to reference the
-   chart.** ADR-0042's rule stands for a consumer that reads the source.
+4. **What this replaces in ADR-0042.** Its sentences "A consumer pins
+   the chart by a git ref of `garamsh/garam` and the images by tag" and
+   "Nothing packages or publishes the chart, so a tag or a commit SHA of
+   this repository is the reference" no longer hold: a release
+   publishes the chart, and the artifact is pinned by digest. A git ref
+   of `garamsh/garam` remains a way to read the source. The rest of
+   ADR-0042, including that the chart is the description of a
+   deployment, stands.
 
 ## Consequences
 

@@ -206,7 +206,11 @@ ADR-0068).
   and 30 in all per minute** (`platform/internal/operator`
   `KeyIssuancesPerOperator`), and answers 429 with `Retry-After` past
   either; generating the key is the costliest thing a member asks of the
-  browser-facing listener.
+  browser-facing listener. Each bound is per replica, so at the
+  balancer in front of N replicas the ceiling is N times it: 3N per
+  operator and 30N in all
+  ([ADR-0178](./adr/0178-every-workload-runs-two-replicas-spread-across-nodes-and-the-database-stays-the-coordinator.md)
+  §The per-replica rate limiters).
 - **The Operator's half is unbuilt.** One external writer supplies the
   stable PEM, replaced atomically and reloaded at each exchange, with
   `kid` derived from the same read; the Operator refreshes tokens in

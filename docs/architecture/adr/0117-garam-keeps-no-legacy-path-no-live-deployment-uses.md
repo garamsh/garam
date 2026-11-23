@@ -1,6 +1,6 @@
 # ADR 0117: Garam keeps no legacy path no live deployment uses
 
-> Status: superseded in part by [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md) (item 5's gate)
+> Status: superseded in part by [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md) (item 5's gate) and by [ADR-0184](./0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md) (item 2's one-time token, for a connected cluster only)
 > Date: 2026-10-19
 
 Drafted for #1593, for which the Garam PM reserved this number on

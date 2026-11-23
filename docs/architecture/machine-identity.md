@@ -16,6 +16,13 @@ waits for an activation (ADR-0118). An operator's shared-secret
 credential, its exchange and its enrollment token are gone
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md));
 the supervisor's shared-secret exchange and `machine-token.v1` stay.
+A connected cluster is a fourth kind of key-holding caller, decided and
+unbuilt ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
+It registers once by spending a one-time token with a key it generated,
+which supersedes ADR-0117 in part for a cluster only, because that key
+never leaves the cluster. After that it exchanges `private_key_jwt`
+assertions under `machine-token.v2`, as an operator does, and it
+rotates its key only under its current key's signature.
 
 | Type | Responsibility |
 |------|----------------|

@@ -1062,7 +1062,8 @@ ADRs:
   legacy definitions go once #1594 moves aurora's agent off them; each
   removal is its own pull request of #1593; supersedes 0086, 0088 and
   0090, and parts of 0031, 0064, 0073, 0075, 0077, 0080, 0082, 0084
-  and 0102; item 5's gate is superseded by 0118
+  and 0102; item 5's gate is superseded by 0118, and item 2's one-time
+  token, for a connected cluster only, by 0184
 - [0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
   — every legacy path goes now with nothing migrated, and the
   certificate path goes with them: #1593's fifth pull request removes
@@ -1610,3 +1611,11 @@ ADRs:
   does not wait for, and a consumer pins it by digest; accepted, built
   (#2033); supersedes ADR-0042 in part on whether a release publishes the
   chart and how a consumer pins it
+- [0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)
+  — a connected cluster is a machine identity,
+  `grn:<org>/iam/cluster/<id>`, that registers once by spending a
+  one-time token with a key it generated, so its private key never
+  leaves the cluster; it then exchanges `private_key_jwt` assertions,
+  rotates its key under its current key's signature, and is revoked by
+  its organization; accepted, unbuilt (#2043); supersedes 0117 in part,
+  item 2's one-time token, for a connected cluster only

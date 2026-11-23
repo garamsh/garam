@@ -56,7 +56,10 @@ Each image has one repository, named `<publishing repository>/<image>`
 `garam/server`, `garam/console`, `garam/site` and `garam/policy`, which
 the chart's `image.*.repository` names, and `garam/cowork` and
 `garam/cowork-web`, which no chart here deploys. A release publishes
-all six, and no image holds an address chosen when it was built
+all six, and the chart itself as an OCI artifact under the release's
+version, pinned by digest
+([ADR-0181](./adr/0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)).
+No image holds an address chosen when it was built
 ([ADR-0150](./adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)).
 The tag says what a build is. A release is a git tag, and the image
 tag is that tag without the `v`
@@ -851,6 +854,9 @@ that would assert one:
   — where the images are published and what triggers a release; the
   names and the number of images are superseded by ADR-0134, and the
   release tag's form until launch by ADR-0157
+- [ADR-0181](./adr/0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)
+  — a release publishes the chart as an OCI artifact under the
+  release version, and a consumer pins it by digest
 - [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development build is told apart by its tag, which this
   repository refuses to make a release version

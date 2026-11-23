@@ -754,10 +754,25 @@ from the request after that.
 
 ## Pinning a version
 
-Nothing packages or publishes this chart, so it is referenced by a git
-ref of `garamsh/garam` — a tag, or a commit SHA, which cannot come to
-mean something else. `Chart.yaml`'s `version` moves when the chart
-changes and names no garam version.
+A release also publishes this chart as an OCI artifact
+([ADR-0181](../../../docs/architecture/adr/0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)),
+to the repository `garam/charts/garam` of the registry the images go
+to, under the release's version: `release.yml`'s `chart` job packages
+it with `--version` and `--app-version` set to the release version, so
+the chart and the images carry one version, and pushes it with
+`make -C deploy/charts chart-publish`. The job records the digest the
+registry answers with in its step summary, and a deployment pins the
+chart by that digest. The job runs beside the release and the release
+does not wait for it, so a release exists whose chart is not yet
+published: the repository is created by the infrastructure repository,
+and a run of the job before it exists fails with the repository not
+found, which re-running the job after it exists repairs. The chart is
+also referenced by a git ref of `garamsh/garam` — a tag, or a commit
+SHA, which cannot come to mean something else.
+
+`Chart.yaml`'s `version` moves when the chart changes and names no
+garam version; the published artifact's version is the release's, set
+when it is packaged, so the two are different numbers by design.
 
 The images are pinned separately, through `image.server.tag`,
 `image.web.tag`, `image.site.tag` and `image.policy.tag`. A release is a

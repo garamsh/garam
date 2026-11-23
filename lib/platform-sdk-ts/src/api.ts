@@ -439,7 +439,7 @@ export interface paths {
          * What deleting the organization would destroy. Requires the `owner` role.
          * @description What `deleteOrg` would remove, counted on the server at the moment of the read. Nothing here deletes anything and nothing here reserves the counts: an organization written to after this answers is deleted with what it holds then.
          *
-         *     The counts are of the resources keyed on the organization itself. What is keyed on those in turn goes with its parent and is not counted apart from it — a group's members with the group, a project's members with the project, a policy's versions and attachments with the policy, an agent's assignment with the agent, and an operator's keys with the operator.
+         *     The counts are of the resources keyed on the organization itself. What is keyed on those in turn goes with its parent and is not counted apart from it — a group's members with the group, a project's members with the project, an agent's assignment with the agent, and an operator's keys with the operator.
          *
          *     `certificateAuthority` is outside `counts` because it is the one thing on this answer that cannot be created again. The rest can be re-made by whoever made them; the retired authority's private key is stored sealed and goes with the row, and nothing imports or restores one (ADR-0016, ADR-0118).
          */
@@ -463,13 +463,13 @@ export interface paths {
         put?: never;
         /**
          * Ask whether the signed-in caller may take each of a list of actions. Requires membership.
-         * @description Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
+         * @description Answers each pair with the decision enforcement would reach for the same caller, action and resource: the policy service's decision, asked of it one pair at a time. The answer is `allow` or `deny` and never why, so no policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
          *
-         *     Some actions are decided by more than that `Check`. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+         *     Some actions are decided by more than the policy service's decision. `iam:agent.create`, `iam:agent.configure`, `iam:agent.recover`, `iam:agent.replace`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:agent.execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the policy service's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `iam:operator.delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `iam:agent.enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
          *
          *     A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
          *
-         *     A caller who is not a member of the organization is refused with 403, as every operation inside it refuses one. A pair the engine cannot decide fails the whole request, so no answer is partial.
+         *     A caller who is not a member of the organization is refused with 403, as every operation inside it refuses one. A pair the policy service cannot decide fails the whole request, so no answer is partial.
          */
         post: operations["checkPermissions"];
         delete?: never;
@@ -514,14 +514,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the members and agents the engine allows one action. Requires `iam:org.member-list`.
-         * @description Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
+         * List the members and agents the policy service allows one action. Requires `iam:org.member-list`.
+         * @description Answers which principals of the organization the policy service allows `action` on the resource, each asked of it as enforcement asks it: one decision per member or agent.
          *
          *     It requires `iam:org.member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `iam:agent.read` on the organization, the check `listAgents` makes; otherwise none is listed.
          *
-         *     The candidates are the organization's members in ascending GRN order followed by its agents in ascending GRN order. A page asks `limit` of them from `offset`, at most fifty, and answers those the engine allows, so a page may hold fewer holders than it asked candidates, none at all among them. `nextOffset` is where the next page starts, and absent on the last.
+         *     The candidates are the organization's members in ascending GRN order followed by its agents in ascending GRN order. A page asks `limit` of them from `offset`, at most fifty, and answers those the policy service allows, so a page may hold fewer holders than it asked candidates, none at all among them. `nextOffset` is where the next page starts, and absent on the last.
          *
-         *     Only actions the engine's `Check` alone decides are answered. One `checkPermissions` puts to more than that is refused with 400, since the engine is not what decides who holds it. An action garam does not define is held by no one. The resource is named and refused as `explainPermission` names and refuses it.
+         *     Only actions the policy service's decision alone decides are answered. One `checkPermissions` puts to more than that is refused with 400, since the policy service is not what decides who holds it. An action garam does not define is held by no one. The resource is named and refused as `explainPermission` names and refuses it.
          */
         get: operations["listPermissionHolders"];
         put?: never;
@@ -1803,7 +1803,7 @@ export interface components {
             members: number;
             /** @description Invitations issued for this organization, accepted and pending alike. A pending one stops admitting anybody. */
             invitations: number;
-            /** @description Policies, each taking its versions and its attachments with it (ADR-0008). */
+            /** @description Policies, the length of the organization's list that the policy service answers. */
             policies: number;
             /** @description Agents, each taking its operator assignment with it. */
             agents: number;
@@ -1878,7 +1878,7 @@ export interface components {
             expiresAt: string;
         };
         /**
-         * @description A policy's lifecycle state. Only an `active` policy contributes statements to a check.
+         * @description A policy's lifecycle state. Only an `active` policy contributes its default version to decisions.
          * @enum {string}
          */
         PolicyStatus: "draft" | "active";
@@ -3161,7 +3161,7 @@ export interface operations {
                 resourceType?: components["parameters"]["permissionResourceType"];
                 /** @description The last segment of the resource's identifier, given with `resourceType`. */
                 resourceId?: components["parameters"]["permissionResourceId"];
-                /** @description How many candidates to ask, from 1 to 50; 50 when absent. Unlike the `limit` other lists share, 0 is refused rather than read as no limit, because each candidate costs the engine a check. */
+                /** @description How many candidates to ask, from 1 to 50; 50 when absent. Unlike the `limit` other lists share, 0 is refused rather than read as no limit, because each candidate costs the policy service a decision. */
                 limit?: number;
                 offset?: components["parameters"]["offset"];
             };

@@ -71,9 +71,10 @@ are that, and each is read off an artifact rather than judged:
   run's annotation names the account rather than the diff. Both halves
   are read off the run.
 - **No workflow watches the base.** Every workflow that runs on
-  `pull_request` — `ci.yml` and `images.yml` — carries
-  `branches: [main, dev]`, which selects a pull request by the branch
-  it targets, so a pull request into any other branch starts nothing.
+  `pull_request` — `ci.yml` and `images.yml` — carries a `branches:`
+  list (`[main, dev, "goal/**"]` in `ci.yml`, `[main, dev]` in
+  `images.yml`), which selects a pull request by the branch it
+  targets, so a pull request into any other branch starts nothing.
   The filter is read off those two files and the base off the pull
   request.
 
@@ -90,7 +91,9 @@ In either state the PM may merge on a local run that:
 `branches:` line names the base, the run it dispatched is a verdict on
 the diff until `steps=0` and the annotation are read off that run.
 Both lines have named `dev` since #1657, so a pull request into `dev`
-dispatches a run, and that run is the verdict on it. Each permission
+dispatches a run, and that run is the verdict on it. `ci.yml`'s also
+names `goal/**`, so a pull request into a goal branch dispatches its
+run, and that run is the verdict on it. Each permission
 ends by itself, the first the moment a run is dispatched and the second
 the moment a `branches:` line names the base, and (iv) is owed again by
 every pull request merged under it rather than settled once.

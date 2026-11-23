@@ -2,12 +2,12 @@
 # account created and annotated for every workload, an image pinned by
 # digest as well as by tag, key material split across two Secrets, and
 # message signing keys in Transit with the machine pod annotated, and
-# the operator exchange's token endpoint, the branches in the
-# templates — so the render `make -C deploy/charts ci` checks covers
-# both sides of each. The minimal file covers the other side of each:
+# the operator exchange's token endpoint, garam's OIDC issuer with the
+# service keys file, the branches in the templates — so the render
+# `make -C deploy/charts ci` checks covers both sides of each. The minimal file covers the other side of each:
 # no name, so no account and no binding; no digest; one Secret holding
 # all four files; keys sealed under the key-encryption key; and no
-# token endpoint.
+# token endpoint, no issuer and no service keys.
 #
 # The policy service is set under every name of its own here, and its
 # address and Secret keys differ from the defaults, so each value
@@ -63,11 +63,20 @@ api:
   # file leaves the address unset, so each side renders.
   policy:
     address: policy.garam.example:8443
-    tokenIssuer: https://garam.example
+    tokenIssuer: https://garam.example/api
     caSecretName: garam-policy-ca
     signingKeyFile: /vault/secrets/policy-signing-key
   podAnnotations:
     vault.hashicorp.com/agent-inject: "true"
+# The issuer turned on, so it renders on api and machine alike, with the
+# service keys read from a Secret under a key of its own. It names
+# the policy token issuer's value: the two are one issuer. The minimal
+# file leaves both unset.
+identity:
+  issuer: https://garam.example/api
+  serviceKeys:
+    secretName: garam-service-keys
+    key: keys.json
 policy:
   serviceAccount:
     name: garam-policy

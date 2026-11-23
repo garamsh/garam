@@ -20,7 +20,8 @@ name: ci
 # verified on the forge before it lands (#1657). `goal/**` names the
 # goal branches a goal's pull requests merge into, so each of those is
 # verified the same way. A pull request into any other branch starts
-# nothing.
+# nothing. images.yml does not name `goal/**`: the images are built
+# for a release.
 
 on:
   pull_request:

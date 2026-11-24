@@ -110,6 +110,36 @@ func (q *Queries) ClusterKeyExists(ctx context.Context, arg ClusterKeyExistsPara
 	return exists, err
 }
 
+const clusterReportHolds = `-- name: ClusterReportHolds :one
+SELECT EXISTS (
+    SELECT 1 FROM cluster_reports
+    WHERE cluster_grn = $1 AND report -> 'objects' @> jsonb_build_array(jsonb_build_object(
+        'owner', 'cluster', 'kind', $2::text,
+        'namespace', $3::text, 'name', $4::text))
+) AS held
+`
+
+type ClusterReportHoldsParams struct {
+	ClusterGrn string
+	Kind       string
+	Namespace  string
+	Name       string
+}
+
+// Whether the record's kept report shows a cluster-owned object under
+// kind, namespace and name (gbo ADR 0089 decision 4).
+func (q *Queries) ClusterReportHolds(ctx context.Context, arg ClusterReportHoldsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, clusterReportHolds,
+		arg.ClusterGrn,
+		arg.Kind,
+		arg.Namespace,
+		arg.Name,
+	)
+	var held bool
+	err := row.Scan(&held)
+	return held, err
+}
+
 const createCluster = `-- name: CreateCluster :one
 INSERT INTO clusters (grn, org_grn, created_by, created_at, name, description)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -191,6 +221,27 @@ func (q *Queries) GetCluster(ctx context.Context, grn string) (Cluster, error) {
 		&i.Name,
 		&i.Description,
 	)
+	return i, err
+}
+
+const getClusterReport = `-- name: GetClusterReport :one
+SELECT c.grn, t.last_contact_at, r.report
+FROM clusters c
+LEFT JOIN cluster_contacts t ON t.cluster_grn = c.grn
+LEFT JOIN cluster_reports r ON r.cluster_grn = c.grn
+WHERE c.grn = $1
+`
+
+type GetClusterReportRow struct {
+	Grn           string
+	LastContactAt pgtype.Timestamptz
+	Report        []byte
+}
+
+func (q *Queries) GetClusterReport(ctx context.Context, grn string) (GetClusterReportRow, error) {
+	row := q.db.QueryRow(ctx, getClusterReport, grn)
+	var i GetClusterReportRow
+	err := row.Scan(&i.Grn, &i.LastContactAt, &i.Report)
 	return i, err
 }
 
@@ -359,6 +410,30 @@ func (q *Queries) IssueRegistrationToken(ctx context.Context, arg IssueRegistrat
 	var expires_at pgtype.Timestamptz
 	err := row.Scan(&expires_at)
 	return expires_at, err
+}
+
+const keepClusterReport = `-- name: KeepClusterReport :execrows
+INSERT INTO cluster_reports (cluster_grn, observed_at, received_at, report)
+VALUES ($1, $2, now(), $3)
+ON CONFLICT (cluster_grn) DO UPDATE
+SET observed_at = EXCLUDED.observed_at, received_at = EXCLUDED.received_at, report = EXCLUDED.report
+WHERE cluster_reports.observed_at < EXCLUDED.observed_at
+`
+
+type KeepClusterReportParams struct {
+	ClusterGrn string
+	ObservedAt pgtype.Timestamptz
+	Report     []byte
+}
+
+// A report replaces the kept one only where it was observed later
+// (REP-5); none answers zero rows.
+func (q *Queries) KeepClusterReport(ctx context.Context, arg KeepClusterReportParams) (int64, error) {
+	result, err := q.db.Exec(ctx, keepClusterReport, arg.ClusterGrn, arg.ObservedAt, arg.Report)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listClusterKeys = `-- name: ListClusterKeys :many
@@ -560,6 +635,40 @@ func (q *Queries) ListLiveDeclarationsAfter(ctx context.Context, arg ListLiveDec
 	return items, nil
 }
 
+const listPlacedDeclarationIDs = `-- name: ListPlacedDeclarationIDs :many
+
+SELECT id FROM cluster_declarations
+WHERE cluster_grn = $1 AND id = ANY($2::text[])
+`
+
+type ListPlacedDeclarationIDsParams struct {
+	ClusterGrn string
+	Ids        []string
+}
+
+// Reports (ADR-0188).
+// The identifiers of ids a declaration of the record holds, live or
+// tombstoned (REP-8).
+func (q *Queries) ListPlacedDeclarationIDs(ctx context.Context, arg ListPlacedDeclarationIDsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listPlacedDeclarationIDs, arg.ClusterGrn, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const notifyDeclarations = `-- name: NotifyDeclarations :exec
 SELECT pg_notify('garam_cluster_declarations', $1::text)
 `
@@ -633,12 +742,20 @@ func (q *Queries) ReserveDeclarationID(ctx context.Context, id string) (int64, e
 }
 
 const resolveClusterToken = `-- name: ResolveClusterToken :one
-SELECT t.cluster_grn, t.expires_at
-FROM cluster_tokens t
-JOIN clusters c ON c.grn = t.cluster_grn
-JOIN cluster_keys k ON k.id = t.key_id
-WHERE t.token_hash = $1 AND t.expires_at > now()
-  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+WITH resolved AS (
+    SELECT t.cluster_grn, t.expires_at
+    FROM cluster_tokens t
+    JOIN clusters c ON c.grn = t.cluster_grn
+    JOIN cluster_keys k ON k.id = t.key_id
+    WHERE t.token_hash = $1 AND t.expires_at > now()
+      AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+), contact AS (
+    INSERT INTO cluster_contacts (cluster_grn, last_contact_at)
+    SELECT cluster_grn, now() FROM resolved
+    ON CONFLICT (cluster_grn) DO UPDATE SET last_contact_at = EXCLUDED.last_contact_at
+    WHERE cluster_contacts.last_contact_at < EXCLUDED.last_contact_at - interval '1 second'
+)
+SELECT cluster_grn, expires_at FROM resolved
 `
 
 type ResolveClusterTokenRow struct {
@@ -646,6 +763,8 @@ type ResolveClusterTokenRow struct {
 	ExpiresAt  pgtype.Timestamptz
 }
 
+// A token that resolves records its record's contact (REP-5,
+// ADR-0188), skipped while the kept time is under a second old.
 func (q *Queries) ResolveClusterToken(ctx context.Context, tokenHash string) (ResolveClusterTokenRow, error) {
 	row := q.db.QueryRow(ctx, resolveClusterToken, tokenHash)
 	var i ResolveClusterTokenRow

@@ -17,8 +17,9 @@ type DeclarationStore interface {
 	// generation 1, or the next generation of the live one id names on
 	// g, answering whether it was new. An id placed on another record
 	// is ErrDeclarationTaken, a tombstoned one ErrDeclarationTombstoned,
-	// and an object another live declaration of g names
-	// ErrDeclaredObjectTaken.
+	// an object another live declaration of g names
+	// ErrDeclaredObjectTaken, and one g's latest report shows held by a
+	// cluster-owned object ErrDeclaredObjectHeld.
 	Declare(ctx context.Context, g grn.GRN, id string, object DeclaredObject) (Declaration, bool, error)
 	// Tombstone deletes g's live declaration id by a change at its next
 	// generation, or answers ErrDeclarationNotFound.

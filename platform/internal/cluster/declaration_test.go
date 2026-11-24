@@ -210,7 +210,7 @@ func ptr(s string) *string { return &s }
 
 func TestWatch_HoldsAnEmptyPageUntilAWriteWakesIt(t *testing.T) {
 	store, wakes := newPagedStore(), cluster.NewWakes()
-	d := cluster.NewService(nil, store, cluster.Config{Wakes: wakes, DeclarationRecheck: time.Hour})
+	d := cluster.NewService(nil, store, nil, cluster.Config{Wakes: wakes, DeclarationRecheck: time.Hour})
 	answered := make(chan cluster.Page)
 	go func() {
 		page, err := d.WatchDeclarations(context.Background(), self, ptr("c.0"), cluster.MaxWait)
@@ -230,7 +230,7 @@ func TestWatch_HoldsAnEmptyPageUntilAWriteWakesIt(t *testing.T) {
 
 func TestWatch_ReadsAgainAtItsRecheckWhenNoWakeCame(t *testing.T) {
 	store := newPagedStore()
-	d := cluster.NewService(nil, store, cluster.Config{DeclarationRecheck: 10 * time.Millisecond})
+	d := cluster.NewService(nil, store, nil, cluster.Config{DeclarationRecheck: 10 * time.Millisecond})
 	answered := make(chan cluster.Page)
 	go func() {
 		page, _ := d.WatchDeclarations(context.Background(), self, ptr("c.0"), cluster.MaxWait)
@@ -248,7 +248,7 @@ func TestWatch_ReadsAgainAtItsRecheckWhenNoWakeCame(t *testing.T) {
 
 func TestWatch_AnswersEmptyOnceWaitIsOverAndAFullSetAtOnce(t *testing.T) {
 	store := newPagedStore()
-	d := cluster.NewService(nil, store, cluster.Config{DeclarationRecheck: time.Hour})
+	d := cluster.NewService(nil, store, nil, cluster.Config{DeclarationRecheck: time.Hour})
 	page, err := d.WatchDeclarations(context.Background(), self, ptr("c.0"), 0)
 	require.NoError(t, err)
 	assert.Empty(t, page.Changes)
@@ -265,7 +265,7 @@ func TestWatch_AnswersEmptyOnceWaitIsOverAndAFullSetAtOnce(t *testing.T) {
 
 func TestWatch_RefusesWhatTheRouteMayNotAsk(t *testing.T) {
 	store := newPagedStore()
-	d := cluster.NewService(nil, store, cluster.Config{})
+	d := cluster.NewService(nil, store, nil, cluster.Config{})
 	_, err := d.WatchDeclarations(context.Background(), self, ptr(""), 0)
 	assert.Equal(t, errorx.KindInvalidArgument, errorx.KindOf(err), "an empty after")
 	_, err = d.WatchDeclarations(context.Background(), self, nil, cluster.MaxWait+time.Second)
@@ -285,7 +285,7 @@ func TestWatch_IsBoundedPerCluster(t *testing.T) {
 	store := newPagedStore()
 	store.page.Full = true
 	now := time.Now()
-	d := cluster.NewService(nil, store, cluster.Config{Now: func() time.Time { return now }})
+	d := cluster.NewService(nil, store, nil, cluster.Config{Now: func() time.Time { return now }})
 	for range cluster.WatchesPerCluster {
 		_, err := d.WatchDeclarations(context.Background(), self, nil, 0)
 		require.NoError(t, err)

@@ -90,13 +90,23 @@ INSERT INTO cluster_tokens (token_hash, cluster_grn, key_id, issued_at, expires_
 VALUES (sqlc.arg('token_hash'), sqlc.arg('cluster_grn'), sqlc.arg('key_id'),
         sqlc.arg('issued_at'), sqlc.arg('expires_at'));
 
+-- A token that resolves records its record's contact (REP-5,
+-- ADR-0188), skipped while the kept time is under a second old.
 -- name: ResolveClusterToken :one
-SELECT t.cluster_grn, t.expires_at
-FROM cluster_tokens t
-JOIN clusters c ON c.grn = t.cluster_grn
-JOIN cluster_keys k ON k.id = t.key_id
-WHERE t.token_hash = $1 AND t.expires_at > now()
-  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now());
+WITH resolved AS (
+    SELECT t.cluster_grn, t.expires_at
+    FROM cluster_tokens t
+    JOIN clusters c ON c.grn = t.cluster_grn
+    JOIN cluster_keys k ON k.id = t.key_id
+    WHERE t.token_hash = $1 AND t.expires_at > now()
+      AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+), contact AS (
+    INSERT INTO cluster_contacts (cluster_grn, last_contact_at)
+    SELECT cluster_grn, now() FROM resolved
+    ON CONFLICT (cluster_grn) DO UPDATE SET last_contact_at = EXCLUDED.last_contact_at
+    WHERE cluster_contacts.last_contact_at < EXCLUDED.last_contact_at - interval '1 second'
+)
+SELECT cluster_grn, expires_at FROM resolved;
 
 -- name: ListClusterKeys :many
 SELECT id, cluster_grn, kid, public_jwk, created_at, retires_at, revoked_at, predecessor_id,
@@ -196,3 +206,37 @@ ORDER BY last_seq LIMIT sqlc.arg('max_rows');
 SELECT * FROM cluster_declaration_changes
 WHERE cluster_grn = sqlc.arg('cluster_grn') AND seq > sqlc.arg('after')
 ORDER BY seq LIMIT sqlc.arg('max_rows');
+
+-- Reports (ADR-0188).
+
+-- The identifiers of ids a declaration of the record holds, live or
+-- tombstoned (REP-8).
+-- name: ListPlacedDeclarationIDs :many
+SELECT id FROM cluster_declarations
+WHERE cluster_grn = sqlc.arg('cluster_grn') AND id = ANY(sqlc.arg('ids')::text[]);
+
+-- A report replaces the kept one only where it was observed later
+-- (REP-5); none answers zero rows.
+-- name: KeepClusterReport :execrows
+INSERT INTO cluster_reports (cluster_grn, observed_at, received_at, report)
+VALUES (sqlc.arg('cluster_grn'), sqlc.arg('observed_at'), now(), sqlc.arg('report'))
+ON CONFLICT (cluster_grn) DO UPDATE
+SET observed_at = EXCLUDED.observed_at, received_at = EXCLUDED.received_at, report = EXCLUDED.report
+WHERE cluster_reports.observed_at < EXCLUDED.observed_at;
+
+-- name: GetClusterReport :one
+SELECT c.grn, t.last_contact_at, r.report
+FROM clusters c
+LEFT JOIN cluster_contacts t ON t.cluster_grn = c.grn
+LEFT JOIN cluster_reports r ON r.cluster_grn = c.grn
+WHERE c.grn = $1;
+
+-- Whether the record's kept report shows a cluster-owned object under
+-- kind, namespace and name (gbo ADR 0089 decision 4).
+-- name: ClusterReportHolds :one
+SELECT EXISTS (
+    SELECT 1 FROM cluster_reports
+    WHERE cluster_grn = sqlc.arg('cluster_grn') AND report -> 'objects' @> jsonb_build_array(jsonb_build_object(
+        'owner', 'cluster', 'kind', sqlc.arg('kind')::text,
+        'namespace', sqlc.arg('namespace')::text, 'name', sqlc.arg('name')::text))
+) AS held;

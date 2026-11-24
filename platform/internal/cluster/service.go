@@ -80,26 +80,34 @@ type Service interface {
 	// answered at once, empty or not, and a record deleted meanwhile is
 	// operator.ErrClientInvalid.
 	WatchDeclarations(ctx context.Context, caller grn.GRN, after *string, wait time.Duration) (Page, error)
+	// Report keeps r as caller's report where it was observed after
+	// the one kept, with only what names a declaration placed on caller
+	// (REP-5, REP-8). Past ReportsPerCluster it answers
+	// *operator.Exceeded, and a record deleted meanwhile is
+	// operator.ErrClientInvalid.
+	Report(ctx context.Context, caller grn.GRN, r Report) error
 }
 
 type service struct {
 	credentials  CredentialStore
 	declarations DeclarationStore
+	reports      ReportStore
 	cfg          Config
 	// perSource bounds registrations and exchanges per address before
 	// anything is read; perClient each cluster's verified exchanges.
 	registrations *operator.Limiter
 	perSource     *operator.Limiter
 	perClient     *operator.Limiter
-	// rotations bounds each cluster's rotation requests, and watches
-	// its declaration polls.
-	rotations *operator.Limiter
-	watches   *operator.Limiter
+	// rotations bounds each cluster's rotation requests, watches its
+	// declaration polls and reportsLimit its reports.
+	rotations    *operator.Limiter
+	watches      *operator.Limiter
+	reportsLimit *operator.Limiter
 }
 
-// NewService constructs the service over a cluster's credentials and
-// the declarations placed on it.
-func NewService(credentials CredentialStore, declarations DeclarationStore, cfg Config) Service {
+// NewService constructs the service over a cluster's credentials, the
+// declarations placed on it and the reports it sends.
+func NewService(credentials CredentialStore, declarations DeclarationStore, reports ReportStore, cfg Config) Service {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
@@ -119,11 +127,12 @@ func NewService(credentials CredentialStore, declarations DeclarationStore, cfg 
 		return operator.NewLimiter(operator.LimiterConfig{Limit: limit, Window: operator.ExchangeWindow,
 			MaxKeys: operator.TrackedClients, Now: cfg.Now})
 	}
-	return &service{credentials: credentials, declarations: declarations, cfg: cfg,
+	return &service{credentials: credentials, declarations: declarations, reports: reports, cfg: cfg,
 		registrations: limiter(cfg.RegistrationLimit),
 		perSource:     limiter(operator.ExchangesPerSource),
 		perClient:     limiter(operator.ExchangesPerClient),
 		rotations:     limiter(RotationsPerCluster),
 		watches:       limiter(WatchesPerCluster),
+		reportsLimit:  limiter(ReportsPerCluster),
 	}
 }

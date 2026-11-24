@@ -369,6 +369,15 @@ var apiOperations = []apiOperation{
 		},
 	},
 	{
+		ID: "getClusterReport", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/report",
+		Words: []string{"clusters", "report"}, Verb: "get", Short: "Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.",
+		Args: []string{"cluster"}, FromOrg: true,
+		Columns: []string{"cluster", "lastContactAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewGetClusterReportRequest(server, path[0], path[1])
+		},
+	},
+	{
 		ID: "listClusterDeclarations", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/declarations",
 		Words: []string{"clusters", "declarations"}, Verb: "list", Short: "List the declarations placed on a connected cluster. Requires the `member` role.",
 		Args: []string{"cluster"}, FromOrg: true,

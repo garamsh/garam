@@ -54,6 +54,14 @@ func (s *Store) Declare(ctx context.Context, g grn.GRN, id string, object cluste
 		default:
 			return pgxerr.Classify(err, "get declaration", nil, nil)
 		}
+		held, err := q.ClusterReportHolds(ctx, db.ClusterReportHoldsParams{ClusterGrn: g.String(),
+			Kind: object.Kind(), Namespace: object.Namespace(), Name: object.Name()})
+		if err != nil {
+			return pgxerr.Classify(err, "read cluster report", nil, nil)
+		}
+		if held {
+			return cluster.ErrDeclaredObjectHeld
+		}
 		row, err := s.write(ctx, q, g, db.WriteDeclarationParams{
 			ID: id, ClusterGrn: g.String(), Generation: generation,
 			Kind: object.Kind(), Namespace: object.Namespace(), Name: object.Name(),

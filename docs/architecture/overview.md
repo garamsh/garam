@@ -232,13 +232,15 @@ garam's retired templates and the browser's `operatorGrn`
 - Clusters as a resource an organization connects, beyond its record
   and its identity. A connected cluster is a machine identity,
   `grn:<org>/iam/cluster/<id>`. Its record, its browser routes, its
-  registration, its exchange, its key rotation and the declarations
-  placed on it are built ([clusters.md](./clusters.md)). The
+  registration, its exchange, its key rotation, the declarations
+  placed on it and the reports it sends are built
+  ([clusters.md](./clusters.md)). The
   registration route takes no token, as a standalone host's enrollment
   does, and spends the one-time token instead
   ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
   What is decided and unbuilt is the cluster as the target of the bots
-  and workspaces declared for it: reports and the bot-token mint.
+  and workspaces declared for it: the bot-token mint, and the
+  console's pages for a cluster.
   The wire between garam and the connector in that cluster is
   `garamsh/garam-bot-operator`'s interface
   `interfaces/cluster-connection/v1alpha1/`, whose server garam owes.

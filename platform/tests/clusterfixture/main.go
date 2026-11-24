@@ -51,6 +51,7 @@ const usage = `usage: clusterfixture <subcommand> [arguments]
   tombstone ID
   revoke-keys GRN
   delete-cluster GRN
+  latest-report GRN
   expire-cursors GRN
 environment: ` + envAPIURL + `, ` + envSessionToken + `, ` + envOrg + `, and ` + envDatabaseURL + ` for --expired and expire-cursors`
 
@@ -124,7 +125,7 @@ func dispatch(ctx context.Context, args []string, getenv func(string) string) (a
 			return nil, errUsage
 		}
 		return f.tombstone(ctx, rest[0])
-	case "revoke-keys", "delete-cluster", "expire-cursors":
+	case "revoke-keys", "delete-cluster", "expire-cursors", "latest-report":
 		if len(rest) != 1 {
 			return nil, errUsage
 		}
@@ -137,6 +138,8 @@ func dispatch(ctx context.Context, args []string, getenv func(string) string) (a
 			return f.revokeKeys(ctx, g)
 		case "delete-cluster":
 			return f.deleteCluster(ctx, g)
+		case "latest-report":
+			return f.latestReport(ctx, g)
 		}
 		return f.expireCursors(ctx, g, getenv(envDatabaseURL))
 	}
@@ -411,6 +414,17 @@ func (f *fixture) tombstone(ctx context.Context, id string) (declared, error) {
 		return declared{ID: id, Generation: live.Generation + 1}, nil
 	}
 	return declared{}, &refusal{Code: "not_found", Message: "no live declaration " + id + " in the organization"}
+}
+
+// latestReport reads g's kept report and its lastContactAt, each null
+// where there is none, as getClusterReport answers them: cluster,
+// lastContactAt and report are the members the suite reads.
+func (f *fixture) latestReport(ctx context.Context, g grn.GRN) (json.RawMessage, error) {
+	var view json.RawMessage
+	if err := f.call(ctx, http.MethodGet, recordPath(g)+"/report", "", &view, http.StatusOK); err != nil {
+		return nil, err
+	}
+	return view, nil
 }
 
 // expireCursors purges g's log and every cursor answered so far

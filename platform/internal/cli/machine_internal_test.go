@@ -11,6 +11,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +24,9 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/ca"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/health"
+	"github.com/garamsh/garam/platform/internal/machineapi"
 )
 
 func machineGRN(org, id string) grn.GRN {
@@ -386,4 +389,24 @@ func TestClusterRegistrationLimit_TakesAPositiveBoundAndNoOther(t *testing.T) {
 		_, err := clusterRegistrationLimit()
 		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), raw)
 	}
+}
+
+// TestBoundedBodies_AReportIsReadPastTheListenersBound holds that a
+// cluster's report is bounded at REP-6's 4 MiB, which its route answers
+// 413 past, and every other body at maxRequestBody.
+func TestBoundedBodies_AReportIsReadPastTheListenersBound(t *testing.T) {
+	read := boundedBodies(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.ReadAll(r.Body); err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+		}
+	}))
+	send := func(path string, size int) int {
+		rec := httptest.NewRecorder()
+		read.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, strings.NewReader(strings.Repeat("x", size))))
+		return rec.Code
+	}
+	assert.Equal(t, http.StatusOK, send(machineapi.ReportPath, 2*maxRequestBody), "a report past the listener's bound")
+	assert.Equal(t, http.StatusRequestEntityTooLarge, send(machineapi.ReportPath, cluster.ReportMaxBytes+1), "a report past REP-6's")
+	assert.Equal(t, http.StatusRequestEntityTooLarge, send("/cluster-connection/v1alpha1/clusters/self/keys", 2*maxRequestBody),
+		"the control: any other body past the listener's bound")
 }

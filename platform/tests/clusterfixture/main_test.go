@@ -69,6 +69,8 @@ func (b *browserAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"id":"chosen","generation":4}`))
 	case "GET " + record + "/declarations/chosen":
 		_, _ = w.Write([]byte(`{"id":"chosen","generation":4}`))
+	case "GET " + record + "/report":
+		_, _ = w.Write([]byte(`{"cluster":"` + testRecord + `","lastContactAt":"2026-11-24T12:00:01Z","report":null}`))
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"kind":"not_found","message":"cluster not found"}`))
@@ -241,6 +243,24 @@ func TestTombstone_FindsTheRecordHoldingTheIdentifier(t *testing.T) {
 		"GET " + record + "/declarations/chosen", "DELETE " + record + "/declarations/chosen"}, api.requests)
 
 	code, answer, _ = runFixture(t, srv.URL, nil, "tombstone", "absent")
+	assert.Equal(t, 1, code)
+	assert.Equal(t, "not_found", answer["error"])
+}
+
+// TestLatestReport_PrintsWhatGetClusterReportAnswers holds the members
+// the suite reads, a report the record has none of as null, and a
+// record the organization does not hold refused.
+func TestLatestReport_PrintsWhatGetClusterReportAnswers(t *testing.T) {
+	api := &browserAPI{}
+	srv := httptest.NewServer(api)
+	t.Cleanup(srv.Close)
+
+	code, answer, _ := runFixture(t, srv.URL, nil, "latest-report", testRecord)
+	require.Equal(t, 0, code)
+	assert.Equal(t, map[string]any{"cluster": testRecord, "lastContactAt": "2026-11-24T12:00:01Z", "report": nil}, answer)
+	assert.Equal(t, []string{"GET /orgs/acme/clusters/5f60710a1b2c3d4e/report"}, api.requests)
+
+	code, answer, _ = runFixture(t, srv.URL, nil, "latest-report", "grn:acme/iam/cluster/0000000000000000")
 	assert.Equal(t, 1, code)
 	assert.Equal(t, "not_found", answer["error"])
 }

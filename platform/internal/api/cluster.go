@@ -12,20 +12,22 @@ import (
 )
 
 // clusterStores is what the cluster routes read and write: the
-// records, what each record authenticates with, and what is declared
-// on it.
+// records, what each record authenticates with, what is declared on
+// it and what it reported.
 type clusterStores struct {
 	records      cluster.Store
 	credentials  cluster.CredentialStore
 	declarations cluster.DeclarationStore
+	reports      cluster.ReportStore
 }
 
 // WithClusters gives the server the stores connected clusters are kept
-// in (ADR-0184) and the declarations placed on them (ADR-0187). A
-// server without them answers the cluster routes unavailable, and one
-// with nil declarations the declaration routes.
-func (s *Server) WithClusters(records cluster.Store, credentials cluster.CredentialStore, declarations cluster.DeclarationStore) *Server {
-	s.clusters = &clusterStores{records: records, credentials: credentials, declarations: declarations}
+// in (ADR-0184), the declarations placed on them (ADR-0187) and what
+// they report (ADR-0188). A server without them answers the cluster
+// routes unavailable, one with nil declarations the declaration routes,
+// and one with nil reports the report route.
+func (s *Server) WithClusters(records cluster.Store, credentials cluster.CredentialStore, declarations cluster.DeclarationStore, reports cluster.ReportStore) *Server {
+	s.clusters = &clusterStores{records: records, credentials: credentials, declarations: declarations, reports: reports}
 	return s
 }
 

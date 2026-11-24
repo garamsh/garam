@@ -13,8 +13,7 @@ garam binary or image carries it. `platform/tests/e2e` checks that
 
 ## What it serves
 
-Only the subcommands whose server side is built. Each of the others
-lands with the pull request that builds its side (#2047):
+Every subcommand the suite names (#2047):
 
 | Subcommand | Does | Prints | Through |
 |---|---|---|---|
@@ -25,11 +24,11 @@ lands with the pull request that builds its side (#2047):
 | `delete-cluster <grn>` | deletes the record | `cluster` | `deleteCluster` |
 | `declare <file>` | places the file's object on its record, as a new declaration or the next generation of the one it names | `id`, `generation` | `createClusterDeclaration`, or `putClusterDeclaration` where the file names an `id` |
 | `tombstone <id>` | tombstones the live declaration `id` on whichever of the organization's records holds it | `id`, `generation` | `listClusters`, `getClusterDeclaration`, `deleteClusterDeclaration` |
+| `latest-report <grn>` | reads the record's kept report and its `lastContactAt`, each `null` where there is none | `cluster`, `lastContactAt`, `report` | `getClusterReport` |
 | `expire-cursors <grn>` | purges the record's log and every cursor answered so far: the purged position becomes the head, the head moves one past it, and the record's held polls are woken | `cluster` | `getCluster`, then the database |
 
 `declare`'s file is one JSON object: `cluster`, the record's GRN;
-`id`, optional; and `object`, the declared object. `latest-report`
-lands with #2050.
+`id`, optional; and `object`, the declared object.
 
 ## Invocation
 

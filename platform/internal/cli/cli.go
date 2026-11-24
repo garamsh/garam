@@ -276,7 +276,8 @@ const requestReadTimeout = 30 * time.Second
 // largest body a specification admits is a message submission's 65536
 // characters (ADR-0034), which weighs 768 KiB where a caller spends
 // twelve bytes on each as an escaped surrogate pair; this is the next
-// power of two above that.
+// power of two above that. A cluster's report is the one body bounded
+// otherwise, at REP-6's 4 MiB (boundedBodies).
 const maxRequestBody = 1 << 20
 
 // clusterRegistrationLimit reads how many registrations one client

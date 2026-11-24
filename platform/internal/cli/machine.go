@@ -337,7 +337,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
 	authority := NewAuthorityService(pool, cfg.Decisions)
-	clusters := cluster.NewService(clusterStore, clusterStore, cluster.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
+	clusters := cluster.NewService(clusterStore, clusterStore, clusterStore, cluster.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
 		RotationURL: clusterRotationURL(cfg.TokenURL), RegistrationLimit: cfg.ClusterRegistrationLimit,
 		Wakes: cfg.DeclarationWakes})
 	// One mux carries both specifications' routes: the machine
@@ -387,13 +387,26 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 func (o *observability) machineServer(tokens machine.Tokens, evidence *machine.Evidence, certificate machine.ServerCertificate, next http.Handler) *http.Server {
 	srv := machine.NewServer(tokens, evidence, certificate,
 		otelhttp.NewHandler(next, serviceMachine))
-	srv.Handler = o.recoverPanics(http.MaxBytesHandler(srv.Handler, maxRequestBody))
+	srv.Handler = o.recoverPanics(boundedBodies(srv.Handler))
 	// A handshake that fails outright — a client that speaks no TLS
 	// 1.3, or a certificate the listener cannot present — is reported
 	// here rather than through a handler.
 	srv.ErrorLog = slog.NewLogLogger(o.logger.Handler(), slog.LevelWarn)
 	srv.ReadTimeout = requestReadTimeout
 	return srv
+}
+
+// boundedBodies bounds each request's body before a decoder allocates
+// for it: a cluster's report at REP-6's bound, which its route
+// answers 413 past, and every other at maxRequestBody.
+func boundedBodies(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limit := int64(maxRequestBody)
+		if r.URL.Path == machineapi.ReportPath {
+			limit = cluster.ReportMaxBytes
+		}
+		http.MaxBytesHandler(next, limit).ServeHTTP(w, r)
+	})
 }
 
 // machineProbeHandler is what `serve machine` answers on the port

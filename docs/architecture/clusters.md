@@ -72,9 +72,13 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   spent when it is presented, however the registration fares (REG-3):
   the store deletes its row before the key is read.
 - **Registration is throttled per source address before the token is
-  read** (REG-8): ten in a minute, past which a request is answered
-  429 and spends nothing. A listener with no token endpoint configured
-  serves no registration, since it would have no `tokenUrl` to answer.
+  read** (REG-8): `GARAM_CLUSTER_REGISTRATION_LIMIT` a minute, ten
+  unless set, past which a request is answered 429 and spends
+  nothing. The binary refuses `0`, so no deployment runs without the
+  bound, and a conformance run raises it
+  (`deploy/charts/garam/README.md` is authoritative for the value).
+  A listener with no token endpoint configured serves no
+  registration, since it would have no `tokenUrl` to answer.
 - **A registration binds the public half of an RSA key of 3072 to 4096
   bits** (REG-1, REG-2). A JWK naming a private member (`d`, `p`, `q`,
   `dp`, `dq`, `qi`, `oth`), another algorithm or another use is
@@ -142,8 +146,12 @@ serves from `platform/internal/machineapi` §ClusterConnection.
 ## Open questions
 
 - Not yet built, each its own issue: the server conformance suite in
-  CI (#2047); declarations placed on a cluster (#2048); the bot-token
-  mint for a cluster (#2049); reports (#2050).
+  CI (#2047), which waits for garam-bot-operator#439 to build it;
+  declarations placed on a cluster (#2048); the bot-token mint for a
+  cluster (#2049); reports (#2050). The fixture the suite will run is
+  built for what the server already serves,
+  `platform/tests/clusterfixture` (its `README.md` is the contract),
+  and each issue adds its own subcommands.
 - `garam_machine_token_exchanges_total` counts a cluster's exchange
   under the method `operator_private_key_jwt`, since the method is
   read off the route and a cluster's exchange shares the operator's.

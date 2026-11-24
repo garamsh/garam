@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/policydecision"
 )
@@ -40,6 +41,7 @@ func newSupervisorService(pool *pgxpool.Pool, decisions policydecision.Service, 
 type identityRegistrations struct {
 	operators   operator.Store
 	supervisors agent.StandaloneStore
+	clusters    cluster.Store
 }
 
 func (r identityRegistrations) Holds(ctx context.Context, subject grn.GRN) error {
@@ -54,6 +56,9 @@ func (r identityRegistrations) Holds(ctx context.Context, subject grn.GRN) error
 		return err
 	case agent.ServiceTypeSupervisor:
 		_, err := r.supervisors.GetSupervisor(ctx, subject)
+		return err
+	case cluster.ServiceType:
+		_, err := r.clusters.Get(ctx, subject)
 		return err
 	}
 	return nil

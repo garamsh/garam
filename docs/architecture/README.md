@@ -550,7 +550,8 @@ ADRs:
   completed by the turn-end event that names it; its in-memory pairing
   is superseded by 0079
 - [0019](./adr/0019-machine-openapi-spec.md) — the machine listener
-  carries an OpenAPI specification of its own
+  carries an OpenAPI specification of its own; superseded in part by
+  0186 for paths under `/cluster-connection/v1alpha1/`
 - [0020](./adr/0020-published-artifacts.md) — garam publishes images and
   a contract, not manifests; superseded by 0042
 - [0021](./adr/0021-liveness-and-readiness.md) — liveness and readiness
@@ -1619,11 +1620,18 @@ ADRs:
   one-time token with a key it generated, so its private key never
   leaves the cluster; it then exchanges `private_key_jwt` assertions,
   rotates its key under its current key's signature, and is revoked by
-  its organization; accepted, the record built (#2045); supersedes 0117
-  in part, item 2's one-time token, for a connected cluster only
+  its organization; accepted, the record built (#2045), registration,
+  the exchange and rotation built (#2046); supersedes 0117 in part, item
+  2's one-time token, for a connected cluster only
 - [0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)
   — every cluster garam reaches, aurora's included, connects by the
   connector and its one-time registration token, and garam issues no
   PEM for a cluster; accepted, unbuilt (#2054); amends 0184 by
   reference, its "a user's own cluster" read as any cluster garam
   reaches
+- [0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)
+  — the paths under `/cluster-connection/v1alpha1/` are served on the
+  machine listener from garam-bot-operator's specification, vendored
+  byte for byte at a commit the PM pins and `check-vendor` holds;
+  accepted, built (#2046); supersedes 0019 in part, for those paths
+  only

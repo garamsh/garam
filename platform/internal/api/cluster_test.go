@@ -4,11 +4,13 @@ import (
 	"net/http"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/org"
 )
 
@@ -45,7 +47,7 @@ func TestCreateCluster_MintsTheIdentifierUnderTheRegisterAction(t *testing.T) {
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/clusters", `{"name":" EKS prod ","description":"the main one"}`, admin)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	created := decodeBody[apigen.Cluster](t, rec)
+	created := decodeBody[apigen.CreatedCluster](t, rec).Cluster
 	assert.Regexp(t, mintedCluster(slug), created.Grn)
 	assert.Equal(t, "EKS prod", created.Name)
 	assert.Equal(t, "the main one", created.Description)
@@ -55,7 +57,7 @@ func TestCreateCluster_MintsTheIdentifierUnderTheRegisterAction(t *testing.T) {
 	// Two creations mint two identifiers.
 	rec = f.do(t, "POST", "/orgs/"+slug+"/clusters", `{}`, admin)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	second := decodeBody[apigen.Cluster](t, rec)
+	second := decodeBody[apigen.CreatedCluster](t, rec).Cluster
 	assert.NotEqual(t, created.Grn, second.Grn)
 	assert.Regexp(t, mintedCluster(slug), second.Grn)
 
@@ -83,7 +85,7 @@ func TestCreateCluster_NamesItByItsIdentifierWhenGivenNone(t *testing.T) {
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/clusters", `{}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	created := decodeBody[apigen.Cluster](t, rec)
+	created := decodeBody[apigen.CreatedCluster](t, rec).Cluster
 	assert.Equal(t, created.Grn[len(created.Grn)-16:], created.Name)
 	assert.Empty(t, created.Description)
 }
@@ -117,10 +119,10 @@ func TestCreateCluster_RefusesDetailsItCannotStore(t *testing.T) {
 	assert.Len(t, f.clustersOf(t, slug), 1, "no refused creation was stored")
 }
 
-// TestCluster_ReadUpdateAndDeleteEachTakeTheirOwnAction holds ADR-0184
+// TestCluster_EachRouteOnARecordTakesItsOwnAction holds ADR-0184
 // decision 9 route by route: each is decided on its own action, and a
 // caller holding every other cluster action is refused it.
-func TestCluster_ReadUpdateAndDeleteEachTakeTheirOwnAction(t *testing.T) {
+func TestCluster_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
 	all := []string{org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue, org.ActionClusterDelete}
 	tests := []struct {
 		name   string
@@ -134,6 +136,9 @@ func TestCluster_ReadUpdateAndDeleteEachTakeTheirOwnAction(t *testing.T) {
 		{"list", org.ActionClusterRead, "GET", "list", "", http.StatusOK},
 		{"update", org.ActionClusterUpdate, "PATCH", "", `{"name":"renamed"}`, http.StatusOK},
 		{"delete", org.ActionClusterDelete, "DELETE", "", "", http.StatusNoContent},
+		{"reissue", org.ActionClusterReissue, "POST", "/registration-token", "", http.StatusCreated},
+		{"list keys", org.ActionClusterRead, "GET", "/keys", "", http.StatusOK},
+		{"revoke a key", org.ActionClusterReissue, "DELETE", "/keys/held", "", http.StatusNoContent},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -158,8 +163,9 @@ func TestCluster_ReadUpdateAndDeleteEachTakeTheirOwnAction(t *testing.T) {
 			require.Equal(t, http.StatusCreated, rec.Code)
 			path := "/orgs/" + slug + "/clusters"
 			if tt.path != "list" {
-				g := decodeBody[apigen.Cluster](t, rec).Grn
-				path += "/" + g[len(g)-16:]
+				g := decodeBody[apigen.CreatedCluster](t, rec).Cluster.Grn
+				f.clusterKeys.place(g, cluster.Key{KID: "held", State: cluster.KeyStateActive})
+				path += "/" + g[len(g)-16:] + tt.path
 			}
 
 			rec = f.do(t, tt.method, path, tt.body, lacking)
@@ -184,7 +190,7 @@ func TestCluster_UpdateChangesOnlyTheDetailsGivenAndDeleteRemovesIt(t *testing.T
 	)
 	rec := f.do(t, "POST", "/orgs/"+slug+"/clusters", `{"name":"prod","description":"first"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	created := decodeBody[apigen.Cluster](t, rec)
+	created := decodeBody[apigen.CreatedCluster](t, rec).Cluster
 	path := "/orgs/" + slug + "/clusters/" + created.Grn[len(created.Grn)-16:]
 
 	rec = f.do(t, "PATCH", path, `{"description":""}`, owner)
@@ -218,4 +224,36 @@ func (f *fixture) clustersOf(t *testing.T, slug string) []string {
 		out = append(out, c.GRN.String())
 	}
 	return out
+}
+
+// TestCluster_ARegistrationTokenIsAnsweredOnceAndStoredAsItsHash holds
+// ADR-0184 decision 3 at the browser routes: creating a record and
+// reissuing answer a token under no-store, the store keeps only its
+// hash, and a reissue replaces the token held.
+func TestCluster_ARegistrationTokenIsAnsweredOnceAndStoredAsItsHash(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionClusterRegister},
+		permission{userGRNOf("owner-sub"), org.ActionClusterReissue})
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/clusters", `{}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+	created := decodeBody[apigen.CreatedCluster](t, rec)
+	first := created.Registration.RegistrationToken
+	assert.True(t, cluster.WellFormed(first, cluster.RegistrationTokenPrefix), first)
+	assert.WithinDuration(t, time.Now().Add(cluster.RegistrationTokenTTL), created.Registration.ExpiresAt, time.Minute)
+	assert.Equal(t, cluster.HashSecret(first), f.clusterKeys.tokenHash(created.Cluster.Grn), "the hash is what is stored")
+
+	g := created.Cluster.Grn
+	rec = f.do(t, "POST", "/orgs/"+slug+"/clusters/"+g[len(g)-16:]+"/registration-token", "", owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+	second := decodeBody[apigen.ClusterRegistrationToken](t, rec).RegistrationToken
+	assert.NotEqual(t, first, second)
+	assert.Equal(t, cluster.HashSecret(second), f.clusterKeys.tokenHash(g), "a reissue replaces the token held")
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/clusters/0000000000000000/registration-token", "", owner)
+	assert.Equal(t, http.StatusNotFound, rec.Code, "no token for a record that does not exist")
 }

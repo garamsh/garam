@@ -22,7 +22,7 @@ const waitsForDelivery = "waits"
 const relayed = "relayed to the policy service, which stores it in the call"
 
 // feedClassification is every operation that writes, by operationId:
-// the two API specs' POST, PUT, PATCH and DELETE operations and the
+// the three API specs' POST, PUT, PATCH and DELETE operations and the
 // sign-in callback, which creates a user. It is the check that a route
 // added later is decided: an operation absent from it fails the test
 // below until its author has read what its write raises in the outbox
@@ -59,10 +59,12 @@ var feedClassification = map[string]string{
 	"mintOperationAuthority":       "mints a token",
 	// Iam::Cluster is @caller("none") and decided on its organization
 	// (ADR-0184), so nothing feeds a cluster.
-	"createCluster":    "writes clusters, which no trigger watches",
-	"updateCluster":    "writes clusters, which no trigger watches",
-	"deleteCluster":    "writes clusters, which no trigger watches",
-	"createInvitation": "writes invitations", "revokeInvitation": "writes invitations",
+	"createCluster":                   "writes clusters, which no trigger watches",
+	"updateCluster":                   "writes clusters, which no trigger watches",
+	"deleteCluster":                   "writes clusters, which no trigger watches",
+	"reissueClusterRegistrationToken": "writes cluster_registration_tokens",
+	"revokeClusterKey":                "writes cluster_keys",
+	"createInvitation":                "writes invitations", "revokeInvitation": "writes invitations",
 	// The relayed writes (ADR-0169): the service stores in the call.
 	"createIamPolicy": relayed, "createIamPolicyVersion": relayed,
 	"activateIamPolicy": relayed, "rollbackIamPolicy": relayed,
@@ -81,6 +83,11 @@ var feedClassification = map[string]string{
 	"introspectController": "reads", "activateAgent": "writes agent_executions",
 	"deactivateAgent": "writes agent_executions", "introspectAgentExecution": "reads",
 	"recoverAgentCredential": "writes agent_executions", "prepareAgentEnrollment": "stores an approval",
+	// api/cluster-connection/v1alpha1/openapi.yaml, vendored (ADR-0186),
+	// what raises no mark.
+	"register":  "writes cluster_keys and cluster_registration_tokens",
+	"rotateKey": "writes cluster_keys",
+	"report":    "answers unimplemented until #2050 decides what it writes",
 }
 
 // TestFeedClassification_NamesEveryOperationThatWrites holds that the
@@ -89,7 +96,8 @@ var feedClassification = map[string]string{
 // operation is a decision about a route that is gone.
 func TestFeedClassification_NamesEveryOperationThatWrites(t *testing.T) {
 	written := map[string]string{}
-	for _, spec := range []string{"../../api/openapi.yaml", "../../api/machine.yaml"} {
+	for _, spec := range []string{"../../api/openapi.yaml", "../../api/machine.yaml",
+		"../../api/cluster-connection/v1alpha1/openapi.yaml"} {
 		raw, err := os.ReadFile(spec)
 		require.NoError(t, err)
 		var doc struct {

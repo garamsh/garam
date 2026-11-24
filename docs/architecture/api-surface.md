@@ -29,9 +29,12 @@ authenticates as rather than what a process contains
 ([ADR-0019](./adr/0019-machine-openapi-spec.md)). That split is what
 this document holds.
 
-It describes no operation. `platform/api/openapi.yaml` and
-`platform/api/machine.yaml` are the source of truth for those
-([ADR-0004](./adr/0004-openapi-first-api.md), ADR-0019), the chart at
+It describes no operation. `platform/api/openapi.yaml`,
+`platform/api/machine.yaml` and the vendored
+`platform/api/cluster-connection/v1alpha1/openapi.yaml` are the source
+of truth for those
+([ADR-0004](./adr/0004-openapi-first-api.md), ADR-0019,
+[ADR-0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)), the chart at
 `deploy/charts/garam/` is authoritative for the address each process
 listens on and for what may stand in front of it
 ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)),
@@ -44,6 +47,7 @@ repeated. A second copy is a second thing to keep true.
 |---|---|---|---|
 | Browser-facing HTTP | `garam serve api` | `platform/api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
 | Machine | `garam serve machine` | `platform/api/machine.yaml` | an operator, an agent or a standalone host's supervisor presenting a token garam issued (ADR-0100, ADR-0118) |
+| Cluster connection | `garam serve machine`, on the machine listener, under `/cluster-connection/v1alpha1/` | `platform/api/cluster-connection/v1alpha1/openapi.yaml`, garam-bot-operator's, vendored (ADR-0186) | a connected cluster's connector: registering with no token, then presenting a cluster's token (ADR-0184) |
 | Probes | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
 | Metrics | `garam serve api`, on the listener it already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
 
@@ -696,10 +700,17 @@ With none, none is registered and nothing else changes.
 ## What a specification is authoritative for
 
 One specification per listener, and a third listener repeats that
-rather than reopening it (ADR-0019). `platform/api/openapi.yaml` is the
-source of truth for what `garam serve api` serves (ADR-0004);
-`platform/api/machine.yaml` for what `garam serve machine` serves
-(ADR-0019).
+rather than reopening it (ADR-0019), with one exception.
+`platform/api/openapi.yaml` is the source of truth for what `garam
+serve api` serves (ADR-0004), and `platform/api/machine.yaml` for what
+`garam serve machine` serves (ADR-0019). The exception is the paths
+under `/cluster-connection/v1alpha1/`, which the same listener serves
+from `platform/api/cluster-connection/v1alpha1/openapi.yaml`.
+That file is garam-bot-operator's interface, vendored byte for byte at
+the commit `CLUSTER_CONNECTION_PIN` in `platform/Makefile` names. Its
+refusals carry the interface's `{error, message}` body (T-5), not the
+listener's. `make -C platform check-vendor` fails when the copy is not
+that commit's file, and the PM moves the pin (ADR-0186).
 
 Each is also written for the caller its listener admits, and the two
 are not held to agree: a value both files carry is described in each
@@ -1031,3 +1042,6 @@ document owes an update.
   — the issuer's discovery, JWKS, token and introspection endpoints,
   served only with a signing key; built for a CLI session's exchange
   (#1757)
+- [ADR-0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)
+  — the paths under `/cluster-connection/v1alpha1/` are served from
+  garam-bot-operator's specification, vendored at a pinned commit

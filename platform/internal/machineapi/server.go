@@ -24,6 +24,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/message"
@@ -73,6 +74,9 @@ type Server struct {
 	// 503.
 	issuer     *identity.Issuer
 	principals *identity.Principals
+	// clusters exchanges a connected cluster's assertions (ADR-0184
+	// decision 5); nil refuses one as unavailable.
+	clusters cluster.Service
 }
 
 // Rechecker reads again, for one decision, what admitted the caller's

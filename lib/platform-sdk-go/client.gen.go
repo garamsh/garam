@@ -198,6 +198,27 @@ func (e AuditRecordKind) Valid() bool {
 	}
 }
 
+// Defines values for ClusterKeyState.
+const (
+	ClusterKeyActive   ClusterKeyState = "active"
+	ClusterKeyRetiring ClusterKeyState = "retiring"
+	ClusterKeyRevoked  ClusterKeyState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the ClusterKeyState enum.
+func (e ClusterKeyState) Valid() bool {
+	switch e {
+	case ClusterKeyActive:
+		return true
+	case ClusterKeyRetiring:
+		return true
+	case ClusterKeyRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CredentialEventAction.
 const (
 	EventIssue CredentialEventAction = "issue"
@@ -1218,6 +1239,27 @@ type ClusterCreation struct {
 // ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 type ClusterDescription = string
 
+// ClusterKey The public record of one key a cluster's connector generated. It carries no private material.
+type ClusterKey struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Kid The base64url SHA-256 RFC 7638 thumbprint of the public key.
+	Kid       string     `json:"kid"`
+	RetiresAt *time.Time `json:"retiresAt,omitempty"`
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+
+	// State Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+	State ClusterKeyState `json:"state"`
+}
+
+// ClusterKeyState Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+type ClusterKeyState string
+
+// ClusterKeyList defines model for ClusterKeyList.
+type ClusterKeyList struct {
+	Keys []ClusterKey `json:"keys"`
+}
+
 // ClusterName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
 type ClusterName = string
 
@@ -1230,9 +1272,24 @@ type ClusterPatch struct {
 	Name *ClusterName `json:"name,omitempty"`
 }
 
+// ClusterRegistrationToken A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
+type ClusterRegistrationToken struct {
+	ExpiresAt         time.Time `json:"expiresAt"`
+	RegistrationToken string    `json:"registrationToken"`
+}
+
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
 	Url string `json:"url"`
+}
+
+// CreatedCluster defines model for CreatedCluster.
+type CreatedCluster struct {
+	// Cluster A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster.
+	Cluster Cluster `json:"cluster"`
+
+	// Registration A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
+	Registration ClusterRegistrationToken `json:"registration"`
 }
 
 // CredentialEvent defines model for CredentialEvent.
@@ -3011,7 +3068,7 @@ type ClientInterface interface {
 
 	// CreateClusterWithBody Create a connected cluster's record. Requires the `admin` role.
 	//
-	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3020,7 +3077,7 @@ type ClientInterface interface {
 
 	// CreateCluster Create a connected cluster's record. Requires the `admin` role.
 	//
-	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3058,6 +3115,27 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
 	UpdateCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListClusterKeys List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
+	//
+	// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster}/keys (the `ListClusterKeys` operationId).
+	ListClusterKeys(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeClusterKey Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
+	//
+	// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
+	//
+	// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/keys/{kid} (the `RevokeClusterKey` operationId).
+	RevokeClusterKey(ctx context.Context, org Org, clusterSlug ClusterSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReissueClusterRegistrationToken Answer a new registration token for a cluster. Requires the `admin` role.
+	//
+	// Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
+	//
+	// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
+	ReissueClusterRegistrationToken(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	//
@@ -4564,7 +4642,7 @@ func (c *Client) ListClusters(ctx context.Context, org Org, reqEditors ...Reques
 
 // CreateClusterWithBody Create a connected cluster's record. Requires the `admin` role.
 //
-// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4583,7 +4661,7 @@ func (c *Client) CreateClusterWithBody(ctx context.Context, org Org, contentType
 
 // CreateCluster Create a connected cluster's record. Requires the `admin` role.
 //
-// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4662,6 +4740,57 @@ func (c *Client) UpdateClusterWithBody(ctx context.Context, org Org, clusterSlug
 // Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
 func (c *Client) UpdateCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateClusterRequest(c.Server, org, clusterSlug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListClusterKeys List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
+//
+// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster}/keys (the `ListClusterKeys` operationId).
+func (c *Client) ListClusterKeys(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListClusterKeysRequest(c.Server, org, clusterSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeClusterKey Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
+//
+// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
+//
+// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/keys/{kid} (the `RevokeClusterKey` operationId).
+func (c *Client) RevokeClusterKey(ctx context.Context, org Org, clusterSlug ClusterSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeClusterKeyRequest(c.Server, org, clusterSlug, keyID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReissueClusterRegistrationToken Answer a new registration token for a cluster. Requires the `admin` role.
+//
+// Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
+//
+// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
+func (c *Client) ReissueClusterRegistrationToken(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReissueClusterRegistrationTokenRequest(c.Server, org, clusterSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -7722,6 +7851,136 @@ func NewUpdateClusterRequestWithBody(server string, org Org, clusterSlug Cluster
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListClusterKeysRequest constructs an http.Request for the ListClusterKeys method
+func NewListClusterKeysRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/keys", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRevokeClusterKeyRequest constructs an http.Request for the RevokeClusterKey method
+func NewRevokeClusterKeyRequest(server string, org Org, clusterSlug ClusterSlug, keyID KeyID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "kid", keyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/keys/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReissueClusterRegistrationTokenRequest constructs an http.Request for the ReissueClusterRegistrationToken method
+func NewReissueClusterRegistrationTokenRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/registration-token", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -10931,7 +11190,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateClusterWithBodyWithResponse Create a connected cluster's record. Requires the `admin` role.
 	//
-	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10940,7 +11199,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateClusterWithResponse Create a connected cluster's record. Requires the `admin` role.
 	//
-	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10982,6 +11241,33 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
 	UpdateClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error)
+
+	// ListClusterKeysWithResponse List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
+	//
+	// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster}/keys (the `ListClusterKeys` operationId).
+	ListClusterKeysWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ListClusterKeysResponse, error)
+
+	// RevokeClusterKeyWithResponse Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
+	//
+	// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/keys/{kid} (the `RevokeClusterKey` operationId).
+	RevokeClusterKeyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*RevokeClusterKeyResponse, error)
+
+	// ReissueClusterRegistrationTokenWithResponse Answer a new registration token for a cluster. Requires the `admin` role.
+	//
+	// Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
+	ReissueClusterRegistrationTokenWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ReissueClusterRegistrationTokenResponse, error)
 
 	// ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
 	//
@@ -13732,11 +14018,16 @@ func (r ListClustersResponse) ContentType() string {
 	return ""
 }
 
+// CreateClusterResponse201Headers the declared response headers of an HTTP 201 response for CreateCluster
+type CreateClusterResponse201Headers struct {
+	CacheControl *string
+}
+
 type CreateClusterResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *Cluster
+	JSON201 *CreatedCluster
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -13745,10 +14036,12 @@ type CreateClusterResponse struct {
 	JSON403 *Error
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *Error
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreateClusterResponse201Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateClusterResponse) GetJSON201() *Cluster {
+func (r CreateClusterResponse) GetJSON201() *CreatedCluster {
 	return r.JSON201
 }
 
@@ -13995,6 +14288,213 @@ func (r UpdateClusterResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateClusterResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListClusterKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterKeyList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListClusterKeysResponse) GetJSON200() *ClusterKeyList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListClusterKeysResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListClusterKeysResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListClusterKeysResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListClusterKeysResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ListClusterKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListClusterKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListClusterKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListClusterKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeClusterKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RevokeClusterKeyResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RevokeClusterKeyResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RevokeClusterKeyResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RevokeClusterKeyResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeClusterKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeClusterKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeClusterKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeClusterKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ReissueClusterRegistrationTokenResponse201Headers the declared response headers of an HTTP 201 response for ReissueClusterRegistrationToken
+type ReissueClusterRegistrationTokenResponse201Headers struct {
+	CacheControl *string
+}
+
+type ReissueClusterRegistrationTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ClusterRegistrationToken
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *ReissueClusterRegistrationTokenResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r ReissueClusterRegistrationTokenResponse) GetJSON201() *ClusterRegistrationToken {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ReissueClusterRegistrationTokenResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ReissueClusterRegistrationTokenResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ReissueClusterRegistrationTokenResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ReissueClusterRegistrationTokenResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ReissueClusterRegistrationTokenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReissueClusterRegistrationTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReissueClusterRegistrationTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReissueClusterRegistrationTokenResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18557,7 +19057,7 @@ func (c *ClientWithResponses) ListClustersWithResponse(ctx context.Context, org 
 
 // CreateClusterWithBodyWithResponse Create a connected cluster's record. Requires the `admin` role.
 //
-// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18572,7 +19072,7 @@ func (c *ClientWithResponses) CreateClusterWithBodyWithResponse(ctx context.Cont
 
 // CreateClusterWithResponse Create a connected cluster's record. Requires the `admin` role.
 //
-// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18643,6 +19143,51 @@ func (c *ClientWithResponses) UpdateClusterWithResponse(ctx context.Context, org
 		return nil, err
 	}
 	return ParseUpdateClusterResponse(rsp)
+}
+
+// ListClusterKeysWithResponse List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
+//
+// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster}/keys (the `ListClusterKeys` operationId).
+func (c *ClientWithResponses) ListClusterKeysWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ListClusterKeysResponse, error) {
+	rsp, err := c.ListClusterKeys(ctx, org, clusterSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListClusterKeysResponse(rsp)
+}
+
+// RevokeClusterKeyWithResponse Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
+//
+// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/keys/{kid} (the `RevokeClusterKey` operationId).
+func (c *ClientWithResponses) RevokeClusterKeyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*RevokeClusterKeyResponse, error) {
+	rsp, err := c.RevokeClusterKey(ctx, org, clusterSlug, keyID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeClusterKeyResponse(rsp)
+}
+
+// ReissueClusterRegistrationTokenWithResponse Answer a new registration token for a cluster. Requires the `admin` role.
+//
+// Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
+func (c *ClientWithResponses) ReissueClusterRegistrationTokenWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ReissueClusterRegistrationTokenResponse, error) {
+	rsp, err := c.ReissueClusterRegistrationToken(ctx, org, clusterSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReissueClusterRegistrationTokenResponse(rsp)
 }
 
 // ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
@@ -21375,7 +21920,7 @@ func ParseCreateClusterResponse(rsp *http.Response) (*CreateClusterResponse, err
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest Cluster
+		var dest CreatedCluster
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -21409,6 +21954,19 @@ func ParseCreateClusterResponse(rsp *http.Response) (*CreateClusterResponse, err
 		}
 		response.JSON404 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers CreateClusterResponse201Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers201 = &headers
 	}
 
 	return response, nil
@@ -21567,6 +22125,177 @@ func ParseUpdateClusterResponse(rsp *http.Response) (*UpdateClusterResponse, err
 		}
 		response.JSON404 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseListClusterKeysResponse parses an HTTP response from a ListClusterKeysWithResponse call
+func ParseListClusterKeysResponse(rsp *http.Response) (*ListClusterKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListClusterKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterKeyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeClusterKeyResponse parses an HTTP response from a RevokeClusterKeyWithResponse call
+func ParseRevokeClusterKeyResponse(rsp *http.Response) (*RevokeClusterKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeClusterKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReissueClusterRegistrationTokenResponse parses an HTTP response from a ReissueClusterRegistrationTokenWithResponse call
+func ParseReissueClusterRegistrationTokenResponse(rsp *http.Response) (*ReissueClusterRegistrationTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReissueClusterRegistrationTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ClusterRegistrationToken
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers ReissueClusterRegistrationTokenResponse201Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers201 = &headers
 	}
 
 	return response, nil

@@ -173,6 +173,13 @@ func ParseServiceAssertion(compact string) (*ClientAssertion, error) {
 	return parseAssertion(compact, TypeJWT, TypeClientAuth)
 }
 
+// ParseSignedRequest reads compact as [ParseClientAssertion] does, for
+// a signed request whose typ is the one given: a connected cluster's
+// key rotation signs two (ADR-0184 decision 6).
+func ParseSignedRequest(compact, typ string) (*ClientAssertion, error) {
+	return parseAssertion(compact, typ)
+}
+
 func parseAssertion(compact string, types ...string) (*ClientAssertion, error) {
 	if len(compact) > MaxAssertionLength || !compactJWT.MatchString(compact) {
 		return nil, ErrClientInvalid
@@ -254,6 +261,30 @@ func (a *ClientAssertion) VerifyService(key Key, client grn.GRN, issuer string) 
 	return a.verify(key, client, func(aud, _ string) bool {
 		return issuer != "" && aud == issuer
 	})
+}
+
+// VerifyRequest verifies a request [ParseSignedRequest] read as
+// [ClientAssertion.Verify] verifies an assertion, with aud its one
+// audience, and refuses it unless each claim in want is that string.
+// An empty aud accepts nothing.
+func (a *ClientAssertion) VerifyRequest(key Key, client grn.GRN, aud string, want map[string]string) (VerifiedAssertion, error) {
+	verified, err := a.verify(key, client, func(got, _ string) bool {
+		return aud != "" && got == aud
+	})
+	if err != nil {
+		return VerifiedAssertion{}, err
+	}
+	// The payload is the one the signature covered: verify compared it.
+	claims, err := strictObject(a.payload)
+	if err != nil {
+		return VerifiedAssertion{}, err
+	}
+	for name, value := range want {
+		if stringMember(claims, name) != value {
+			return VerifiedAssertion{}, ErrClientInvalid
+		}
+	}
+	return verified, nil
 }
 
 func (a *ClientAssertion) verify(key Key, client grn.GRN, audience func(aud, typ string) bool) (VerifiedAssertion, error) {

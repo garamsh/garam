@@ -60,6 +60,7 @@ func identityIssuer(sessions identity.Sessions, logger *slog.Logger) (*identity.
 const (
 	machineTokenPath      = "/oauth/token"
 	introspectionPathTail = "/oauth/introspect"
+	clusterRotationPath   = "/cluster-connection/v1alpha1/clusters/self/keys"
 )
 
 // identityServiceKeys names the service keys file: each first-party
@@ -83,6 +84,18 @@ func identityServiceKeys() (identity.KeySource, error) {
 		return nil, errorx.Wrap(err, string(envIdentityServiceKeysFile))
 	}
 	return identity.KeysFile(file), nil
+}
+
+// clusterRotationURL derives the key rotation route's absolute URL,
+// which a rotation's two JWSs name as aud (ROT-1), from the machine
+// token endpoint the same listener serves. A token URL of another shape
+// serves no rotation.
+func clusterRotationURL(tokenURL string) string {
+	origin, ok := strings.CutSuffix(tokenURL, machineTokenPath)
+	if !ok {
+		return ""
+	}
+	return origin + clusterRotationPath
 }
 
 // introspectionURL derives the introspection URL from the machine

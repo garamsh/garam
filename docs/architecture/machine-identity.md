@@ -18,7 +18,10 @@ credential, its exchange and its enrollment token are gone
 the supervisor's shared-secret exchange and `machine-token.v1` stay.
 A connected cluster is another caller that authenticates by signing
 with a private key it holds, as an operator and a first-party service
-principal do. It is decided and unbuilt ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
+principal do ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
+Its registration, its exchange, its rotation and their revocation are
+built (#2046), and [clusters.md](./clusters.md) holds their current
+decisions; the bot-token mint a cluster's token also reaches is not.
 It registers once by spending a one-time token with a key it generated,
 which supersedes ADR-0117 in part for a cluster only, because that key
 never leaves the cluster. After that it exchanges `private_key_jwt`
@@ -288,7 +291,11 @@ credential, and an agent holds the tokens its assignee mints for it
   caller may do there is its identity's: a route reading a credential's
   serial refuses an operator's token, and `ConfineSupervisors` keeps a
   supervisor to its identity, its lifecycle routes and its agent's mint
-  ([agents.md](./agents.md) §Standalone hosts).
+  ([agents.md](./agents.md) §Standalone hosts). `ConfineClusters`
+  refuses a connected cluster's token on all of them: it reaches the
+  cluster-connection routes alone, which the same listener serves from
+  the interface's own specification (ADR-0186,
+  [clusters.md](./clusters.md)).
 
 ## Browser tokens
 

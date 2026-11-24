@@ -1,6 +1,9 @@
 # ADR 0019: The machine listener carries an OpenAPI specification of its own
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0186](./0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)
+> (paths under `/cluster-connection/v1alpha1/`; every other path
+> stands)
 > Date: 2026-08-17
 
 ## Contents

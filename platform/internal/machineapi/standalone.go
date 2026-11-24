@@ -13,6 +13,7 @@ import (
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/audit"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 )
@@ -124,6 +125,22 @@ var supervisorRoutes = map[string]bool{
 // assertion exchange (ADR-0102), which refuses every credential beside
 // its assertion itself, in the OAuth error form its caller reads.
 const clientAssertionRoute = http.MethodPost + " /oauth/token"
+
+// ConfineClusters refuses a connected cluster's request to every route
+// of this specification before its handler runs. A cluster's token
+// reaches the cluster-connection routes alone, which this router does
+// not serve (ADR-0184 decision 10, AUTH-4); the assertion exchange
+// carries no token, so it never names a cluster here.
+func ConfineClusters(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		identity, ok := machine.IdentityOf(r)
+		if ok && identity.GRN().ServiceType == cluster.ServiceType {
+			writeError(w, errorx.New(errorx.KindPermissionDenied, "a cluster reaches its cluster-connection routes alone"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // ConfineSupervisors refuses a supervisor's request to any route
 // outside supervisorRoutes before its handler runs. It is the one place

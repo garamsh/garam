@@ -1894,8 +1894,11 @@ paths:
       summary: Create a connected cluster's record. Requires the `admin` role.
       description: >-
         Records that this organization has a connected cluster, under
-        an identifier garam mints and answers in the GRN (ADR-0184).
-        Authorized as `iam:cluster.register` on the organization.
+        an identifier garam mints and answers in the GRN (ADR-0184),
+        and answers its one-time registration token. The token is
+        answered here once and stored as its hash only: it is not read
+        back. Authorized as `iam:cluster.register` on the
+        organization.
       parameters:
         - $ref: '#/components/parameters/org'
       requestBody:
@@ -1906,11 +1909,16 @@ paths:
               $ref: '#/components/schemas/ClusterCreation'
       responses:
         '201':
-          description: Cluster created.
+          description: Cluster created, with its registration token.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Cluster'
+                $ref: '#/components/schemas/CreatedCluster'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2016,6 +2024,97 @@ paths:
       responses:
         '204':
           description: Cluster deleted.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/clusters/{cluster}/registration-token:
+    post:
+      operationId: reissueClusterRegistrationToken
+      tags: [cluster]
+      summary: Answer a new registration token for a cluster. Requires the `admin` role.
+      description: >-
+        Answers a new one-time registration token, once, and spends any
+        the cluster held before (ADR-0184 decision 3). The connector
+        that registers with it binds the key it generated, and every
+        key the cluster held before is withdrawn then: this is how a
+        lost key is recovered (decision 7). Until then the keys stand.
+        Authorized as `iam:cluster.reissue` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+      responses:
+        '201':
+          description: The registration token.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterRegistrationToken'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/clusters/{cluster}/keys:
+    get:
+      operationId: listClusterKeys
+      tags: [cluster]
+      summary: List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
+      description: >-
+        Every key the cluster held, withdrawn ones included, oldest
+        first. Each is its public record alone: garam never held the
+        private half (ADR-0184 decision 4). Authorized as
+        `iam:cluster.read` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+      responses:
+        '200':
+          description: The cluster's keys.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterKeyList'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/clusters/{cluster}/keys/{kid}:
+    delete:
+      operationId: revokeClusterKey
+      tags: [cluster]
+      summary: Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
+      description: >-
+        Withdraws the key (ADR-0184 decision 7): the next request
+        presenting a token exchanged under it is refused, on a
+        connection already open too. The key's record stays, listed as
+        `revoked`, and a rotation to it is refused. Withdrawing a key
+        already withdrawn answers 204 again. Authorized as
+        `iam:cluster.reissue` on the organization, as withdrawing an
+        operator's key is `iam:operator.reissue`.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/kid'
+      responses:
+        '204':
+          description: Key withdrawn, with its tokens.
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -4920,6 +5019,63 @@ components:
           type: string
           description: The member that created the record.
         createdAt:
+          type: string
+          format: date-time
+    CreatedCluster:
+      type: object
+      required: [cluster, registration]
+      properties:
+        cluster:
+          $ref: '#/components/schemas/Cluster'
+        registration:
+          $ref: '#/components/schemas/ClusterRegistrationToken'
+    ClusterRegistrationToken:
+      type: object
+      description: >-
+        A one-time registration token, answered once. It is good for
+        one registration attempt within the hour: presenting it spends
+        it whatever the outcome (ADR-0184 decision 3).
+      required: [registrationToken, expiresAt]
+      properties:
+        registrationToken:
+          type: string
+          example: garam_crt_0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0
+        expiresAt:
+          type: string
+          format: date-time
+    ClusterKeyList:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClusterKey'
+    ClusterKey:
+      type: object
+      description: >-
+        The public record of one key a cluster's connector generated.
+        It carries no private material.
+      required: [kid, state, createdAt]
+      properties:
+        kid:
+          type: string
+          description: The base64url SHA-256 RFC 7638 thumbprint of the public key.
+        state:
+          type: string
+          enum: [active, retiring, revoked]
+          x-enum-varnames: [ClusterKeyActive, ClusterKeyRetiring, ClusterKeyRevoked]
+          description: >-
+            Where the key stands at garam's database time: `retiring`
+            until `retiresAt`, which a rotation set; `revoked` once
+            withdrawn or past it.
+        createdAt:
+          type: string
+          format: date-time
+        retiresAt:
+          type: string
+          format: date-time
+        revokedAt:
           type: string
           format: date-time
     ClusterCreation:

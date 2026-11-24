@@ -64,3 +64,36 @@ func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing
 		})
 	}
 }
+
+// TestConfineClusters_AClusterReachesNoMachineRoute sends every
+// operation api/machine.yaml declares as a connected cluster's token
+// and as an agent's. The cluster is refused on each (AUTH-4): it
+// reaches the cluster-connection routes alone, which this router does
+// not serve. The agent, the control, is refused by the boundary
+// nowhere.
+func TestConfineClusters_AClusterReachesNoMachineRoute(t *testing.T) {
+	const refused = "a cluster reaches its cluster-connection routes alone"
+	routes := machineRoutes(t, map[string]string{
+		"agent":      agentGRN("acme", "0a1b2c3d4e5f6071").String(),
+		"claim":      "c-1",
+		"controller": operatorGRN("acme").String(),
+		"message":    "m-1",
+		"ref":        "ref-1",
+		"activation": "00000000-0000-0000-0000-000000000001",
+		"approval":   "00000000-0000-0000-0000-000000000002",
+	})
+	middlewares := []machinegen.MiddlewareFunc{machineapi.ConfineClusters, machineapi.RecoverPanics}
+	srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	clusterURL, clusterClient := serveTLS(t, srv, grn.New("acme", "cluster", "5f60710a1b2c3d4e"), middlewares...)
+	agentURL, agentClient := serveTLS(t, srv, agentGRN("acme", "0a1b2c3d4e5f6071"), middlewares...)
+
+	for pattern, route := range routes {
+		t.Run(pattern, func(t *testing.T) {
+			status, body := send(t, clusterClient, route.method, clusterURL+route.path, "")
+			assert.Equal(t, http.StatusForbidden, status)
+			assert.Contains(t, body, refused)
+			_, body = send(t, agentClient, route.method, agentURL+route.path, "")
+			assert.NotContains(t, body, refused, "the control: an agent is not confined")
+		})
+	}
+}

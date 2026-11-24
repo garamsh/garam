@@ -461,6 +461,9 @@ Responsibility documents:
 - [clusters.md](./clusters.md) — what an organization records about a
   cluster it connected, whose connector authenticates as that record,
   the declarations it places on it and what the cluster reports back
+- [apps.md](./apps.md) — how every system that connects to garam is
+  registered, installed in an organization and authenticated, and what
+  each app's settings decide; not yet built
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the
@@ -1143,7 +1146,8 @@ ADRs:
   organization's agents, decided by `iam:message.send`; the deployment
   holds the key and revokes a principal, which stops that
   organization's cowork; not yet built; how an open WebSocket stops is
-  superseded by 0139
+  superseded by 0139; amended by 0192, the principal becoming cowork's
+  automatic installation
 - [0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
   — the policy engine becomes `policy/`, a Rust service deciding Cedar
   policies through the reference crates behind an AuthZEN-shaped gRPC
@@ -1626,13 +1630,15 @@ ADRs:
   rotates its key under its current key's signature, and is revoked by
   its organization; accepted, the record built (#2045), registration,
   the exchange and rotation built (#2046); supersedes 0117 in part, item
-  2's one-time token, for a connected cluster only
+  2's one-time token, for a connected cluster only; decisions 1, 2 and
+  9 superseded by 0192, the record becoming an app's instance
 - [0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)
   — every cluster garam reaches, aurora's included, connects by the
   connector and its one-time registration token, and garam issues no
   PEM for a cluster; accepted, unbuilt (#2054); amends 0184 by
   reference, its "a user's own cluster" read as any cluster garam
-  reaches
+  reaches; amended by 0192, each connector an instance of the
+  connector app
 - [0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)
   — the paths under `/cluster-connection/v1alpha1/` are served on the
   machine listener from garam-bot-operator's specification, vendored
@@ -1647,7 +1653,7 @@ ADRs:
   declaration once across every record, DECL-7 to DECL-9 are refused
   at the write, and a write wakes the connector's long poll through
   Postgres; accepted, built (#2048); amends 0184 decision 9, adding an
-  action to its list
+  action to its list; decision 1 superseded by 0192's `iam:bot.place`
 - [0188](./adr/0188-garam-keeps-a-connected-clusters-latest-report-as-untrusted-display-data-and-its-last-contact-from-its-token.md)
   — a connected cluster's latest report is kept, one per record,
   replaced only by one observed later, with what names a declaration
@@ -1667,7 +1673,8 @@ ADRs:
   MCP in three auth modes with no Connection resource; static keys
   are sealed to the place; a bot declared at its place has no garam
   identity; accepted, partly built: the token exchange and the shared
-  identifier space (#2049)
+  identifier space (#2049); amended by 0192, the actor an instance
+  whose installation holds `iam:bot.host`
 - [0190](./adr/0190-ai-gateway-is-an-interface-deployable-at-garam-or-in-the-organizations-own-environment-and-a-session-has-one-brain.md)
   — ai-gateway is an interface, garam-bot's interface 5, deployable
   at `ai.garam.sh` or in an organization's environment; a model call
@@ -1675,3 +1682,16 @@ ADRs:
   bot's token; a session has one brain and every other capability is
   an MCP tool; BYOK at every deployment; accepted, not built (#2027);
   supersedes 0126 in part and decides 0180's decision 3
+- [0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
+  — every system that connects to garam is an app, registered by the
+  platform or by an organization, private or public; an organization's
+  owner installs it, writing its requested existing actions as
+  `permit`s on `grn:<org>/iam/installation/<slug>`; each running copy
+  is `grn:<org>/iam/instance/<id>`, registered with a one-time token
+  and a key it generated, its kind opaque; an app key authenticates an
+  installation; instances, delivery (pull or webhook) and bot hosting
+  are app settings, and no path branches on the app; `iam:cluster.*`
+  becomes `iam:app.*`, `iam:installation.*` and `iam:instance.*`, and
+  placing a bot `iam:bot.place`; accepted, not built (#2079);
+  supersedes 0184 decisions 1, 2 and 9 and 0187 decision 1, and amends
+  0185, 0189 and 0129

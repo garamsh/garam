@@ -31,6 +31,17 @@ garam reaches connects this way, the one garam's own deployment runs
 on included, and garam issues no PEM for a cluster
 ([ADR-0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)).
 
+**Unbuilt: one app system replaces the per-kind callers**
+([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md),
+[apps.md](./apps.md)). A connected cluster becomes an instance of the
+`garam-bot-connector` app's installation in its organization, and its
+registration, exchange, rotation and revocation become every
+instance's. A first-party service's principal becomes its app's
+automatic installation, `grn:<org>/iam/installation/<slug>`, and its
+deployment key that app's key. An app an organization registers
+authenticates by the same two paths. What follows describes the
+callers as built.
+
 | Type | Responsibility |
 |------|----------------|
 | `Identity` | the GRN a live token names, and the token's own serial and dates — which is what the execution fence judges an agent's request by (ADR-0080) |
@@ -360,6 +371,11 @@ and its place's connector obtains its token. The claims are garam-bot's
   (ADR-0184 decision 10, AUTH-5). A bot never declared, declared as
   another kind, tombstoned, placed on another record or of another
   organization is refused.
+- **The place is an instance whose installation holds
+  `iam:bot.host`**, and `act.sub` is the instance's GRN
+  ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
+  decision 10). Unbuilt: until the app system is built the place is a
+  connected cluster.
 - **The token is `garam_bt_` and opaque, accepted for an hour.**
   `cluster_bot_tokens` (migration 000087) keeps its hash beside its
   `sub`, the bot, by the declaration that places it; its `act.sub`, the
@@ -457,7 +473,14 @@ a supervisor. Built: the record, written with the organization and by
 migration `000073` for each that existed, and an exchange that answers
 a principal the issuer's token for the policy service (§The issuer).
 Unbuilt: the hour-long machine token, its revocation and re-issue, and
-every machine operation it reaches, so cowork reaches no queue.
+every machine operation it reaches, so cowork reaches no queue. Also
+unbuilt, and decided by
+[ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md):
+the principal becomes cowork's automatic installation,
+`grn:<org>/iam/installation/cowork`, its deployment key cowork's app
+key, and the three operations below the machine operations cowork's
+app record lists ([apps.md](./apps.md)). One per organization, the
+deployment's revocation and the machine-listener-only audience stand.
 
 - **One per organization.** `grn:<org>/iam/service/cowork`, a
   record the platform writes with the organization and a migration
@@ -700,5 +723,8 @@ Built, as cowork's principal is (§cowork's principal):
 
 Unbuilt:
 
+- **codehub as an app** (ADR-0192): its principal becomes its
+  automatic installation, `grn:<org>/iam/installation/codehub`, and
+  its deployment key its app key, as §cowork's principal states.
 - **An authorization-code flow** for codehub.
 - **The chart rendering the issuer's settings.**

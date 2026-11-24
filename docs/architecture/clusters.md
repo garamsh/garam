@@ -10,6 +10,20 @@ connector is `garamsh/garam-bot-operator`'s interface
 `interfaces/cluster-connection/v1alpha1/`, whose server garam owes and
 serves from `platform/internal/machineapi` §ClusterConnection.
 
+What this document describes is built, and it is decided to be
+replaced
+([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md),
+[apps.md](./apps.md)). The record becomes an instance,
+`grn:<org>/iam/instance/<id>`, of an installation of the
+`garam-bot-connector` app, superseding ADR-0184 decisions 1, 2 and 9;
+the `iam:cluster.*` actions become `iam:instance.*`; and placing a
+declaration becomes `iam:bot.place` on the instance, superseding
+ADR-0187 decision 1. Registration, the exchange, rotation and
+revocation carry over to every instance unchanged. Declarations,
+reports and last contact move to garam's bot domain, keyed by the
+instance's GRN. None of that is built, so the bullets below hold for
+the code as it stands.
+
 | Type | Responsibility |
 |------|----------------|
 | `Cluster` | an organization's record of a connected cluster under a GRN garam minted: what the organization calls it and says it is for, who created it and when |
@@ -281,4 +295,5 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   Telling them apart needs the label read off `client_id`, which the
   counter does not parse.
 - The console pages for a cluster, built once the routes above are,
-  in one issue filed after #2050.
+  in one issue filed after #2050. ADR-0192 replaces the routes they
+  would render, so the console follows the app system's.

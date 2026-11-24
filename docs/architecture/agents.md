@@ -165,6 +165,12 @@ on a connected cluster by a declaration
   `spec.permissions` ([authz.md](./authz.md) §A bot's policy).
 - **A bot declared at its place** has no garam identity and no garam
   token. Whether it gets one is open, as garam-bot left it.
+- **Its place becomes an instance** of an app whose installation the
+  organization's owner granted `iam:bot.host`, and placing it is
+  `iam:bot.place` on that instance
+  ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
+  decision 10, [apps.md](./apps.md)). Until that is built it is a
+  connected cluster under `iam:cluster.declare`.
 
 ## Acting on the browser-facing listener
 

@@ -49,6 +49,8 @@ the Go package implementing it is in parentheses.
   (`platform/internal/operator`)
 - [clusters.md](./clusters.md) — what an organization records about a
   cluster it connected (`platform/internal/cluster`)
+- [apps.md](./apps.md) — apps, their installations in an organization
+  and their instances; not yet built, and no package holds it
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam (`platform/internal/agent`)
 - [machine-identity.md](./machine-identity.md) — who is calling on the

@@ -24,13 +24,16 @@ type botTokens struct {
 	cluster.CredentialStore
 	placed   map[string]bool
 	resolved []string
-	recorded []recordedBot
+	// actorGone has RecordBotToken find the actor's key withdrawn since
+	// it resolved.
+	actorGone bool
+	recorded  []recordedBot
 }
 
 type recordedBot struct {
-	place    grn.GRN
-	id, hash string
-	ttl      time.Duration
+	place           grn.GRN
+	id, actor, hash string
+	ttl             time.Duration
 }
 
 func (s *botTokens) ResolveToken(_ context.Context, hash string) (cluster.TokenHolder, error) {
@@ -41,8 +44,11 @@ func (s *botTokens) ResolveToken(_ context.Context, hash string) (cluster.TokenH
 	return cluster.TokenHolder{Cluster: self}, nil
 }
 
-func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, hash string, ttl time.Duration) (time.Time, error) {
-	s.recorded = append(s.recorded, recordedBot{place: g, id: id, hash: hash, ttl: ttl})
+func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, actor, hash string, ttl time.Duration) (time.Time, error) {
+	s.recorded = append(s.recorded, recordedBot{place: g, id: id, actor: actor, hash: hash, ttl: ttl})
+	if s.actorGone {
+		return time.Time{}, cluster.ErrTokenInvalid
+	}
 	if !s.placed[id] {
 		return time.Time{}, cluster.ErrBotNotPlaced
 	}
@@ -51,7 +57,7 @@ func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, hash string
 
 func newBotService() (cluster.Service, *botTokens) {
 	store := &botTokens{placed: map[string]bool{"decl-a": true}}
-	return cluster.NewService(store, nil, nil, cluster.Config{}), store
+	return cluster.NewService(store, nil, nil, cluster.Config{TokenEndpoint: tokenURL}), store
 }
 
 var placedBot = cluster.BotGRN(self.Organization, "decl-a").String()
@@ -70,8 +76,9 @@ func TestMintBotToken_AnswersATokenForABotPlacedOnTheActorsRecord(t *testing.T) 
 	assert.Equal(t, self, token.Place)
 	assert.Equal(t, []string{}, token.Scope)
 	require.Len(t, store.recorded, 1)
-	assert.Equal(t, recordedBot{place: self, id: "decl-a", hash: cluster.HashSecret(token.Value), ttl: time.Hour},
-		store.recorded[0], "the hash is kept, never the value")
+	assert.Equal(t, recordedBot{place: self, id: "decl-a", actor: cluster.HashSecret(actorToken),
+		hash: cluster.HashSecret(token.Value), ttl: time.Hour},
+		store.recorded[0], "the hash is kept, never the value, under the actor that asked")
 	assert.WithinDuration(t, time.Now().Add(time.Hour), token.ExpiresAt, time.Minute)
 }
 
@@ -101,23 +108,58 @@ func TestMintBotToken_RefusesWhatAUTH5Refuses(t *testing.T) {
 
 // TestMintBotToken_AuthenticatesTheActorBeforeAnythingElse holds that
 // an actor token that is malformed is refused without a read, one that
-// does not resolve is refused as every request's token is, and a scope
-// is refused before any token is read.
+// does not resolve is refused, one whose key is withdrawn before the
+// token is written is refused, and a scope is refused before any token
+// is read. Each actor refusal is ErrActorTokenRefused.
 func TestMintBotToken_AuthenticatesTheActorBeforeAnythingElse(t *testing.T) {
 	svc, store := newBotService()
 	_, err := svc.MintBotToken(context.Background(), cluster.BotExchange{ActorToken: "garam_ot_x", Subject: placedBot})
-	assert.ErrorIs(t, err, cluster.ErrTokenInvalid)
+	assert.ErrorIs(t, err, cluster.ErrActorTokenRefused)
 	assert.Empty(t, store.resolved, "a malformed actor token is not looked up")
 
 	_, err = svc.MintBotToken(context.Background(), cluster.BotExchange{
 		ActorToken: cluster.TokenPrefix + strings.Repeat("cd", 32), Subject: placedBot})
-	assert.ErrorIs(t, err, cluster.ErrTokenInvalid)
+	assert.ErrorIs(t, err, cluster.ErrActorTokenRefused)
 	assert.Empty(t, store.recorded)
+
+	store.actorGone = true
+	_, err = svc.MintBotToken(context.Background(), cluster.BotExchange{ActorToken: actorToken, Subject: placedBot})
+	assert.ErrorIs(t, err, cluster.ErrActorTokenRefused, "a key withdrawn between resolving and writing")
+	store.actorGone = false
 
 	store.resolved = nil
 	_, err = svc.MintBotToken(context.Background(), cluster.BotExchange{ActorToken: actorToken, Subject: placedBot, Scope: "tools:read"})
 	assert.ErrorIs(t, err, cluster.ErrScopeUndefined)
 	assert.Empty(t, store.resolved, "a scope is refused before the actor is read")
+}
+
+// TestMintBotToken_TakesGaramsAudienceOrNone holds ADR-0189 decision
+// 2's audience: garam's, the token endpoint's URL, and an absent one
+// are minted for, and any other is refused before the actor is read.
+func TestMintBotToken_TakesGaramsAudienceOrNone(t *testing.T) {
+	garams, other, empty := tokenURL, "https://ai.garam.sh", ""
+	for _, tc := range []struct {
+		name     string
+		audience *string
+		refused  bool
+	}{
+		{"garam's audience", &garams, false},
+		{"none", nil, false},
+		{"another audience", &other, true},
+		{"an empty audience", &empty, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, store := newBotService()
+			_, err := svc.MintBotToken(context.Background(),
+				cluster.BotExchange{ActorToken: actorToken, Subject: placedBot, Audience: tc.audience})
+			if tc.refused {
+				assert.ErrorIs(t, err, cluster.ErrAudienceRefused)
+				assert.Empty(t, store.resolved, "refused before the actor is read")
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
 }
 
 // TestMintBotToken_IsBoundedPerCluster holds BotTokensPerCluster.

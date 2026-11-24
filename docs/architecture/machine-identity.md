@@ -341,28 +341,42 @@ and its place's connector obtains its token. The claims are garam-bot's
   connector's own access token, of type
   `urn:ietf:params:oauth:token-type:access_token`, and
   `subject_token` the bot's GRN, of garam's own type
-  `urn:garam:params:oauth:token-type:bot`. The actor authenticates the
-  request, read as every request's token is, so a withdrawn key or a
-  deleted record refuses it `invalid_client`.
-- **The token's audience is garam's**, so an `audience` is
-  `invalid_target`. No scope is defined yet, so a `scope` is
+  `urn:garam:params:oauth:token-type:bot`. `platform/api/machine.yaml`
+  §exchangeClientAssertion is authoritative for the form and its
+  refusals.
+- **Garam's audience is the token endpoint's URL.** ADR-0189 decision 2
+  has the connector send `audience` as garam's. That value is the
+  endpoint's own URL, `GARAM_MACHINE_TOKEN_URL`, which a connector
+  already puts in its assertion's `aud` (AUTH-1), so neither side is
+  configured with another. An absent `audience` means the same, and any
+  other is `invalid_target`. No scope is defined yet, so a `scope` is
   `invalid_scope` and nothing is implied by its absence.
+- **Refusals follow RFC 8693 §2.2.2.** An actor token that does not
+  authenticate a connected cluster, and a subject the policy below
+  refuses, are `invalid_request`. The actor is read as every request's
+  token is, and again as the token is written, so a key withdrawn
+  meanwhile mints nothing.
+- **Only a bot placed on that place by a live `Bot` declaration**
+  (ADR-0184 decision 10, AUTH-5). A bot never declared, declared as
+  another kind, tombstoned, placed on another record or of another
+  organization is refused.
 - **The token is `garam_bt_` and opaque, accepted for an hour.**
   `cluster_bot_tokens` (migration 000087) keeps its hash beside its
   `sub`, the bot, by the declaration that places it; its `act.sub`, the
-  record; and the scope allowed, empty. Its `aud` is garam's. A
-  record's expired tokens are swept at its next exchange, and a record
-  or a declaration takes its tokens when it goes. A record exchanges at
-  most 600 a minute.
-- **Only a bot placed on that place by a live declaration** (ADR-0184
-  decision 10, AUTH-5). A bot never declared, tombstoned, placed on
-  another record or of another organization is `invalid_grant`, so a
-  tombstone refuses the next exchange.
+  record; the connector key whose token acted; and the scope allowed,
+  empty. Its `aud` is garam's. A record exchanges at most 600 a minute.
+- **A token goes with what it rests on, in the transaction that
+  withdraws it.** Tombstoning its declaration or declaring another kind
+  under its identifier, revoking the connector key it was minted
+  under, registering the record again, and deleting the record each
+  delete it. A record's expired tokens are swept at its next exchange.
 - **What is not built.** No route resolves a bot's token, so it reaches
-  no operation, and nothing introspects it. A party that verifies
-  offline, ai-gateway among them, is to get a narrower JWT bound to its
-  audience by a further exchange of the bot's token, which lives no
-  longer than it (ADR-0141). Each waits for the first consumer.
+  no operation, and nothing introspects it. A read that resolves one
+  will also check its expiry and that its key has not retired, which no
+  delete covers. A party that verifies offline, ai-gateway among them,
+  is to get a narrower JWT bound to its audience by a further exchange
+  of the bot's token, which lives no longer than it (ADR-0141). Each
+  waits for the first consumer.
 
 ## The issuer
 

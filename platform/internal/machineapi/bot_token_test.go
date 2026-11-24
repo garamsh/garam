@@ -58,6 +58,14 @@ func TestExchangeBotToken_AnswersRFC8693sTokenForm(t *testing.T) {
 	require.NotNil(t, clusters.exchange)
 	assert.Equal(t, cluster.BotExchange{ActorToken: actorValue, Subject: "grn:acme/iam/bot/decl-a"}, *clusters.exchange)
 	assert.Empty(t, operators.calls, "no operator's exchange ran")
+
+	form := botForm()
+	form.Set("audience", connectionTokenURL)
+	form.Set("requested_token_type", cluster.TokenTypeAccessToken)
+	resp, body = exchangeForm(t, anonymous(t), base, form.Encode(), nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "an audience and the access token type asked for: %s", body)
+	require.NotNil(t, clusters.exchange.Audience, "the audience reaches the domain, which judges it")
+	assert.Equal(t, connectionTokenURL, *clusters.exchange.Audience)
 }
 
 // TestExchangeBotToken_RefusesAFormOutsideTheExchange holds each form
@@ -82,9 +90,8 @@ func TestExchangeBotToken_RefusesAFormOutsideTheExchange(t *testing.T) {
 		headers map[string]string
 		code    string
 	}{
-		{"an audience", changed(func(f url.Values) { f.Set("audience", "https://ai.garam.sh") }), nil, "invalid_target"},
-		{"a resource", changed(func(f url.Values) { f.Set("resource", "https://ai.garam.sh") }), nil, "invalid_request"},
-		{"a requested token type", changed(func(f url.Values) {
+		{"a resource", changed(func(f url.Values) { f.Set("resource", "https://ai.garam.sh") }), nil, "invalid_target"},
+		{"another requested token type", changed(func(f url.Values) {
 			f.Set("requested_token_type", "urn:ietf:params:oauth:token-type:jwt")
 		}), nil, "invalid_request"},
 		{"a client_id", changed(func(f url.Values) { f.Set("client_id", connectedGRN.String()) }), nil, "invalid_request"},
@@ -114,9 +121,10 @@ func TestExchangeBotToken_RefusesAFormOutsideTheExchange(t *testing.T) {
 }
 
 // TestExchangeBotToken_TranslatesTheDomainsRefusals maps each domain
-// answer to its OAuth status and code: an actor that authenticates
-// nothing is invalid_client, a bot not placed on the actor's record is
-// invalid_grant, a scope is invalid_scope, and the bound is 429.
+// answer to its OAuth status and code. RFC 8693 §2.2.2 makes an actor
+// or subject token that is invalid or refused by policy
+// invalid_request; another audience is invalid_target, a scope
+// invalid_scope, and the bound is 429.
 func TestExchangeBotToken_TranslatesTheDomainsRefusals(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -124,8 +132,9 @@ func TestExchangeBotToken_TranslatesTheDomainsRefusals(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"an actor that authenticates nothing", cluster.ErrTokenInvalid, http.StatusBadRequest, "invalid_client"},
-		{"a bot not placed on the record", cluster.ErrBotNotPlaced, http.StatusBadRequest, "invalid_grant"},
+		{"an actor that authenticates nothing", cluster.ErrActorTokenRefused, http.StatusBadRequest, "invalid_request"},
+		{"a bot not placed on the record", cluster.ErrBotNotPlaced, http.StatusBadRequest, "invalid_request"},
+		{"another audience", cluster.ErrAudienceRefused, http.StatusBadRequest, "invalid_target"},
 		{"a scope", cluster.ErrScopeUndefined, http.StatusBadRequest, "invalid_scope"},
 		{"the bound exceeded", &operator.Exceeded{RetryAfter: time.Second}, http.StatusTooManyRequests, "temporarily_unavailable"},
 		{"a store that cannot be read", errorx.New(errorx.KindUnavailable, "postgres down"), http.StatusServiceUnavailable, "temporarily_unavailable"},

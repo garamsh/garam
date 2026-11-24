@@ -92,81 +92,6 @@ func (e AgentEnrollmentBindingPlacement) Valid() bool {
 	}
 }
 
-// Defines values for BotTokenExchangeRequestActorTokenType.
-const (
-	BotTokenExchangeRequestActorTokenTypeUrnIetfParamsOauthTokenTypeAccessToken BotTokenExchangeRequestActorTokenType = "urn:ietf:params:oauth:token-type:access_token"
-)
-
-// Valid indicates whether the value is a known member of the BotTokenExchangeRequestActorTokenType enum.
-func (e BotTokenExchangeRequestActorTokenType) Valid() bool {
-	switch e {
-	case BotTokenExchangeRequestActorTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BotTokenExchangeRequestGrantType.
-const (
-	UrnIetfParamsOauthGrantTypeTokenExchange BotTokenExchangeRequestGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
-)
-
-// Valid indicates whether the value is a known member of the BotTokenExchangeRequestGrantType enum.
-func (e BotTokenExchangeRequestGrantType) Valid() bool {
-	switch e {
-	case UrnIetfParamsOauthGrantTypeTokenExchange:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BotTokenExchangeRequestSubjectTokenType.
-const (
-	UrnGaramParamsOauthTokenTypeBot BotTokenExchangeRequestSubjectTokenType = "urn:garam:params:oauth:token-type:bot"
-)
-
-// Valid indicates whether the value is a known member of the BotTokenExchangeRequestSubjectTokenType enum.
-func (e BotTokenExchangeRequestSubjectTokenType) Valid() bool {
-	switch e {
-	case UrnGaramParamsOauthTokenTypeBot:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientAssertionRequestClientAssertionType.
-const (
-	ClientAssertionRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer ClientAssertionRequestClientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-)
-
-// Valid indicates whether the value is a known member of the ClientAssertionRequestClientAssertionType enum.
-func (e ClientAssertionRequestClientAssertionType) Valid() bool {
-	switch e {
-	case ClientAssertionRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClientAssertionRequestGrantType.
-const (
-	ClientCredentials ClientAssertionRequestGrantType = "client_credentials"
-)
-
-// Valid indicates whether the value is a known member of the ClientAssertionRequestGrantType enum.
-func (e ClientAssertionRequestGrantType) Valid() bool {
-	switch e {
-	case ClientCredentials:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ExecutionIntrospectionCredential.
 const (
 	ExecutionIntrospectionCredentialCurrent ExecutionIntrospectionCredential = "current"
@@ -311,7 +236,6 @@ func (e MessageState) Valid() bool {
 // Defines values for OAuthErrorError.
 const (
 	InvalidClient          OAuthErrorError = "invalid_client"
-	InvalidGrant           OAuthErrorError = "invalid_grant"
 	InvalidRequest         OAuthErrorError = "invalid_request"
 	InvalidScope           OAuthErrorError = "invalid_scope"
 	InvalidTarget          OAuthErrorError = "invalid_target"
@@ -325,8 +249,6 @@ const (
 func (e OAuthErrorError) Valid() bool {
 	switch e {
 	case InvalidClient:
-		return true
-	case InvalidGrant:
 		return true
 	case InvalidRequest:
 		return true
@@ -479,6 +401,84 @@ func (e StandaloneEnrollmentPlacement) Valid() bool {
 	}
 }
 
+// Defines values for TokenRequestActorTokenType.
+const (
+	TokenRequestActorTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenRequestActorTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenRequestActorTokenType enum.
+func (e TokenRequestActorTokenType) Valid() bool {
+	switch e {
+	case TokenRequestActorTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenRequestClientAssertionType.
+const (
+	TokenRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer TokenRequestClientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+)
+
+// Valid indicates whether the value is a known member of the TokenRequestClientAssertionType enum.
+func (e TokenRequestClientAssertionType) Valid() bool {
+	switch e {
+	case TokenRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenRequestGrantType.
+const (
+	ClientCredentials                        TokenRequestGrantType = "client_credentials"
+	UrnIetfParamsOauthGrantTypeTokenExchange TokenRequestGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the TokenRequestGrantType enum.
+func (e TokenRequestGrantType) Valid() bool {
+	switch e {
+	case ClientCredentials:
+		return true
+	case UrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenRequestRequestedTokenType.
+const (
+	TokenRequestRequestedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenRequestRequestedTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenRequestRequestedTokenType enum.
+func (e TokenRequestRequestedTokenType) Valid() bool {
+	switch e {
+	case TokenRequestRequestedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenRequestSubjectTokenType.
+const (
+	UrnGaramParamsOauthTokenTypeBot TokenRequestSubjectTokenType = "urn:garam:params:oauth:token-type:bot"
+)
+
+// Valid indicates whether the value is a known member of the TokenRequestSubjectTokenType enum.
+func (e TokenRequestSubjectTokenType) Valid() bool {
+	switch e {
+	case UrnGaramParamsOauthTokenTypeBot:
+		return true
+	default:
+		return false
+	}
+}
+
 // Activation defines model for Activation.
 type Activation struct {
 	ActivationId string `json:"activationId"`
@@ -621,32 +621,6 @@ type AuthorityIntrospection struct {
 	Authority string `json:"authority"`
 }
 
-// BotTokenExchangeRequest The RFC 8693 exchange a connected cluster's connector makes for a bot garam declared and placed on its record (ADR-0189). Each parameter appears once.
-type BotTokenExchangeRequest struct {
-	// ActorToken The connector's own access token, prefixed `garam_ct_`.
-	ActorToken     string                                `json:"actor_token"`
-	ActorTokenType BotTokenExchangeRequestActorTokenType `json:"actor_token_type"`
-	GrantType      BotTokenExchangeRequestGrantType      `json:"grant_type"`
-
-	// Scope What the bot is to call. No scope is defined yet, so any value is `invalid_scope`, and nothing is implied by its absence.
-	Scope *string `json:"scope,omitempty"`
-
-	// SubjectToken The bot's GRN, `grn:<org>/iam/bot/<declaration id>`.
-	SubjectToken string `json:"subject_token"`
-
-	// SubjectTokenType garam's own token type, whose value is a bot's GRN.
-	SubjectTokenType BotTokenExchangeRequestSubjectTokenType `json:"subject_token_type"`
-}
-
-// BotTokenExchangeRequestActorTokenType defines model for BotTokenExchangeRequest.ActorTokenType.
-type BotTokenExchangeRequestActorTokenType string
-
-// BotTokenExchangeRequestGrantType defines model for BotTokenExchangeRequest.GrantType.
-type BotTokenExchangeRequestGrantType string
-
-// BotTokenExchangeRequestSubjectTokenType garam's own token type, whose value is a bot's GRN.
-type BotTokenExchangeRequestSubjectTokenType string
-
 // BoundAssignment Where the agent ran when an operation on it was authorized. Present for `iam:agent.configure`, `iam:agent.recover`, `iam:agent.execution-read` and `iam:agent.replace` only.
 type BoundAssignment struct {
 	// Epoch Opaque.
@@ -677,26 +651,6 @@ type Claim struct {
 	// Watchers How many streams garam was holding for this agent when it answered, which is what says whether to forward the turn's events (ADR-0022). Zero is the ordinary answer and the field is always here: garam stores nothing for an agent nobody watches, so it is answered in the same shape as one somebody watches. Every renewal carries the count again, so a person who opened the view mid-turn is seen without a call of their own — and one who left is stopped forwarding to.
 	Watchers int `json:"watchers"`
 }
-
-// ClientAssertionRequest The client credentials request `exchangeClientAssertion` reads (ADR-0102). Each parameter appears once.
-type ClientAssertionRequest struct {
-	// Audience The GRN of another operator of the caller's organization the token is to be shown to. Absent, the token is garam's. A service principal's request names `policy` here.
-	Audience *string `json:"audience,omitempty"`
-
-	// ClientAssertion One compact RS256 JWT the operator's private key signed; never the key itself.
-	ClientAssertion     string                                    `json:"client_assertion"`
-	ClientAssertionType ClientAssertionRequestClientAssertionType `json:"client_assertion_type"`
-
-	// ClientId The operator's canonical GRN, which the assertion's `iss` and `sub` equal.
-	ClientId  string                          `json:"client_id"`
-	GrantType ClientAssertionRequestGrantType `json:"grant_type"`
-}
-
-// ClientAssertionRequestClientAssertionType defines model for ClientAssertionRequest.ClientAssertionType.
-type ClientAssertionRequestClientAssertionType string
-
-// ClientAssertionRequestGrantType defines model for ClientAssertionRequest.GrantType.
-type ClientAssertionRequestGrantType string
 
 // ControllerIntrospection defines model for ControllerIntrospection.
 type ControllerIntrospection struct {
@@ -918,12 +872,12 @@ type MessageSubmission struct {
 
 // OAuthError RFC 6749's error response (ADR-0102).
 type OAuthError struct {
-	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_grant` for a bot no live declaration places on the exchanging cluster; `invalid_target` for an `audience` on a bot token exchange; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_target` for an `audience` other than garam's, or a `resource`, on a bot token exchange; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_grant` for a bot no live declaration places on the exchanging cluster; `invalid_target` for an `audience` on a bot token exchange; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_target` for an `audience` other than garam's, or a `resource`, on a bot token exchange; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 type OAuthErrorError string
 
 // OAuthToken RFC 6749's successful token response (ADR-0102), and RFC 8693's for a bot token exchange (ADR-0189).
@@ -1067,6 +1021,49 @@ type TokenExchange struct {
 	// Audience Refused with 400: a supervisor's token is shown to no hosted operator.
 	Audience *string `json:"audience,omitempty"`
 }
+
+// TokenRequest The token endpoint's one form (RFC 6749 §3.2), read by `grant_type`. Each parameter appears once. `client_credentials` (ADR-0102) requires `client_id`, `client_assertion_type` and `client_assertion`, and takes `audience`. The bot token exchange (RFC 8693, ADR-0189) requires `subject_token`, `subject_token_type`, `actor_token` and `actor_token_type`, and takes `audience`, `requested_token_type` and `scope`, and refuses a client authentication parameter. `client_credentials` ignores a parameter it does not read.
+type TokenRequest struct {
+	// ActorToken The connector's own access token, prefixed `garam_ct_`.
+	ActorToken     *string                     `json:"actor_token,omitempty"`
+	ActorTokenType *TokenRequestActorTokenType `json:"actor_token_type,omitempty"`
+
+	// Audience For `client_credentials`, the GRN of another operator of the caller's organization the token is to be shown to, and `policy` for a service principal; absent, the token is garam's. For the bot token exchange, garam's audience, this endpoint's URL, or absent.
+	Audience *string `json:"audience,omitempty"`
+
+	// ClientAssertion One compact RS256 JWT the operator's private key signed; never the key itself.
+	ClientAssertion     *string                          `json:"client_assertion,omitempty"`
+	ClientAssertionType *TokenRequestClientAssertionType `json:"client_assertion_type,omitempty"`
+
+	// ClientId The operator's canonical GRN, which the assertion's `iss` and `sub` equal.
+	ClientId           *string                         `json:"client_id,omitempty"`
+	GrantType          TokenRequestGrantType           `json:"grant_type"`
+	RequestedTokenType *TokenRequestRequestedTokenType `json:"requested_token_type,omitempty"`
+
+	// Scope What the bot is to call. No scope is defined yet, so any value is `invalid_scope`, and nothing is implied by its absence.
+	Scope *string `json:"scope,omitempty"`
+
+	// SubjectToken The bot's GRN, `grn:<org>/iam/bot/<declaration id>`.
+	SubjectToken *string `json:"subject_token,omitempty"`
+
+	// SubjectTokenType garam's own token type, whose value is a bot's GRN.
+	SubjectTokenType *TokenRequestSubjectTokenType `json:"subject_token_type,omitempty"`
+}
+
+// TokenRequestActorTokenType defines model for TokenRequest.ActorTokenType.
+type TokenRequestActorTokenType string
+
+// TokenRequestClientAssertionType defines model for TokenRequest.ClientAssertionType.
+type TokenRequestClientAssertionType string
+
+// TokenRequestGrantType defines model for TokenRequest.GrantType.
+type TokenRequestGrantType string
+
+// TokenRequestRequestedTokenType defines model for TokenRequest.RequestedTokenType.
+type TokenRequestRequestedTokenType string
+
+// TokenRequestSubjectTokenType garam's own token type, whose value is a bot's GRN.
+type TokenRequestSubjectTokenType string
 
 // TurnEvent One event from the agent's monitoring stream, as the agent platform emitted it. garam carries it and never reads it, so what a kind means and what a body holds are the platform's to say.
 type TurnEvent struct {
@@ -1264,7 +1261,7 @@ type PostMessageJSONRequestBody = MessageSubmission
 type IntrospectIssuedTokenFormdataRequestBody = IntrospectionRequest
 
 // ExchangeClientAssertionFormdataRequestBody defines body for ExchangeClientAssertion for application/x-www-form-urlencoded ContentType.
-type ExchangeClientAssertionFormdataRequestBody = ClientAssertionRequest
+type ExchangeClientAssertionFormdataRequestBody = TokenRequest
 
 // IntrospectOperationAuthorityJSONRequestBody defines body for IntrospectOperationAuthority for application/json ContentType.
 type IntrospectOperationAuthorityJSONRequestBody = AuthorityIntrospection

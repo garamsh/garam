@@ -135,6 +135,12 @@ func (s *Store) write(ctx context.Context, q *db.Queries, g grn.GRN, d db.WriteD
 	}); err != nil {
 		return db.ClusterDeclaration{}, pgxerr.Classify(err, "purge declaration changes", nil, nil)
 	}
+	if d.Tombstoned || d.Kind != cluster.BotKind {
+		// The bot it placed is gone, so the tokens minted for it go too.
+		if err := q.DeleteDeclarationBotTokens(ctx, d.ID); err != nil {
+			return db.ClusterDeclaration{}, pgxerr.Classify(err, "delete declaration bot tokens", nil, nil)
+		}
+	}
 	if err := q.NotifyDeclarations(ctx, g.String()); err != nil {
 		return db.ClusterDeclaration{}, pgxerr.Classify(err, "announce declarations", nil, nil)
 	}

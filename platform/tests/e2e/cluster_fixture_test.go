@@ -437,8 +437,9 @@ func TestClusterFixture_ReportsReachLatestReport(t *testing.T) {
 
 // exchangeBot makes the RFC 8693 exchange for bot with actor, the
 // connector's own token, as ADR-0189 decision 2 has a connector make it,
-// answering the status and the decoded body.
-func (c *connector) exchangeBot(tokenURL, actor, bot string) (int, map[string]any) {
+// naming audience where it is not empty, and answers the status and the
+// decoded body.
+func (c *connector) exchangeBot(tokenURL, actor, bot, audience string) (int, map[string]any) {
 	c.t.Helper()
 	form := url.Values{
 		"grant_type":         {"urn:ietf:params:oauth:grant-type:token-exchange"},
@@ -446,6 +447,9 @@ func (c *connector) exchangeBot(tokenURL, actor, bot string) (int, map[string]an
 		"subject_token_type": {"urn:garam:params:oauth:token-type:bot"},
 		"actor_token":        {actor},
 		"actor_token_type":   {"urn:ietf:params:oauth:token-type:access_token"},
+	}
+	if audience != "" {
+		form.Set("audience", audience)
 	}
 	resp, err := c.client.Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 	require.NoError(c.t, err)
@@ -456,11 +460,16 @@ func (c *connector) exchangeBot(tokenURL, actor, bot string) (int, map[string]an
 }
 
 // TestClusterFixture_AConnectorExchangesForABotItsRecordPlaces holds the
-// bot token exchange (#2049) through the built servers: a bot a live
-// declaration places on the connector's record is answered a token
-// prefixed garam_bt_ for an hour, which no cluster-connection route
-// accepts; the bot of a declaration the organization tombstoned, and
-// one never declared, are invalid_grant (AUTH-5).
+// bot token exchange (#2049) through the built servers:
+//
+//   - a bot a live Bot declaration places on the connector's record is
+//     answered a token prefixed garam_bt_ for an hour, with no audience
+//     and with garam's, the token endpoint's URL, and no
+//     cluster-connection route accepts it;
+//   - another audience is invalid_target;
+//   - a bot never declared, an identifier a WorkspaceClass holds, and
+//     the bot of a declaration the organization tombstoned are
+//     invalid_request (AUTH-5, RFC 8693 §2.2.2).
 func TestClusterFixture_AConnectorExchangesForABotItsRecordPlaces(t *testing.T) {
 	bin, env, c, tokenURL, slug := startFixtureStack(t)
 	code, minted := clusterFixture(t, bin, env, "mint-token")
@@ -471,31 +480,47 @@ func TestClusterFixture_AConnectorExchangesForABotItsRecordPlaces(t *testing.T) 
 	actor, err := c.exchange(record, tokenURL)
 	require.NoError(t, err)
 
-	file := filepath.Join(t.TempDir(), "declare.json")
-	require.NoError(t, os.WriteFile(file, []byte(`{"cluster":"`+record+`","id":"e2e-bot","object":
-		{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"reviewer"},
-		 "spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"}}}}`), 0o600))
-	code, placed := clusterFixture(t, bin, env, "declare", file)
-	require.Equal(t, 0, code, "%v", placed)
+	dir := t.TempDir()
+	for id, object := range map[string]string{
+		"e2e-bot": `{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"reviewer"},
+			"spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"}}}`,
+		"e2e-class": `{"apiVersion":"bot.garam.sh/v1alpha1","kind":"WorkspaceClass","metadata":{"namespace":"team-a","name":"small"},
+			"spec":{"provider":"mvmd","resources":{"cpu":2,"memory":"4Gi","disk":"20Gi"}}}`,
+	} {
+		file := filepath.Join(dir, id+".json")
+		require.NoError(t, os.WriteFile(file, []byte(`{"cluster":"`+record+`","id":"`+id+`","object":`+object+`}`), 0o600))
+		code, placed := clusterFixture(t, bin, env, "declare", file)
+		require.Equal(t, 0, code, "%v", placed)
+	}
 	bot := "grn:" + slug + "/iam/bot/e2e-bot"
 
-	status, token := c.exchangeBot(tokenURL, actor, bot)
-	require.Equal(t, http.StatusOK, status, "%v", token)
-	assert.Equal(t, "Bearer", token["token_type"])
-	assert.Equal(t, float64(3600), token["expires_in"])
-	assert.Equal(t, "urn:ietf:params:oauth:token-type:access_token", token["issued_token_type"])
-	value, _ := token["access_token"].(string)
-	require.True(t, strings.HasPrefix(value, "garam_bt_"), value)
-	status, refused, _ := c.poll(value, "", 0)
-	assert.Equal(t, http.StatusUnauthorized, status, "a bot's token is no cluster's: %v", refused)
-
-	status, never := c.exchangeBot(tokenURL, actor, "grn:"+slug+"/iam/bot/never-declared")
+	for _, audience := range []string{"", tokenURL} {
+		status, token := c.exchangeBot(tokenURL, actor, bot, audience)
+		require.Equal(t, http.StatusOK, status, "audience %q: %v", audience, token)
+		assert.Equal(t, "Bearer", token["token_type"])
+		assert.Equal(t, float64(3600), token["expires_in"])
+		assert.Equal(t, "urn:ietf:params:oauth:token-type:access_token", token["issued_token_type"])
+		value, _ := token["access_token"].(string)
+		require.True(t, strings.HasPrefix(value, "garam_bt_"), value)
+		status, refused, _ := c.poll(value, "", 0)
+		assert.Equal(t, http.StatusUnauthorized, status, "a bot's token is no cluster's: %v", refused)
+	}
+	status, other := c.exchangeBot(tokenURL, actor, bot, "https://ai.garam.sh")
 	assert.Equal(t, http.StatusBadRequest, status)
-	assert.Equal(t, "invalid_grant", never["error"], "a bot never declared")
+	assert.Equal(t, "invalid_target", other["error"], "another audience")
+
+	for name, subject := range map[string]string{
+		"a bot never declared":                 "grn:" + slug + "/iam/bot/never-declared",
+		"an identifier a WorkspaceClass holds": "grn:" + slug + "/iam/bot/e2e-class",
+	} {
+		status, refused := c.exchangeBot(tokenURL, actor, subject, "")
+		assert.Equal(t, http.StatusBadRequest, status, name)
+		assert.Equal(t, "invalid_request", refused["error"], name)
+	}
 
 	code, tombstoned := clusterFixture(t, bin, env, "tombstone", "e2e-bot")
 	require.Equal(t, 0, code, "%v", tombstoned)
-	status, gone := c.exchangeBot(tokenURL, actor, bot)
+	status, gone := c.exchangeBot(tokenURL, actor, bot, "")
 	assert.Equal(t, http.StatusBadRequest, status)
-	assert.Equal(t, "invalid_grant", gone["error"], "the bot of a tombstoned declaration")
+	assert.Equal(t, "invalid_request", gone["error"], "the bot of a tombstoned declaration")
 }

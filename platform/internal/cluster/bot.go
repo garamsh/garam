@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -23,6 +24,9 @@ const (
 	// BotServiceType is the GRN type of a bot garam declared,
 	// grn:<org>/iam/bot/<declaration id>.
 	BotServiceType = "bot"
+	// BotKind is the declared kind that places a bot; no other kind
+	// does (ADR-0189 decision 1).
+	BotKind = "Bot"
 	// BotTokenPrefix marks a bot's token.
 	BotTokenPrefix = "garam_bt_"
 	// BotTokenTTL is how long a bot's token is accepted for, the most
@@ -40,10 +44,18 @@ const (
 const agentServiceType = "agent"
 
 var (
-	// ErrBotNotPlaced answers a bot no live declaration places on the
-	// exchanging record (AUTH-5): one never declared, placed on
-	// another record, tombstoned, or of another organization.
+	// ErrBotNotPlaced answers a bot no live Bot declaration places on
+	// the exchanging record (AUTH-5): one never declared, declared as
+	// another kind, placed on another record, tombstoned, or of
+	// another organization.
 	ErrBotNotPlaced = errorx.New(errorx.KindPermissionDenied, "no live declaration places the bot on this cluster")
+	// ErrActorTokenRefused answers an actor token that authenticates
+	// no connected cluster: malformed, unknown, expired, or exchanged
+	// under a key since withdrawn.
+	ErrActorTokenRefused = errorx.New(errorx.KindUnauthenticated, "the actor token authenticates no connected cluster")
+	// ErrAudienceRefused answers an audience other than garam's, the
+	// token endpoint's URL.
+	ErrAudienceRefused = errorx.New(errorx.KindInvalidArgument, "a bot's token is for garam's audience alone")
 	// ErrDeclarationIDHeldByAgent answers a declaration whose identifier
 	// names an agent record of the organization: declared bots and the
 	// agent records ADR-0179 renames share one identifier space.
@@ -80,6 +92,9 @@ type BotExchange struct {
 	ActorToken string
 	// Subject is the subject token's value, the bot's GRN.
 	Subject string
+	// Audience is the audience asked for, nil where none was named,
+	// which asks for garam's.
+	Audience *string
 	// Scope is what the bot is to call, space-separated; empty asks
 	// for nothing.
 	Scope string
@@ -87,18 +102,27 @@ type BotExchange struct {
 
 // MintBotToken answers a token for the bot exchange's subject names,
 // to the record whose token is its actor (ADR-0189 decision 2). The
-// actor is read as every request's token is, so a withdrawn key or a
-// deleted record refuses it. A bot no live declaration places on that
-// record is ErrBotNotPlaced, and a scope is refused, none being
-// defined yet.
+// actor is read as every request's token is, and again as the token
+// is written, so a withdrawn key or a deleted record refuses it with
+// ErrActorTokenRefused. A bot no live Bot declaration places on that
+// record is ErrBotNotPlaced. The audience is garam's, the token
+// endpoint's URL, or none; another is ErrAudienceRefused. A scope is
+// refused, none being defined yet.
 func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error) {
 	if !WellFormed(exchange.ActorToken, TokenPrefix) {
-		return nil, ErrTokenInvalid
+		return nil, ErrActorTokenRefused
+	}
+	if exchange.Audience != nil && (s.cfg.TokenEndpoint == "" || *exchange.Audience != s.cfg.TokenEndpoint) {
+		return nil, ErrAudienceRefused
 	}
 	if strings.TrimSpace(exchange.Scope) != "" {
 		return nil, ErrScopeUndefined
 	}
-	holder, err := s.credentials.ResolveToken(ctx, HashSecret(exchange.ActorToken))
+	actor := HashSecret(exchange.ActorToken)
+	holder, err := s.credentials.ResolveToken(ctx, actor)
+	if errors.Is(err, ErrTokenInvalid) {
+		return nil, ErrActorTokenRefused
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +138,10 @@ func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotT
 	if err != nil {
 		return nil, err
 	}
-	expiresAt, err := s.credentials.RecordBotToken(ctx, place, bot.Identifier, HashSecret(value), BotTokenTTL)
+	expiresAt, err := s.credentials.RecordBotToken(ctx, place, bot.Identifier, actor, HashSecret(value), BotTokenTTL)
+	if errors.Is(err, ErrTokenInvalid) {
+		return nil, ErrActorTokenRefused
+	}
 	if err != nil {
 		return nil, err
 	}

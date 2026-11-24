@@ -78,7 +78,8 @@ func (s *Store) SpendRegistrationToken(ctx context.Context, hash string) (grn.GR
 	return storedGRN(row.ClusterGrn)
 }
 
-// BindKey withdraws g's keys and tokens and binds key.
+// BindKey withdraws g's keys, its tokens and its bots' tokens, and
+// binds key.
 func (s *Store) BindKey(ctx context.Context, g grn.GRN, key cluster.PublicKey) error {
 	jwk, err := key.JWK()
 	if err != nil {
@@ -90,6 +91,9 @@ func (s *Store) BindKey(ctx context.Context, g grn.GRN, key cluster.PublicKey) e
 		}
 		if err := q.DeleteClusterTokens(ctx, g.String()); err != nil {
 			return pgxerr.Classify(err, "delete cluster tokens", nil, nil)
+		}
+		if err := q.DeleteClusterBotTokens(ctx, g.String()); err != nil {
+			return pgxerr.Classify(err, "delete cluster bot tokens", nil, nil)
 		}
 		if err := q.BindClusterKey(ctx, db.BindClusterKeyParams{
 			ClusterGrn: g.String(), Kid: key.KID(), PublicJwk: jwk,
@@ -231,7 +235,8 @@ func (s *Store) ListKeys(ctx context.Context, g grn.GRN) ([]cluster.Key, error) 
 	return keys, nil
 }
 
-// RevokeKey withdraws g's key kid and its tokens.
+// RevokeKey withdraws g's key kid, its tokens and the bot tokens they
+// were exchanged for.
 func (s *Store) RevokeKey(ctx context.Context, g grn.GRN, kid string) error {
 	return s.inTx(ctx, g, cluster.ErrClusterNotFound, func(q *db.Queries, _ time.Time) error {
 		id, err := q.RevokeClusterKey(ctx, db.RevokeClusterKeyParams{ClusterGrn: g.String(), Kid: kid})
@@ -250,6 +255,9 @@ func (s *Store) RevokeKey(ctx context.Context, g grn.GRN, kid string) error {
 		}
 		if err := q.DeleteClusterKeyTokens(ctx, id); err != nil {
 			return pgxerr.Classify(err, "delete cluster key tokens", nil, nil)
+		}
+		if err := q.DeleteKeyBotTokens(ctx, id); err != nil {
+			return pgxerr.Classify(err, "delete key bot tokens", nil, nil)
 		}
 		return nil
 	})

@@ -246,8 +246,12 @@ func writeOAuthError(w http.ResponseWriter, err error) {
 	case errors.As(err, &exceeded):
 		status = http.StatusTooManyRequests
 		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))
-	case errors.Is(err, cluster.ErrBotNotPlaced):
-		status, body.Error = http.StatusBadRequest, machinegen.InvalidGrant
+	case errors.Is(err, cluster.ErrBotNotPlaced), errors.Is(err, cluster.ErrActorTokenRefused):
+		// RFC 8693 §2.2.2: a subject or actor token that is invalid or
+		// unacceptable by policy is invalid_request.
+		status, body.Error = http.StatusBadRequest, machinegen.InvalidRequest
+	case errors.Is(err, cluster.ErrAudienceRefused):
+		status, body.Error = http.StatusBadRequest, machinegen.InvalidTarget
 	case errors.Is(err, cluster.ErrScopeUndefined):
 		status, body.Error = http.StatusBadRequest, machinegen.InvalidScope
 	case errors.Is(err, identity.ErrOrganizationUnknown):

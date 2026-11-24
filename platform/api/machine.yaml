@@ -260,9 +260,9 @@ paths:
         grant are refused, and unrecognised parameters are ignored.
 
         **A bot token exchange** (RFC 8693, ADR-0189) is the other
-        grant, whose form is `BotTokenExchangeRequest`. The request body
-        names `ClientAssertionRequest` alone, because a generated client
-        cannot form-encode a body that is one of two. `grant_type`
+        grant. `TokenRequest` is one form for both, as RFC 6749 §3.2
+        has the token endpoint take one, and its description names
+        each grant's required parameters. `grant_type`
         `urn:ietf:params:oauth:grant-type:token-exchange`,
         `actor_token` a connected cluster's own access token with
         `actor_token_type` `urn:ietf:params:oauth:token-type:access_token`,
@@ -270,19 +270,27 @@ paths:
         `grn:<org>/iam/bot/<declaration id>`, with
         `subject_token_type` `urn:garam:params:oauth:token-type:bot`.
         The actor token authenticates the request, read as every
-        request's token is, so a withdrawn key or a deleted record is
-        `invalid_client`. A bot no live declaration places on the
-        actor's record, one tombstoned, placed on another record or of
-        another organization is `invalid_grant` (AUTH-5). The token is
-        garam's: an `audience` is `invalid_target`, a `scope` is
-        `invalid_scope` while none is defined, and a client
-        authentication parameter, `resource` or `requested_token_type`
-        is `invalid_request`. The answer carries `issued_token_type`
-        and a token prefixed `garam_bt_`, accepted for an hour, of which
-        garam keeps the hash beside the bot (`sub`), the record that
-        acted (`act.sub`), garam's audience and the scope allowed. It
-        reaches no operation yet. A record exchanges at most 600 a
-        minute, and 429 with `Retry-After` past it.
+        request's token is and again as the token is written. Following
+        RFC 8693 §2.2.2, an actor token that is unknown, expired, under
+        a withdrawn key or of a deleted record, and a bot no live `Bot`
+        declaration places on the actor's record, are `invalid_request`:
+        a bot never declared, declared as another kind, tombstoned,
+        placed on another record or of another organization (AUTH-5).
+        `audience` is garam's, which is this endpoint's URL, the `aud` a
+        connector's assertion carries, and an absent `audience` means
+        the same; any other is `invalid_target`, as is a `resource`.
+        `requested_token_type` may name
+        `urn:ietf:params:oauth:token-type:access_token` and nothing
+        else. A `scope` is `invalid_scope` while none is defined, and a
+        client authentication parameter is `invalid_request`. The
+        answer carries `issued_token_type` and a token prefixed
+        `garam_bt_`, accepted for an hour, of which garam keeps the hash
+        beside the bot (`sub`), the record that acted (`act.sub`), the
+        connector key it acted under and the scope allowed; its `aud`
+        is garam's. Tombstoning the declaration, revoking that key,
+        registering the record again or deleting it withdraws the
+        token. It reaches no operation yet. A record exchanges at most
+        600 a minute, and 429 with `Retry-After` past it.
 
         A `client_id` that is a service principal's GRN,
         `grn:<org>/iam/service/<name>`, takes the principal route
@@ -330,7 +338,7 @@ paths:
         content:
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ClientAssertionRequest'
+              $ref: '#/components/schemas/TokenRequest'
       responses:
         '200':
           description: Token issued, shown once. It is not stored and not cached.
@@ -2035,47 +2043,23 @@ components:
           description: >-
             Refused with 400: a supervisor's token is shown to no
             hosted operator.
-    BotTokenExchangeRequest:
+    TokenRequest:
       type: object
       description: >-
-        The RFC 8693 exchange a connected cluster's connector makes for
-        a bot garam declared and placed on its record (ADR-0189). Each
-        parameter appears once.
-      required: [grant_type, subject_token, subject_token_type, actor_token, actor_token_type]
+        The token endpoint's one form (RFC 6749 §3.2), read by
+        `grant_type`. Each parameter appears once. `client_credentials`
+        (ADR-0102) requires `client_id`, `client_assertion_type` and
+        `client_assertion`, and takes `audience`. The bot token exchange
+        (RFC 8693, ADR-0189) requires `subject_token`,
+        `subject_token_type`, `actor_token` and `actor_token_type`, and
+        takes `audience`, `requested_token_type` and `scope`, and
+        refuses a client authentication parameter. `client_credentials`
+        ignores a parameter it does not read.
+      required: [grant_type]
       properties:
         grant_type:
           type: string
-          enum: ['urn:ietf:params:oauth:grant-type:token-exchange']
-        subject_token:
-          type: string
-          description: The bot's GRN, `grn:<org>/iam/bot/<declaration id>`.
-          example: grn:acme/iam/bot/decl-0a1b2c3d4e5f6071
-        subject_token_type:
-          type: string
-          enum: ['urn:garam:params:oauth:token-type:bot']
-          description: garam's own token type, whose value is a bot's GRN.
-        actor_token:
-          type: string
-          description: The connector's own access token, prefixed `garam_ct_`.
-        actor_token_type:
-          type: string
-          enum: ['urn:ietf:params:oauth:token-type:access_token']
-        scope:
-          type: string
-          description: >-
-            What the bot is to call. No scope is defined yet, so any
-            value is `invalid_scope`, and nothing is implied by its
-            absence.
-    ClientAssertionRequest:
-      type: object
-      description: >-
-        The client credentials request `exchangeClientAssertion` reads
-        (ADR-0102). Each parameter appears once.
-      required: [grant_type, client_id, client_assertion_type, client_assertion]
-      properties:
-        grant_type:
-          type: string
-          enum: [client_credentials]
+          enum: [client_credentials, 'urn:ietf:params:oauth:grant-type:token-exchange']
         client_id:
           type: string
           description: The operator's canonical GRN, which the assertion's `iss` and `sub` equal.
@@ -2090,10 +2074,35 @@ components:
         audience:
           type: string
           description: >-
-            The GRN of another operator of the caller's organization the
-            token is to be shown to. Absent, the token is garam's.
-            A service principal's request names `policy` here.
+            For `client_credentials`, the GRN of another operator of the
+            caller's organization the token is to be shown to, and
+            `policy` for a service principal; absent, the token is
+            garam's. For the bot token exchange, garam's audience, this
+            endpoint's URL, or absent.
           example: grn:acme/iam/operator/control
+        subject_token:
+          type: string
+          description: The bot's GRN, `grn:<org>/iam/bot/<declaration id>`.
+          example: grn:acme/iam/bot/decl-0a1b2c3d4e5f6071
+        subject_token_type:
+          type: string
+          enum: ['urn:garam:params:oauth:token-type:bot']
+          description: garam's own token type, whose value is a bot's GRN.
+        actor_token:
+          type: string
+          description: The connector's own access token, prefixed `garam_ct_`.
+        actor_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:access_token']
+        requested_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:access_token']
+        scope:
+          type: string
+          description: >-
+            What the bot is to call. No scope is defined yet, so any
+            value is `invalid_scope`, and nothing is implied by its
+            absence.
     OAuthToken:
       type: object
       description: >-
@@ -2172,7 +2181,7 @@ components:
       properties:
         error:
           type: string
-          enum: [invalid_request, invalid_client, invalid_grant, invalid_target, unauthorized_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
+          enum: [invalid_request, invalid_client, invalid_target, unauthorized_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
           description: >-
             `invalid_request` for a malformed or repeated parameter, a
             `Authorization` header, or an audience
@@ -2184,9 +2193,8 @@ components:
             `client_id` names an organization garam does not hold;
             `unsupported_grant_type` for a grant other than
             `client_credentials` or token exchange; `invalid_scope` for
-            any `scope`; `invalid_grant` for a bot no live declaration
-            places on the exchanging cluster; `invalid_target` for an
-            `audience` on a bot token exchange;
+            any `scope`; `invalid_target` for an `audience` other than
+            garam's, or a `resource`, on a bot token exchange;
             `temporarily_unavailable` with 429 or 503; `server_error`
             with 500.
         error_description:

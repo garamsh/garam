@@ -116,7 +116,9 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   any other caller's token with 401. The bot-token mint AUTH-4 also
   names is an RFC 8693 exchange at the machine listener's token
   endpoint, with the connector's token as the actor, for a bot a live
-  declaration places on the record (#2049)
+  `Bot` declaration places on the record (#2049). ADR-0189's "garam's
+  audience" is that endpoint's URL, the `aud` AUTH-1's assertion
+  carries
   ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)
   decision 2, [machine-identity.md](./machine-identity.md) §A declared
   bot's token).

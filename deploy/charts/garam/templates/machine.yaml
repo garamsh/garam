@@ -80,6 +80,8 @@ spec:
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.kekKey is required" .Values.machine.keyMaterial.kekKey) | quote }}
             - name: GARAM_AGENT_TOKEN_LIFETIME
               value: {{ required "machine.agentTokenLifetime is required" .Values.machine.agentTokenLifetime | quote }}
+            - name: GARAM_CLUSTER_REGISTRATION_LIMIT
+              value: {{ required "machine.clusterRegistrationLimit is required" .Values.machine.clusterRegistrationLimit | quote }}
             - name: GARAM_MACHINE_ISSUER
               value: {{ required "machine.issuer is required" .Values.machine.issuer | quote }}
 {{- include "garam.machineTokenUrlEnv" . }}

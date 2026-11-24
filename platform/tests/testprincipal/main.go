@@ -25,6 +25,7 @@ import (
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 	"github.com/garamsh/garam/platform/internal/user"
 	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
+	"github.com/garamsh/garam/platform/tests/loopback"
 )
 
 // contractVersion is the one contract this build serves. A caller
@@ -139,7 +140,7 @@ func prepare(ctx context.Context, serverURL, migrations string, ttl time.Duratio
 	if err != nil {
 		return err
 	}
-	admin, err := parseLocal(serverURL)
+	admin, err := loopback.ParseConfig(serverURL)
 	if err != nil {
 		return err
 	}
@@ -232,7 +233,7 @@ func seed(ctx context.Context, target *pgxpool.Config, dir string, ttl time.Dura
 
 // drop removes a database prepare created.
 func drop(ctx context.Context, serverURL, database string) error {
-	admin, err := parseLocal(serverURL)
+	admin, err := loopback.ParseConfig(serverURL)
 	if err != nil {
 		return err
 	}

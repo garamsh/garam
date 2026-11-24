@@ -83,6 +83,10 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
+	registrationLimit, err := clusterRegistrationLimit()
+	if err != nil {
+		return err
+	}
 	tokenLifetime, err := agentTokenLifetime()
 	if err != nil {
 		return err
@@ -128,15 +132,16 @@ func serveMachine(cmd *cobra.Command) error {
 		// The delivery parameters default narrow (ADR-0018), and the
 		// defaults are what this process runs on until something asks
 		// for another value.
-		Delivery:           message.Config{},
-		AgentTokenLifetime: tokenLifetime,
-		TokenURL:           tokenURL,
-		Identity:           idIssuer,
-		ServiceKeys:        idKeys,
-		Decisions:          decisions,
-		Feed:               policyfeed.NewObservingGate(policyfeedpg.NewStore(pool), policyfeed.Bound),
-		Logger:             obs.logger,
-		Metrics:            obs.registry,
+		Delivery:                 message.Config{},
+		AgentTokenLifetime:       tokenLifetime,
+		ClusterRegistrationLimit: registrationLimit,
+		TokenURL:                 tokenURL,
+		Identity:                 idIssuer,
+		ServiceKeys:              idKeys,
+		Decisions:                decisions,
+		Feed:                     policyfeed.NewObservingGate(policyfeedpg.NewStore(pool), policyfeed.Bound),
+		Logger:                   obs.logger,
+		Metrics:                  obs.registry,
 	})
 	if err != nil {
 		return err
@@ -195,6 +200,10 @@ type MachineConfig struct {
 	// AgentTokenLifetime is how long an agent token is accepted
 	// (ADR-0100); zero is the default, and agent.NewService bounds it.
 	AgentTokenLifetime time.Duration
+	// ClusterRegistrationLimit bounds a connected cluster's
+	// registrations per client address per minute; zero takes the
+	// cluster package's default (REG-8).
+	ClusterRegistrationLimit int
 	// TokenURL is the token endpoint URL an operator's assertion names
 	// as its audience, which operator.ParseTokenEndpoint read
 	// (ADR-0102). Empty serves no assertion exchange.
@@ -318,7 +327,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// server serves.
 	authority := NewAuthorityService(pool, cfg.Decisions)
 	clusters := cluster.NewService(clusterStore, cluster.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
-		RotationURL: clusterRotationURL(cfg.TokenURL)})
+		RotationURL: clusterRotationURL(cfg.TokenURL), RegistrationLimit: cfg.ClusterRegistrationLimit})
 	// One mux carries both specifications' routes: the machine
 	// specification's, and cluster-connection's under its own prefix
 	// with its own error body (ADR-0186).

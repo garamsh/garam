@@ -7,7 +7,7 @@ type: application
 # version, set when it is packaged, so a consumer pins that artifact by
 # digest or this source by a git ref of garamsh/garam, and pins the
 # images separately through image.*.tag (ADR-0042).
-version: 0.19.1
+version: 0.20.0
 # No appVersion in the source. The published artifact's appVersion is
 # the release's version, set when `make chart-publish` packages it
 # (ADR-0181), so the source names no garam version and the artifact

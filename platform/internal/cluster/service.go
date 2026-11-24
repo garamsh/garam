@@ -14,9 +14,10 @@ const (
 	TypeKeyProof    = "key-proof+jwt"
 )
 
-// RegistrationsPerSource bounds the registrations one client address
-// sends per operator.ExchangeWindow, counted before the token is read
-// (ADR-0184 decision 3, REG-8).
+// RegistrationsPerSource is the default bound on the registrations one
+// client address sends per operator.ExchangeWindow, counted before the
+// token is read (ADR-0184 decision 3, REG-8). Config.RegistrationLimit
+// replaces it.
 const RegistrationsPerSource = 10
 
 // Config holds the clock and the two absolute URLs a cluster's signed
@@ -30,6 +31,10 @@ type Config struct {
 	// RotationURL is the key rotation route's absolute URL, which both
 	// of a rotation's JWSs name as aud (ROT-1).
 	RotationURL string
+	// RegistrationLimit bounds the registrations one client address
+	// sends per operator.ExchangeWindow; zero takes
+	// RegistrationsPerSource. A deployment always has a bound.
+	RegistrationLimit int
 }
 
 // Service is how a cluster's connector registers, exchanges its key
@@ -65,12 +70,15 @@ func NewService(credentials CredentialStore, cfg Config) Service {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.RegistrationLimit == 0 {
+		cfg.RegistrationLimit = RegistrationsPerSource
+	}
 	limiter := func(limit int) *operator.Limiter {
 		return operator.NewLimiter(operator.LimiterConfig{Limit: limit, Window: operator.ExchangeWindow,
 			MaxKeys: operator.TrackedClients, Now: cfg.Now})
 	}
 	return &service{credentials: credentials, cfg: cfg,
-		registrations: limiter(RegistrationsPerSource),
+		registrations: limiter(cfg.RegistrationLimit),
 		perSource:     limiter(operator.ExchangesPerSource),
 		perClient:     limiter(operator.ExchangesPerClient),
 	}

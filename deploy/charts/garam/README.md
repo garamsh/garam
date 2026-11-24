@@ -317,6 +317,15 @@ lifetime has passed, so a quarter of it is the margin its propagation
 into the agent's Pod has to fit in; a deployment whose propagation
 does not fit raises the lifetime rather than refreshing later.
 
+`machine.clusterRegistrationLimit` defaults to the binary's own `10`
+and bounds the registrations a connected cluster's connector sends from
+one address a minute, counted before the registration token is read so
+a throttled request spends nothing (ADR-0184, REG-8). The binary
+refuses `0` and anything but a positive whole number, so no deployment
+runs without the bound. A deployment that runs garam-bot-operator's
+conformance suite against itself raises it for that run, since the
+suite registers more than ten times from one address.
+
 `machine.tokenUrl` turns on the operator key exchange
 ([ADR-0102](../../../docs/architecture/adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md))
 and is empty by default. It renders `GARAM_MACHINE_TOKEN_URL` on both

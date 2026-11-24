@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -188,6 +189,24 @@ func TestRegister_ThrottlesBeforeTheTokenIsRead(t *testing.T) {
 
 	_, err = svc.Register(context.Background(), "192.0.2.2", liveToken, publicJWK(t, current))
 	assert.NoError(t, err)
+}
+
+// TestRegister_TakesTheConfiguredBound holds that Config.RegistrationLimit
+// replaces the default bound: with two, the third request from one
+// address is throttled, and the default admits it, the control.
+func TestRegister_TakesTheConfiguredBound(t *testing.T) {
+	testKeys(t)
+	throttled := func(cfg cluster.Config) bool {
+		svc := cluster.NewService(&credentials{t: t}, cfg)
+		for range 2 {
+			_, _ = svc.Register(context.Background(), "192.0.2.1", "garam_crt_bad", nil)
+		}
+		_, err := svc.Register(context.Background(), "192.0.2.1", "garam_crt_bad", nil)
+		var exceeded *operator.Exceeded
+		return errors.As(err, &exceeded)
+	}
+	assert.True(t, throttled(cluster.Config{TokenEndpoint: tokenURL, RegistrationLimit: 2}))
+	assert.False(t, throttled(cluster.Config{TokenEndpoint: tokenURL}), "the control: the default bound is ten")
 }
 
 // TestParsePublicJWK_TakesThePublicHalfOfAKeyOf3072BitsOrMore holds

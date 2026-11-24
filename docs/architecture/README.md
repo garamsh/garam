@@ -1619,3 +1619,9 @@ ADRs:
   rotates its key under its current key's signature, and is revoked by
   its organization; accepted, unbuilt (#2043); supersedes 0117 in part,
   item 2's one-time token, for a connected cluster only
+- [0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)
+  — every cluster garam reaches, aurora's included, connects by the
+  connector and its one-time registration token, and garam issues no
+  PEM for a cluster; accepted, unbuilt (#2054); amends 0184 by
+  reference, its "a user's own cluster" read as any cluster garam
+  reaches

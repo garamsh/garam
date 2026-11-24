@@ -236,6 +236,9 @@ garam's retired templates and the browser's `operatorGrn`
   The wire between garam and the connector in that cluster is
   `garamsh/garam-bot-operator`'s interface
   `interfaces/cluster-connection/v1alpha1/`, whose server garam owes.
+  The cluster garam's own deployment runs on connects the same way,
+  and garam issues no PEM for a cluster
+  ([ADR-0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)).
 - A first account on an empty database. `/register` mints one only from
   an invitation (ADR-0006) and an invitation comes from an org admin, so
   a database holding neither is reached with real Google credentials or

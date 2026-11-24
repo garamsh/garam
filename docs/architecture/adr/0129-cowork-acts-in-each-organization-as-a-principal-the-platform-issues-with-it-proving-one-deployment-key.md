@@ -2,7 +2,10 @@
 
 > Status: accepted; §7's last sentence, on an open WebSocket, is
 > superseded by
-> [ADR-0139](./0139-an-open-cowork-websocket-is-asked-again-within-a-stated-bound.md)
+> [ADR-0139](./0139-an-open-cowork-websocket-is-asked-again-within-a-stated-bound.md);
+> superseded in part by
+> [ADR-0192](./0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
+> (decision 1's principal and decision 5's three operations)
 > Date: 2026-10-28
 
 Drafted for #1664; #1655 reserves this number. The direction is the

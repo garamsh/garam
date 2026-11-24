@@ -1,6 +1,8 @@
 # ADR 0189: A bot garam declares is an IAM principal whose connector exchanges for its token, and one Cedar policy decides what it may do
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0192](./0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
+> (decision 2's actor)
 > Date: 2026-11-25
 
 Append-only: once merged, the body below is not rewritten. A fact later

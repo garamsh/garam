@@ -1,6 +1,8 @@
 # ADR 0187: A declaration placed on a cluster is written under iam:cluster.declare into a log per record the connector long-polls
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0192](./0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
+> (decision 1)
 > Date: 2026-11-24
 
 Append-only: once merged, the body below is not rewritten. A fact later

@@ -247,6 +247,13 @@ garam's retired templates and the browser's `operatorGrn`
   The cluster garam's own deployment runs on connects the same way,
   and garam issues no PEM for a cluster
   ([ADR-0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)).
+- Apps. Decided and unbuilt: every system that connects to garam, the
+  connector, cowork, codehub and an app an organization registers
+  alike, is an app installed in an organization, each running copy an
+  instance with its own key, and a connected cluster becomes such an
+  instance
+  ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md),
+  [apps.md](./apps.md)).
 - A first account on an empty database. `/register` mints one only from
   an invitation (ADR-0006) and an invitation comes from an org admin, so
   a database holding neither is reached with real Google credentials or

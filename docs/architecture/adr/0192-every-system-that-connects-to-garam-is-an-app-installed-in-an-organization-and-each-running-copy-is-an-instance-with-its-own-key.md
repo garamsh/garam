@@ -11,11 +11,12 @@ Drafted for #2079, for which the Garam PM reserved this number. The
 owner's direction is `garamsh/discussions` discussion 6, comments
 19863476 and 19863532 (the app system), 19863598 (the connector
 registers through it, and what differs between apps is settings) and
-19863634 (registration, review and the permission request by
-organizations and third parties are built now). The decisions #2079
+19863634 (registration by organizations and third parties is built
+now rather than later). The decisions #2079
 lists were settled before drafting, its inventory comment of
 2026-11-24 maps what this changes, and the PM's review of #2080
-settled the review gate, the floor of requestable actions and an
+decided that a public app is reviewed by the platform (its finding
+F1), and settled the floor of requestable actions and an
 installation's scope. garam is read at
 `855dc64cab84c71d647e84abd09bdce69ad2f9c3`, and garam-bot at
 `c1446a3754715ef3cc769bcca8e3c2700be473fc`. A claim below that names
@@ -57,10 +58,14 @@ no revision holds for those.
     feed its instances pull;
   - whether it may host bots, which an organization's administrator
     grants explicitly at install.
-- **Registration is open now** (comment 19863634): an organization
-  registers its own apps, an app may be offered to other
-  organizations, and the owner named review as part of it. A third
-  party is an organization whose app is public.
+- **Registration is open now** (comment 19863634): the owner had
+  organizations and third parties register their own apps now rather
+  than later. An organization registers its own apps, and an app may
+  be offered to other organizations; a third party is an organization
+  whose app is public.
+- **Public apps are reviewed** (the PM's decision in the review of
+  #2080, finding F1): an app reaches organizations other than its own
+  only after the platform approves it.
 - **"An admin installs" reads as the organization's owner.** #2079
   has an admin's install write the requested actions as policies, and
   writing a `permit` is held by the owner role and no lesser one
@@ -464,8 +469,8 @@ app, or on an instance's kind.**
   project. A scope on the one installation says the same, and keeps
   the installation's GRN derivable from the organization.
 - **Public apps installable on an owner's consent alone**, as a public
-  GitHub App is. The owner named review as part of registration
-  (comment 19863634).
+  GitHub App is. The PM decided that an app offered to other
+  organizations is reviewed first (the review of #2080, finding F1).
 - **A never-requestable list without its property.** A list alone
   missed the membership actions that grant roles, and the next action
   of that kind would have been requestable on arrival.

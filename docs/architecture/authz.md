@@ -909,9 +909,10 @@ puts what a bot garam declares may do under one Cedar policy:
   bot run without garam has its `spec.permissions` translated into
   the same policies and decided locally.
 - **There is no Connection resource.** A grant says which bot may use
-  which external app connection with which scope. That is the
-  per-organization record of an external service's app garam brokers,
-  not an `iam/installation` of a garam app
+  which external app connection with which scope. An external app
+  connection is a record, not a resource: the organization's record of
+  an external service's app garam brokers, which no policy names and
+  which is not an `iam/installation` of a garam app
   ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
   decision 1).
 

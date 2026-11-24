@@ -130,8 +130,9 @@ names it is built.
   principal from the organization with no lookup, as ADR-0129's did.
 - Why installing is the owner's: an install writes `permit`s
   (ADR-0145 item 4).
-- Why public apps are reviewed: the owner named review as part of
-  registration (ADR-0192 §Context).
+- Why registration by organizations is built now: the owner's
+  direction; why public apps are reviewed: the PM's decision (ADR-0192
+  §Context).
 - Why webhooks are signed by the issuer key under a type of their own:
   garam already publishes that key set (ADR-0141), and a distinct
   `typ` and audience keep an event from being taken for a token.

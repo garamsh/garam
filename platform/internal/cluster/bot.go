@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 )
 
 // The RFC 8693 exchange a connector makes for a bot garam declared and
@@ -109,7 +110,7 @@ type BotExchange struct {
 // endpoint's URL, or none; another is ErrAudienceRefused. A scope is
 // refused, none being defined yet.
 func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error) {
-	if !WellFormed(exchange.ActorToken, TokenPrefix) {
+	if !app.WellFormed(exchange.ActorToken, app.TokenPrefix) {
 		return nil, ErrActorTokenRefused
 	}
 	if exchange.Audience != nil && (s.cfg.TokenEndpoint == "" || *exchange.Audience != s.cfg.TokenEndpoint) {
@@ -118,28 +119,28 @@ func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotT
 	if strings.TrimSpace(exchange.Scope) != "" {
 		return nil, ErrScopeUndefined
 	}
-	actor := HashSecret(exchange.ActorToken)
+	actor := app.HashSecret(exchange.ActorToken)
 	holder, err := s.credentials.ResolveToken(ctx, actor)
-	if errors.Is(err, ErrTokenInvalid) {
+	if errors.Is(err, app.ErrTokenInvalid) {
 		return nil, ErrActorTokenRefused
 	}
 	if err != nil {
 		return nil, err
 	}
-	place := holder.Cluster
-	if err := s.botTokens.Check(place.String()); err != nil {
+	place := holder.Instance
+	if err := s.botTokenLimit.Check(place.String()); err != nil {
 		return nil, err
 	}
 	bot, err := grn.Parse(exchange.Subject)
 	if err != nil || bot != BotGRN(place.Organization, bot.Identifier) {
 		return nil, ErrBotNotPlaced
 	}
-	value, err := NewSecret(BotTokenPrefix)
+	value, err := app.NewSecret(BotTokenPrefix)
 	if err != nil {
 		return nil, err
 	}
-	expiresAt, err := s.credentials.RecordBotToken(ctx, place, bot.Identifier, actor, HashSecret(value), BotTokenTTL)
-	if errors.Is(err, ErrTokenInvalid) {
+	expiresAt, err := s.botTokens.RecordBotToken(ctx, place, bot.Identifier, actor, app.HashSecret(value), BotTokenTTL)
+	if errors.Is(err, app.ErrTokenInvalid) {
 		return nil, ErrActorTokenRefused
 	}
 	if err != nil {

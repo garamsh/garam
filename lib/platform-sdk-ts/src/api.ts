@@ -916,7 +916,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/clusters": {
+    "/orgs/{org}/apps": {
         parameters: {
             query?: never;
             header?: never;
@@ -924,23 +924,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List an organization's connected clusters. Requires the `member` role.
-         * @description The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
+         * List the apps an organization may install. Requires the `member` role.
+         * @description The organization's own apps and every public one, ordered by GRN (ADR-0192 decision 3). Authorized as `iam:app.read` on the organization.
          */
-        get: operations["listClusters"];
+        get: operations["listApps"];
         put?: never;
-        /**
-         * Create a connected cluster's record. Requires the `admin` role.
-         * @description Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-         */
-        post: operations["createCluster"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/clusters/{cluster}": {
+    "/orgs/{org}/apps/{app}": {
         parameters: {
             query?: never;
             header?: never;
@@ -948,27 +944,119 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read one of an organization's connected clusters. Requires the `member` role.
-         * @description Authorized as `iam:cluster.read` on the organization.
+         * Read an app the organization may install. Requires the `member` role.
+         * @description Another organization's private app answers 404, as one that is not there does. Authorized as `iam:app.read` on the organization.
          */
-        get: operations["getCluster"];
+        get: operations["getApp"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/installations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the apps an organization has installed. Requires the `member` role.
+         * @description Ordered by GRN. Authorized as `iam:installation.read` on the organization.
+         */
+        get: operations["listInstallations"];
+        put?: never;
+        /**
+         * Install an app in an organization. Requires the `owner` role.
+         * @description Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+         */
+        post: operations["createInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/installations/{installation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one of an organization's installations. Requires the `member` role.
+         * @description Authorized as `iam:installation.read` on the installation.
+         */
+        get: operations["getInstallation"];
         put?: never;
         post?: never;
         /**
-         * Delete a connected cluster's record. Requires the `admin` role.
-         * @description Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
+         * Uninstall an app. Requires the `admin` role.
+         * @description Deletes the installation with its instances, their keys and their tokens, each refused from the next request (ADR-0192 decision 4). A reinstall is a new incarnation and inherits none of it. Authorized as `iam:installation.delete` on the installation.
          */
-        delete: operations["deleteCluster"];
+        delete: operations["deleteInstallation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/installations/{installation}/instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List an installation's instances. Requires the `member` role.
+         * @description The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
+         */
+        get: operations["listInstances"];
+        put?: never;
+        /**
+         * Create an instance's record. Requires the `admin` role.
+         * @description Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+         */
+        post: operations["createInstance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/installations/{installation}/instances/{instance}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one of an organization's instances. Requires the `member` role.
+         * @description Authorized as `iam:instance.read` on the installation.
+         */
+        get: operations["getInstance"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an instance's record. Requires the `admin` role.
+         * @description Removes the organization's record of the instance, and with it what the instance authenticates as (ADR-0184 decision 7). Nothing in the instance is touched: garam never dials it. Authorized as `iam:instance.delete` on the installation.
+         */
+        delete: operations["deleteInstance"];
         options?: never;
         head?: never;
         /**
-         * Rename or describe a connected cluster. Requires the `admin` role.
-         * @description Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+         * Rename or describe an instance. Requires the `admin` role.
+         * @description Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
          */
-        patch: operations["updateCluster"];
+        patch: operations["updateInstance"];
         trace?: never;
     };
-    "/orgs/{org}/clusters/{cluster}/registration-token": {
+    "/orgs/{org}/installations/{installation}/instances/{instance}/registration-token": {
         parameters: {
             query?: never;
             header?: never;
@@ -978,17 +1066,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Answer a new registration token for a cluster. Requires the `admin` role.
-         * @description Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
+         * Answer a new registration token for an instance. Requires the `admin` role.
+         * @description Answers a new one-time registration token, once, and spends any the instance held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the instance held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:instance.reissue` on the installation.
          */
-        post: operations["reissueClusterRegistrationToken"];
+        post: operations["reissueInstanceRegistrationToken"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/clusters/{cluster}/keys": {
+    "/orgs/{org}/installations/{installation}/instances/{instance}/keys": {
         parameters: {
             query?: never;
             header?: never;
@@ -996,10 +1084,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
-         * @description Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
+         * List the keys an instance registered, with where each stands. Requires the `member` role.
+         * @description Every key the instance held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:instance.read` on the installation.
          */
-        get: operations["listClusterKeys"];
+        get: operations["listInstanceKeys"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1008,7 +1096,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/clusters/{cluster}/keys/{kid}": {
+    "/orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1019,16 +1107,16 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
-         * @description Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
+         * Withdraw an instance's key and every token exchanged under it. Requires the `admin` role.
+         * @description Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:instance.reissue` on the installation, as withdrawing an operator's key is `iam:operator.reissue`.
          */
-        delete: operations["revokeClusterKey"];
+        delete: operations["revokeInstanceKey"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/clusters/{cluster}/report": {
+    "/orgs/{org}/installations/{installation}/instances/{instance}/report": {
         parameters: {
             query?: never;
             header?: never;
@@ -1036,10 +1124,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
-         * @description The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
+         * Read what an instance last reported, and when it last reached garam. Requires the `member` role.
+         * @description The instance's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this instance, or naming none. Every `spec`, `status` and `message` in it is what the instance said: display data, to be rendered as text and never acted on. Authorized as `iam:instance.read` on the installation.
          */
-        get: operations["getClusterReport"];
+        get: operations["getInstanceReport"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1048,7 +1136,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/clusters/{cluster}/declarations": {
+    "/orgs/{org}/installations/{installation}/instances/{instance}/declarations": {
         parameters: {
             query?: never;
             header?: never;
@@ -1056,23 +1144,23 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the declarations placed on a connected cluster. Requires the `member` role.
-         * @description The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
+         * List the declarations placed on an instance. Requires the `member` role.
+         * @description The live declarations placed on the instance, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:instance.read` on the installation.
          */
-        get: operations["listClusterDeclarations"];
+        get: operations["listInstanceDeclarations"];
         put?: never;
         /**
-         * Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-         * @description Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+         * Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+         * @description Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
          */
-        post: operations["createClusterDeclaration"];
+        post: operations["createInstanceDeclaration"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/clusters/{cluster}/declarations/{declaration}": {
+    "/orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1080,21 +1168,21 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read one live declaration placed on a connected cluster. Requires the `member` role.
-         * @description A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
+         * Read one live declaration placed on an instance. Requires the `member` role.
+         * @description A tombstoned declaration answers 404. Authorized as `iam:instance.read` on the installation.
          */
-        get: operations["getClusterDeclaration"];
+        get: operations["getInstanceDeclaration"];
         /**
-         * Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-         * @description An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+         * Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+         * @description An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
          */
-        put: operations["putClusterDeclaration"];
+        put: operations["putInstanceDeclaration"];
         post?: never;
         /**
-         * Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+         * Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
          * @description Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
          */
-        delete: operations["deleteClusterDeclaration"];
+        delete: operations["deleteInstanceDeclaration"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1895,7 +1983,7 @@ export interface components {
             id: string;
         };
         /** @enum {string} */
-        PermissionResourceType: "group" | "project" | "agent" | "policy" | "cowork-page" | "cowork-channel" | "cowork-task" | "cowork-artifact";
+        PermissionResourceType: "group" | "project" | "agent" | "policy" | "installation" | "cowork-page" | "cowork-channel" | "cowork-task" | "cowork-artifact";
         PermissionCheckAnswer: {
             results: components["schemas"]["PermissionCheckResult"][];
         };
@@ -2443,42 +2531,104 @@ export interface components {
                 description?: components["schemas"]["OperatorDescription"];
             };
         };
-        /** @description A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster. */
-        Cluster: {
+        /** @description An app's record (ADR-0192 decision 2). Every difference between apps is one of these settings. */
+        App: {
             /**
-             * @description The GRN, whose identifier garam minted.
-             * @example grn:acme/iam/cluster/5f60710a1b2c3d4e
+             * @description `grn:root/iam/app/<slug>` for an app the platform registered, `grn:<org>/iam/app/<slug>` for an organization's.
+             * @example grn:root/iam/app/garam-bot-connector
              */
             grn: string;
+            /** @example garam-bot-connector */
+            slug: string;
+            name: string;
+            description: string;
             /**
-             * @description What the organization calls the cluster. It is not unique and not an identity. A creation that named none is called by its identifier.
+             * @description A private app is installable only in its own organization.
+             * @enum {string}
+             */
+            visibility: "private" | "public";
+            /** @description The single action ids an installation is granted, each written as a permit on the installation. */
+            requestedActions: string[];
+            /** @description Whether it asks to host bots, which an installation's owner grants apart from the requested actions. */
+            requestsBotHosting: boolean;
+            /**
+             * @description How many instances one installation of it holds.
+             * @enum {string}
+             */
+            instances: "none" | "one" | "many";
+            /**
+             * @description How events reach it.
+             * @enum {string}
+             */
+            delivery: "pull";
+        };
+        /** @description One app installed in one organization (ADR-0192 decision 4). */
+        Installation: {
+            /** @example grn:acme/iam/installation/garam-bot-connector */
+            grn: string;
+            orgGrn: string;
+            appGrn: string;
+            /** @description Tells this installation from an earlier one of the same app, which held the same GRN. */
+            incarnation: string;
+            /** @description The GRNs of the projects its grants reach, empty where they reach the whole organization. */
+            projects: string[];
+            /** @description The owner that installed it. */
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        InstallationCreation: {
+            /**
+             * @description The slug of the app to install.
+             * @example garam-bot-connector
+             */
+            app: string;
+            /** @description The slugs of the projects its grants reach. Left out, they reach the whole organization; an empty list is refused. */
+            projects?: string[];
+        };
+        /** @description A running copy of an installation's app (ADR-0192 decision 1). Nothing on it is a report from the instance. */
+        Instance: {
+            /**
+             * @description The GRN, whose identifier garam minted.
+             * @example grn:acme/iam/instance/5f60710a1b2c3d4e
+             */
+            grn: string;
+            /** @description The installation it is a copy of. */
+            installationGrn: string;
+            /**
+             * @description What the organization calls the instance. It is not unique and not an identity. A creation that named none is called by its identifier.
              * @example EKS production
              */
             name: string;
-            /** @description What the organization says the cluster is for, empty where it says nothing. */
+            /** @description What the organization says the instance is for, empty where it says nothing. */
             description: string;
+            /**
+             * @description What the instance runs on, as the organization says it, empty where it says nothing. garam stores and shows it and never reads it.
+             * @example cluster
+             */
+            kind: string;
             orgGrn: string;
             /** @description The member that created the record. */
             createdBy: string;
             /** Format: date-time */
             createdAt: string;
         };
-        CreatedCluster: {
-            cluster: components["schemas"]["Cluster"];
-            registration: components["schemas"]["ClusterRegistrationToken"];
+        CreatedInstance: {
+            instance: components["schemas"]["Instance"];
+            registration: components["schemas"]["InstanceRegistrationToken"];
         };
         /** @description A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3). */
-        ClusterRegistrationToken: {
+        InstanceRegistrationToken: {
             /** @example garam_crt_0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0 */
             registrationToken: string;
             /** Format: date-time */
             expiresAt: string;
         };
-        ClusterKeyList: {
-            keys: components["schemas"]["ClusterKey"][];
+        InstanceKeyList: {
+            keys: components["schemas"]["InstanceKey"][];
         };
-        /** @description The public record of one key a cluster's connector generated. It carries no private material. */
-        ClusterKey: {
+        /** @description The public record of one key an instance generated. It carries no private material. */
+        InstanceKey: {
             /** @description The base64url SHA-256 RFC 7638 thumbprint of the public key. */
             kid: string;
             /**
@@ -2493,22 +2643,29 @@ export interface components {
             /** Format: date-time */
             revokedAt?: string;
         };
-        ClusterCreation: {
-            name?: components["schemas"]["ClusterName"];
-            description?: components["schemas"]["ClusterDescription"];
+        InstanceCreation: {
+            name?: components["schemas"]["InstanceName"];
+            description?: components["schemas"]["InstanceDescription"];
+            kind?: components["schemas"]["InstanceKind"];
         };
-        /** @description A change to what the organization says about a cluster. A field left out keeps its value; the identifier is not a field. */
-        ClusterPatch: {
-            name?: components["schemas"]["ClusterName"];
-            description?: components["schemas"]["ClusterDescription"];
+        /** @description A change to what the organization says about an instance. A field left out keeps its value; the identifier is not a field. */
+        InstancePatch: {
+            name?: components["schemas"]["InstanceName"];
+            description?: components["schemas"]["InstanceDescription"];
+            kind?: components["schemas"]["InstanceKind"];
         };
         /**
          * @description At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
          * @example EKS production
          */
-        ClusterName: string;
+        InstanceName: string;
         /** @description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was. */
-        ClusterDescription: string;
+        InstanceDescription: string;
+        /**
+         * @description At most 64 characters once surrounding space is trimmed. Empty is no kind, and on an update clears the one there was.
+         * @example cluster
+         */
+        InstanceKind: string;
         ClusterDeclarationWrite: {
             object: components["schemas"]["ClusterDeclaredObject"];
         };
@@ -2516,12 +2673,12 @@ export interface components {
         ClusterDeclaredObject: {
             [key: string]: unknown;
         };
-        /** @description One declaration placed on a connected cluster, which its connector applies (ADR-0187). */
+        /** @description One declaration placed on an instance of garam-bot-connector, which its connector applies (ADR-0187). */
         ClusterDeclaration: {
             /** @example decl-5f60710a1b2c3d4e */
             id: string;
-            /** @description The GRN of the cluster it is placed on. */
-            cluster: string;
+            /** @description The GRN of the instance it is placed on. */
+            instance: string;
             /**
              * Format: int64
              * @description 1 when placed, and one more at every write.
@@ -2536,13 +2693,13 @@ export interface components {
         ClusterDeclarationList: {
             declarations: components["schemas"]["ClusterDeclaration"][];
         };
-        /** @description What garam holds of a connected cluster's reports. */
+        /** @description What garam holds of an instance's reports. */
         ClusterReportView: {
-            /** @description The cluster's GRN. */
-            cluster: string;
+            /** @description The instance's GRN. */
+            instance: string;
             /**
              * Format: date-time
-             * @description When the cluster's latest authenticated request reached garam, to within a second; null where none has.
+             * @description When the instance's latest authenticated request reached garam, to within a second; null where none has.
              */
             lastContactAt: string | null;
             report: components["schemas"]["ClusterReport"] | null;
@@ -2745,8 +2902,12 @@ export interface components {
         agent: string;
         /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
         kid: string;
-        /** @description Cluster identifier (the last GRN segment). */
-        cluster: string;
+        /** @description An app's slug, the last segment of its GRN. */
+        app: string;
+        /** @description An installation's identifier, its app's slug. */
+        installation: string;
+        /** @description Instance identifier (the last GRN segment). */
+        instance: string;
         /** @description A declaration's identifier: 1 to 128 letters, digits, `.`, `_` or `-`. */
         declaration: string;
         /** @description Operator identifier (the last GRN segment). */
@@ -4376,7 +4537,7 @@ export interface operations {
             403: components["responses"]["Error"];
         };
     };
-    listClusters: {
+    listApps: {
         parameters: {
             query?: never;
             header?: never;
@@ -4388,13 +4549,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The organization's clusters. */
+            /** @description The apps. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Cluster"][];
+                    "application/json": components["schemas"]["App"][];
                 };
             };
             401: components["responses"]["Error"];
@@ -4402,7 +4563,62 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    createCluster: {
+    getApp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description An app's slug, the last segment of its GRN. */
+                app: components["parameters"]["app"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The app. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["App"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listInstallations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's installations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Installation"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createInstallation: {
         parameters: {
             query?: never;
             header?: never;
@@ -4414,56 +4630,47 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ClusterCreation"];
+                "application/json": components["schemas"]["InstallationCreation"];
             };
         };
         responses: {
-            /** @description Cluster created, with its registration token. */
+            /** @description The installation. */
             201: {
                 headers: {
-                    "Cache-Control"?: "no-store";
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreatedCluster"];
+                    "application/json": components["schemas"]["Installation"];
                 };
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
-            /** @description The identifier garam minted is already a cluster's. It is drawn from 64 random bits, so the request is sent again. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
+            409: components["responses"]["Error"];
         };
     };
-    getCluster: {
+    getInstallation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The cluster. */
+            /** @description The installation. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Cluster"];
+                    "application/json": components["schemas"]["Installation"];
                 };
             };
             400: components["responses"]["Error"];
@@ -4472,21 +4679,21 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    deleteCluster: {
+    deleteInstallation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Cluster deleted. */
+            /** @description Uninstalled. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -4499,31 +4706,100 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    updateCluster: {
+    listInstances: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClusterPatch"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description The cluster as stored after the change. */
+            /** @description The installation's instances. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Cluster"];
+                    "application/json": components["schemas"]["Instance"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstanceCreation"];
+            };
+        };
+        responses: {
+            /** @description Instance created, with its registration token. */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedInstance"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description The app runs one instance per installation and the installation holds it, or the identifier garam minted is already an instance's, which is drawn from 64 random bits, so the request is sent again. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The instance. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Instance"];
                 };
             };
             400: components["responses"]["Error"];
@@ -4532,15 +4808,81 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    reissueClusterRegistrationToken: {
+    deleteInstance: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Instance deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateInstance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstancePatch"];
+            };
+        };
+        responses: {
+            /** @description The instance as stored after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Instance"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    reissueInstanceRegistrationToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
             };
             cookie?: never;
         };
@@ -4553,7 +4895,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterRegistrationToken"];
+                    "application/json": components["schemas"]["InstanceRegistrationToken"];
                 };
             };
             400: components["responses"]["Error"];
@@ -4562,27 +4904,29 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    listClusterKeys: {
+    listInstanceKeys: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The cluster's keys. */
+            /** @description The instance's keys. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterKeyList"];
+                    "application/json": components["schemas"]["InstanceKeyList"];
                 };
             };
             400: components["responses"]["Error"];
@@ -4591,15 +4935,17 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    revokeClusterKey: {
+    revokeInstanceKey: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
                 /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
                 kid: components["parameters"]["kid"];
             };
@@ -4620,21 +4966,23 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    getClusterReport: {
+    getInstanceReport: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description What garam holds of the cluster's reports. */
+            /** @description What garam holds of the instance's reports. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4649,21 +4997,23 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    listClusterDeclarations: {
+    listInstanceDeclarations: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The cluster's live declarations. */
+            /** @description The instance's live declarations. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4678,15 +5028,17 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    createClusterDeclaration: {
+    createInstanceDeclaration: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
             };
             cookie?: never;
         };
@@ -4713,15 +5065,17 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
-    getClusterDeclaration: {
+    getInstanceDeclaration: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
                 /** @description A declaration's identifier: 1 to 128 letters, digits, `.`, `_` or `-`. */
                 declaration: components["parameters"]["declaration"];
             };
@@ -4744,15 +5098,17 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    putClusterDeclaration: {
+    putInstanceDeclaration: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
                 /** @description A declaration's identifier: 1 to 128 letters, digits, `.`, `_` or `-`. */
                 declaration: components["parameters"]["declaration"];
             };
@@ -4790,15 +5146,17 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
-    deleteClusterDeclaration: {
+    deleteInstanceDeclaration: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */
                 org: components["parameters"]["org"];
-                /** @description Cluster identifier (the last GRN segment). */
-                cluster: components["parameters"]["cluster"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+                /** @description Instance identifier (the last GRN segment). */
+                instance: components["parameters"]["instance"];
                 /** @description A declaration's identifier: 1 to 128 letters, digits, `.`, `_` or `-`. */
                 declaration: components["parameters"]["declaration"];
             };

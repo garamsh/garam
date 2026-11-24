@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/authn"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/listfilter"
@@ -1201,99 +1202,225 @@ func (s *fakePasswordAttemptStore) releaseOne() {
 	}
 }
 
-// fakeClusterStore holds clusters in memory and answers as the
-// Postgres store does.
-type fakeClusterStore struct {
-	mu       sync.Mutex
-	clusters map[string]*cluster.Cluster
+// connectorApp is garam-bot-connector as migration 000088 writes it.
+func connectorApp() *app.App {
+	return &app.App{
+		GRN: grn.New(grn.RootOwner, app.AppType, "garam-bot-connector"), Slug: "garam-bot-connector",
+		Name: "garam-bot connector", Visibility: app.VisibilityPublic, RequestedActions: []string{},
+		RequestsBotHosting: true, Instances: app.InstancesMany, Delivery: app.DeliveryPull,
+		MachineOperations: []string{
+			"GET /cluster-connection/v1alpha1/clusters/self/declarations",
+			"POST /cluster-connection/v1alpha1/clusters/self/reports",
+		},
+	}
 }
 
-func newFakeClusterStore() *fakeClusterStore {
-	return &fakeClusterStore{clusters: map[string]*cluster.Cluster{}}
+// fakeAppStore holds apps, installations and instances in memory and
+// answers as the Postgres store does. It starts with the connector, as
+// every deployment does.
+type fakeAppStore struct {
+	mu            sync.Mutex
+	apps          map[string]*app.App
+	installations map[string]*app.Installation
+	instances     map[string]*app.Instance
+	// installed counts every installation written, so each is answered
+	// an incarnation no earlier one held, as gen_random_uuid() does.
+	installed int
 }
 
-func (s *fakeClusterStore) Create(_ context.Context, c *cluster.Cluster) (*cluster.Cluster, error) {
+func newFakeAppStore() *fakeAppStore {
+	connector := connectorApp()
+	return &fakeAppStore{
+		apps:          map[string]*app.App{connector.GRN.String(): connector},
+		installations: map[string]*app.Installation{},
+		instances:     map[string]*app.Instance{},
+	}
+}
+
+// addApp registers a.
+func (s *fakeAppStore) addApp(a *app.App) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.clusters[c.GRN.String()]; ok {
-		return nil, errorx.New(errorx.KindAlreadyExists, "cluster already exists")
+	s.apps[a.GRN.String()] = a
+}
+
+func (s *fakeAppStore) GetApp(_ context.Context, g grn.GRN) (*app.App, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.apps[g.String()]
+	if !ok {
+		return nil, app.ErrAppNotFound
 	}
-	stored := *c
-	s.clusters[c.GRN.String()] = &stored
+	answered := *a
+	return &answered, nil
+}
+
+func (s *fakeAppStore) ListApps(_ context.Context, orgGRN grn.GRN) ([]*app.App, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*app.App
+	for _, a := range s.apps {
+		if a.Visibility == app.VisibilityPublic || a.GRN.Organization == orgGRN.Identifier {
+			answered := *a
+			out = append(out, &answered)
+		}
+	}
+	slices.SortFunc(out, func(a, b *app.App) int { return strings.Compare(a.GRN.String(), b.GRN.String()) })
+	return out, nil
+}
+
+func (s *fakeAppStore) CreateInstallation(_ context.Context, i *app.Installation) (*app.Installation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.installations[i.GRN.String()]; ok {
+		return nil, app.ErrInstallationExists
+	}
+	stored := *i
+	s.installed++
+	stored.Incarnation = fmt.Sprintf("00000000-0000-0000-0000-%012d", s.installed)
+	s.installations[i.GRN.String()] = &stored
 	answered := stored
 	return &answered, nil
 }
 
-func (s *fakeClusterStore) Get(_ context.Context, g grn.GRN) (*cluster.Cluster, error) {
+func (s *fakeAppStore) GetInstallation(_ context.Context, g grn.GRN) (*app.Installation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c, ok := s.clusters[g.String()]
+	i, ok := s.installations[g.String()]
 	if !ok {
-		return nil, cluster.ErrClusterNotFound
+		return nil, app.ErrInstallationNotFound
 	}
-	answered := *c
+	answered := *i
 	return &answered, nil
 }
 
-func (s *fakeClusterStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*cluster.Cluster, error) {
+func (s *fakeAppStore) ListInstallations(_ context.Context, orgGRN grn.GRN) ([]*app.Installation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var out []*cluster.Cluster
-	for _, c := range s.clusters {
-		if c.Organization == orgGRN {
-			answered := *c
+	var out []*app.Installation
+	for _, i := range s.installations {
+		if i.Organization == orgGRN {
+			answered := *i
 			out = append(out, &answered)
 		}
 	}
-	slices.SortFunc(out, func(a, b *cluster.Cluster) int { return strings.Compare(a.GRN.String(), b.GRN.String()) })
+	slices.SortFunc(out, func(a, b *app.Installation) int { return strings.Compare(a.GRN.String(), b.GRN.String()) })
 	return out, nil
 }
 
-func (s *fakeClusterStore) UpdateDetails(_ context.Context, g grn.GRN, patch cluster.DetailsPatch) (*cluster.Cluster, error) {
+func (s *fakeAppStore) DeleteInstallation(_ context.Context, g grn.GRN) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c, ok := s.clusters[g.String()]
-	if !ok {
-		return nil, cluster.ErrClusterNotFound
+	if _, ok := s.installations[g.String()]; !ok {
+		return app.ErrInstallationNotFound
 	}
-	if n := patch.Name(); n != nil {
-		c.Name = *n
+	delete(s.installations, g.String())
+	for k, i := range s.instances {
+		if i.Installation == g {
+			delete(s.instances, k)
+		}
 	}
-	if d := patch.Description(); d != nil {
-		c.Description = *d
-	}
-	answered := *c
-	return &answered, nil
-}
-
-func (s *fakeClusterStore) Delete(_ context.Context, g grn.GRN) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.clusters[g.String()]; !ok {
-		return cluster.ErrClusterNotFound
-	}
-	delete(s.clusters, g.String())
 	return nil
 }
 
-// fakeClusterCredentials holds the browser half of a cluster's
+func (s *fakeAppStore) CreateInstance(_ context.Context, i *app.Instance) (*app.Instance, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	installation, ok := s.installations[i.Installation.String()]
+	if !ok {
+		return nil, app.ErrInstallationNotFound
+	}
+	held := 0
+	for _, other := range s.instances {
+		if other.Installation == i.Installation {
+			held++
+		}
+	}
+	if err := s.apps[installation.App.String()].Instances.Admit(held); err != nil {
+		return nil, err
+	}
+	if _, ok := s.instances[i.GRN.String()]; ok {
+		return nil, errorx.New(errorx.KindAlreadyExists, "instance already exists")
+	}
+	stored := *i
+	s.instances[i.GRN.String()] = &stored
+	answered := stored
+	return &answered, nil
+}
+
+func (s *fakeAppStore) GetInstance(_ context.Context, g grn.GRN) (*app.Instance, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i, ok := s.instances[g.String()]
+	if !ok {
+		return nil, app.ErrInstanceNotFound
+	}
+	answered := *i
+	return &answered, nil
+}
+
+func (s *fakeAppStore) ListInstances(_ context.Context, installation grn.GRN) ([]*app.Instance, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*app.Instance
+	for _, i := range s.instances {
+		if i.Installation == installation {
+			answered := *i
+			out = append(out, &answered)
+		}
+	}
+	slices.SortFunc(out, func(a, b *app.Instance) int { return strings.Compare(a.GRN.String(), b.GRN.String()) })
+	return out, nil
+}
+
+func (s *fakeAppStore) UpdateInstance(_ context.Context, g grn.GRN, patch app.DetailsPatch) (*app.Instance, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i, ok := s.instances[g.String()]
+	if !ok {
+		return nil, app.ErrInstanceNotFound
+	}
+	if n := patch.Name(); n != nil {
+		i.Name = *n
+	}
+	if d := patch.Description(); d != nil {
+		i.Description = *d
+	}
+	if k := patch.Kind(); k != nil {
+		i.Kind = *k
+	}
+	answered := *i
+	return &answered, nil
+}
+
+func (s *fakeAppStore) DeleteInstance(_ context.Context, g grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.instances[g.String()]; !ok {
+		return app.ErrInstanceNotFound
+	}
+	delete(s.instances, g.String())
+	return nil
+}
+
+// fakeClusterCredentials holds the browser half of an instance's
 // credentials in memory: the registration token's hash, and keys a
 // test places. The machine half is left to the embedded interface,
 // which no browser route calls.
 type fakeClusterCredentials struct {
-	cluster.CredentialStore
-	records *fakeClusterStore
+	app.CredentialStore
+	records *fakeAppStore
 	mu      sync.Mutex
 	tokens  map[string]string
-	keys    map[string][]cluster.Key
+	keys    map[string][]app.Key
 }
 
-func newFakeClusterCredentials(records *fakeClusterStore) *fakeClusterCredentials {
-	return &fakeClusterCredentials{records: records, tokens: map[string]string{}, keys: map[string][]cluster.Key{}}
+func newFakeClusterCredentials(records *fakeAppStore) *fakeClusterCredentials {
+	return &fakeClusterCredentials{records: records, tokens: map[string]string{}, keys: map[string][]app.Key{}}
 }
 
 func (s *fakeClusterCredentials) IssueRegistrationToken(ctx context.Context, g grn.GRN, hash string, ttl time.Duration) (time.Time, error) {
-	if _, err := s.records.Get(ctx, g); err != nil {
+	if _, err := s.records.GetInstance(ctx, g); err != nil {
 		return time.Time{}, err
 	}
 	s.mu.Lock()
@@ -1303,7 +1430,7 @@ func (s *fakeClusterCredentials) IssueRegistrationToken(ctx context.Context, g g
 }
 
 // place holds key on the cluster g names.
-func (s *fakeClusterCredentials) place(g string, key cluster.Key) {
+func (s *fakeClusterCredentials) place(g string, key app.Key) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.keys[g] = append(s.keys[g], key)
@@ -1317,8 +1444,8 @@ func (s *fakeClusterCredentials) tokenHash(g string) string {
 	return s.tokens[g]
 }
 
-func (s *fakeClusterCredentials) ListKeys(ctx context.Context, g grn.GRN) ([]cluster.Key, error) {
-	if _, err := s.records.Get(ctx, g); err != nil {
+func (s *fakeClusterCredentials) ListKeys(ctx context.Context, g grn.GRN) ([]app.Key, error) {
+	if _, err := s.records.GetInstance(ctx, g); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -1331,14 +1458,14 @@ func (s *fakeClusterCredentials) RevokeKey(_ context.Context, g grn.GRN, kid str
 	defer s.mu.Unlock()
 	for i, k := range s.keys[g.String()] {
 		if k.KID == kid {
-			if k.State != cluster.KeyStateRevoked {
+			if k.State != app.KeyStateRevoked {
 				now := time.Now().UTC()
-				s.keys[g.String()][i].State, s.keys[g.String()][i].RevokedAt = cluster.KeyStateRevoked, &now
+				s.keys[g.String()][i].State, s.keys[g.String()][i].RevokedAt = app.KeyStateRevoked, &now
 			}
 			return nil
 		}
 	}
-	return cluster.ErrKeyNotFound
+	return app.ErrKeyNotFound
 }
 
 type fakeOperatorStore struct {
@@ -1668,7 +1795,7 @@ func (s *fakeAuthorityReader) HasAuthority(_ context.Context, orgGRN grn.GRN) (b
 // is left to the embedded interface, which no browser route calls.
 type fakeDeclarations struct {
 	cluster.DeclarationStore
-	records      *fakeClusterStore
+	records      *fakeAppStore
 	mu           sync.Mutex
 	declarations map[string]*cluster.Declaration
 	// seq orders the declarations as last written.
@@ -1679,12 +1806,12 @@ type fakeDeclarations struct {
 	agentIDs map[string]bool
 }
 
-func newFakeDeclarations(records *fakeClusterStore) *fakeDeclarations {
+func newFakeDeclarations(records *fakeAppStore) *fakeDeclarations {
 	return &fakeDeclarations{records: records, declarations: map[string]*cluster.Declaration{}, written: map[string]int64{}}
 }
 
 func (s *fakeDeclarations) Declare(ctx context.Context, g grn.GRN, id string, object cluster.DeclaredObject) (cluster.Declaration, bool, error) {
-	if _, err := s.records.Get(ctx, g); err != nil {
+	if _, err := s.records.GetInstance(ctx, g); err != nil {
 		return cluster.Declaration{}, false, err
 	}
 	s.mu.Lock()
@@ -1743,7 +1870,7 @@ func (s *fakeDeclarations) GetDeclaration(_ context.Context, g grn.GRN, id strin
 }
 
 func (s *fakeDeclarations) ListDeclarations(ctx context.Context, g grn.GRN) ([]cluster.Declaration, error) {
-	if _, err := s.records.Get(ctx, g); err != nil {
+	if _, err := s.records.GetInstance(ctx, g); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -1762,12 +1889,12 @@ func (s *fakeDeclarations) ListDeclarations(ctx context.Context, g grn.GRN) ([]c
 // put there.
 type fakeReports struct {
 	cluster.ReportStore
-	records *fakeClusterStore
+	records *fakeAppStore
 	kept    map[string]cluster.KeptReport
 }
 
 func (s *fakeReports) LatestReport(ctx context.Context, g grn.GRN) (cluster.KeptReport, error) {
-	if _, err := s.records.Get(ctx, g); err != nil {
+	if _, err := s.records.GetInstance(ctx, g); err != nil {
 		return cluster.KeptReport{}, err
 	}
 	kept, ok := s.kept[g.String()]
@@ -1777,6 +1904,6 @@ func (s *fakeReports) LatestReport(ctx context.Context, g grn.GRN) (cluster.Kept
 	return kept, nil
 }
 
-func newFakeReports(records *fakeClusterStore) *fakeReports {
+func newFakeReports(records *fakeAppStore) *fakeReports {
 	return &fakeReports{records: records, kept: map[string]cluster.KeptReport{}}
 }

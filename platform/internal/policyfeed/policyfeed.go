@@ -57,6 +57,9 @@ const (
 	AgentType      = "Iam::Agent"
 	OperatorType   = "Iam::Operator"
 	SupervisorType = "Iam::Supervisor"
+	// An app's installation and an instance of it (ADR-0192).
+	InstallationType = "Iam::Installation"
+	InstanceType     = "Iam::Instance"
 )
 
 // RoleLinkType is the mark kind of a member's role link (ADR-0146

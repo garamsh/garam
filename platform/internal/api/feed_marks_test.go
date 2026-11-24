@@ -15,6 +15,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
@@ -76,7 +77,76 @@ func feedRoutes() []feedRoute {
 			return []policyfeed.Entity{mark(typ, id(slug, n))}
 		}
 	}
+	// installFor installs an app of its own for n, so two seeds in one
+	// organization install two, and answers the installation's slug.
+	installFor := func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) string {
+		appSlug := fmt.Sprintf("feed-app-%d", n)
+		a := connectorApp()
+		a.GRN, a.Slug = grn.New(grn.RootOwner, app.AppType, appSlug), appSlug
+		f.apps.addApp(a)
+		rec := f.do(t, "POST", "/orgs/"+slug+"/installations", `{"app":"`+appSlug+`"}`, owner)
+		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+		return appSlug
+	}
+	installationsPath := func(slug, installation string) string {
+		return "/orgs/" + slug + "/installations/" + installation
+	}
+	instanceFor := func(t *testing.T, f *fixture, owner *http.Cookie, slug, installation string) string {
+		rec := f.do(t, "POST", installationsPath(slug, installation)+"/instances", `{}`, owner)
+		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+		return decodeBody[apigen.CreatedInstance](t, rec).Instance.Grn
+	}
 	return []feedRoute{
+		{name: "createInstallation", status: http.StatusCreated,
+			marks: func(t *testing.T, _ *fixture, _ *http.Cookie, _ string, _ int, rec *httptest.ResponseRecorder) []policyfeed.Entity {
+				return []policyfeed.Entity{mark(policyfeed.InstallationType, bodyGRN(t, rec))}
+			},
+			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
+				appSlug := fmt.Sprintf("fresh-app-%d", n)
+				a := connectorApp()
+				a.GRN, a.Slug = grn.New(grn.RootOwner, app.AppType, appSlug), appSlug
+				f.apps.addApp(a)
+				return f.do(t, "POST", "/orgs/"+slug+"/installations", `{"app":"`+appSlug+`"}`, owner)
+			}},
+		{name: "deleteInstallation", status: http.StatusNoContent,
+			marks: func(_ *testing.T, _ *fixture, _ *http.Cookie, slug string, n int, _ *httptest.ResponseRecorder) []policyfeed.Entity {
+				// The installation's instance is gone with it, so its
+				// mark is read from what the seed stored.
+				return []policyfeed.Entity{
+					mark(policyfeed.InstallationType, grn.New(slug, app.InstallationType, fmt.Sprintf("feed-app-%d", n)).String()),
+					mark(policyfeed.InstanceType, deleted[fmt.Sprintf("installation%d", n)]),
+				}
+			},
+			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
+				installation := installFor(t, f, owner, slug, n)
+				deleted[fmt.Sprintf("installation%d", n)] = instanceFor(t, f, owner, slug, installation)
+			},
+			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
+				return f.do(t, "DELETE", installationsPath(slug, fmt.Sprintf("feed-app-%d", n)), "", owner)
+			}},
+		{name: "createInstance", status: http.StatusCreated,
+			marks: func(t *testing.T, _ *fixture, _ *http.Cookie, _ string, _ int, rec *httptest.ResponseRecorder) []policyfeed.Entity {
+				return []policyfeed.Entity{mark(policyfeed.InstanceType, decodeBody[apigen.CreatedInstance](t, rec).Instance.Grn)}
+			},
+			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
+				installFor(t, f, owner, slug, n)
+			},
+			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
+				return f.do(t, "POST", installationsPath(slug, fmt.Sprintf("feed-app-%d", n))+"/instances", `{}`, owner)
+			}},
+		{name: "deleteInstance", status: http.StatusNoContent,
+			marks: func(_ *testing.T, _ *fixture, _ *http.Cookie, _ string, n int, _ *httptest.ResponseRecorder) []policyfeed.Entity {
+				return []policyfeed.Entity{mark(policyfeed.InstanceType, deleted[fmt.Sprintf("instance%d", n)])}
+			},
+			seed: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) {
+				installation := installFor(t, f, owner, slug, n)
+				deleted[fmt.Sprintf("instance%d", n)] = instanceFor(t, f, owner, slug, installation)
+			},
+			send: func(t *testing.T, f *fixture, owner *http.Cookie, slug string, n int) *httptest.ResponseRecorder {
+				g, err := grn.Parse(deleted[fmt.Sprintf("instance%d", n)])
+				require.NoError(t, err)
+				return f.do(t, "DELETE", installationsPath(slug, fmt.Sprintf("feed-app-%d", n))+"/instances/"+g.Identifier, "", owner)
+			}},
 		{name: "createOrg", status: http.StatusCreated,
 			marks: func(t *testing.T, _ *fixture, _ *http.Cookie, _ string, _ int, rec *httptest.ResponseRecorder) []policyfeed.Entity {
 				created := bodyGRN(t, rec)
@@ -266,7 +336,9 @@ func allPermitted(t *testing.T, f *fixture) (*http.Cookie, string) {
 		permission{g, org.ActionOperatorRegister}, permission{g, org.ActionOperatorDelete},
 		permission{g, org.ActionOperatorUpdate}, permission{g, org.ActionOrgUpdate},
 		permission{g, org.ActionGroupDelete}, permission{g, org.ActionProjectDelete},
-		permission{g, org.ActionOrgDelete})
+		permission{g, org.ActionOrgDelete},
+		permission{g, org.ActionInstallationCreate}, permission{g, org.ActionInstallationDelete},
+		permission{g, org.ActionInstanceRegister}, permission{g, org.ActionInstanceDelete})
 	// Asking once keeps the stubbed evaluator's expectation met for a
 	// route that asks it nothing.
 	require.Equal(t, http.StatusOK, f.do(t, "GET", "/orgs/"+slug+"/groups", "", owner).Code)

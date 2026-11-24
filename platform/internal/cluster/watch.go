@@ -7,6 +7,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
@@ -24,7 +25,7 @@ const (
 // one until a write wakes it, its recheck reads a change, or wait is
 // out.
 func (s *service) WatchDeclarations(ctx context.Context, caller grn.GRN, after *string, wait time.Duration) (Page, error) {
-	if !IsClusterGRN(caller) {
+	if !app.IsInstanceGRN(caller) {
 		return Page{}, operator.ErrClientInvalid
 	}
 	if after != nil && *after == "" {
@@ -47,7 +48,7 @@ func (s *service) WatchDeclarations(ctx context.Context, caller grn.GRN, after *
 	expired := false
 	for {
 		page, err := s.declarations.DeclarationPage(ctx, caller, after, s.cfg.DeclarationPageSize)
-		if errors.Is(err, ErrClusterNotFound) {
+		if errors.Is(err, app.ErrInstanceNotFound) {
 			return Page{}, operator.ErrClientInvalid
 		}
 		if err != nil {

@@ -156,10 +156,14 @@ func CheckDeclarationID(id string) error {
 	return nil
 }
 
+// declarationIDBytes is the randomness of a drawn identifier, rendered
+// as twice as many hex digits.
+const declarationIDBytes = 8
+
 // NewDeclarationID draws the identifier of a declaration whose writer
 // named none.
 func NewDeclarationID() (string, error) {
-	b := make([]byte, identifierBytes)
+	b := make([]byte, declarationIDBytes)
 	if _, err := rand.Read(b); err != nil {
 		return "", errorx.Wrap(err, "cluster: draw a declaration identifier", errorx.KindInternal)
 	}

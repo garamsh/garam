@@ -9,6 +9,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/cluster/postgres/db"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
@@ -30,7 +31,7 @@ func (s *Store) Declare(ctx context.Context, g grn.GRN, id string, object cluste
 		out     cluster.Declaration
 		created bool
 	)
-	err := s.inTx(ctx, g, cluster.ErrClusterNotFound, func(q *db.Queries, now time.Time) error {
+	err := s.inTx(ctx, g, app.ErrInstanceNotFound, func(q *db.Queries, now time.Time) error {
 		generation := int64(1)
 		current, err := q.GetDeclarationForWrite(ctx, id)
 		switch {
@@ -156,10 +157,11 @@ func (s *Store) GetDeclaration(ctx context.Context, g grn.GRN, id string) (clust
 	return storedDeclaration(row)
 }
 
-// ListDeclarations reads g's live declarations, or ErrClusterNotFound.
+// ListDeclarations reads g's live declarations, or
+// app.ErrInstanceNotFound.
 func (s *Store) ListDeclarations(ctx context.Context, g grn.GRN) ([]cluster.Declaration, error) {
-	if _, err := s.q.GetCluster(ctx, g.String()); err != nil {
-		return nil, pgxerr.Classify(err, "get cluster", cluster.ErrClusterNotFound, nil)
+	if _, err := s.q.InstanceExists(ctx, g.String()); err != nil {
+		return nil, pgxerr.Classify(err, "get instance", app.ErrInstanceNotFound, nil)
 	}
 	rows, err := s.q.ListLiveDeclarations(ctx, g.String())
 	if err != nil {
@@ -187,7 +189,7 @@ func (s *Store) DeclarationPage(ctx context.Context, g grn.GRN, after *string, s
 	q := s.q.WithTx(tx)
 	position, err := q.GetDeclarationPosition(ctx, g.String())
 	if err != nil {
-		return cluster.Page{}, pgxerr.Classify(err, "get declaration position", cluster.ErrClusterNotFound, nil)
+		return cluster.Page{}, pgxerr.Classify(err, "get declaration position", app.ErrInstanceNotFound, nil)
 	}
 	at, err := cluster.ParseCursor(after, cluster.Position{Head: position.Head, PurgedThrough: position.PurgedThrough})
 	if err != nil {

@@ -29,9 +29,9 @@ func declarationWrite(name string) string {
 }
 
 // declare places declaredBot(name) on g under id through the store.
-func (f *fixture) declare(t *testing.T, clusterGRN, id, name string) {
+func (f *fixture) declare(t *testing.T, instanceGRN, id, name string) {
 	t.Helper()
-	g, err := grn.Parse(clusterGRN)
+	g, err := grn.Parse(instanceGRN)
 	require.NoError(t, err)
 	object, err := cluster.ParseDeclaredObject([]byte(declaredBot(name)))
 	require.NoError(t, err)
@@ -40,36 +40,39 @@ func (f *fixture) declare(t *testing.T, clusterGRN, id, name string) {
 }
 
 // declaringOrg is an organization whose owner may read and declare on
-// the cluster it creates, and the cluster's declarations path.
-func declaringOrg(t *testing.T, f *fixture) (owner *http.Cookie, slug, clusterGRN, path string) {
+// the instance of garam-bot-connector it creates, and the instance's
+// declarations path.
+func declaringOrg(t *testing.T, f *fixture) (owner *http.Cookie, slug, instanceGRN, path string) {
 	t.Helper()
 	owner = f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug = createOrg(t, f, owner, "acme")
 	f.permit(
-		permission{userGRNOf("owner-sub"), org.ActionClusterRegister},
-		permission{userGRNOf("owner-sub"), org.ActionClusterRead},
-		permission{userGRNOf("owner-sub"), org.ActionClusterDelete},
+		permission{userGRNOf("owner-sub"), org.ActionInstallationCreate},
+		permission{userGRNOf("owner-sub"), org.ActionInstanceRegister},
+		permission{userGRNOf("owner-sub"), org.ActionInstanceRead},
+		permission{userGRNOf("owner-sub"), org.ActionInstanceDelete},
 		permission{userGRNOf("owner-sub"), org.ActionClusterDeclare},
 	)
-	rec := f.do(t, "POST", "/orgs/"+slug+"/clusters", `{}`, owner)
+	installConnector(t, f, slug, owner)
+	rec := f.do(t, "POST", connectorPath(slug)+"/instances", `{}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	clusterGRN = decodeBody[apigen.CreatedCluster](t, rec).Cluster.Grn
-	return owner, slug, clusterGRN, "/orgs/" + slug + "/clusters/" + clusterGRN[len(clusterGRN)-16:] + "/declarations"
+	instanceGRN = decodeBody[apigen.CreatedInstance](t, rec).Instance.Grn
+	return owner, slug, instanceGRN, connectorPath(slug) + "/instances/" + instanceGRN[len(instanceGRN)-16:] + "/declarations"
 }
 
-// TestClusterDeclaration_EachWriteIsTheNextGenerationAndATombstoneIsFinal
+// TestInstanceDeclaration_EachWriteIsTheNextGenerationAndATombstoneIsFinal
 // reads each write back (ADR-0187): a POST draws the identifier at
 // generation 1, a PUT to it is the next generation, a tombstoned
 // declaration is read as gone and its identifier is never placed again.
-func TestClusterDeclaration_EachWriteIsTheNextGenerationAndATombstoneIsFinal(t *testing.T) {
+func TestInstanceDeclaration_EachWriteIsTheNextGenerationAndATombstoneIsFinal(t *testing.T) {
 	f := newFixture(t)
-	owner, _, clusterGRN, path := declaringOrg(t, f)
+	owner, _, instanceGRN, path := declaringOrg(t, f)
 
 	rec := f.do(t, "POST", path, declarationWrite("reviewer"), owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
 	created := decodeBody[apigen.ClusterDeclaration](t, rec)
 	assert.Regexp(t, regexp.MustCompile(`^decl-[0-9a-f]{16}$`), created.Id)
-	assert.Equal(t, clusterGRN, created.Cluster)
+	assert.Equal(t, instanceGRN, created.Instance)
 	assert.Equal(t, int64(1), created.Generation)
 	assert.Contains(t, string(created.Object), `"secrets":["bot-token/value"]`, "the object is answered as kept")
 
@@ -104,11 +107,11 @@ func TestClusterDeclaration_EachWriteIsTheNextGenerationAndATombstoneIsFinal(t *
 	require.Equal(t, http.StatusOK, rec.Code, "the control: the other declaration stands")
 }
 
-// TestClusterDeclaration_RefusesWhatNoDeclarationMayBe covers each
+// TestInstanceDeclaration_RefusesWhatNoDeclarationMayBe covers each
 // refusal a write answers before anything is stored: 422 naming the
 // field for an object the connector refuses, 400 for a request not in
 // the required form. The accepted write is the control.
-func TestClusterDeclaration_RefusesWhatNoDeclarationMayBe(t *testing.T) {
+func TestInstanceDeclaration_RefusesWhatNoDeclarationMayBe(t *testing.T) {
 	f := newFixture(t)
 	owner, _, _, path := declaringOrg(t, f)
 	withObject := func(from, to string) string {
@@ -145,17 +148,17 @@ func TestClusterDeclaration_RefusesWhatNoDeclarationMayBe(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rec.Code, "the control: the longest identifier is placed")
 }
 
-// TestClusterDeclaration_AnIdentifierAndAnObjectNameOneDeclaration
+// TestInstanceDeclaration_AnIdentifierAndAnObjectNameOneDeclaration
 // holds the two conflicts: an identifier placed on another record, and
 // an object another live declaration of the record names. Tombstoning
 // the latter frees its object, which is the control.
-func TestClusterDeclaration_AnIdentifierAndAnObjectNameOneDeclaration(t *testing.T) {
+func TestInstanceDeclaration_AnIdentifierAndAnObjectNameOneDeclaration(t *testing.T) {
 	f := newFixture(t)
 	owner, slug, _, path := declaringOrg(t, f)
-	rec := f.do(t, "POST", "/orgs/"+slug+"/clusters", `{}`, owner)
+	rec := f.do(t, "POST", connectorPath(slug)+"/instances", `{}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	other := decodeBody[apigen.CreatedCluster](t, rec).Cluster.Grn
-	otherPath := "/orgs/" + slug + "/clusters/" + other[len(other)-16:] + "/declarations"
+	other := decodeBody[apigen.CreatedInstance](t, rec).Instance.Grn
+	otherPath := connectorPath(slug) + "/instances/" + other[len(other)-16:] + "/declarations"
 
 	rec = f.do(t, "PUT", path+"/shared", declarationWrite("reviewer"), owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
@@ -177,11 +180,11 @@ func TestClusterDeclaration_AnIdentifierAndAnObjectNameOneDeclaration(t *testing
 	assert.Equal(t, http.StatusCreated, rec.Code, "the control: a tombstone frees the object it named")
 }
 
-// TestClusterDeclaration_AnIdentifierAnAgentRecordHoldsIsTaken holds
+// TestInstanceDeclaration_AnIdentifierAnAgentRecordHoldsIsTaken holds
 // ADR-0189's shared identifier space on the route: a declaration placed
 // under an identifier an agent record of the organization holds is 409,
 // and another identifier is the control.
-func TestClusterDeclaration_AnIdentifierAnAgentRecordHoldsIsTaken(t *testing.T) {
+func TestInstanceDeclaration_AnIdentifierAnAgentRecordHoldsIsTaken(t *testing.T) {
 	f := newFixture(t)
 	owner, _, _, path := declaringOrg(t, f)
 	f.declared.agentIDs = map[string]bool{"mira": true}
@@ -193,27 +196,32 @@ func TestClusterDeclaration_AnIdentifierAnAgentRecordHoldsIsTaken(t *testing.T) 
 	assert.Equal(t, http.StatusCreated, rec.Code, "the control: an identifier no agent record holds")
 }
 
-// TestClusterDeclaration_AnotherOrganizationsRecordIsReachedByNoRoute
+// TestInstanceDeclaration_AnotherOrganizationsRecordIsReachedByNoRoute
 // mirrors the record's own cross-organization test for the declaration
 // routes: acme's admin holding every action is refused on globex's
 // path and answered 404 with globex's identifier under acme.
-func TestClusterDeclaration_AnotherOrganizationsRecordIsReachedByNoRoute(t *testing.T) {
+func TestInstanceDeclaration_AnotherOrganizationsRecordIsReachedByNoRoute(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	otherOwner := f.sessionCookieFor(t, "other-owner-sub", "Other Owner")
 	otherSlug := createOrg(t, f, otherOwner, "globex")
 	var grants []permission
-	for _, a := range []string{org.ActionClusterRead, org.ActionClusterDeclare} {
+	for _, a := range []string{org.ActionInstanceRead, org.ActionClusterDeclare} {
 		grants = append(grants, permission{userGRNOf("holder-sub"), a}, permission{userGRNOf("other-owner-sub"), a})
 	}
-	f.permit(append(grants, permission{userGRNOf("other-owner-sub"), org.ActionClusterRegister})...)
+	f.permit(append(grants,
+		permission{userGRNOf("owner-sub"), org.ActionInstallationCreate},
+		permission{userGRNOf("other-owner-sub"), org.ActionInstallationCreate},
+		permission{userGRNOf("other-owner-sub"), org.ActionInstanceRegister})...)
 	holder := f.sessionCookieFor(t, "holder-sub", "Holder")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("holder-sub"), org.RoleAdmin)))
+	installConnector(t, f, slug, owner)
+	installConnector(t, f, otherSlug, otherOwner)
 
-	rec := f.do(t, "POST", "/orgs/"+otherSlug+"/clusters", `{}`, otherOwner)
+	rec := f.do(t, "POST", connectorPath(otherSlug)+"/instances", `{}`, otherOwner)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	theirs := decodeBody[apigen.CreatedCluster](t, rec).Cluster.Grn
+	theirs := decodeBody[apigen.CreatedInstance](t, rec).Instance.Grn
 	id := theirs[len(theirs)-16:]
 	f.declare(t, theirs, "theirs", "reviewer")
 
@@ -221,13 +229,13 @@ func TestClusterDeclaration_AnotherOrganizationsRecordIsReachedByNoRoute(t *test
 		{"GET", "", ""}, {"POST", "", declarationWrite("mine")},
 		{"GET", "/theirs", ""}, {"PUT", "/theirs", declarationWrite("mine")}, {"DELETE", "/theirs", ""},
 	} {
-		rec = f.do(t, route.method, "/orgs/"+otherSlug+"/clusters/"+id+"/declarations"+route.path, route.body, holder)
+		rec = f.do(t, route.method, connectorPath(otherSlug)+"/instances/"+id+"/declarations"+route.path, route.body, holder)
 		assert.Equal(t, http.StatusForbidden, rec.Code, route.method+route.path+" on globex's path")
-		rec = f.do(t, route.method, "/orgs/"+slug+"/clusters/"+id+"/declarations"+route.path, route.body, holder)
+		rec = f.do(t, route.method, connectorPath(slug)+"/instances/"+id+"/declarations"+route.path, route.body, holder)
 		assert.Equal(t, http.StatusNotFound, rec.Code, route.method+route.path+" with globex's identifier under acme")
 	}
 
-	rec = f.do(t, "GET", "/orgs/"+otherSlug+"/clusters/"+id+"/declarations/theirs", "", otherOwner)
+	rec = f.do(t, "GET", connectorPath(otherSlug)+"/instances/"+id+"/declarations/theirs", "", otherOwner)
 	require.Equal(t, http.StatusOK, rec.Code, "the control: globex's owner reads it")
 	var object map[string]any
 	require.NoError(t, json.Unmarshal(decodeBody[apigen.ClusterDeclaration](t, rec).Object, &object))

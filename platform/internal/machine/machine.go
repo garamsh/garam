@@ -41,6 +41,7 @@ type Identity struct {
 	serial    string
 	notBefore time.Time
 	notAfter  time.Time
+	reach     Reach
 }
 
 // GRN returns the identity's GRN, which is the whole of what the token
@@ -57,3 +58,6 @@ func (i Identity) NotBefore() time.Time { return i.notBefore }
 
 // NotAfter returns when the token stops being accepted.
 func (i Identity) NotAfter() time.Time { return i.notAfter }
+
+// Reach returns the routes the token reaches.
+func (i Identity) Reach() Reach { return i.reach }

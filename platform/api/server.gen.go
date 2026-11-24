@@ -175,6 +175,60 @@ func (e AgentSupervisorState) Valid() bool {
 	}
 }
 
+// Defines values for AppDelivery.
+const (
+	AppDeliveryPull AppDelivery = "pull"
+)
+
+// Valid indicates whether the value is a known member of the AppDelivery enum.
+func (e AppDelivery) Valid() bool {
+	switch e {
+	case AppDeliveryPull:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AppInstances.
+const (
+	AppInstancesMany AppInstances = "many"
+	AppInstancesNone AppInstances = "none"
+	AppInstancesOne  AppInstances = "one"
+)
+
+// Valid indicates whether the value is a known member of the AppInstances enum.
+func (e AppInstances) Valid() bool {
+	switch e {
+	case AppInstancesMany:
+		return true
+	case AppInstancesNone:
+		return true
+	case AppInstancesOne:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AppVisibility.
+const (
+	AppPrivate AppVisibility = "private"
+	AppPublic  AppVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the AppVisibility enum.
+func (e AppVisibility) Valid() bool {
+	switch e {
+	case AppPrivate:
+		return true
+	case AppPublic:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditRecordKind.
 const (
 	Denial         AuditRecordKind = "denial"
@@ -214,27 +268,6 @@ func (e ClusterDeclarationOutcomeOutcome) Valid() bool {
 	case Invalid:
 		return true
 	case NamespaceNotWatched:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClusterKeyState.
-const (
-	ClusterKeyActive   ClusterKeyState = "active"
-	ClusterKeyRetiring ClusterKeyState = "retiring"
-	ClusterKeyRevoked  ClusterKeyState = "revoked"
-)
-
-// Valid indicates whether the value is a known member of the ClusterKeyState enum.
-func (e ClusterKeyState) Valid() bool {
-	switch e {
-	case ClusterKeyActive:
-		return true
-	case ClusterKeyRetiring:
-		return true
-	case ClusterKeyRevoked:
 		return true
 	default:
 		return false
@@ -285,16 +318,16 @@ func (e ClusterReportedObjectKind) Valid() bool {
 
 // Defines values for ClusterReportedObjectOwner.
 const (
-	ClusterReportedObjectOwnerCluster ClusterReportedObjectOwner = "cluster"
-	ClusterReportedObjectOwnerGaram   ClusterReportedObjectOwner = "garam"
+	Cluster ClusterReportedObjectOwner = "cluster"
+	Garam   ClusterReportedObjectOwner = "garam"
 )
 
 // Valid indicates whether the value is a known member of the ClusterReportedObjectOwner enum.
 func (e ClusterReportedObjectOwner) Valid() bool {
 	switch e {
-	case ClusterReportedObjectOwnerCluster:
+	case Cluster:
 		return true
-	case ClusterReportedObjectOwnerGaram:
+	case Garam:
 		return true
 	default:
 		return false
@@ -562,6 +595,27 @@ func (e IamRoleLinkScope) Valid() bool {
 	case IamRoleLinkScopeOrganization:
 		return true
 	case IamRoleLinkScopeTeamOrProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InstanceKeyState.
+const (
+	InstanceKeyActive   InstanceKeyState = "active"
+	InstanceKeyRetiring InstanceKeyState = "retiring"
+	InstanceKeyRevoked  InstanceKeyState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the InstanceKeyState enum.
+func (e InstanceKeyState) Valid() bool {
+	switch e {
+	case InstanceKeyActive:
+		return true
+	case InstanceKeyRetiring:
+		return true
+	case InstanceKeyRevoked:
 		return true
 	default:
 		return false
@@ -900,6 +954,7 @@ const (
 	PermissionResourceTypeCoworkPage     PermissionResourceType = "cowork-page"
 	PermissionResourceTypeCoworkTask     PermissionResourceType = "cowork-task"
 	PermissionResourceTypeGroup          PermissionResourceType = "group"
+	PermissionResourceTypeInstallation   PermissionResourceType = "installation"
 	PermissionResourceTypePolicy         PermissionResourceType = "policy"
 	PermissionResourceTypeProject        PermissionResourceType = "project"
 )
@@ -918,6 +973,8 @@ func (e PermissionResourceType) Valid() bool {
 	case PermissionResourceTypeCoworkTask:
 		return true
 	case PermissionResourceTypeGroup:
+		return true
+	case PermissionResourceTypeInstallation:
 		return true
 	case PermissionResourceTypePolicy:
 		return true
@@ -1238,6 +1295,39 @@ type AgentSupervisorPlacement string
 // AgentSupervisorState defines model for AgentSupervisor.State.
 type AgentSupervisorState string
 
+// App An app's record (ADR-0192 decision 2). Every difference between apps is one of these settings.
+type App struct {
+	// Delivery How events reach it.
+	Delivery    AppDelivery `json:"delivery"`
+	Description string      `json:"description"`
+
+	// Grn `grn:root/iam/app/<slug>` for an app the platform registered, `grn:<org>/iam/app/<slug>` for an organization's.
+	Grn string `json:"grn"`
+
+	// Instances How many instances one installation of it holds.
+	Instances AppInstances `json:"instances"`
+	Name      string       `json:"name"`
+
+	// RequestedActions The single action ids an installation is granted, each written as a permit on the installation.
+	RequestedActions []string `json:"requestedActions"`
+
+	// RequestsBotHosting Whether it asks to host bots, which an installation's owner grants apart from the requested actions.
+	RequestsBotHosting bool   `json:"requestsBotHosting"`
+	Slug               string `json:"slug"`
+
+	// Visibility A private app is installable only in its own organization.
+	Visibility AppVisibility `json:"visibility"`
+}
+
+// AppDelivery How events reach it.
+type AppDelivery string
+
+// AppInstances How many instances one installation of it holds.
+type AppInstances string
+
+// AppVisibility A private app is installable only in its own organization.
+type AppVisibility string
+
 // AuditRecord One record of the policy service's audit (ADR-0148). It holds no policy text, no context, no token and no fault text.
 type AuditRecord struct {
 	// Action The action in its qualified form, such as `iam:permit.write`.
@@ -1291,42 +1381,16 @@ type AuditRecordPage struct {
 	Records       []AuditRecord `json:"records"`
 }
 
-// Cluster A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster.
-type Cluster struct {
-	CreatedAt time.Time `json:"createdAt"`
-
-	// CreatedBy The member that created the record.
-	CreatedBy string `json:"createdBy"`
-
-	// Description What the organization says the cluster is for, empty where it says nothing.
-	Description string `json:"description"`
-
-	// Grn The GRN, whose identifier garam minted.
-	Grn string `json:"grn"`
-
-	// Name What the organization calls the cluster. It is not unique and not an identity. A creation that named none is called by its identifier.
-	Name   string `json:"name"`
-	OrgGrn string `json:"orgGrn"`
-}
-
-// ClusterCreation defines model for ClusterCreation.
-type ClusterCreation struct {
-	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
-	Description *ClusterDescription `json:"description,omitempty"`
-
-	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
-	Name *ClusterName `json:"name,omitempty"`
-}
-
-// ClusterDeclaration One declaration placed on a connected cluster, which its connector applies (ADR-0187).
+// ClusterDeclaration One declaration placed on an instance of garam-bot-connector, which its connector applies (ADR-0187).
 type ClusterDeclaration struct {
-	// Cluster The GRN of the cluster it is placed on.
-	Cluster   string    `json:"cluster"`
 	CreatedAt time.Time `json:"createdAt"`
 
 	// Generation 1 when placed, and one more at every write.
 	Generation int64  `json:"generation"`
 	Id         string `json:"id"`
+
+	// Instance The GRN of the instance it is placed on.
+	Instance string `json:"instance"`
 
 	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 	Object    ClusterDeclaredObject `json:"object"`
@@ -1360,48 +1424,6 @@ type ClusterDeclarationWrite struct {
 // ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 type ClusterDeclaredObject = json.RawMessage
 
-// ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
-type ClusterDescription = string
-
-// ClusterKey The public record of one key a cluster's connector generated. It carries no private material.
-type ClusterKey struct {
-	CreatedAt time.Time `json:"createdAt"`
-
-	// Kid The base64url SHA-256 RFC 7638 thumbprint of the public key.
-	Kid       string     `json:"kid"`
-	RetiresAt *time.Time `json:"retiresAt,omitempty"`
-	RevokedAt *time.Time `json:"revokedAt,omitempty"`
-
-	// State Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
-	State ClusterKeyState `json:"state"`
-}
-
-// ClusterKeyState Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
-type ClusterKeyState string
-
-// ClusterKeyList defines model for ClusterKeyList.
-type ClusterKeyList struct {
-	Keys []ClusterKey `json:"keys"`
-}
-
-// ClusterName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
-type ClusterName = string
-
-// ClusterPatch A change to what the organization says about a cluster. A field left out keeps its value; the identifier is not a field.
-type ClusterPatch struct {
-	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
-	Description *ClusterDescription `json:"description,omitempty"`
-
-	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
-	Name *ClusterName `json:"name,omitempty"`
-}
-
-// ClusterRegistrationToken A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
-type ClusterRegistrationToken struct {
-	ExpiresAt         time.Time `json:"expiresAt"`
-	RegistrationToken string    `json:"registrationToken"`
-}
-
 // ClusterReport A connected cluster's report (cluster-connection v1alpha1 REP-1), as garam kept it.
 type ClusterReport struct {
 	Connector    ClusterReportConnector      `json:"connector"`
@@ -1424,12 +1446,12 @@ type ClusterReportConnector struct {
 // ClusterReportConnectorMode defines model for ClusterReportConnector.Mode.
 type ClusterReportConnectorMode string
 
-// ClusterReportView What garam holds of a connected cluster's reports.
+// ClusterReportView What garam holds of an instance's reports.
 type ClusterReportView struct {
-	// Cluster The cluster's GRN.
-	Cluster string `json:"cluster"`
+	// Instance The instance's GRN.
+	Instance string `json:"instance"`
 
-	// LastContactAt When the cluster's latest authenticated request reached garam, to within a second; null where none has.
+	// LastContactAt When the instance's latest authenticated request reached garam, to within a second; null where none has.
 	LastContactAt *time.Time     `json:"lastContactAt"`
 	Report        *ClusterReport `json:"report"`
 }
@@ -1471,13 +1493,13 @@ type ControlEndpointWrite struct {
 	Url string `json:"url"`
 }
 
-// CreatedCluster defines model for CreatedCluster.
-type CreatedCluster struct {
-	// Cluster A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster.
-	Cluster Cluster `json:"cluster"`
+// CreatedInstance defines model for CreatedInstance.
+type CreatedInstance struct {
+	// Instance A running copy of an installation's app (ADR-0192 decision 1). Nothing on it is a report from the instance.
+	Instance Instance `json:"instance"`
 
 	// Registration A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
-	Registration ClusterRegistrationToken `json:"registration"`
+	Registration InstanceRegistrationToken `json:"registration"`
 }
 
 // CredentialEvent defines model for CredentialEvent.
@@ -1791,6 +1813,116 @@ type IamRoleLink struct {
 
 // IamRoleLinkScope defines model for IamRoleLink.Scope.
 type IamRoleLinkScope string
+
+// Installation One app installed in one organization (ADR-0192 decision 4).
+type Installation struct {
+	AppGrn    string    `json:"appGrn"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy The owner that installed it.
+	CreatedBy string `json:"createdBy"`
+	Grn       string `json:"grn"`
+
+	// Incarnation Tells this installation from an earlier one of the same app, which held the same GRN.
+	Incarnation string `json:"incarnation"`
+	OrgGrn      string `json:"orgGrn"`
+
+	// Projects The GRNs of the projects its grants reach, empty where they reach the whole organization.
+	Projects []string `json:"projects"`
+}
+
+// InstallationCreation defines model for InstallationCreation.
+type InstallationCreation struct {
+	// App The slug of the app to install.
+	App string `json:"app"`
+
+	// Projects The slugs of the projects its grants reach. Left out, they reach the whole organization; an empty list is refused.
+	Projects *[]string `json:"projects,omitempty"`
+}
+
+// Instance A running copy of an installation's app (ADR-0192 decision 1). Nothing on it is a report from the instance.
+type Instance struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy The member that created the record.
+	CreatedBy string `json:"createdBy"`
+
+	// Description What the organization says the instance is for, empty where it says nothing.
+	Description string `json:"description"`
+
+	// Grn The GRN, whose identifier garam minted.
+	Grn string `json:"grn"`
+
+	// InstallationGrn The installation it is a copy of.
+	InstallationGrn string `json:"installationGrn"`
+
+	// Kind What the instance runs on, as the organization says it, empty where it says nothing. garam stores and shows it and never reads it.
+	Kind string `json:"kind"`
+
+	// Name What the organization calls the instance. It is not unique and not an identity. A creation that named none is called by its identifier.
+	Name   string `json:"name"`
+	OrgGrn string `json:"orgGrn"`
+}
+
+// InstanceCreation defines model for InstanceCreation.
+type InstanceCreation struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *InstanceDescription `json:"description,omitempty"`
+
+	// Kind At most 64 characters once surrounding space is trimmed. Empty is no kind, and on an update clears the one there was.
+	Kind *InstanceKind `json:"kind,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+	Name *InstanceName `json:"name,omitempty"`
+}
+
+// InstanceDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+type InstanceDescription = string
+
+// InstanceKey The public record of one key an instance generated. It carries no private material.
+type InstanceKey struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Kid The base64url SHA-256 RFC 7638 thumbprint of the public key.
+	Kid       string     `json:"kid"`
+	RetiresAt *time.Time `json:"retiresAt,omitempty"`
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+
+	// State Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+	State InstanceKeyState `json:"state"`
+}
+
+// InstanceKeyState Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+type InstanceKeyState string
+
+// InstanceKeyList defines model for InstanceKeyList.
+type InstanceKeyList struct {
+	Keys []InstanceKey `json:"keys"`
+}
+
+// InstanceKind At most 64 characters once surrounding space is trimmed. Empty is no kind, and on an update clears the one there was.
+type InstanceKind = string
+
+// InstanceName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+type InstanceName = string
+
+// InstancePatch A change to what the organization says about an instance. A field left out keeps its value; the identifier is not a field.
+type InstancePatch struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *InstanceDescription `json:"description,omitempty"`
+
+	// Kind At most 64 characters once surrounding space is trimmed. Empty is no kind, and on an update clears the one there was.
+	Kind *InstanceKind `json:"kind,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+	Name *InstanceName `json:"name,omitempty"`
+}
+
+// InstanceRegistrationToken A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
+type InstanceRegistrationToken struct {
+	ExpiresAt         time.Time `json:"expiresAt"`
+	RegistrationToken string    `json:"registrationToken"`
+}
 
 // Invitation defines model for Invitation.
 type Invitation struct {
@@ -2462,8 +2594,8 @@ type User struct {
 // AgentSlug defines model for agent.
 type AgentSlug = string
 
-// ClusterSlug defines model for cluster.
-type ClusterSlug = string
+// AppSlug defines model for app.
+type AppSlug = string
 
 // ContractVersion defines model for contractVersion.
 type ContractVersion = string
@@ -2476,6 +2608,12 @@ type GroupSlug = string
 
 // IamPolicyId defines model for iamPolicy.
 type IamPolicyId = string
+
+// InstallationSlug defines model for installation.
+type InstallationSlug = string
+
+// InstanceSlug defines model for instance.
+type InstanceSlug = string
 
 // KeyID defines model for kid.
 type KeyID = string
@@ -2717,18 +2855,6 @@ type ApproveAgentEnrollmentJSONRequestBody = AgentEnrollmentApproval
 // RenameAgentJSONRequestBody defines body for RenameAgent for application/json ContentType.
 type RenameAgentJSONRequestBody = AgentPatch
 
-// CreateClusterJSONRequestBody defines body for CreateCluster for application/json ContentType.
-type CreateClusterJSONRequestBody = ClusterCreation
-
-// UpdateClusterJSONRequestBody defines body for UpdateCluster for application/json ContentType.
-type UpdateClusterJSONRequestBody = ClusterPatch
-
-// CreateClusterDeclarationJSONRequestBody defines body for CreateClusterDeclaration for application/json ContentType.
-type CreateClusterDeclarationJSONRequestBody = ClusterDeclarationWrite
-
-// PutClusterDeclarationJSONRequestBody defines body for PutClusterDeclaration for application/json ContentType.
-type PutClusterDeclarationJSONRequestBody = ClusterDeclarationWrite
-
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
 
@@ -2746,6 +2872,21 @@ type RollbackIamPolicyJSONRequestBody = PolicyRollback
 
 // CreateIamPolicyVersionJSONRequestBody defines body for CreateIamPolicyVersion for application/json ContentType.
 type CreateIamPolicyVersionJSONRequestBody = IamPolicyVersionCreate
+
+// CreateInstallationJSONRequestBody defines body for CreateInstallation for application/json ContentType.
+type CreateInstallationJSONRequestBody = InstallationCreation
+
+// CreateInstanceJSONRequestBody defines body for CreateInstance for application/json ContentType.
+type CreateInstanceJSONRequestBody = InstanceCreation
+
+// UpdateInstanceJSONRequestBody defines body for UpdateInstance for application/json ContentType.
+type UpdateInstanceJSONRequestBody = InstancePatch
+
+// CreateInstanceDeclarationJSONRequestBody defines body for CreateInstanceDeclaration for application/json ContentType.
+type CreateInstanceDeclarationJSONRequestBody = ClusterDeclarationWrite
+
+// PutInstanceDeclarationJSONRequestBody defines body for PutInstanceDeclaration for application/json ContentType.
+type PutInstanceDeclarationJSONRequestBody = ClusterDeclarationWrite
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreate
@@ -2890,51 +3031,15 @@ type ServerInterface interface {
 	// WatchAgent Watch an agent work. Requires the `iam:agent.watch` action.
 	// (GET /orgs/{org}/agents/{agent}/watch)
 	WatchAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
+	// ListApps List the apps an organization may install. Requires the `member` role.
+	// (GET /orgs/{org}/apps)
+	ListApps(w http.ResponseWriter, r *http.Request, org Org)
+	// GetApp Read an app the organization may install. Requires the `member` role.
+	// (GET /orgs/{org}/apps/{app})
+	GetApp(w http.ResponseWriter, r *http.Request, org Org, appSlug AppSlug)
 	// ListAuditRecords Read an organization's audit records, newest first.
 	// (GET /orgs/{org}/audit-records)
 	ListAuditRecords(w http.ResponseWriter, r *http.Request, org Org, params ListAuditRecordsParams)
-	// ListClusters List an organization's connected clusters. Requires the `member` role.
-	// (GET /orgs/{org}/clusters)
-	ListClusters(w http.ResponseWriter, r *http.Request, org Org)
-	// CreateCluster Create a connected cluster's record. Requires the `admin` role.
-	// (POST /orgs/{org}/clusters)
-	CreateCluster(w http.ResponseWriter, r *http.Request, org Org)
-	// DeleteCluster Delete a connected cluster's record. Requires the `admin` role.
-	// (DELETE /orgs/{org}/clusters/{cluster})
-	DeleteCluster(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
-	// GetCluster Read one of an organization's connected clusters. Requires the `member` role.
-	// (GET /orgs/{org}/clusters/{cluster})
-	GetCluster(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
-	// UpdateCluster Rename or describe a connected cluster. Requires the `admin` role.
-	// (PATCH /orgs/{org}/clusters/{cluster})
-	UpdateCluster(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
-	// ListClusterDeclarations List the declarations placed on a connected cluster. Requires the `member` role.
-	// (GET /orgs/{org}/clusters/{cluster}/declarations)
-	ListClusterDeclarations(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
-	// CreateClusterDeclaration Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-	// (POST /orgs/{org}/clusters/{cluster}/declarations)
-	CreateClusterDeclaration(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
-	// DeleteClusterDeclaration Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
-	// (DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration})
-	DeleteClusterDeclaration(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug, declarationID DeclarationID)
-	// GetClusterDeclaration Read one live declaration placed on a connected cluster. Requires the `member` role.
-	// (GET /orgs/{org}/clusters/{cluster}/declarations/{declaration})
-	GetClusterDeclaration(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug, declarationID DeclarationID)
-	// PutClusterDeclaration Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-	// (PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration})
-	PutClusterDeclaration(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug, declarationID DeclarationID)
-	// ListClusterKeys List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
-	// (GET /orgs/{org}/clusters/{cluster}/keys)
-	ListClusterKeys(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
-	// RevokeClusterKey Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
-	// (DELETE /orgs/{org}/clusters/{cluster}/keys/{kid})
-	RevokeClusterKey(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug, keyID KeyID)
-	// ReissueClusterRegistrationToken Answer a new registration token for a cluster. Requires the `admin` role.
-	// (POST /orgs/{org}/clusters/{cluster}/registration-token)
-	ReissueClusterRegistrationToken(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
-	// GetClusterReport Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
-	// (GET /orgs/{org}/clusters/{cluster}/report)
-	GetClusterReport(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	// (GET /orgs/{org}/consents)
 	ListOrgConsents(w http.ResponseWriter, r *http.Request, org Org)
@@ -2995,6 +3100,60 @@ type ServerInterface interface {
 	// CreateIamPolicyVersion Append a version to a role link, guardrail or permit.
 	// (POST /orgs/{org}/iam-policies/{iamPolicy}/versions)
 	CreateIamPolicyVersion(w http.ResponseWriter, r *http.Request, org Org, iamPolicyId IamPolicyId)
+	// ListInstallations List the apps an organization has installed. Requires the `member` role.
+	// (GET /orgs/{org}/installations)
+	ListInstallations(w http.ResponseWriter, r *http.Request, org Org)
+	// CreateInstallation Install an app in an organization. Requires the `owner` role.
+	// (POST /orgs/{org}/installations)
+	CreateInstallation(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteInstallation Uninstall an app. Requires the `admin` role.
+	// (DELETE /orgs/{org}/installations/{installation})
+	DeleteInstallation(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug)
+	// GetInstallation Read one of an organization's installations. Requires the `member` role.
+	// (GET /orgs/{org}/installations/{installation})
+	GetInstallation(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug)
+	// ListInstances List an installation's instances. Requires the `member` role.
+	// (GET /orgs/{org}/installations/{installation}/instances)
+	ListInstances(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug)
+	// CreateInstance Create an instance's record. Requires the `admin` role.
+	// (POST /orgs/{org}/installations/{installation}/instances)
+	CreateInstance(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug)
+	// DeleteInstance Delete an instance's record. Requires the `admin` role.
+	// (DELETE /orgs/{org}/installations/{installation}/instances/{instance})
+	DeleteInstance(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug)
+	// GetInstance Read one of an organization's instances. Requires the `member` role.
+	// (GET /orgs/{org}/installations/{installation}/instances/{instance})
+	GetInstance(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug)
+	// UpdateInstance Rename or describe an instance. Requires the `admin` role.
+	// (PATCH /orgs/{org}/installations/{installation}/instances/{instance})
+	UpdateInstance(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug)
+	// ListInstanceDeclarations List the declarations placed on an instance. Requires the `member` role.
+	// (GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations)
+	ListInstanceDeclarations(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug)
+	// CreateInstanceDeclaration Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+	// (POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations)
+	CreateInstanceDeclaration(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug)
+	// DeleteInstanceDeclaration Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
+	// (DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration})
+	DeleteInstanceDeclaration(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID)
+	// GetInstanceDeclaration Read one live declaration placed on an instance. Requires the `member` role.
+	// (GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration})
+	GetInstanceDeclaration(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID)
+	// PutInstanceDeclaration Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+	// (PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration})
+	PutInstanceDeclaration(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID)
+	// ListInstanceKeys List the keys an instance registered, with where each stands. Requires the `member` role.
+	// (GET /orgs/{org}/installations/{installation}/instances/{instance}/keys)
+	ListInstanceKeys(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug)
+	// RevokeInstanceKey Withdraw an instance's key and every token exchanged under it. Requires the `admin` role.
+	// (DELETE /orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid})
+	RevokeInstanceKey(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, keyID KeyID)
+	// ReissueInstanceRegistrationToken Answer a new registration token for an instance. Requires the `admin` role.
+	// (POST /orgs/{org}/installations/{installation}/instances/{instance}/registration-token)
+	ReissueInstanceRegistrationToken(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug)
+	// GetInstanceReport Read what an instance last reported, and when it last reached garam. Requires the `member` role.
+	// (GET /orgs/{org}/installations/{installation}/instances/{instance}/report)
+	GetInstanceReport(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug)
 	// ListInvitations List the invitations that can still be accepted. Requires `iam:org.invite`.
 	// (GET /orgs/{org}/invitations)
 	ListInvitations(w http.ResponseWriter, r *http.Request, org Org, params ListInvitationsParams)
@@ -3990,6 +4149,67 @@ func (siw *ServerInterfaceWrapper) WatchAgent(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListApps operation middleware
+func (siw *ServerInterfaceWrapper) ListApps(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListApps(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetApp operation middleware
+func (siw *ServerInterfaceWrapper) GetApp(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "app" -------------
+	var appSlug AppSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "app", r.PathValue("app"), &appSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "app", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetApp(w, r, org, appSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListAuditRecords operation middleware
 func (siw *ServerInterfaceWrapper) ListAuditRecords(w http.ResponseWriter, r *http.Request) {
 
@@ -4036,514 +4256,6 @@ func (siw *ServerInterfaceWrapper) ListAuditRecords(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAuditRecords(w, r, org, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListClusters operation middleware
-func (siw *ServerInterfaceWrapper) ListClusters(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListClusters(w, r, org)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateCluster operation middleware
-func (siw *ServerInterfaceWrapper) CreateCluster(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateCluster(w, r, org)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteCluster operation middleware
-func (siw *ServerInterfaceWrapper) DeleteCluster(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteCluster(w, r, org, clusterSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetCluster operation middleware
-func (siw *ServerInterfaceWrapper) GetCluster(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetCluster(w, r, org, clusterSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateCluster operation middleware
-func (siw *ServerInterfaceWrapper) UpdateCluster(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateCluster(w, r, org, clusterSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListClusterDeclarations operation middleware
-func (siw *ServerInterfaceWrapper) ListClusterDeclarations(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListClusterDeclarations(w, r, org, clusterSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateClusterDeclaration operation middleware
-func (siw *ServerInterfaceWrapper) CreateClusterDeclaration(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateClusterDeclaration(w, r, org, clusterSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteClusterDeclaration operation middleware
-func (siw *ServerInterfaceWrapper) DeleteClusterDeclaration(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "declaration" -------------
-	var declarationID DeclarationID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteClusterDeclaration(w, r, org, clusterSlug, declarationID)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetClusterDeclaration operation middleware
-func (siw *ServerInterfaceWrapper) GetClusterDeclaration(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "declaration" -------------
-	var declarationID DeclarationID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetClusterDeclaration(w, r, org, clusterSlug, declarationID)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// PutClusterDeclaration operation middleware
-func (siw *ServerInterfaceWrapper) PutClusterDeclaration(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "declaration" -------------
-	var declarationID DeclarationID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PutClusterDeclaration(w, r, org, clusterSlug, declarationID)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListClusterKeys operation middleware
-func (siw *ServerInterfaceWrapper) ListClusterKeys(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListClusterKeys(w, r, org, clusterSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RevokeClusterKey operation middleware
-func (siw *ServerInterfaceWrapper) RevokeClusterKey(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "kid" -------------
-	var keyID KeyID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "kid", r.PathValue("kid"), &keyID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kid", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RevokeClusterKey(w, r, org, clusterSlug, keyID)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ReissueClusterRegistrationToken operation middleware
-func (siw *ServerInterfaceWrapper) ReissueClusterRegistrationToken(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ReissueClusterRegistrationToken(w, r, org, clusterSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetClusterReport operation middleware
-func (siw *ServerInterfaceWrapper) GetClusterReport(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "cluster" -------------
-	var clusterSlug ClusterSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetClusterReport(w, r, org, clusterSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5274,6 +4986,762 @@ func (siw *ServerInterfaceWrapper) CreateIamPolicyVersion(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateIamPolicyVersion(w, r, org, iamPolicyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInstallations operation middleware
+func (siw *ServerInterfaceWrapper) ListInstallations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInstallations(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInstallation operation middleware
+func (siw *ServerInterfaceWrapper) CreateInstallation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInstallation(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteInstallation operation middleware
+func (siw *ServerInterfaceWrapper) DeleteInstallation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteInstallation(w, r, org, installationSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInstallation operation middleware
+func (siw *ServerInterfaceWrapper) GetInstallation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInstallation(w, r, org, installationSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInstances operation middleware
+func (siw *ServerInterfaceWrapper) ListInstances(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInstances(w, r, org, installationSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInstance operation middleware
+func (siw *ServerInterfaceWrapper) CreateInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInstance(w, r, org, installationSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteInstance operation middleware
+func (siw *ServerInterfaceWrapper) DeleteInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteInstance(w, r, org, installationSlug, instanceSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInstance operation middleware
+func (siw *ServerInterfaceWrapper) GetInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInstance(w, r, org, installationSlug, instanceSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateInstance operation middleware
+func (siw *ServerInterfaceWrapper) UpdateInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateInstance(w, r, org, installationSlug, instanceSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInstanceDeclarations operation middleware
+func (siw *ServerInterfaceWrapper) ListInstanceDeclarations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInstanceDeclarations(w, r, org, installationSlug, instanceSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInstanceDeclaration operation middleware
+func (siw *ServerInterfaceWrapper) CreateInstanceDeclaration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInstanceDeclaration(w, r, org, installationSlug, instanceSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteInstanceDeclaration operation middleware
+func (siw *ServerInterfaceWrapper) DeleteInstanceDeclaration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "declaration" -------------
+	var declarationID DeclarationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteInstanceDeclaration(w, r, org, installationSlug, instanceSlug, declarationID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInstanceDeclaration operation middleware
+func (siw *ServerInterfaceWrapper) GetInstanceDeclaration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "declaration" -------------
+	var declarationID DeclarationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInstanceDeclaration(w, r, org, installationSlug, instanceSlug, declarationID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutInstanceDeclaration operation middleware
+func (siw *ServerInterfaceWrapper) PutInstanceDeclaration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "declaration" -------------
+	var declarationID DeclarationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutInstanceDeclaration(w, r, org, installationSlug, instanceSlug, declarationID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInstanceKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListInstanceKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInstanceKeys(w, r, org, installationSlug, instanceSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeInstanceKey operation middleware
+func (siw *ServerInterfaceWrapper) RevokeInstanceKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kid" -------------
+	var keyID KeyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kid", r.PathValue("kid"), &keyID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kid", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeInstanceKey(w, r, org, installationSlug, instanceSlug, keyID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReissueInstanceRegistrationToken operation middleware
+func (siw *ServerInterfaceWrapper) ReissueInstanceRegistrationToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReissueInstanceRegistrationToken(w, r, org, installationSlug, instanceSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInstanceReport operation middleware
+func (siw *ServerInterfaceWrapper) GetInstanceReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "instance" -------------
+	var instanceSlug InstanceSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "instance", r.PathValue("instance"), &instanceSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instance", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInstanceReport(w, r, org, installationSlug, instanceSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6867,20 +7335,26 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-supervisors", wrapper.ListAgentSupervisors)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-supervisors/{supervisor}", wrapper.RevokeAgentSupervisor)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/credential-events", wrapper.ListCredentialEvents)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters", wrapper.ListClusters)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters", wrapper.CreateCluster)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.DeleteCluster)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.GetCluster)
-	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.UpdateCluster)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/registration-token", wrapper.ReissueClusterRegistrationToken)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/keys", wrapper.ListClusterKeys)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/keys/{kid}", wrapper.RevokeClusterKey)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/report", wrapper.GetClusterReport)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations", wrapper.ListClusterDeclarations)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations", wrapper.CreateClusterDeclaration)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations/{declaration}", wrapper.DeleteClusterDeclaration)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations/{declaration}", wrapper.GetClusterDeclaration)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations/{declaration}", wrapper.PutClusterDeclaration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/apps", wrapper.ListApps)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/apps/{app}", wrapper.GetApp)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations", wrapper.ListInstallations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/installations", wrapper.CreateInstallation)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/installations/{installation}", wrapper.DeleteInstallation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}", wrapper.GetInstallation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances", wrapper.ListInstances)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances", wrapper.CreateInstance)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}", wrapper.DeleteInstance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}", wrapper.GetInstance)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}", wrapper.UpdateInstance)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/registration-token", wrapper.ReissueInstanceRegistrationToken)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/keys", wrapper.ListInstanceKeys)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid}", wrapper.RevokeInstanceKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/report", wrapper.GetInstanceReport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/declarations", wrapper.ListInstanceDeclarations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/declarations", wrapper.CreateInstanceDeclaration)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration}", wrapper.DeleteInstanceDeclaration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration}", wrapper.GetInstanceDeclaration)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration}", wrapper.PutInstanceDeclaration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)

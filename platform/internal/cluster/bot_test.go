@@ -10,18 +10,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 // actorToken is the connector's token botTokens resolves to self.
-var actorToken = cluster.TokenPrefix + strings.Repeat("ab", 32)
+var actorToken = app.TokenPrefix + strings.Repeat("ab", 32)
 
 // botTokens is a CredentialStore resolving actorToken to self, holding
 // placed as the declarations live on it, and recording each bot token
 // it was asked to keep.
 type botTokens struct {
-	cluster.CredentialStore
+	app.CredentialStore
 	placed   map[string]bool
 	resolved []string
 	// actorGone has RecordBotToken find the actor's key withdrawn since
@@ -36,18 +37,18 @@ type recordedBot struct {
 	ttl             time.Duration
 }
 
-func (s *botTokens) ResolveToken(_ context.Context, hash string) (cluster.TokenHolder, error) {
+func (s *botTokens) ResolveToken(_ context.Context, hash string) (app.TokenHolder, error) {
 	s.resolved = append(s.resolved, hash)
-	if hash != cluster.HashSecret(actorToken) {
-		return cluster.TokenHolder{}, cluster.ErrTokenInvalid
+	if hash != app.HashSecret(actorToken) {
+		return app.TokenHolder{}, app.ErrTokenInvalid
 	}
-	return cluster.TokenHolder{Cluster: self}, nil
+	return app.TokenHolder{Instance: self}, nil
 }
 
 func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, actor, hash string, ttl time.Duration) (time.Time, error) {
 	s.recorded = append(s.recorded, recordedBot{place: g, id: id, actor: actor, hash: hash, ttl: ttl})
 	if s.actorGone {
-		return time.Time{}, cluster.ErrTokenInvalid
+		return time.Time{}, app.ErrTokenInvalid
 	}
 	if !s.placed[id] {
 		return time.Time{}, cluster.ErrBotNotPlaced
@@ -57,7 +58,7 @@ func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, actor, hash
 
 func newBotService() (cluster.Service, *botTokens) {
 	store := &botTokens{placed: map[string]bool{"decl-a": true}}
-	return cluster.NewService(store, nil, nil, cluster.Config{TokenEndpoint: tokenURL}), store
+	return cluster.NewService(store, nil, nil, store, cluster.Config{TokenEndpoint: tokenURL}), store
 }
 
 var placedBot = cluster.BotGRN(self.Organization, "decl-a").String()
@@ -71,13 +72,13 @@ func TestMintBotToken_AnswersATokenForABotPlacedOnTheActorsRecord(t *testing.T) 
 	svc, store := newBotService()
 	token, err := svc.MintBotToken(context.Background(), cluster.BotExchange{ActorToken: actorToken, Subject: placedBot})
 	require.NoError(t, err)
-	assert.True(t, cluster.WellFormed(token.Value, cluster.BotTokenPrefix), token.Value)
+	assert.True(t, app.WellFormed(token.Value, cluster.BotTokenPrefix), token.Value)
 	assert.Equal(t, placedBot, token.Bot.String())
 	assert.Equal(t, self, token.Place)
 	assert.Equal(t, []string{}, token.Scope)
 	require.Len(t, store.recorded, 1)
-	assert.Equal(t, recordedBot{place: self, id: "decl-a", actor: cluster.HashSecret(actorToken),
-		hash: cluster.HashSecret(token.Value), ttl: time.Hour},
+	assert.Equal(t, recordedBot{place: self, id: "decl-a", actor: app.HashSecret(actorToken),
+		hash: app.HashSecret(token.Value), ttl: time.Hour},
 		store.recorded[0], "the hash is kept, never the value, under the actor that asked")
 	assert.WithinDuration(t, time.Now().Add(time.Hour), token.ExpiresAt, time.Minute)
 }
@@ -118,7 +119,7 @@ func TestMintBotToken_AuthenticatesTheActorBeforeAnythingElse(t *testing.T) {
 	assert.Empty(t, store.resolved, "a malformed actor token is not looked up")
 
 	_, err = svc.MintBotToken(context.Background(), cluster.BotExchange{
-		ActorToken: cluster.TokenPrefix + strings.Repeat("cd", 32), Subject: placedBot})
+		ActorToken: app.TokenPrefix + strings.Repeat("cd", 32), Subject: placedBot})
 	assert.ErrorIs(t, err, cluster.ErrActorTokenRefused)
 	assert.Empty(t, store.recorded)
 

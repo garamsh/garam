@@ -4,35 +4,29 @@ What an organization records about a cluster it connected: a user's
 own cluster, EKS or any conformant one, whose connector dials garam
 and authenticates as that record
 ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
-Implemented by `platform/internal/cluster`, which persists through
-`platform/internal/cluster/postgres`. The wire between garam and the
-connector is `garamsh/garam-bot-operator`'s interface
+The record is an instance of the organization's installation of the
+`garam-bot-connector` app, and what it authenticates with is every
+instance's, in `platform/internal/app` ([apps.md](./apps.md)). What a
+connected cluster has beyond that, its declarations, its reports and
+the bot tokens its connector mints, is `platform/internal/cluster`,
+which persists through `platform/internal/cluster/postgres`, keyed by
+the instance's GRN. The wire between garam and the connector is `garamsh/garam-bot-operator`'s interface
 `interfaces/cluster-connection/v1alpha1/`, whose server garam owes and
 serves from `platform/internal/machineapi` §ClusterConnection.
 
-What this document describes is built, and it is decided to be
-replaced
-([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md),
-[apps.md](./apps.md)). The record becomes an instance,
-`grn:<org>/iam/instance/<id>`, of an installation of the
-`garam-bot-connector` app, superseding ADR-0184 decisions 1, 2 and 9;
-the `iam:cluster.*` actions become `iam:instance.*`; and placing a
-declaration becomes `iam:bot.place` on the instance, superseding
-ADR-0187 decision 1. Registration, the exchange, rotation and
-revocation carry over to every instance unchanged. Declarations,
-reports and last contact move to garam's bot domain, keyed by the
-instance's GRN. None of that is built, so the bullets below hold for
-the code as it stands.
+The record's move to the app system is built (#2081): the record is
+`grn:<org>/iam/instance/<id>`, superseding ADR-0184 decisions 1, 2 and
+9 ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)),
+and the `iam:cluster.*` actions but `.declare` are `iam:instance.*`.
+Not yet built: declarations, reports and last contact moving to
+garam's bot domain, and placing a declaration becoming `iam:bot.place`
+on the instance, superseding ADR-0187 decision 1 (#2082). The bullets
+below hold for the code as it stands.
 
 | Type | Responsibility |
 |------|----------------|
-| `Cluster` | an organization's record of a connected cluster under a GRN garam minted: what the organization calls it and says it is for, who created it and when |
-| `DetailsPatch` | a parsed name and description, each absent where the caller said nothing: what a creation starts with and what an update changes |
-| `Store` | creates one, answers one by GRN, lists an organization's own, changes its name and description, and deletes one |
-| `PublicKey` | the public half of a connector's RSA key, parsed from the JWK it sent, with its RFC 7638 thumbprint as `kid` |
-| `Key` | a key the record holds, live or withdrawn, and the row an exchange or a rotation verified with |
-| `CredentialStore` | what a record authenticates with: the hash of its registration token, its keys, the hashes of its tokens and the jtis its signed requests spent |
-| `Service` | registers a connector, exchanges its assertion for a token, rotates its key, and holds its declarations poll until a change, a wake or the wait |
+| `Service` | holds an instance's declarations poll until a change, a wake or the wait, keeps its report, and mints a declared bot's token for its connector |
+| `BotTokenStore` | records a bot token for a live `Bot` declaration of the instance, under the key its connector's token rests on |
 | `DeclaredObject` | an object DECL-7 to DECL-9 admit, kept to DECL-7's members, with the kind, namespace and name two live declarations never share |
 | `Declaration` | one declaration placed on a record: its identifier, generation and object, or none once tombstoned |
 | `DeclarationStore` | places, tombstones, reads and lists a record's declarations, and answers a page of its log after a cursor; `Declare` checks a write before it reaches the store |
@@ -43,64 +37,42 @@ the code as it stands.
 
 ## Current decisions
 
-- **A connected cluster is `grn:<org>/iam/cluster/<id>`, in one
-  organization** (ADR-0184 decisions 1 and 2). garam mints the
-  identifier, sixteen hex digits from a cryptographically secure
-  source, because the connector learns its identity at registration
-  and is configured with none before it. The ownership is held twice:
-  `cluster.GRNOf` derives the GRN, and
-  `platform/migrations/000082_clusters.up.sql` §clusters_grn_ownership
-  refuses a row whose GRN names another organization or another type.
+- **A connected cluster is an instance of `garam-bot-connector`,
+  `grn:<org>/iam/instance/<id>`, in one organization** (ADR-0192
+  decisions 1 and 11). garam mints the identifier, sixteen hex digits
+  from a cryptographically secure source, because the connector learns
+  its identity at registration and is configured with none before it.
+  The organization installs the app once, and each cluster is an
+  instance of that installation, which `garam-bot-connector`'s
+  `instances` setting of `many` admits. The record, its routes, the
+  actions they are decided on and the roles that hold them are
+  [apps.md](./apps.md)'s, and every instance's registration, exchange,
+  rotation and revocation are what the bullets below describe for a
+  cluster.
 - **Every cluster garam reaches is such a record**, the one garam's
   own deployment runs on included, and garam issues no PEM for a
   cluster
   ([ADR-0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)).
-- **The record carries what ADR-0184 decision 8 lists of it and
-  nothing else**: the GRN, the organization, the name, the
-  description, who created it and when. A name is not unique and not
-  an identity, and one left out of a creation is the identifier. The
-  bounds are `platform/api/openapi.yaml` §ClusterName and
-  §ClusterDescription, which is authoritative for them, and 000082
-  holds the same ones. The record follows its organization out.
-- **The surface is the browser-facing listener, on the organization's
-  own paths**: `createCluster`, `listClusters`, `getCluster`,
-  `updateCluster` and `deleteCluster`. `platform/api/openapi.yaml`
-  §cluster is authoritative for them.
-- **Every cluster route is decided on the organization's GRN**, each
-  on an action of its own (ADR-0184 decision 9, and ADR-0187 decision
-  1 for declarations): `iam:cluster.read` for the list and a read,
-  `iam:cluster.register` to create, `iam:cluster.update` to rename and
-  describe, `iam:cluster.delete` to delete, `iam:cluster.reissue` to
-  answer a new registration token and to revoke a key, and
-  `iam:cluster.declare` to place, change and tombstone a declaration.
-  Listing the keys, reading the declarations and reading the report
-  take `iam:cluster.read`.
-- **Which roles hold each**, decided where it was built (#2045, and
-  #2048 for `.declare`): every role holds `iam:cluster.read`; the
-  owner and the administrator hold `iam:cluster.register`, `.update`,
-  `.reissue`, `.delete` and `.declare`. Each is
-  named and none is granted as `iam:cluster.*`, for the operator's
-  reason: a wildcard grants in advance an action nobody has decided.
+- **Placing a declaration is `iam:cluster.declare` on the
+  organization**, held by the owner and the administrator (ADR-0187
+  decision 1, #2048), and reading the declarations and the report is
+  `iam:instance.read` on the installation. `iam:cluster.declare` is the
+  one cluster action left, until `iam:bot.place` replaces it (#2082).
   `platform/internal/org/role.go` §machineActions and
-  `policy/schema/iam.cedarschema` are authoritative for the grants,
-  and a test holds the two together.
-- **`Iam::Cluster` is declared with `@caller("none")`**, so the GRN
-  type exists in `lib/grn`'s catalogue and nothing feeds a cluster to
-  the policy service: no decision names one while every route is
-  decided on its organization.
+  `policy/schema/iam.cedarschema` are authoritative for the grants.
 - **A registration token is answered once, and stored only as a
   hash** (ADR-0184 decision 3). It is 256 bits from a cryptographically
-  secure source behind `garam_crt_`, answered by `createCluster` and
-  by `reissueClusterRegistrationToken`, under `Cache-Control:
+  secure source behind `garam_crt_`, answered by `createInstance` and
+  by `reissueInstanceRegistrationToken`, under `Cache-Control:
   no-store`. A record holds one at a time: minting another replaces
   it. It is refused an hour after it was minted (REG-5), and it is
   spent when it is presented, however the registration fares (REG-3):
   the store deletes its row before the key is read. An expired hash
-  is deleted on the next mint or spend of any cluster's token, so with
+  is deleted on the next mint or spend of any instance's token, so with
   no traffic one lingers, granting nothing. A record deleted between
   the spend and the bind is refused as an unknown token is.
 - **Registration is throttled per source address before the token is
-  read** (REG-8): `GARAM_CLUSTER_REGISTRATION_LIMIT` a minute, ten
+  read** (REG-8): `GARAM_INSTANCE_REGISTRATION_LIMIT` a minute, ten
   unless set, past which a request is answered 429 and spends
   nothing. The binary refuses `0`, so no deployment runs without the
   bound, and a conformance run raises it
@@ -116,8 +88,9 @@ the code as it stands.
   (REG-6).
 - **The connector's assertion is exchanged on `/oauth/token`**, under
   the operator's `private_key_jwt` profile, verified against the
-  record's live keys (AUTH-1). The exchange picks the cluster's profile
-  by `client_id`'s GRN type, and a cluster's token names no audience.
+  record's live keys (AUTH-1). The exchange picks the instance's
+  profile by `client_id`'s GRN type, and an instance's token names no
+  audience.
   A token is `garam_ct_` and 256 bits, valid for an hour, stored only
   as a hash, and read on every request joined to the record and the
   key it was exchanged under, so a deleted record or a withdrawn key
@@ -125,9 +98,13 @@ the code as it stands.
   resolution is `platform/internal/cli/machine_token.go`
   §identityTokens.
 - **A cluster's token reaches the cluster-connection routes alone**
-  (AUTH-4): `machineapi.ConfineClusters` refuses it on every route of
-  `platform/api/machine.yaml`, and the cluster-connection routes refuse
-  any other caller's token with 401. The bot-token mint AUTH-4 also
+  (AUTH-4): `machineapi.ConfineApps` refuses an instance's token on
+  every route of `platform/api/machine.yaml` its app's machine
+  operations do not list, and garam-bot-connector lists none of them.
+  The declarations and reports routes refuse with 401 a token of an
+  instance whose app does not list them, and any other caller's; the
+  registration and the rotation are the app system's own, which every
+  instance reaches. The bot-token mint AUTH-4 also
   names is an RFC 8693 exchange at the machine listener's token
   endpoint, with the connector's token as the actor, for a bot a live
   `Bot` declaration places on the record (#2049). ADR-0189's "garam's
@@ -153,19 +130,23 @@ the code as it stands.
   bound included (ROT-4).
 - **An organization withdraws a key, re-registers or deletes the
   record**, and each takes effect on the connector's next request
-  (ADR-0184 decision 7): `revokeClusterKey` withdraws one key and its
+  (ADR-0184 decision 7): `revokeInstanceKey` withdraws one key and its
   tokens, a registration withdraws every key held before, and deleting
-  the record cascades to its keys and tokens, and to its declarations
-  and their log, all but the identifiers. `listClusterKeys`
-  answers each key held, with its state.
+  the record, or the installation it is an instance of, cascades to its
+  keys and tokens, and to its declarations and their log, all but the
+  identifiers. A withdrawn key takes the bot tokens minted under it,
+  through `platform/migrations/000088_apps.up.sql`
+  §instance_keys_withdrawn. `listInstanceKeys` answers each key held,
+  with its state.
 - **An organization places declarations on a record, and its
   connector long-polls them**
   ([ADR-0187](./adr/0187-a-declaration-placed-on-a-cluster-is-written-under-iam-cluster-declare-into-a-log-per-record-the-connector-long-polls.md)).
-  The browser routes are `listClusterDeclarations`,
-  `createClusterDeclaration` (garam draws the identifier),
-  `getClusterDeclaration`, `putClusterDeclaration` (a new identifier,
-  or the next generation of a live one) and `deleteClusterDeclaration`,
-  which tombstones. `platform/api/openapi.yaml` §cluster is
+  The browser routes are `listInstanceDeclarations`,
+  `createInstanceDeclaration` (garam draws the identifier),
+  `getInstanceDeclaration`, `putInstanceDeclaration` (a new identifier,
+  or the next generation of a live one) and
+  `deleteInstanceDeclaration`, which tombstones, each under the
+  instance's path. `platform/api/openapi.yaml` §instance is
   authoritative for them. Each write is the next generation, and a
   tombstone is a delete at the next generation carrying the identifier
   alone.
@@ -234,13 +215,14 @@ the code as it stands.
   `invalid_request`, and a body over 4 MiB 413 `report_too_large`, the
   one body the listener bounds past its 1 MiB. Each cluster's reports
   are bounded, 120 a minute. Every `spec`, `status` and `message` is
-  kept as sent and never read. `getClusterReport` answers the kept
-  report under `iam:cluster.read`, for a console to render as text.
+  kept as sent and never read. `getInstanceReport` answers the kept
+  report under `iam:instance.read`, for a console to render as text.
   `platform/migrations/000086_cluster_reports.up.sql` holds the rows.
 - **`lastContactAt` is the time a record's token last resolved**, to
-  within a second (ADR-0188 decision 4). The query that resolves a
-  cluster's token records it and skips the write while the kept time
-  is under a second old, so a busy record writes once a second.
+  within a second (ADR-0188 decision 4). The query that resolves an
+  instance's token, in `platform/internal/app/postgres`, records it in
+  `instance_contacts` and skips the write while the kept time is under
+  a second old, so a busy record writes once a second.
 - **The wire is the interface's own specification, vendored**
   ([ADR-0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)).
   `platform/api/cluster-connection/v1alpha1/openapi.yaml` is
@@ -262,16 +244,12 @@ the code as it stands.
   `platform/api/machine.yaml`: a second copy of the interface's contract
   would drift from the one its conformance suite tests (ADR-0186).
 - Why placing a declaration is an action of its own rather than
-  `iam:cluster.update`, why an identifier is never placed twice, and
+  `iam:instance.update`, why an identifier is never placed twice, and
   why the wake goes through Postgres: ADR-0187.
 - Why one report per record, why a tombstoned declaration's
   identifier still counts as placed, and why `lastContactAt` is
   written at most once a second: ADR-0188.
-- Why every route is decided on the organization and the roles mirror
-  the operator's: standing a machine identity up or taking it away is
-  the administrative act registering and deleting an operator already
-  are (ADR-0045, ADR-0070), and the PM settled the fork that way on
-  #2045.
+- Why the record is an app's instance: ADR-0192 §Context.
 
 ## Open questions
 
@@ -289,11 +267,10 @@ the code as it stands.
 - A rotation from a key already retiring answers that key's earlier
   deadline, which can be under ROT-3's 24 hours; the interface's
   answer for that case is garam-bot-operator#451's.
-- `garam_machine_token_exchanges_total` counts a cluster's exchange
+- `garam_machine_token_exchanges_total` counts an instance's exchange
   under the method `operator_private_key_jwt`, since the method is
-  read off the route and a cluster's exchange shares the operator's.
+  read off the route and an instance's exchange shares the operator's.
   Telling them apart needs the label read off `client_id`, which the
   counter does not parse.
-- The console pages for a cluster, built once the routes above are,
-  in one issue filed after #2050. ADR-0192 replaces the routes they
-  would render, so the console follows the app system's.
+- The console pages for an instance and its declarations are the
+  rest of #2081.

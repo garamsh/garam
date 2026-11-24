@@ -8,7 +8,7 @@ import (
 
 // ReportStore keeps what a record's connector tells garam (ADR-0188):
 // its latest report, and the time of its latest authenticated request,
-// which CredentialStore.ResolveToken records. ErrClusterNotFound where
+// which app.CredentialStore.ResolveToken records. app.ErrInstanceNotFound where
 // the organization holds no record under g.
 type ReportStore interface {
 	// PlacedDeclarationIDs answers which of ids a declaration of g

@@ -13,19 +13,22 @@ garam binary or image carries it. `platform/tests/e2e` checks that
 
 ## What it serves
 
-Every subcommand the suite names (#2047):
+Every subcommand the suite names (#2047). The interface names a
+record a cluster; garam keeps it as an instance of the organization's
+installation of `garam-bot-connector` (ADR-0192), and the subcommands,
+their arguments and what they print keep the interface's names:
 
 | Subcommand | Does | Prints | Through |
 |---|---|---|---|
-| `mint-token` | creates a record in the organization and answers its registration token | `registrationToken`, `cluster` | `createCluster` |
-| `mint-token --cluster <grn>` | answers a new registration token for that record | `registrationToken`, `cluster` | `reissueClusterRegistrationToken` |
+| `mint-token` | installs `garam-bot-connector` where the organization has not, creates a record of that installation and answers its registration token | `registrationToken`, `cluster` | `createInstallation`, `createInstance` |
+| `mint-token --cluster <grn>` | answers a new registration token for that record | `registrationToken`, `cluster` | `reissueInstanceRegistrationToken` |
 | `mint-token … --expired` | as above, then moves that token's expiry into the past | `registrationToken`, `cluster` | the database |
-| `revoke-keys <grn>` | withdraws every key of the record not yet withdrawn | `cluster` | `listClusterKeys`, `revokeClusterKey` |
-| `delete-cluster <grn>` | deletes the record | `cluster` | `deleteCluster` |
-| `declare <file>` | places the file's object on its record, as a new declaration or the next generation of the one it names | `id`, `generation` | `createClusterDeclaration`, or `putClusterDeclaration` where the file names an `id` |
-| `tombstone <id>` | tombstones the live declaration `id` on whichever of the organization's records holds it | `id`, `generation` | `listClusters`, `getClusterDeclaration`, `deleteClusterDeclaration` |
-| `latest-report <grn>` | reads the record's kept report and its `lastContactAt`, each `null` where there is none | `cluster`, `lastContactAt`, `report` | `getClusterReport` |
-| `expire-cursors <grn>` | purges the record's log and every cursor answered so far: the purged position becomes the head, the head moves one past it, and the record's held polls are woken | `cluster` | `getCluster`, then the database |
+| `revoke-keys <grn>` | withdraws every key of the record not yet withdrawn | `cluster` | `listInstanceKeys`, `revokeInstanceKey` |
+| `delete-cluster <grn>` | deletes the record | `cluster` | `deleteInstance` |
+| `declare <file>` | places the file's object on its record, as a new declaration or the next generation of the one it names | `id`, `generation` | `createInstanceDeclaration`, or `putInstanceDeclaration` where the file names an `id` |
+| `tombstone <id>` | tombstones the live declaration `id` on whichever of the organization's records holds it | `id`, `generation` | `listInstances`, `getInstanceDeclaration`, `deleteInstanceDeclaration` |
+| `latest-report <grn>` | reads the record's kept report and its `lastContactAt`, each `null` where there is none | `cluster`, `lastContactAt`, `report` | `getInstanceReport`, its `instance` printed as `cluster` |
+| `expire-cursors <grn>` | purges the record's log and every cursor answered so far: the purged position becomes the head, the head moves one past it, and the record's held polls are woken | `cluster` | `getInstance`, then the database |
 
 `declare`'s file is one JSON object: `cluster`, the record's GRN;
 `id`, optional; and `object`, the declared object.
@@ -46,10 +49,11 @@ GARAM_FIXTURE_DATABASE_URL=postgres://... \
 - `GARAM_FIXTURE_API_URL`: `serve api`'s base URL, its routes at the
   root as the console's `/api/*` rewrite reaches them.
 - `GARAM_FIXTURE_SESSION_TOKEN`: the session of a principal holding
-  `iam:cluster.register`, `.read`, `.reissue`, `.delete` and
-  `.declare` in the organization, sent as the `garam_session`
-  cookie. `testprincipal prepare` answers one, and that principal owns
-  any organization it creates.
+  `iam:installation.create` and `.read`, `iam:instance.register`,
+  `.read`, `.reissue` and `.delete`, and `iam:cluster.declare` in the
+  organization, sent as the `garam_session` cookie. Installing is the
+  owner's alone. `testprincipal prepare` answers one, and that
+  principal owns any organization it creates.
 - `GARAM_FIXTURE_ORG`: the organization a new record is created in. A
   subcommand naming a record by GRN reaches it in the GRN's own
   organization.
@@ -59,7 +63,7 @@ GARAM_FIXTURE_DATABASE_URL=postgres://... \
   `localhost` or a unix socket, every dial checked), and the check runs
   before garam is reached.
 
-`serve machine` refuses past `GARAM_CLUSTER_REGISTRATION_LIMIT`
+`serve machine` refuses past `GARAM_INSTANCE_REGISTRATION_LIMIT`
 registrations per address a minute, ten unless set. The suite
 registers more often than that from one address, so a run sets it
 higher.

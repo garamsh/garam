@@ -11,28 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addClusterKey = `-- name: AddClusterKey :exec
-INSERT INTO cluster_keys (cluster_grn, kid, public_jwk, created_at, predecessor_id)
-VALUES ($1, $2, $3, now(), $4)
-`
-
-type AddClusterKeyParams struct {
-	ClusterGrn    string
-	Kid           string
-	PublicJwk     string
-	PredecessorID pgtype.Int8
-}
-
-func (q *Queries) AddClusterKey(ctx context.Context, arg AddClusterKeyParams) error {
-	_, err := q.db.Exec(ctx, addClusterKey,
-		arg.ClusterGrn,
-		arg.Kid,
-		arg.PublicJwk,
-		arg.PredecessorID,
-	)
-	return err
-}
-
 const advanceDeclarationHead = `-- name: AdvanceDeclarationHead :one
 INSERT INTO cluster_declaration_heads (cluster_grn, head) VALUES ($1, 1)
 ON CONFLICT (cluster_grn) DO UPDATE SET head = cluster_declaration_heads.head + 1
@@ -88,41 +66,6 @@ func (q *Queries) AppendDeclarationChange(ctx context.Context, arg AppendDeclara
 	return err
 }
 
-const bindClusterKey = `-- name: BindClusterKey :exec
-INSERT INTO cluster_keys (cluster_grn, kid, public_jwk, created_at)
-VALUES ($1, $2, $3, now())
-ON CONFLICT (cluster_grn, kid) DO UPDATE SET retires_at = NULL, revoked_at = NULL, predecessor_id = NULL
-`
-
-type BindClusterKeyParams struct {
-	ClusterGrn string
-	Kid        string
-	PublicJwk  string
-}
-
-// A key the cluster held before is bound again live, its deadlines
-// cleared: registration makes the key sent the record's only live one.
-func (q *Queries) BindClusterKey(ctx context.Context, arg BindClusterKeyParams) error {
-	_, err := q.db.Exec(ctx, bindClusterKey, arg.ClusterGrn, arg.Kid, arg.PublicJwk)
-	return err
-}
-
-const clusterKeyExists = `-- name: ClusterKeyExists :one
-SELECT EXISTS (SELECT 1 FROM cluster_keys WHERE cluster_grn = $1 AND kid = $2)
-`
-
-type ClusterKeyExistsParams struct {
-	ClusterGrn string
-	Kid        string
-}
-
-func (q *Queries) ClusterKeyExists(ctx context.Context, arg ClusterKeyExistsParams) (bool, error) {
-	row := q.db.QueryRow(ctx, clusterKeyExists, arg.ClusterGrn, arg.Kid)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const clusterReportHolds = `-- name: ClusterReportHolds :one
 SELECT EXISTS (
     SELECT 1 FROM cluster_reports
@@ -153,81 +96,6 @@ func (q *Queries) ClusterReportHolds(ctx context.Context, arg ClusterReportHolds
 	return held, err
 }
 
-const createCluster = `-- name: CreateCluster :one
-INSERT INTO clusters (grn, org_grn, created_by, created_at, name, description)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING grn, org_grn, created_by, created_at, name, description
-`
-
-type CreateClusterParams struct {
-	Grn         string
-	OrgGrn      string
-	CreatedBy   string
-	CreatedAt   pgtype.Timestamptz
-	Name        string
-	Description string
-}
-
-func (q *Queries) CreateCluster(ctx context.Context, arg CreateClusterParams) (Cluster, error) {
-	row := q.db.QueryRow(ctx, createCluster,
-		arg.Grn,
-		arg.OrgGrn,
-		arg.CreatedBy,
-		arg.CreatedAt,
-		arg.Name,
-		arg.Description,
-	)
-	var i Cluster
-	err := row.Scan(
-		&i.Grn,
-		&i.OrgGrn,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.Name,
-		&i.Description,
-	)
-	return i, err
-}
-
-const deleteCluster = `-- name: DeleteCluster :execrows
-DELETE FROM clusters WHERE grn = $1
-`
-
-func (q *Queries) DeleteCluster(ctx context.Context, grn string) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteCluster, grn)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteClusterBotTokens = `-- name: DeleteClusterBotTokens :exec
-DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1
-`
-
-func (q *Queries) DeleteClusterBotTokens(ctx context.Context, clusterGrn string) error {
-	_, err := q.db.Exec(ctx, deleteClusterBotTokens, clusterGrn)
-	return err
-}
-
-const deleteClusterKeyTokens = `-- name: DeleteClusterKeyTokens :exec
-DELETE FROM cluster_tokens WHERE key_id = $1
-`
-
-func (q *Queries) DeleteClusterKeyTokens(ctx context.Context, keyID int64) error {
-	_, err := q.db.Exec(ctx, deleteClusterKeyTokens, keyID)
-	return err
-}
-
-const deleteClusterTokens = `-- name: DeleteClusterTokens :exec
-DELETE FROM cluster_tokens WHERE cluster_grn = $1
-`
-
-func (q *Queries) DeleteClusterTokens(ctx context.Context, clusterGrn string) error {
-	_, err := q.db.Exec(ctx, deleteClusterTokens, clusterGrn)
-	return err
-}
-
 const deleteDeclarationBotTokens = `-- name: DeleteDeclarationBotTokens :exec
 DELETE FROM cluster_bot_tokens WHERE declaration_id = $1
 `
@@ -237,37 +105,10 @@ func (q *Queries) DeleteDeclarationBotTokens(ctx context.Context, declarationID 
 	return err
 }
 
-const deleteKeyBotTokens = `-- name: DeleteKeyBotTokens :exec
-DELETE FROM cluster_bot_tokens WHERE key_id = $1
-`
-
-func (q *Queries) DeleteKeyBotTokens(ctx context.Context, keyID int64) error {
-	_, err := q.db.Exec(ctx, deleteKeyBotTokens, keyID)
-	return err
-}
-
-const getCluster = `-- name: GetCluster :one
-SELECT grn, org_grn, created_by, created_at, name, description FROM clusters WHERE grn = $1
-`
-
-func (q *Queries) GetCluster(ctx context.Context, grn string) (Cluster, error) {
-	row := q.db.QueryRow(ctx, getCluster, grn)
-	var i Cluster
-	err := row.Scan(
-		&i.Grn,
-		&i.OrgGrn,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.Name,
-		&i.Description,
-	)
-	return i, err
-}
-
 const getClusterReport = `-- name: GetClusterReport :one
 SELECT c.grn, t.last_contact_at, r.report
-FROM clusters c
-LEFT JOIN cluster_contacts t ON t.cluster_grn = c.grn
+FROM instances c
+LEFT JOIN instance_contacts t ON t.instance_grn = c.grn
 LEFT JOIN cluster_reports r ON r.cluster_grn = c.grn
 WHERE c.grn = $1
 `
@@ -290,8 +131,7 @@ const getDeclarationForWrite = `-- name: GetDeclarationForWrite :one
 SELECT id, cluster_grn, generation, kind, namespace, name, object, last_seq, tombstoned, created_at, updated_at FROM cluster_declarations WHERE id = $1 FOR UPDATE
 `
 
-// Declarations (ADR-0187). Every write runs inside HoldCluster, so a
-// record's positions are drawn and committed in one order.
+// Declarations (ADR-0187). Every write runs inside HoldInstance.
 func (q *Queries) GetDeclarationForWrite(ctx context.Context, id string) (ClusterDeclaration, error) {
 	row := q.db.QueryRow(ctx, getDeclarationForWrite, id)
 	var i ClusterDeclaration
@@ -313,7 +153,7 @@ func (q *Queries) GetDeclarationForWrite(ctx context.Context, id string) (Cluste
 
 const getDeclarationPosition = `-- name: GetDeclarationPosition :one
 SELECT COALESCE(h.head, 0)::bigint AS head, COALESCE(h.purged_through, -1)::bigint AS purged_through
-FROM clusters c LEFT JOIN cluster_declaration_heads h ON h.cluster_grn = c.grn
+FROM instances c LEFT JOIN cluster_declaration_heads h ON h.cluster_grn = c.grn
 WHERE c.grn = $1
 `
 
@@ -327,43 +167,6 @@ func (q *Queries) GetDeclarationPosition(ctx context.Context, grn string) (GetDe
 	row := q.db.QueryRow(ctx, getDeclarationPosition, grn)
 	var i GetDeclarationPositionRow
 	err := row.Scan(&i.Head, &i.PurgedThrough)
-	return i, err
-}
-
-const getLiveClusterKey = `-- name: GetLiveClusterKey :one
-SELECT k.id, k.cluster_grn, k.kid, k.public_jwk, k.created_at, k.retires_at, k.revoked_at
-FROM cluster_keys k
-WHERE k.cluster_grn = $1 AND k.kid = $2
-  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
-`
-
-type GetLiveClusterKeyParams struct {
-	ClusterGrn string
-	Kid        string
-}
-
-type GetLiveClusterKeyRow struct {
-	ID         int64
-	ClusterGrn string
-	Kid        string
-	PublicJwk  string
-	CreatedAt  pgtype.Timestamptz
-	RetiresAt  pgtype.Timestamptz
-	RevokedAt  pgtype.Timestamptz
-}
-
-func (q *Queries) GetLiveClusterKey(ctx context.Context, arg GetLiveClusterKeyParams) (GetLiveClusterKeyRow, error) {
-	row := q.db.QueryRow(ctx, getLiveClusterKey, arg.ClusterGrn, arg.Kid)
-	var i GetLiveClusterKeyRow
-	err := row.Scan(
-		&i.ID,
-		&i.ClusterGrn,
-		&i.Kid,
-		&i.PublicJwk,
-		&i.CreatedAt,
-		&i.RetiresAt,
-		&i.RevokedAt,
-	)
 	return i, err
 }
 
@@ -395,48 +198,28 @@ func (q *Queries) GetLiveDeclaration(ctx context.Context, arg GetLiveDeclaration
 	return i, err
 }
 
-const holdCluster = `-- name: HoldCluster :one
-SELECT now()::timestamptz AS decided_at FROM clusters WHERE grn = $1 FOR NO KEY UPDATE
+const holdInstance = `-- name: HoldInstance :one
+SELECT now()::timestamptz AS decided_at FROM instances WHERE grn = $1 FOR NO KEY UPDATE
 `
 
-// Every credential write holds the cluster's row before its keys and
-// tokens, the order an organization's deletion takes them in through
-// the cascades, so neither waits on the other while holding what the
-// other needs (#1424). It answers the database's time, which every
-// check in the transaction reads.
-func (q *Queries) HoldCluster(ctx context.Context, grn string) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, holdCluster, grn)
+// A declaration write and a bot token's holds the instance's row
+// first, as internal/app's credential writes do, so a record's
+// positions are drawn and committed in one order and no tombstone lands
+// while a bot's token is written. It answers the database's time.
+func (q *Queries) HoldInstance(ctx context.Context, grn string) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, holdInstance, grn)
 	var decided_at pgtype.Timestamptz
 	err := row.Scan(&decided_at)
 	return decided_at, err
 }
 
-const holdLiveClusterKey = `-- name: HoldLiveClusterKey :one
-SELECT id FROM cluster_keys
-WHERE id = $1 AND cluster_grn = $2
-  AND revoked_at IS NULL AND (retires_at IS NULL OR retires_at > now())
-FOR NO KEY UPDATE
-`
-
-type HoldLiveClusterKeyParams struct {
-	ID         int64
-	ClusterGrn string
-}
-
-func (q *Queries) HoldLiveClusterKey(ctx context.Context, arg HoldLiveClusterKeyParams) (int64, error) {
-	row := q.db.QueryRow(ctx, holdLiveClusterKey, arg.ID, arg.ClusterGrn)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
 const insertBotToken = `-- name: InsertBotToken :one
 INSERT INTO cluster_bot_tokens (token_hash, cluster_grn, key_id, declaration_id, scope, issued_at, expires_at)
-SELECT $1, t.cluster_grn, t.key_id, $2, $3,
+SELECT $1, t.instance_grn, t.key_id, $2, $3,
        now(), now() + $4::interval
-FROM cluster_tokens t
-JOIN cluster_keys k ON k.id = t.key_id
-WHERE t.token_hash = $5 AND t.cluster_grn = $6
+FROM instance_tokens t
+JOIN instance_keys k ON k.id = t.key_id
+WHERE t.token_hash = $5 AND t.instance_grn = $6
   AND t.expires_at > now()
   AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
 RETURNING expires_at
@@ -468,26 +251,15 @@ func (q *Queries) InsertBotToken(ctx context.Context, arg InsertBotTokenParams) 
 	return expires_at, err
 }
 
-const issueRegistrationToken = `-- name: IssueRegistrationToken :one
-INSERT INTO cluster_registration_tokens (cluster_grn, token_hash, expires_at)
-VALUES ($1, $2,
-        now() + $3::bigint * interval '1 second')
-ON CONFLICT (cluster_grn) DO UPDATE
-SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at
-RETURNING expires_at
+const instanceExists = `-- name: InstanceExists :one
+SELECT grn FROM instances WHERE grn = $1
 `
 
-type IssueRegistrationTokenParams struct {
-	ClusterGrn string
-	TokenHash  string
-	TtlSeconds int64
-}
-
-func (q *Queries) IssueRegistrationToken(ctx context.Context, arg IssueRegistrationTokenParams) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, issueRegistrationToken, arg.ClusterGrn, arg.TokenHash, arg.TtlSeconds)
-	var expires_at pgtype.Timestamptz
-	err := row.Scan(&expires_at)
-	return expires_at, err
+func (q *Queries) InstanceExists(ctx context.Context, grn string) (string, error) {
+	row := q.db.QueryRow(ctx, instanceExists, grn)
+	var grn_2 string
+	err := row.Scan(&grn_2)
+	return grn_2, err
 }
 
 const keepClusterReport = `-- name: KeepClusterReport :execrows
@@ -512,85 +284,6 @@ func (q *Queries) KeepClusterReport(ctx context.Context, arg KeepClusterReportPa
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const listClusterKeys = `-- name: ListClusterKeys :many
-SELECT id, cluster_grn, kid, public_jwk, created_at, retires_at, revoked_at, predecessor_id,
-       (revoked_at IS NULL AND (retires_at IS NULL OR retires_at > now())) AS live
-FROM cluster_keys WHERE cluster_grn = $1 ORDER BY created_at, id
-`
-
-type ListClusterKeysRow struct {
-	ID            int64
-	ClusterGrn    string
-	Kid           string
-	PublicJwk     string
-	CreatedAt     pgtype.Timestamptz
-	RetiresAt     pgtype.Timestamptz
-	RevokedAt     pgtype.Timestamptz
-	PredecessorID pgtype.Int8
-	Live          pgtype.Bool
-}
-
-func (q *Queries) ListClusterKeys(ctx context.Context, clusterGrn string) ([]ListClusterKeysRow, error) {
-	rows, err := q.db.Query(ctx, listClusterKeys, clusterGrn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListClusterKeysRow
-	for rows.Next() {
-		var i ListClusterKeysRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.ClusterGrn,
-			&i.Kid,
-			&i.PublicJwk,
-			&i.CreatedAt,
-			&i.RetiresAt,
-			&i.RevokedAt,
-			&i.PredecessorID,
-			&i.Live,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listClustersByOrg = `-- name: ListClustersByOrg :many
-SELECT grn, org_grn, created_by, created_at, name, description FROM clusters WHERE org_grn = $1 ORDER BY grn
-`
-
-func (q *Queries) ListClustersByOrg(ctx context.Context, orgGrn string) ([]Cluster, error) {
-	rows, err := q.db.Query(ctx, listClustersByOrg, orgGrn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Cluster
-	for rows.Next() {
-		var i Cluster
-		if err := rows.Scan(
-			&i.Grn,
-			&i.OrgGrn,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.Name,
-			&i.Description,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listDeclarationChangesAfter = `-- name: ListDeclarationChangesAfter :many
@@ -771,7 +464,7 @@ type PlacingDeclarationExistsParams struct {
 // Bot tokens (ADR-0189).
 // The live Bot declaration that places the bot on the record; none
 // answers zero rows. It takes no lock of its own: RecordBotToken runs
-// inside HoldCluster, the record row's FOR NO KEY UPDATE that every
+// inside HoldInstance, the record row's FOR NO KEY UPDATE that every
 // declaration write also takes, so no tombstone lands before the token
 // is written.
 func (q *Queries) PlacingDeclarationExists(ctx context.Context, arg PlacingDeclarationExistsParams) (string, error) {
@@ -805,31 +498,6 @@ func (q *Queries) PurgeDeclarationChanges(ctx context.Context, arg PurgeDeclarat
 	return err
 }
 
-const recordClusterToken = `-- name: RecordClusterToken :exec
-INSERT INTO cluster_tokens (token_hash, cluster_grn, key_id, issued_at, expires_at)
-VALUES ($1, $2, $3,
-        $4, $5)
-`
-
-type RecordClusterTokenParams struct {
-	TokenHash  string
-	ClusterGrn string
-	KeyID      int64
-	IssuedAt   pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
-}
-
-func (q *Queries) RecordClusterToken(ctx context.Context, arg RecordClusterTokenParams) error {
-	_, err := q.db.Exec(ctx, recordClusterToken,
-		arg.TokenHash,
-		arg.ClusterGrn,
-		arg.KeyID,
-		arg.IssuedAt,
-		arg.ExpiresAt,
-	)
-	return err
-}
-
 const reserveDeclarationID = `-- name: ReserveDeclarationID :execrows
 INSERT INTO cluster_declaration_ids (id) VALUES ($1) ON CONFLICT (id) DO NOTHING
 `
@@ -844,124 +512,6 @@ func (q *Queries) ReserveDeclarationID(ctx context.Context, id string) (int64, e
 	return result.RowsAffected(), nil
 }
 
-const resolveClusterToken = `-- name: ResolveClusterToken :one
-WITH resolved AS (
-    SELECT t.cluster_grn, t.expires_at
-    FROM cluster_tokens t
-    JOIN clusters c ON c.grn = t.cluster_grn
-    JOIN cluster_keys k ON k.id = t.key_id
-    WHERE t.token_hash = $1 AND t.expires_at > now()
-      AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
-), contact AS (
-    INSERT INTO cluster_contacts (cluster_grn, last_contact_at)
-    SELECT cluster_grn, now() FROM resolved
-    ON CONFLICT (cluster_grn) DO UPDATE SET last_contact_at = EXCLUDED.last_contact_at
-    WHERE cluster_contacts.last_contact_at < EXCLUDED.last_contact_at - interval '1 second'
-)
-SELECT cluster_grn, expires_at FROM resolved
-`
-
-type ResolveClusterTokenRow struct {
-	ClusterGrn string
-	ExpiresAt  pgtype.Timestamptz
-}
-
-// A token that resolves records its record's contact (REP-5,
-// ADR-0188), skipped while the kept time is under a second old.
-func (q *Queries) ResolveClusterToken(ctx context.Context, tokenHash string) (ResolveClusterTokenRow, error) {
-	row := q.db.QueryRow(ctx, resolveClusterToken, tokenHash)
-	var i ResolveClusterTokenRow
-	err := row.Scan(&i.ClusterGrn, &i.ExpiresAt)
-	return i, err
-}
-
-const retireClusterKey = `-- name: RetireClusterKey :one
-UPDATE cluster_keys
-SET retires_at = COALESCE(retires_at, now() + $1::bigint * interval '1 second')
-WHERE id = $2
-RETURNING retires_at
-`
-
-type RetireClusterKeyParams struct {
-	WindowSeconds int64
-	ID            int64
-}
-
-// A rotation starts the predecessor's rollover, leaving an earlier
-// deadline where one is set, and answers the deadline.
-func (q *Queries) RetireClusterKey(ctx context.Context, arg RetireClusterKeyParams) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, retireClusterKey, arg.WindowSeconds, arg.ID)
-	var retires_at pgtype.Timestamptz
-	err := row.Scan(&retires_at)
-	return retires_at, err
-}
-
-const revokeAllClusterKeys = `-- name: RevokeAllClusterKeys :exec
-UPDATE cluster_keys SET revoked_at = now() WHERE cluster_grn = $1 AND revoked_at IS NULL
-`
-
-func (q *Queries) RevokeAllClusterKeys(ctx context.Context, clusterGrn string) error {
-	_, err := q.db.Exec(ctx, revokeAllClusterKeys, clusterGrn)
-	return err
-}
-
-const revokeClusterKey = `-- name: RevokeClusterKey :one
-UPDATE cluster_keys SET revoked_at = now()
-WHERE cluster_grn = $1 AND kid = $2 AND revoked_at IS NULL
-RETURNING id
-`
-
-type RevokeClusterKeyParams struct {
-	ClusterGrn string
-	Kid        string
-}
-
-func (q *Queries) RevokeClusterKey(ctx context.Context, arg RevokeClusterKeyParams) (int64, error) {
-	row := q.db.QueryRow(ctx, revokeClusterKey, arg.ClusterGrn, arg.Kid)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const spendClusterJTI = `-- name: SpendClusterJTI :one
-INSERT INTO cluster_jtis (cluster_grn, jti, expires_at)
-VALUES ($1, $2, $3)
-ON CONFLICT (cluster_grn, jti) DO NOTHING
-RETURNING jti
-`
-
-type SpendClusterJTIParams struct {
-	ClusterGrn string
-	Jti        string
-	ExpiresAt  pgtype.Timestamptz
-}
-
-func (q *Queries) SpendClusterJTI(ctx context.Context, arg SpendClusterJTIParams) (string, error) {
-	row := q.db.QueryRow(ctx, spendClusterJTI, arg.ClusterGrn, arg.Jti, arg.ExpiresAt)
-	var jti string
-	err := row.Scan(&jti)
-	return jti, err
-}
-
-const spendRegistrationToken = `-- name: SpendRegistrationToken :one
-DELETE FROM cluster_registration_tokens WHERE token_hash = $1
-RETURNING cluster_grn, expires_at > now() AS live
-`
-
-type SpendRegistrationTokenRow struct {
-	ClusterGrn string
-	Live       bool
-}
-
-// Spends the token whatever follows: the row goes in the statement
-// that reads it, so a second presentation finds nothing.
-func (q *Queries) SpendRegistrationToken(ctx context.Context, tokenHash string) (SpendRegistrationTokenRow, error) {
-	row := q.db.QueryRow(ctx, spendRegistrationToken, tokenHash)
-	var i SpendRegistrationTokenRow
-	err := row.Scan(&i.ClusterGrn, &i.Live)
-	return i, err
-}
-
 const sweepBotTokens = `-- name: SweepBotTokens :exec
 DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1 AND expires_at <= now()
 `
@@ -969,65 +519,6 @@ DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1 AND expires_at <= now()
 func (q *Queries) SweepBotTokens(ctx context.Context, clusterGrn string) error {
 	_, err := q.db.Exec(ctx, sweepBotTokens, clusterGrn)
 	return err
-}
-
-const sweepClusterJTIs = `-- name: SweepClusterJTIs :exec
-DELETE FROM cluster_jtis WHERE cluster_grn = $1 AND expires_at <= now()
-`
-
-func (q *Queries) SweepClusterJTIs(ctx context.Context, clusterGrn string) error {
-	_, err := q.db.Exec(ctx, sweepClusterJTIs, clusterGrn)
-	return err
-}
-
-const sweepClusterTokens = `-- name: SweepClusterTokens :exec
-DELETE FROM cluster_tokens WHERE cluster_grn = $1 AND expires_at <= now()
-`
-
-func (q *Queries) SweepClusterTokens(ctx context.Context, clusterGrn string) error {
-	_, err := q.db.Exec(ctx, sweepClusterTokens, clusterGrn)
-	return err
-}
-
-const sweepRegistrationTokens = `-- name: SweepRegistrationTokens :exec
-DELETE FROM cluster_registration_tokens WHERE expires_at <= now()
-`
-
-// Expired registration tokens of every cluster go with each mint and
-// each spend, so no expired hash outlives the next of either.
-func (q *Queries) SweepRegistrationTokens(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, sweepRegistrationTokens)
-	return err
-}
-
-const updateClusterDetails = `-- name: UpdateClusterDetails :one
-UPDATE clusters
-SET name        = COALESCE($1, name),
-    description = COALESCE($2, description)
-WHERE grn = $3
-RETURNING grn, org_grn, created_by, created_at, name, description
-`
-
-type UpdateClusterDetailsParams struct {
-	Name        pgtype.Text
-	Description pgtype.Text
-	Grn         string
-}
-
-// An absent argument keeps the column it would have written, so a
-// caller changing one of the two leaves the other as it stands.
-func (q *Queries) UpdateClusterDetails(ctx context.Context, arg UpdateClusterDetailsParams) (Cluster, error) {
-	row := q.db.QueryRow(ctx, updateClusterDetails, arg.Name, arg.Description, arg.Grn)
-	var i Cluster
-	err := row.Scan(
-		&i.Grn,
-		&i.OrgGrn,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.Name,
-		&i.Description,
-	)
-	return i, err
 }
 
 const writeDeclaration = `-- name: WriteDeclaration :one

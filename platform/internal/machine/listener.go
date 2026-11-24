@@ -77,7 +77,7 @@ func identify(tokens Tokens, evidence *Evidence, next http.Handler) http.Handler
 				return
 			}
 			identity := Identity{grn: bearer.Subject, serial: bearer.Serial,
-				notBefore: bearer.IssuedAt, notAfter: bearer.ExpiresAt}
+				notBefore: bearer.IssuedAt, notAfter: bearer.ExpiresAt, reach: bearer.Reach}
 			evidence.Note(r.Context(), Sighting{Caller: bearer.Subject, Path: PathToken})
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, identity)))
 		default:

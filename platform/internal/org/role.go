@@ -113,19 +113,25 @@ const (
 	// a service, which registering an operator alone does not do.
 	ActionOperatorDelegate = "iam:operator.delegate"
 
-	// A connected cluster's record (ADR-0184): reading the ones an org
-	// holds, creating one, renaming and describing it, re-registering
-	// it, which answers a new one-time token and withdraws every key it
-	// held, and deleting it, which stops its connector. They are named
-	// one at a time, and the org owns them for the reason it owns the
-	// operator's.
-	ActionClusterRead     = "iam:cluster.read"
-	ActionClusterRegister = "iam:cluster.register"
-	ActionClusterUpdate   = "iam:cluster.update"
-	ActionClusterReissue  = "iam:cluster.reissue"
-	ActionClusterDelete   = "iam:cluster.delete"
-	// Placing, changing and tombstoning what a cluster's connector
-	// applies (ADR-0187). Reading what is placed is ActionClusterRead.
+	// The app system (ADR-0192 decision 9): reading the apps an org may
+	// install, installing one, which writes the app's requested actions
+	// as permits and so is the owner's as ActionPermitWrite is, reading
+	// and uninstalling an installation, and creating, reading,
+	// describing, re-registering and deleting an instance of one. They
+	// are named one at a time, and the org owns them for the reason it
+	// owns the operator's.
+	ActionAppRead            = "iam:app.read"
+	ActionInstallationCreate = "iam:installation.create"
+	ActionInstallationRead   = "iam:installation.read"
+	ActionInstallationDelete = "iam:installation.delete"
+	ActionInstanceRead       = "iam:instance.read"
+	ActionInstanceRegister   = "iam:instance.register"
+	ActionInstanceUpdate     = "iam:instance.update"
+	ActionInstanceReissue    = "iam:instance.reissue"
+	ActionInstanceDelete     = "iam:instance.delete"
+	// Placing, changing and tombstoning what an instance's connector
+	// applies (ADR-0187), until iam:bot.place replaces it (#2082).
+	// Reading what is placed is ActionInstanceRead.
 	ActionClusterDeclare = "iam:cluster.declare"
 
 	// Reading the agents an org holds and watching one work. The org
@@ -244,8 +250,9 @@ var actions = []string{
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
-	ActionClusterRead, ActionClusterRegister, ActionClusterUpdate,
-	ActionClusterReissue, ActionClusterDelete, ActionClusterDeclare,
+	ActionAppRead, ActionInstallationCreate, ActionInstallationRead, ActionInstallationDelete,
+	ActionInstanceRead, ActionInstanceRegister, ActionInstanceUpdate,
+	ActionInstanceReissue, ActionInstanceDelete, ActionClusterDeclare,
 	ActionAgentRead, ActionAgentWatch, ActionAgentRename, ActionAgentCreate,
 	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentReplace,
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
@@ -269,18 +276,19 @@ func IsAction(a string) bool {
 	return slices.Contains(actions, a)
 }
 
-// machineActions is every agent, operator, cluster and execution
-// action a role grants, one row each and in the order Actions answers
-// them. An owner and an admin hold every row. A member holds the rows
-// marked for it: it reads the operators and clusters an org has
-// registered and registers neither, because standing a machine
-// identity up for the organization is the administrative act
-// registering already looks like (ADR-0184 for a cluster). It may
+// machineActions is every agent, operator, app system and execution
+// action a role grants but installing an app, one row each and in the
+// order Actions answers them. An owner and an admin hold every row. A
+// member holds the rows marked for it: it reads the operators, apps,
+// installations and instances an org holds and registers none, because
+// standing a machine identity up for the organization is the
+// administrative act registering already looks like (ADR-0184 for an
+// instance). It may
 // create an agent from an allowed profile and read the published
 // templates and profiles it chooses from, and may not configure an
 // agent, publish a template or read an agent's execution.
 //
-// Agent, operator and cluster actions are granted one at a time and
+// Agent, operator and app system actions are granted one at a time and
 // never as a wildcard such as `iam:operator.*`: ADR-0012 puts
 // provisioning outside garam, so a wildcard would grant in advance the
 // actions no endpoint may offer. Deleting an operator is what that
@@ -297,11 +305,14 @@ var machineActions = []struct {
 	{ActionOperatorDelete, false},
 	{ActionOperatorReissue, false},
 	{ActionOperatorDelegate, false},
-	{ActionClusterRead, true},
-	{ActionClusterRegister, false},
-	{ActionClusterUpdate, false},
-	{ActionClusterReissue, false},
-	{ActionClusterDelete, false},
+	{ActionAppRead, true},
+	{ActionInstallationRead, true},
+	{ActionInstallationDelete, false},
+	{ActionInstanceRead, true},
+	{ActionInstanceRegister, false},
+	{ActionInstanceUpdate, false},
+	{ActionInstanceReissue, false},
+	{ActionInstanceDelete, false},
 	{ActionClusterDeclare, false},
 	{ActionAgentRead, true},
 	{ActionAgentRename, true},
@@ -378,7 +389,7 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
-			ActionAuditRead, ActionPermitWrite,
+			ActionAuditRead, ActionPermitWrite, ActionInstallationCreate,
 		}, machineActionsHeld(false), coworkActions, codehubActionsHeld(false))
 	case RoleAdmin:
 		return slices.Concat([]string{

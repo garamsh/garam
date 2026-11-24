@@ -25,6 +25,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/message"
@@ -245,8 +246,17 @@ func (k presentedTokens) Resolve(_ context.Context, token string) (machine.Beare
 	if subject.ServiceType == agent.ServiceType {
 		serial = "t" + strings.Repeat("0", 32)
 	}
+	// An instance's token reaches what its app lists, as the instance
+	// store answers it; another kind's confines nothing.
+	var reach machine.Reach
+	if app.IsInstanceGRN(subject) {
+		reach = machine.ReachOf(nil)
+		if r, ok := instanceReach[subject]; ok {
+			reach = r
+		}
+	}
 	return machine.Bearer{Subject: subject, Serial: serial, IssuedAt: time.Now().Add(-time.Minute),
-		ExpiresAt: time.Now().Add(time.Hour)}, nil
+		ExpiresAt: time.Now().Add(time.Hour), Reach: reach}, nil
 }
 
 // callerToken is the token the test client presents for the caller,

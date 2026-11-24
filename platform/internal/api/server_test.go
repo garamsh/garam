@@ -52,7 +52,7 @@ type fixture struct {
 	authority   *operatormocks.MockAuthorityService
 	standalone  *agentmocks.MockStandaloneService
 	devices     *fakeDeviceStore
-	clusters    *fakeClusterStore
+	apps        *fakeAppStore
 	clusterKeys *fakeClusterCredentials
 	declared    *fakeDeclarations
 	reports     *fakeReports
@@ -88,11 +88,11 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		authority:   operatormocks.NewMockAuthorityService(t),
 		standalone:  agentmocks.NewMockStandaloneService(t),
 		devices:     &fakeDeviceStore{},
-		clusters:    newFakeClusterStore(),
+		apps:        newFakeAppStore(),
 	}
-	f.clusterKeys = newFakeClusterCredentials(f.clusters)
-	f.declared = newFakeDeclarations(f.clusters)
-	f.reports = newFakeReports(f.clusters)
+	f.clusterKeys = newFakeClusterCredentials(f.apps)
+	f.declared = newFakeDeclarations(f.apps)
+	f.reports = newFakeReports(f.apps)
 	// The events a stream carries were forwarded to another process, so
 	// this one delivers what the relay announces to the watches it holds
 	// (ADR-0017) — the goroutine `serve api` runs. The lease is short so
@@ -104,7 +104,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	go func() { _ = watches.Receive(ctx) }()
 	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.authorities, f.authority, f.standalone, cfg).
 		WithDeviceGrant(f.devices).
-		WithClusters(f.clusters, f.clusterKeys, f.declared, f.reports)
+		WithApps(f.apps, f.clusterKeys, f.declared, f.reports)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.
 	f.server = srv

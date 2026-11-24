@@ -57,17 +57,18 @@ var feedClassification = map[string]string{
 	"setOperatorControlEndpoint":   "writes operators.control_endpoint, which no trigger watches",
 	"clearOperatorControlEndpoint": "writes operators.control_endpoint, which no trigger watches",
 	"mintOperationAuthority":       "mints a token",
-	// Iam::Cluster is @caller("none") and decided on its organization
-	// (ADR-0184), so nothing feeds a cluster.
-	"createCluster":                   "writes clusters, which no trigger watches",
-	"updateCluster":                   "writes clusters, which no trigger watches",
-	"deleteCluster":                   "writes clusters, which no trigger watches",
-	"reissueClusterRegistrationToken": "writes cluster_registration_tokens",
-	"revokeClusterKey":                "writes cluster_keys",
-	"createClusterDeclaration":        "writes cluster_declarations, which no trigger watches",
-	"putClusterDeclaration":           "writes cluster_declarations, which no trigger watches",
-	"deleteClusterDeclaration":        "writes cluster_declarations, which no trigger watches",
-	"createInvitation":                "writes invitations", "revokeInvitation": "writes invitations",
+	// Iam::Installation and Iam::Instance are fed (ADR-0192), so their
+	// creation and deletion wait; their other writes are rows no trigger
+	// watches.
+	"createInstallation": waitsForDelivery, "deleteInstallation": waitsForDelivery,
+	"createInstance": waitsForDelivery, "deleteInstance": waitsForDelivery,
+	"updateInstance":                   "writes the name, description and kind, which no trigger watches",
+	"reissueInstanceRegistrationToken": "writes instance_registration_tokens",
+	"revokeInstanceKey":                "writes instance_keys",
+	"createInstanceDeclaration":        "writes cluster_declarations, which no trigger watches",
+	"putInstanceDeclaration":           "writes cluster_declarations, which no trigger watches",
+	"deleteInstanceDeclaration":        "writes cluster_declarations, which no trigger watches",
+	"createInvitation":                 "writes invitations", "revokeInvitation": "writes invitations",
 	// The relayed writes (ADR-0169): the service stores in the call.
 	"createIamPolicy": relayed, "createIamPolicyVersion": relayed,
 	"activateIamPolicy": relayed, "rollbackIamPolicy": relayed,
@@ -88,8 +89,8 @@ var feedClassification = map[string]string{
 	"recoverAgentCredential": "writes agent_executions", "prepareAgentEnrollment": "stores an approval",
 	// api/cluster-connection/v1alpha1/openapi.yaml, vendored (ADR-0186),
 	// what raises no mark.
-	"register":  "writes cluster_keys and cluster_registration_tokens",
-	"rotateKey": "writes cluster_keys",
+	"register":  "writes instance_keys and instance_registration_tokens",
+	"rotateKey": "writes instance_keys",
 	"report":    "answers unimplemented until #2050 decides what it writes",
 }
 

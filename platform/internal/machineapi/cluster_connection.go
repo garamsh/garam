@@ -12,28 +12,34 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	connectiongen "github.com/garamsh/garam/platform/api/cluster-connection/v1alpha1"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 
-// ClusterConnection serves cluster-connection v1alpha1, the protocol a
-// connected cluster's connector speaks (ADR-0184, ADR-0186), from the
-// interface's own specification, vendored at
-// api/cluster-connection/v1alpha1/. Its refusals carry that
-// interface's error body (T-5) rather than this listener's.
+// ClusterConnection serves cluster-connection v1alpha1, the protocol an
+// instance of garam-bot-connector speaks (ADR-0184, ADR-0186,
+// ADR-0192), from the interface's own specification, vendored at
+// api/cluster-connection/v1alpha1/. Registration and rotation are the
+// app system's own, served to an instance of any app; declarations and
+// reports only to an instance whose app lists them among its machine
+// operations. Its refusals carry that interface's error body (T-5)
+// rather than this listener's.
 type ClusterConnection struct {
-	clusters cluster.Service
-	tokenURL string
+	instances app.Service
+	clusters  cluster.Service
+	tokenURL  string
 }
 
 var _ connectiongen.ServerInterface = (*ClusterConnection)(nil)
 
-// NewClusterConnection serves clusters, answering tokenURL as where a
-// registered connector exchanges its assertions (REG-6).
-func NewClusterConnection(clusters cluster.Service, tokenURL string) *ClusterConnection {
-	return &ClusterConnection{clusters: clusters, tokenURL: tokenURL}
+// NewClusterConnection serves instances and what is declared for them,
+// answering tokenURL as where a registered instance exchanges its
+// assertions (REG-6).
+func NewClusterConnection(instances app.Service, clusters cluster.Service, tokenURL string) *ClusterConnection {
+	return &ClusterConnection{instances: instances, clusters: clusters, tokenURL: tokenURL}
 }
 
 // Register spends the registration token and binds the connector's key
@@ -50,7 +56,7 @@ func (c *ClusterConnection) Register(w http.ResponseWriter, r *http.Request) {
 		writeConnectionError(w, errorx.New(errorx.KindInvalidArgument, "the body is not a registration request"))
 		return
 	}
-	g, err := c.clusters.Register(r.Context(), sourceOf(r), body.RegistrationToken, body.Jwk)
+	g, err := c.instances.Register(r.Context(), sourceOf(r), body.RegistrationToken, body.Jwk)
 	if err != nil {
 		writeConnectionError(w, err)
 		return
@@ -63,7 +69,7 @@ func (c *ClusterConnection) Register(w http.ResponseWriter, r *http.Request) {
 // RotateKey adds the successor key the caller's current key authorized
 // and the successor proved (ROT-1 to ROT-4).
 func (c *ClusterConnection) RotateKey(w http.ResponseWriter, r *http.Request) {
-	caller, ok := connectedCluster(w, r)
+	caller, ok := connectedInstance(w, r, false)
 	if !ok {
 		return
 	}
@@ -76,7 +82,7 @@ func (c *ClusterConnection) RotateKey(w http.ResponseWriter, r *http.Request) {
 		writeConnectionError(w, errorx.New(errorx.KindInvalidArgument, "the body is not a key rotation request"))
 		return
 	}
-	rotation, err := c.clusters.Rotate(r.Context(), caller, body.Jwk, body.Authorization, body.Proof)
+	rotation, err := c.instances.Rotate(r.Context(), caller, body.Jwk, body.Authorization, body.Proof)
 	if err != nil {
 		writeConnectionError(w, err)
 		return
@@ -115,7 +121,7 @@ type change struct {
 // WatchDeclarations long-polls the declarations placed on the calling
 // cluster (DECL-1 to DECL-6).
 func (c *ClusterConnection) WatchDeclarations(w http.ResponseWriter, r *http.Request, params connectiongen.WatchDeclarationsParams) {
-	caller, ok := connectedCluster(w, r)
+	caller, ok := connectedInstance(w, r, true)
 	if !ok {
 		return
 	}
@@ -143,7 +149,7 @@ func (c *ClusterConnection) WatchDeclarations(w http.ResponseWriter, r *http.Req
 // Report keeps the calling cluster's report where it is its latest
 // (REP-1 to REP-9), answering 204 whether it was kept or was older.
 func (c *ClusterConnection) Report(w http.ResponseWriter, r *http.Request) {
-	caller, ok := connectedCluster(w, r)
+	caller, ok := connectedInstance(w, r, true)
 	if !ok {
 		return
 	}
@@ -169,21 +175,28 @@ func (c *ClusterConnection) Report(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// connectedCluster is the cluster the request's token stands for, and
+// connectedInstance is the instance the request's token stands for, and
 // writes the refusal where it stands for none: a token that proved
-// nothing, or one of another kind of caller, is answered 401 (AUTH-2).
-func connectedCluster(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
+// nothing, one of another kind of caller, or, on a route that is its
+// app's machine operation rather than the app system's own, an
+// instance whose app does not list the route, is answered 401
+// (AUTH-2).
+func connectedInstance(w http.ResponseWriter, r *http.Request, operation bool) (grn.GRN, bool) {
 	identity, ok := machine.IdentityOf(r)
 	if !ok {
 		err := machine.RefusalOf(r)
 		if err == nil {
-			err = errorx.New(errorx.KindUnauthenticated, "the request carries no cluster's token")
+			err = errorx.New(errorx.KindUnauthenticated, "the request carries no instance's token")
 		}
 		writeConnectionError(w, err)
 		return grn.GRN{}, false
 	}
-	if !cluster.IsClusterGRN(identity.GRN()) {
-		writeConnectionError(w, errorx.New(errorx.KindUnauthenticated, "the token is not a cluster's"))
+	if !app.IsInstanceGRN(identity.GRN()) {
+		writeConnectionError(w, errorx.New(errorx.KindUnauthenticated, "the token is not an instance's"))
+		return grn.GRN{}, false
+	}
+	if operation && !identity.Reach().Allows(r.Pattern) {
+		writeConnectionError(w, errorx.New(errorx.KindUnauthenticated, "the instance's app does not reach this route"))
 		return grn.GRN{}, false
 	}
 	return identity.GRN(), true
@@ -203,9 +216,9 @@ var connectionCodes = []struct {
 	code   string
 	status int
 }{
-	{cluster.ErrRegistrationRefused, "registration_refused", 0},
-	{cluster.ErrInvalidProof, "invalid_proof", 0},
-	{cluster.ErrTooManyKeys, "too_many_keys", 0},
+	{app.ErrRegistrationRefused, "registration_refused", 0},
+	{app.ErrInvalidProof, "invalid_proof", 0},
+	{app.ErrTooManyKeys, "too_many_keys", 0},
 	// No kind maps to 410, which DECL-6 answers, or to 413, which REP-6
 	// answers.
 	{cluster.ErrCursorExpired, "cursor_expired", http.StatusGone},

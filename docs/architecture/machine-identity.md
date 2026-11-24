@@ -31,12 +31,13 @@ garam reaches connects this way, the one garam's own deployment runs
 on included, and garam issues no PEM for a cluster
 ([ADR-0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)).
 
-**Unbuilt: one app system replaces the per-kind callers**
+**Built in part: one app system replaces the per-kind callers**
 ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md),
-[apps.md](./apps.md)). A connected cluster becomes an instance of the
-`garam-bot-connector` app's installation in its organization, and its
-registration, exchange, rotation and revocation become every
-instance's. A first-party service's principal becomes its app's
+[apps.md](./apps.md)). Built (#2081): a connected cluster is an
+instance of the `garam-bot-connector` app's installation in its
+organization, and its registration, exchange, rotation and revocation
+are every instance's. Unbuilt: a first-party service's principal
+becomes its app's
 automatic installation, `grn:<org>/iam/installation/<slug>`, and its
 deployment key that app's key. An app an organization registers
 authenticates by the same two paths. What follows describes the
@@ -302,11 +303,12 @@ credential, and an agent holds the tokens its assignee mints for it
   caller may do there is its identity's: a route reading a credential's
   serial refuses an operator's token, and `ConfineSupervisors` keeps a
   supervisor to its identity, its lifecycle routes and its agent's mint
-  ([agents.md](./agents.md) §Standalone hosts). `ConfineClusters`
-  refuses a connected cluster's token on all of them: it reaches the
-  cluster-connection routes alone, which the same listener serves from
-  the interface's own specification (ADR-0186,
-  [clusters.md](./clusters.md)).
+  ([agents.md](./agents.md) §Standalone hosts). `ConfineApps`
+  refuses an instance's token on each its app's machine operations do
+  not list, and a connected cluster's app lists none of them: it
+  reaches the cluster-connection routes alone, which the same listener
+  serves from the interface's own specification (ADR-0186,
+  [clusters.md](./clusters.md), [apps.md](./apps.md)).
 
 ## Browser tokens
 
@@ -374,8 +376,9 @@ and its place's connector obtains its token. The claims are garam-bot's
 - **The place is an instance whose installation holds
   `iam:bot.host`**, and `act.sub` is the instance's GRN
   ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
-  decision 10). Unbuilt: until the app system is built the place is a
-  connected cluster.
+  decision 10). Unbuilt: no check reads `iam:bot.host` until the bot
+  domain does (#2082), so the place is any instance, and
+  garam-bot-connector is the one app there is.
 - **The token is `garam_bt_` and opaque, accepted for an hour.**
   `cluster_bot_tokens` (migration 000087) keeps its hash beside its
   `sub`, the bot, by the declaration that places it; its `act.sub`, the

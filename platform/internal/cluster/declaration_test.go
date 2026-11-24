@@ -14,6 +14,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
@@ -158,7 +159,7 @@ func TestFullPage_GoesOnFromItsBaseOnceTheSetIsSent(t *testing.T) {
 
 func TestWakes_KeepsOneWakeForAPollBetweenItsReadAndItsWait(t *testing.T) {
 	wakes := cluster.NewWakes()
-	other := grn.New("acme", cluster.ServiceType, "0000000000000000")
+	other := grn.New("acme", app.InstanceType, "0000000000000000")
 	woken, stop := wakes.Subscribe(self)
 	defer stop()
 	wakes.Wake(other)
@@ -210,7 +211,7 @@ func ptr(s string) *string { return &s }
 
 func TestWatch_HoldsAnEmptyPageUntilAWriteWakesIt(t *testing.T) {
 	store, wakes := newPagedStore(), cluster.NewWakes()
-	d := cluster.NewService(nil, store, nil, cluster.Config{Wakes: wakes, DeclarationRecheck: time.Hour})
+	d := cluster.NewService(nil, store, nil, nil, cluster.Config{Wakes: wakes, DeclarationRecheck: time.Hour})
 	answered := make(chan cluster.Page)
 	go func() {
 		page, err := d.WatchDeclarations(context.Background(), self, ptr("c.0"), cluster.MaxWait)
@@ -230,7 +231,7 @@ func TestWatch_HoldsAnEmptyPageUntilAWriteWakesIt(t *testing.T) {
 
 func TestWatch_ReadsAgainAtItsRecheckWhenNoWakeCame(t *testing.T) {
 	store := newPagedStore()
-	d := cluster.NewService(nil, store, nil, cluster.Config{DeclarationRecheck: 10 * time.Millisecond})
+	d := cluster.NewService(nil, store, nil, nil, cluster.Config{DeclarationRecheck: 10 * time.Millisecond})
 	answered := make(chan cluster.Page)
 	go func() {
 		page, _ := d.WatchDeclarations(context.Background(), self, ptr("c.0"), cluster.MaxWait)
@@ -248,7 +249,7 @@ func TestWatch_ReadsAgainAtItsRecheckWhenNoWakeCame(t *testing.T) {
 
 func TestWatch_AnswersEmptyOnceWaitIsOverAndAFullSetAtOnce(t *testing.T) {
 	store := newPagedStore()
-	d := cluster.NewService(nil, store, nil, cluster.Config{DeclarationRecheck: time.Hour})
+	d := cluster.NewService(nil, store, nil, nil, cluster.Config{DeclarationRecheck: time.Hour})
 	page, err := d.WatchDeclarations(context.Background(), self, ptr("c.0"), 0)
 	require.NoError(t, err)
 	assert.Empty(t, page.Changes)
@@ -265,18 +266,18 @@ func TestWatch_AnswersEmptyOnceWaitIsOverAndAFullSetAtOnce(t *testing.T) {
 
 func TestWatch_RefusesWhatTheRouteMayNotAsk(t *testing.T) {
 	store := newPagedStore()
-	d := cluster.NewService(nil, store, nil, cluster.Config{})
+	d := cluster.NewService(nil, store, nil, nil, cluster.Config{})
 	_, err := d.WatchDeclarations(context.Background(), self, ptr(""), 0)
 	assert.Equal(t, errorx.KindInvalidArgument, errorx.KindOf(err), "an empty after")
 	_, err = d.WatchDeclarations(context.Background(), self, nil, cluster.MaxWait+time.Second)
 	assert.Equal(t, errorx.KindInvalidArgument, errorx.KindOf(err), "a wait past 50 seconds")
-	located, err := grn.Parse("grn:acme/iam/cluster/5f60710a1b2c3d4e#somewhere")
+	located, err := grn.Parse("grn:acme/iam/instance/5f60710a1b2c3d4e#somewhere")
 	require.NoError(t, err)
 	_, err = d.WatchDeclarations(context.Background(), located, nil, 0)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "a GRN GRNOf does not derive")
 	assert.Zero(t, store.reads, "a refused poll reads nothing")
 
-	store.err = cluster.ErrClusterNotFound
+	store.err = app.ErrInstanceNotFound
 	_, err = d.WatchDeclarations(context.Background(), self, nil, 0)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "a record deleted meanwhile leaves the token standing for nothing")
 }
@@ -285,7 +286,7 @@ func TestWatch_IsBoundedPerCluster(t *testing.T) {
 	store := newPagedStore()
 	store.page.Full = true
 	now := time.Now()
-	d := cluster.NewService(nil, store, nil, cluster.Config{Now: func() time.Time { return now }})
+	d := cluster.NewService(nil, store, nil, nil, cluster.Config{Now: func() time.Time { return now }})
 	for range cluster.WatchesPerCluster {
 		_, err := d.WatchDeclarations(context.Background(), self, nil, 0)
 		require.NoError(t, err)
@@ -294,7 +295,7 @@ func TestWatch_IsBoundedPerCluster(t *testing.T) {
 	_, err := d.WatchDeclarations(context.Background(), self, nil, 0)
 	var exceeded *operator.Exceeded
 	assert.True(t, errors.As(err, &exceeded), "%v", err)
-	other := grn.New("acme", cluster.ServiceType, "0000000000000000")
+	other := grn.New("acme", app.InstanceType, "0000000000000000")
 	_, err = d.WatchDeclarations(context.Background(), other, nil, 0)
 	assert.NoError(t, err, "the control: another cluster's bound is its own")
 }

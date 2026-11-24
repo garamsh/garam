@@ -246,12 +246,13 @@ machine:
   # Secret's propagation into the agent's Pod has to fit in. The binary
   # refuses the start outside twenty minutes and twenty-four hours.
   agentTokenLifetime: 1h
-  # How many registrations a connected cluster's connector may send
-  # from one address a minute, counted before the token is read, so a
-  # throttled request spends nothing (ADR-0184, REG-8). The binary's
+  # How many registrations an app's instances, a connected cluster's
+  # connector among them, may send from one address a minute, counted
+  # before the token is read, so a throttled request spends nothing
+  # (ADR-0184, REG-8; ADR-0192). The binary's
   # own default is 10, and it refuses 0, so a deployment always has a
   # bound; a conformance run raises it rather than waiting it out.
-  clusterRegistrationLimit: 10
+  instanceRegistrationLimit: 10
   # The issuer every message signature names (ADR-0101): an identity,
   # compared byte for byte, that need not resolve or be reachable.
   # Prefer a stable name the deployment owns, such as the dev cluster's

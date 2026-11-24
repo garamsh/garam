@@ -8,6 +8,8 @@ import (
 
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/app"
+	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 )
 
@@ -65,14 +67,14 @@ func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing
 	}
 }
 
-// TestConfineClusters_AClusterReachesNoMachineRoute sends every
-// operation api/machine.yaml declares as a connected cluster's token
-// and as an agent's. The cluster is refused on each (AUTH-4): it
-// reaches the cluster-connection routes alone, which this router does
-// not serve. The agent, the control, is refused by the boundary
-// nowhere.
-func TestConfineClusters_AClusterReachesNoMachineRoute(t *testing.T) {
-	const refused = "a cluster reaches its cluster-connection routes alone"
+// TestConfineApps_AnInstanceReachesNoMachineRouteItsAppDoesNotList sends
+// every operation api/machine.yaml declares as the connector's
+// instance's token and as an agent's. The instance is refused on each
+// (ADR-0192 decision 7, AUTH-4): its app lists the cluster-connection
+// routes alone, which this router does not serve. The agent, the
+// control, is refused by the boundary nowhere.
+func TestConfineApps_AnInstanceReachesNoMachineRouteItsAppDoesNotList(t *testing.T) {
+	const refused = "the caller's app does not reach this route"
 	routes := machineRoutes(t, map[string]string{
 		"agent":      agentGRN("acme", "0a1b2c3d4e5f6071").String(),
 		"claim":      "c-1",
@@ -82,18 +84,39 @@ func TestConfineClusters_AClusterReachesNoMachineRoute(t *testing.T) {
 		"activation": "00000000-0000-0000-0000-000000000001",
 		"approval":   "00000000-0000-0000-0000-000000000002",
 	})
-	middlewares := []machinegen.MiddlewareFunc{machineapi.ConfineClusters, machineapi.RecoverPanics}
+	middlewares := []machinegen.MiddlewareFunc{machineapi.ConfineApps, machineapi.RecoverPanics}
 	srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
-	clusterURL, clusterClient := serveTLS(t, srv, grn.New("acme", "cluster", "5f60710a1b2c3d4e"), middlewares...)
+	instanceURL, instanceClient := serveTLS(t, srv, connectedGRN, middlewares...)
 	agentURL, agentClient := serveTLS(t, srv, agentGRN("acme", "0a1b2c3d4e5f6071"), middlewares...)
 
 	for pattern, route := range routes {
 		t.Run(pattern, func(t *testing.T) {
-			status, body := send(t, clusterClient, route.method, clusterURL+route.path, "")
+			status, body := send(t, instanceClient, route.method, instanceURL+route.path, "")
 			assert.Equal(t, http.StatusForbidden, status)
 			assert.Contains(t, body, refused)
 			_, body = send(t, agentClient, route.method, agentURL+route.path, "")
 			assert.NotContains(t, body, refused, "the control: an agent is not confined")
 		})
 	}
+}
+
+// TestConfineApps_AnInstanceReachesTheMachineOperationsItsAppLists holds
+// that the confinement is read off the record and not off the caller's
+// kind: an instance whose app lists `GET /identity` reaches it, and is
+// still refused a route its app does not list.
+func TestConfineApps_AnInstanceReachesTheMachineOperationsItsAppLists(t *testing.T) {
+	listing := grn.New("acme", app.InstanceType, "00000000000000aa")
+	instanceReach[listing] = machine.ReachOf([]string{http.MethodGet + " /identity"})
+	t.Cleanup(func() { delete(instanceReach, listing) })
+	middlewares := []machinegen.MiddlewareFunc{machineapi.ConfineApps, machineapi.RecoverPanics}
+	srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	base, client := serveTLS(t, srv, listing, middlewares...)
+
+	status, body := send(t, client, http.MethodGet, base+"/identity", "")
+	assert.Equal(t, http.StatusOK, status, body)
+	assert.Contains(t, body, listing.String())
+
+	status, body = send(t, client, http.MethodPost, base+"/messages", "{}")
+	assert.Equal(t, http.StatusForbidden, status)
+	assert.Contains(t, body, "the caller's app does not reach this route")
 }

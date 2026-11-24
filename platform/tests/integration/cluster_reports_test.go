@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
+	apppg "github.com/garamsh/garam/platform/internal/app/postgres"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	clusterpg "github.com/garamsh/garam/platform/internal/cluster/postgres"
 )
@@ -46,7 +48,7 @@ func TestClusterReports_TheReportObservedLatestIsKept(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	g := declarationRecords(t, p, s, 1)[0]
+	g := declarationRecords(t, p, 1)[0]
 	kept, err := s.LatestReport(ctx, g)
 	require.NoError(t, err)
 	assert.Equal(t, cluster.KeptReport{Cluster: g}, kept, "a record that reported nothing")
@@ -62,10 +64,10 @@ func TestClusterReports_TheReportObservedLatestIsKept(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"persona":{"role":"Lead"}}`, string(kept.Report.Objects[0].Spec), "spec is kept as sent")
 
-	gone := grn.New("acme", cluster.ServiceType, "0000000000000000")
-	assert.ErrorIs(t, s.KeepReport(ctx, gone, clusterReport(at, "Bot", "x")), cluster.ErrClusterNotFound)
+	gone := grn.New("acme", app.InstanceType, "0000000000000000")
+	assert.ErrorIs(t, s.KeepReport(ctx, gone, clusterReport(at, "Bot", "x")), app.ErrInstanceNotFound)
 	_, err = s.LatestReport(ctx, gone)
-	assert.ErrorIs(t, err, cluster.ErrClusterNotFound)
+	assert.ErrorIs(t, err, app.ErrInstanceNotFound)
 }
 
 // TestClusterReports_AnIdentifierIsPlacedOnTheRecordHoldingIt holds
@@ -75,7 +77,7 @@ func TestClusterReports_AnIdentifierIsPlacedOnTheRecordHoldingIt(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	records := declarationRecords(t, p, s, 2)
+	records := declarationRecords(t, p, 2)
 	g, other := records[0], records[1]
 	for _, d := range []struct {
 		on       grn.GRN
@@ -98,36 +100,37 @@ func TestClusterReports_AnIdentifierIsPlacedOnTheRecordHoldingIt(t *testing.T) {
 func TestClusterReports_ATokenThatResolvesRecordsTheContact(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := clusterpg.New(p)
+	s := apppg.New(p)
+	reports := clusterpg.New(p)
 	keys := connectorKeys(t)
 	g := registeredCluster(t, p, s, keys[0])
-	token := &cluster.Token{Cluster: g, Value: "garam_ct_contact"}
+	token := &app.Token{Instance: g, Value: "garam_ct_contact"}
 	require.NoError(t, s.RecordAssertionToken(ctx, signed(t, g, liveKey(t, s, g, keys[0]).ID, "jti-contact"), token))
 	contact := func() *time.Time {
-		kept, err := s.LatestReport(ctx, g)
+		kept, err := reports.LatestReport(ctx, g)
 		require.NoError(t, err)
 		return kept.LastContactAt
 	}
 	assert.Nil(t, contact(), "a record that sent nothing")
 
-	_, err := s.ResolveToken(ctx, cluster.HashSecret(token.Value))
+	_, err := s.ResolveToken(ctx, app.HashSecret(token.Value))
 	require.NoError(t, err)
 	first := contact()
 	require.NotNil(t, first)
 	assert.WithinDuration(t, time.Now(), *first, time.Minute)
-	_, err = s.ResolveToken(ctx, cluster.HashSecret(token.Value))
+	_, err = s.ResolveToken(ctx, app.HashSecret(token.Value))
 	require.NoError(t, err)
 	assert.Equal(t, *first, *contact(), "a second request within a second writes nothing")
 
-	_, err = p.Exec(ctx, `UPDATE cluster_contacts SET last_contact_at = last_contact_at - interval '2 seconds'
-		WHERE cluster_grn = $1`, g.String())
+	_, err = p.Exec(ctx, `UPDATE instance_contacts SET last_contact_at = last_contact_at - interval '2 seconds'
+		WHERE instance_grn = $1`, g.String())
 	require.NoError(t, err)
-	_, err = s.ResolveToken(ctx, cluster.HashSecret(token.Value))
+	_, err = s.ResolveToken(ctx, app.HashSecret(token.Value))
 	require.NoError(t, err)
 	assert.True(t, contact().After(first.Add(-time.Second)), "a request past the window moves the time")
 
-	_, err = s.ResolveToken(ctx, cluster.HashSecret("garam_ct_unknown"))
-	assert.ErrorIs(t, err, cluster.ErrTokenInvalid, "a token that does not resolve records nothing")
+	_, err = s.ResolveToken(ctx, app.HashSecret("garam_ct_unknown"))
+	assert.ErrorIs(t, err, app.ErrTokenInvalid, "a token that does not resolve records nothing")
 }
 
 // TestClusterReports_ADeclarationOnANameTheReportShowsClusterOwnedIsRefused
@@ -140,7 +143,7 @@ func TestClusterReports_ADeclarationOnANameTheReportShowsClusterOwnedIsRefused(t
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	g := declarationRecords(t, p, s, 1)[0]
+	g := declarationRecords(t, p, 1)[0]
 	at := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
 	require.NoError(t, s.KeepReport(ctx, g, clusterReport(at, "Bot", "mira")))
 

@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
@@ -25,6 +26,9 @@ const (
 	kindProject = apigen.PermissionResourceTypeProject
 	kindAgent   = apigen.PermissionResourceTypeAgent
 	kindPolicy  = apigen.PermissionResourceTypePolicy
+	// kindInstallation is an app installed in the organization, which
+	// its own routes and its instances' are decided on (ADR-0192).
+	kindInstallation = apigen.PermissionResourceTypeInstallation
 	// kindCoworkPage is a page cowork keeps (ADR-0127). No operation
 	// here addresses one; cowork asks before it acts on one.
 	kindCoworkPage = apigen.PermissionResourceTypeCoworkPage
@@ -121,13 +125,20 @@ var actionRules = map[string]actionRule{
 	org.ActionOperatorReissue:  {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionOperatorDelegate: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByDelegation},
 
-	// Every cluster route is decided on its organization (ADR-0184).
-	org.ActionClusterRead:     {on: []apigen.PermissionResourceType{onOrg}},
-	org.ActionClusterRegister: {on: []apigen.PermissionResourceType{onOrg}},
-	org.ActionClusterUpdate:   {on: []apigen.PermissionResourceType{onOrg}},
-	org.ActionClusterReissue:  {on: []apigen.PermissionResourceType{onOrg}},
-	org.ActionClusterDelete:   {on: []apigen.PermissionResourceType{onOrg}},
-	org.ActionClusterDeclare:  {on: []apigen.PermissionResourceType{onOrg}},
+	// The apps are read and installed on the organization, an
+	// installation and its instances decided on the installation
+	// (ADR-0192 decision 9). A declaration stays on the organization
+	// until the bot domain takes it (#2082).
+	org.ActionAppRead:            {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionInstallationCreate: {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionInstallationRead:   {on: []apigen.PermissionResourceType{onOrg, kindInstallation}},
+	org.ActionInstallationDelete: {on: []apigen.PermissionResourceType{kindInstallation}},
+	org.ActionInstanceRead:       {on: []apigen.PermissionResourceType{kindInstallation}},
+	org.ActionInstanceRegister:   {on: []apigen.PermissionResourceType{kindInstallation}},
+	org.ActionInstanceUpdate:     {on: []apigen.PermissionResourceType{kindInstallation}},
+	org.ActionInstanceReissue:    {on: []apigen.PermissionResourceType{kindInstallation}},
+	org.ActionInstanceDelete:     {on: []apigen.PermissionResourceType{kindInstallation}},
+	org.ActionClusterDeclare:     {on: []apigen.PermissionResourceType{onOrg}},
 
 	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
 	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},
@@ -306,6 +317,8 @@ func permissionTarget(orgSlug string, check apigen.PermissionCheck) (grn.GRN, er
 		g = agentGRN(orgSlug, id)
 	case kindPolicy:
 		g = policyGRN(orgSlug, id)
+	case kindInstallation:
+		g = grn.New(orgSlug, app.InstallationType, id)
 	case kindCoworkPage:
 		g = grn.New(orgSlug, org.ServiceTypeCoworkPage, id)
 	case kindCoworkChannel:

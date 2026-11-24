@@ -16,6 +16,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/api"
+	apppg "github.com/garamsh/garam/platform/internal/app/postgres"
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
@@ -114,8 +115,10 @@ func serveAPI(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	// One store keeps a connected cluster's record, its credentials and
-	// what is declared on it.
+	// One store keeps the app system's records and an instance's
+	// credentials, another what is declared on an instance and what it
+	// reports.
+	apps := apppg.New(pool)
 	clusters := clusterpg.New(pool)
 	srv := api.NewServer(
 		userpg.New(pool),
@@ -142,7 +145,7 @@ func serveAPI(cmd *cobra.Command) error {
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
 		WithIdentity(issuer).
 		WithPolicyRelay(relay).
-		WithClusters(clusters, clusters, clusters, clusters)
+		WithApps(apps, apps, clusters, clusters)
 
 	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger, obs.registry)
 	if err != nil {

@@ -9,32 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
+	apppg "github.com/garamsh/garam/platform/internal/app/postgres"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	clusterpg "github.com/garamsh/garam/platform/internal/cluster/postgres"
-	"github.com/garamsh/garam/platform/internal/org"
-	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 )
-
-// declarationRecords creates an organization holding n records.
-func declarationRecords(t *testing.T, p *pgxpool.Pool, s *clusterpg.Store, n int) []grn.GRN {
-	t.Helper()
-	ctx := context.Background()
-	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	out := make([]grn.GRN, 0, n)
-	for range n {
-		c, err := cluster.New(orgRootGRN("acme"), scopedGRN("acme", "user", "ada"), cluster.DetailsPatch{})
-		require.NoError(t, err)
-		_, err = s.Create(ctx, c)
-		require.NoError(t, err)
-		out = append(out, c.GRN)
-	}
-	return out
-}
 
 // object is an interface-1 Bot named name, as ParseDeclaredObject
 // admits it.
@@ -75,7 +58,7 @@ func TestClusterDeclarations_AFullSetThenTheLogAfterIt(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	g := declarationRecords(t, p, s, 1)[0]
+	g := declarationRecords(t, p, 1)[0]
 
 	empty := page(t, s, g, "", 100)
 	assert.True(t, empty.Full)
@@ -138,7 +121,7 @@ func TestClusterDeclarations_AnIdentifierNamesOneDeclarationOnce(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	records := declarationRecords(t, p, s, 3)
+	records := declarationRecords(t, p, 3)
 	g, other, deleted := records[0], records[1], records[2]
 
 	_, _, err := s.Declare(ctx, g, "one", object(t, "reviewer"))
@@ -156,11 +139,11 @@ func TestClusterDeclarations_AnIdentifierNamesOneDeclarationOnce(t *testing.T) {
 
 	_, _, err = s.Declare(ctx, deleted, "kept", object(t, "reviewer"))
 	require.NoError(t, err)
-	require.NoError(t, s.Delete(ctx, deleted))
+	require.NoError(t, apppg.New(p).DeleteInstance(ctx, deleted))
 	_, _, err = s.Declare(ctx, g, "kept", object(t, "writer"))
 	assert.ErrorIs(t, err, cluster.ErrDeclarationTaken, "an identifier outlives its record")
 	_, _, err = s.Declare(ctx, deleted, "fresh", object(t, "writer"))
-	assert.ErrorIs(t, err, cluster.ErrClusterNotFound)
+	assert.ErrorIs(t, err, app.ErrInstanceNotFound)
 
 	_, _, err = s.Declare(ctx, g, "two", object(t, "writer"))
 	require.NoError(t, err)
@@ -190,7 +173,7 @@ func TestClusterDeclarations_ACursorBeforeThePurgedPositionIsExpired(t *testing.
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	g := declarationRecords(t, p, s, 1)[0]
+	g := declarationRecords(t, p, 1)[0]
 	for _, id := range []string{"old", "older"} {
 		_, _, err := s.Declare(ctx, g, id, object(t, id))
 		require.NoError(t, err)
@@ -220,7 +203,7 @@ func TestClusterDeclarations_ConcurrentWritesDrawConsecutivePositions(t *testing
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	g := declarationRecords(t, p, s, 1)[0]
+	g := declarationRecords(t, p, 1)[0]
 	const racers = 16
 	var wg sync.WaitGroup
 	start := make(chan struct{})
@@ -253,7 +236,7 @@ func TestClusterDeclarations_AWriteWakesAPollOnAnyProcess(t *testing.T) {
 	defer cancel()
 	p := pool(t)
 	s := clusterpg.New(p)
-	records := declarationRecords(t, p, s, 2)
+	records := declarationRecords(t, p, 2)
 	g, other := records[0], records[1]
 	wakes := cluster.NewWakes()
 	woken, stop := wakes.Subscribe(g)
@@ -289,7 +272,7 @@ func TestClusterDeclarations_ListAnswersTheLiveOnesInWriteOrder(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	g := declarationRecords(t, p, s, 1)[0]
+	g := declarationRecords(t, p, 1)[0]
 	for _, id := range []string{"a", "b", "c"} {
 		_, _, err := s.Declare(ctx, g, id, object(t, id))
 		require.NoError(t, err)
@@ -309,8 +292,8 @@ func TestClusterDeclarations_ListAnswersTheLiveOnesInWriteOrder(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "a", got.Object.Name())
 	assert.False(t, got.UpdatedAt.Before(got.CreatedAt))
-	_, err = s.ListDeclarations(ctx, grn.New("acme", cluster.ServiceType, "0000000000000000"))
-	assert.ErrorIs(t, err, cluster.ErrClusterNotFound)
+	_, err = s.ListDeclarations(ctx, grn.New("acme", app.InstanceType, "0000000000000000"))
+	assert.ErrorIs(t, err, app.ErrInstanceNotFound)
 
 	// jsonb keeps a number as numeric, so it reads back as written.
 	big, err := cluster.ParseDeclaredObject([]byte(`{"apiVersion":"bot.garam.sh/v1alpha1","kind":"BotPool",

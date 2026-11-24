@@ -9,6 +9,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/cluster/postgres/db"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
@@ -45,14 +46,14 @@ func (s *Store) KeepReport(ctx context.Context, g grn.GRN, r cluster.Report) err
 		ClusterGrn: g.String(), ObservedAt: pgxtype.Timestamptz(r.ObservedAt), Report: report,
 	})
 	// A record deleted meanwhile breaks the foreign key.
-	return pgxerr.Classify(err, "keep cluster report", cluster.ErrClusterNotFound, nil)
+	return pgxerr.Classify(err, "keep cluster report", app.ErrInstanceNotFound, nil)
 }
 
 // LatestReport reads g's latest contact and kept report.
 func (s *Store) LatestReport(ctx context.Context, g grn.GRN) (cluster.KeptReport, error) {
 	row, err := s.q.GetClusterReport(ctx, g.String())
 	if errors.Is(err, pgx.ErrNoRows) {
-		return cluster.KeptReport{}, cluster.ErrClusterNotFound
+		return cluster.KeptReport{}, app.ErrInstanceNotFound
 	}
 	if err != nil {
 		return cluster.KeptReport{}, pgxerr.Classify(err, "get cluster report", nil, nil)

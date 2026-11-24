@@ -66,6 +66,11 @@ var (
 	// key its registration bound included, other than a live successor
 	// a rotation made live, which is a repeat (ROT-4).
 	ErrKeyHeld = errorx.New(errorx.KindInvalidArgument, "the cluster has held this key")
+	// ErrRotationUnavailable answers a rotation on a listener whose
+	// token URL names no rotation route, a failure of garam's
+	// configuration rather than the connector's proof.
+	ErrRotationUnavailable = errorx.New(errorx.KindUnavailable,
+		"key rotation is not served: GARAM_MACHINE_TOKEN_URL does not end in /oauth/token")
 	// ErrTooManyKeys refuses a rotation while two keys are live (ROT-4).
 	ErrTooManyKeys = errorx.New(errorx.KindFailedPrecondition, "the cluster holds two live keys")
 	// ErrInvalidKey refuses a JWK that is not the public half of an RSA

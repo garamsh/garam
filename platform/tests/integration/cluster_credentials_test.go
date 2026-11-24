@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -197,4 +199,108 @@ func TestClusterCredentials_RevokingAKeyWithdrawsItsTokens(t *testing.T) {
 	require.NoError(t, s.Delete(ctx, g))
 	_, err = s.ResolveToken(ctx, cluster.HashSecret(kept.Value))
 	assert.ErrorIs(t, err, cluster.ErrTokenInvalid, "a deleted record's token")
+}
+
+// TestClusterCredentials_RacingPresentationsSpendATokenOnce holds REG-3
+// under concurrency: of the presentations racing one token, exactly
+// one is answered its record and every other is refused.
+func TestClusterCredentials_RacingPresentationsSpendATokenOnce(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := clusterpg.New(p)
+	g := registeredCluster(t, p, s, connectorKeys(t)[0])
+	const racers = 16
+	for round := range 5 {
+		hash := "racing-hash-" + strconv.Itoa(round)
+		_, err := s.IssueRegistrationToken(ctx, g, hash, time.Hour)
+		require.NoError(t, err)
+		start := make(chan struct{})
+		results := make(chan error, racers)
+		var wg sync.WaitGroup
+		for range racers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				_, err := s.SpendRegistrationToken(ctx, hash)
+				results <- err
+			}()
+		}
+		close(start)
+		wg.Wait()
+		close(results)
+		var spent, refused int
+		for err := range results {
+			switch {
+			case err == nil:
+				spent++
+			case errors.Is(err, cluster.ErrRegistrationRefused):
+				refused++
+			default:
+				t.Fatalf("round %d: %v", round, err)
+			}
+		}
+		assert.Equal(t, 1, spent, "round %d: one presentation spends the token", round)
+		assert.Equal(t, racers-1, refused, "round %d", round)
+	}
+}
+
+// TestClusterCredentials_AnExchangeSpendsItsAssertionOnceAndOnlyInTime
+// holds the exchange's own admission, apart from a rotation's: an
+// assertion's jti is spent once, and one outside its dates is refused.
+// A fresh assertion under the same key, the control, is admitted.
+func TestClusterCredentials_AnExchangeSpendsItsAssertionOnceAndOnlyInTime(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := clusterpg.New(p)
+	keys := connectorKeys(t)
+	g := registeredCluster(t, p, s, keys[0])
+	key := liveKey(t, s, g, keys[0])
+
+	first := signed(t, g, key.ID, "exchange-jti")
+	require.NoError(t, s.RecordAssertionToken(ctx, first, &cluster.Token{Cluster: g, Value: "garam_ct_first"}))
+	err := s.RecordAssertionToken(ctx, first, &cluster.Token{Cluster: g, Value: "garam_ct_replayed"})
+	assert.ErrorIs(t, err, operator.ErrClientInvalid, "a replayed jti")
+
+	stale := signed(t, g, key.ID, "stale-jti")
+	stale.IssuedAt, stale.ExpiresAt = time.Now().Add(-time.Hour), time.Now().Add(-50*time.Minute)
+	err = s.RecordAssertionToken(ctx, stale, &cluster.Token{Cluster: g, Value: "garam_ct_stale"})
+	assert.ErrorIs(t, err, operator.ErrClientInvalid, "an expired assertion")
+	for _, value := range []string{"garam_ct_replayed", "garam_ct_stale"} {
+		_, err := s.ResolveToken(ctx, cluster.HashSecret(value))
+		assert.ErrorIs(t, err, cluster.ErrTokenInvalid, value+" was not stored")
+	}
+
+	require.NoError(t, s.RecordAssertionToken(ctx, signed(t, g, key.ID, "fresh-jti"),
+		&cluster.Token{Cluster: g, Value: "garam_ct_fresh"}), "the control: a fresh assertion")
+}
+
+// TestClusterCredentials_AWithdrawnKeysTokenIsRefusedByTheReadAlone pins
+// the token read's own join on a live key: a token row written for a
+// key after the key was withdrawn, past RevokeKey's deletion of its
+// tokens, is refused all the same. The same row on the live key is the
+// control.
+func TestClusterCredentials_AWithdrawnKeysTokenIsRefusedByTheReadAlone(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := clusterpg.New(p)
+	keys := connectorKeys(t)
+	g := registeredCluster(t, p, s, keys[0])
+	registered := liveKey(t, s, g, keys[0])
+	_, err := s.Rotate(ctx, g, registered.ID, keys[1], []operator.VerifiedAssertion{signed(t, g, registered.ID, "r")})
+	require.NoError(t, err)
+	successor := liveKey(t, s, g, keys[1])
+	require.NoError(t, s.RevokeKey(ctx, g, keys[0].KID()))
+
+	insert := func(value string, keyID int64) {
+		_, err := p.Exec(ctx, `INSERT INTO cluster_tokens (token_hash, cluster_grn, key_id, issued_at, expires_at)
+			VALUES ($1, $2, $3, now(), now() + interval '1 hour')`, cluster.HashSecret(value), g.String(), keyID)
+		require.NoError(t, err)
+	}
+	insert("garam_ct_withdrawn", registered.ID)
+	insert("garam_ct_live", successor.ID)
+	_, err = s.ResolveToken(ctx, cluster.HashSecret("garam_ct_withdrawn"))
+	assert.ErrorIs(t, err, cluster.ErrTokenInvalid)
+	_, err = s.ResolveToken(ctx, cluster.HashSecret("garam_ct_live"))
+	assert.NoError(t, err, "the control: the same row on a live key resolves")
 }

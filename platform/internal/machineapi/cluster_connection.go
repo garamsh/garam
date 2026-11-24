@@ -115,7 +115,7 @@ func connectedCluster(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
 		writeConnectionError(w, err)
 		return grn.GRN{}, false
 	}
-	if identity.GRN().ServiceType != cluster.ServiceType {
+	if !cluster.IsClusterGRN(identity.GRN()) {
 		writeConnectionError(w, errorx.New(errorx.KindUnauthenticated, "the token is not a cluster's"))
 		return grn.GRN{}, false
 	}

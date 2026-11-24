@@ -138,6 +138,13 @@ func New(orgGRN, createdBy grn.GRN, details DetailsPatch) (*Cluster, error) {
 	}, nil
 }
 
+// IsClusterGRN reports whether g is a connected cluster's GRN in the form
+// GRNOf derives: the iam service's cluster type, with no ancestors and
+// no locator. A GRN of the cluster type under another service is not.
+func IsClusterGRN(g grn.GRN) bool {
+	return g.ServiceType == ServiceType && g == grn.New(g.Organization, ServiceType, g.Identifier)
+}
+
 // GRNOf names the cluster of orgGRN under identifier. It is the one
 // derivation of that name: creating builds the GRN it stores through
 // this, and a route addressing a cluster by its path segment builds the

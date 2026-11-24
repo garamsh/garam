@@ -132,6 +132,7 @@ func TestClusterConnection_RefusalsCarryTheInterfacesCodes(t *testing.T) {
 		{"a third key", cluster.ErrTooManyKeys, http.StatusConflict, "too_many_keys"},
 		{"a throttle", &operator.Exceeded{RetryAfter: 30 * time.Second}, http.StatusTooManyRequests, "throttled"},
 		{"a missing record", errorx.New(errorx.KindNotFound, "cluster not found"), http.StatusNotFound, "not_found"},
+		{"a rotation garam does not serve", cluster.ErrRotationUnavailable, http.StatusServiceUnavailable, "internal"},
 		{"garam's own failure", errorx.Wrap(errors.New(`relation "cluster_keys" SQLSTATE 42P01`), "rotate",
 			errorx.KindInternal), http.StatusInternalServerError, "internal"},
 	}

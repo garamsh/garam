@@ -70,7 +70,10 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   no-store`. A record holds one at a time: minting another replaces
   it. It is refused an hour after it was minted (REG-5), and it is
   spent when it is presented, however the registration fares (REG-3):
-  the store deletes its row before the key is read.
+  the store deletes its row before the key is read. An expired hash
+  is deleted on the next mint or spend of any cluster's token, so with
+  no traffic one lingers, granting nothing. A record deleted between
+  the spend and the bind is refused as an unknown token is.
 - **Registration is throttled per source address before the token is
   read** (REG-8): `GARAM_CLUSTER_REGISTRATION_LIMIT` a minute, ten
   unless set, past which a request is answered 429 and spends
@@ -80,10 +83,12 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   A listener with no token endpoint configured serves no
   registration, since it would have no `tokenUrl` to answer.
 - **A registration binds the public half of an RSA key of 3072 to 4096
-  bits** (REG-1, REG-2). A JWK naming a private member (`d`, `p`, `q`,
-  `dp`, `dq`, `qi`, `oth`), another algorithm or another use is
-  refused. The key becomes the record's only live key: every key held
-  before is withdrawn, with its tokens (REG-6).
+  bits** (REG-1, REG-2). REG-1 sets the floor, and the cap is garam's,
+  the operator's key bound (`operator.MaxKeyBits`). A JWK naming a
+  private member (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`), another
+  algorithm or another use is refused. The key becomes the record's
+  only live key: every key held before is withdrawn, with its tokens
+  (REG-6).
 - **The connector's assertion is exchanged on `/oauth/token`**, under
   the operator's `private_key_jwt` profile, verified against the
   record's live keys (AUTH-1). The exchange picks the cluster's profile
@@ -101,7 +106,11 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   names is #2049's.
 - **A rotation needs the current key's authorization and the
   successor's proof** (ROT-1, ROT-2), verified before the store is
-  asked, so the bearer token alone rotates nothing. Both JWSs' jtis
+  asked, so the bearer token alone rotates nothing. Each cluster's
+  rotations are bounded, ten a minute, before any signature is
+  verified, and past it answered 429 `throttled`. A listener whose
+  token URL does not end in `/oauth/token` serves no rotation, and
+  answers it 503 rather than `invalid_proof`. Both JWSs' jtis
   are spent in the transaction that adds the key. The predecessor
   retires 24 hours after the rotation, and both are live until then
   (ROT-3). A record holds two live keys at most: a third is refused
@@ -152,6 +161,15 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   built for what the server already serves,
   `platform/tests/clusterfixture` (its `README.md` is the contract),
   and each issue adds its own subcommands.
+- The per-address bounds read the machine listener's TCP peer, per
+  replica, so behind a balancer that rewrites the source one address
+  stands for every connector
+  ([deployment-contract.md](./deployment-contract.md) §Replicas,
+  spreading and rollout). Reading a forwarded address waits for a
+  deployment that needs it.
+- A rotation from a key already retiring answers that key's earlier
+  deadline, which can be under ROT-3's 24 hours; the interface's
+  answer for that case is garam-bot-operator#451's.
 - `garam_machine_token_exchanges_total` counts a cluster's exchange
   under the method `operator_private_key_jwt`, since the method is
   read off the route and a cluster's exchange shares the operator's.

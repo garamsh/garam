@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/garamsh/garam/lib/grn"
@@ -47,7 +48,12 @@ func (s *service) Register(ctx context.Context, source, token string, jwk []byte
 	if err != nil {
 		return grn.GRN{}, err
 	}
-	if err := s.credentials.BindKey(ctx, g, key); err != nil {
+	// A record deleted between the spend and the bind is refused as a
+	// token that names no record is (REG-4), not answered 404, which
+	// the route does not declare.
+	if err := s.credentials.BindKey(ctx, g, key); errors.Is(err, ErrClusterNotFound) {
+		return grn.GRN{}, ErrRegistrationRefused
+	} else if err != nil {
 		return grn.GRN{}, err
 	}
 	return g, nil

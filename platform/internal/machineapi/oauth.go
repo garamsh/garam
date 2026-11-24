@@ -58,7 +58,7 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		s.exchangePrincipal(w, r, form)
 		return
 	}
-	if client.ServiceType == cluster.ServiceType {
+	if cluster.IsClusterGRN(client) {
 		s.exchangeCluster(w, r, client, form)
 		return
 	}

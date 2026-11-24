@@ -100,6 +100,8 @@ type credentials struct {
 	bound    []cluster.PublicKey
 	rotated  []int64
 	recorded []*cluster.Token
+	// bindErr is what BindKey answers.
+	bindErr error
 }
 
 func (c *credentials) SpendRegistrationToken(_ context.Context, hash string) (grn.GRN, error) {
@@ -112,7 +114,7 @@ func (c *credentials) SpendRegistrationToken(_ context.Context, hash string) (gr
 
 func (c *credentials) BindKey(_ context.Context, g grn.GRN, key cluster.PublicKey) error {
 	c.bound = append(c.bound, key)
-	return nil
+	return c.bindErr
 }
 
 func (c *credentials) VerificationKey(_ context.Context, g grn.GRN, kidValue string) (cluster.Key, error) {
@@ -325,4 +327,75 @@ func TestExchangeAssertion_AnswersAClusterAndNoOtherIdentity(t *testing.T) {
 	_, err = svc.ExchangeAssertion(context.Background(), "192.0.2.1", grn.New("acme", "operator", "one"), assertion)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid)
 	assert.Len(t, store.recorded, 1)
+}
+
+// TestRegister_RefusesARecordDeletedBeforeItsKeyIsBound holds that a
+// record gone between the spend and the bind is answered as REG-4
+// answers a token naming no record, and not 404, which the route does
+// not declare. Another failure of the bind is the control: it is not
+// recast.
+func TestRegister_RefusesARecordDeletedBeforeItsKeyIsBound(t *testing.T) {
+	svc, store := newService(t)
+	store.bindErr = cluster.ErrClusterNotFound
+	_, err := svc.Register(context.Background(), "192.0.2.1", liveToken, publicJWK(t, current))
+	assert.ErrorIs(t, err, cluster.ErrRegistrationRefused)
+
+	unavailable := errors.New("the database is down")
+	store.bindErr = unavailable
+	_, err = svc.Register(context.Background(), "192.0.2.1", liveToken, publicJWK(t, current))
+	assert.ErrorIs(t, err, unavailable)
+}
+
+// TestRotate_IsBoundedPerClusterBeforeAnySignatureIsVerified holds the
+// rotation route's bound: past RotationsPerCluster a cluster's request
+// is answered *operator.Exceeded and reaches no verification, and
+// another cluster's, the control, is not throttled by it.
+func TestRotate_IsBoundedPerClusterBeforeAnySignatureIsVerified(t *testing.T) {
+	svc, store := newService(t)
+	for range cluster.RotationsPerCluster {
+		_, err := svc.Rotate(context.Background(), self, nil, "", "")
+		require.ErrorIs(t, err, cluster.ErrInvalidKey)
+	}
+	_, err := svc.Rotate(context.Background(), self, publicJWK(t, next),
+		sign(t, current, kid(t, current), cluster.TypeKeyRotation, requestClaims(rotationURL, map[string]any{"jkt": kid(t, next)})),
+		sign(t, next, kid(t, next), cluster.TypeKeyProof, requestClaims(rotationURL, nil)))
+	var exceeded *operator.Exceeded
+	require.ErrorAs(t, err, &exceeded)
+	assert.Empty(t, store.rotated, "a throttled rotation reached no store")
+
+	other := grn.New("acme", cluster.ServiceType, "0000000000000001")
+	_, err = svc.Rotate(context.Background(), other, nil, "", "")
+	assert.ErrorIs(t, err, cluster.ErrInvalidKey, "the control: another cluster's bound is its own")
+}
+
+// TestRotate_AnswersAListenerServingNoRotationAsGaramsFailure holds that
+// a listener whose token URL names no rotation route answers that it
+// is unavailable, not that the connector's proof is wrong. A listener
+// serving the route, the control, reaches the proof.
+func TestRotate_AnswersAListenerServingNoRotationAsGaramsFailure(t *testing.T) {
+	testKeys(t)
+	unserved := cluster.NewService(&credentials{t: t}, cluster.Config{TokenEndpoint: tokenURL})
+	_, err := unserved.Rotate(context.Background(), self, publicJWK(t, next), "", "")
+	assert.ErrorIs(t, err, cluster.ErrRotationUnavailable)
+
+	svc, _ := newService(t)
+	_, err = svc.Rotate(context.Background(), self, publicJWK(t, next), "", "")
+	assert.ErrorIs(t, err, cluster.ErrInvalidProof)
+}
+
+// TestIsClusterGRN_TakesTheFormGRNOfDerivesAndNoOther holds the GRN
+// check the exchange, the rotation and the connection routes share.
+func TestIsClusterGRN_TakesTheFormGRNOfDerivesAndNoOther(t *testing.T) {
+	derived, err := cluster.GRNOf(grn.Org("acme"), "5f60710a1b2c3d4e")
+	require.NoError(t, err)
+	assert.True(t, cluster.IsClusterGRN(derived), "the control: GRNOf's own form")
+	for _, raw := range []string{
+		"grn:acme/iam/cluster/5f60710a1b2c3d4e#somewhere",
+		"grn:acme/iam/org/acme/cluster/5f60710a1b2c3d4e",
+		"grn:acme/iam/operator/one",
+	} {
+		g, err := grn.Parse(raw)
+		require.NoError(t, err, raw)
+		assert.False(t, cluster.IsClusterGRN(g), raw)
+	}
 }

@@ -1,0 +1,1 @@
+DROP INDEX cluster_keys_predecessor_id_idx;

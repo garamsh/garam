@@ -434,3 +434,68 @@ func TestClusterFixture_ReportsReachLatestReport(t *testing.T) {
 	assert.Equal(t, 1, code, "%v", held)
 	assert.Contains(t, held["message"], "cluster-owned", "the latest report shows mira held by the cluster")
 }
+
+// exchangeBot makes the RFC 8693 exchange for bot with actor, the
+// connector's own token, as ADR-0189 decision 2 has a connector make it,
+// answering the status and the decoded body.
+func (c *connector) exchangeBot(tokenURL, actor, bot string) (int, map[string]any) {
+	c.t.Helper()
+	form := url.Values{
+		"grant_type":         {"urn:ietf:params:oauth:grant-type:token-exchange"},
+		"subject_token":      {bot},
+		"subject_token_type": {"urn:garam:params:oauth:token-type:bot"},
+		"actor_token":        {actor},
+		"actor_token_type":   {"urn:ietf:params:oauth:token-type:access_token"},
+	}
+	resp, err := c.client.Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	require.NoError(c.t, err)
+	defer func() { _ = resp.Body.Close() }()
+	var decoded map[string]any
+	require.NoError(c.t, json.NewDecoder(resp.Body).Decode(&decoded))
+	return resp.StatusCode, decoded
+}
+
+// TestClusterFixture_AConnectorExchangesForABotItsRecordPlaces holds the
+// bot token exchange (#2049) through the built servers: a bot a live
+// declaration places on the connector's record is answered a token
+// prefixed garam_bt_ for an hour, which no cluster-connection route
+// accepts; the bot of a declaration the organization tombstoned, and
+// one never declared, are invalid_grant (AUTH-5).
+func TestClusterFixture_AConnectorExchangesForABotItsRecordPlaces(t *testing.T) {
+	bin, env, c, tokenURL, slug := startFixtureStack(t)
+	code, minted := clusterFixture(t, bin, env, "mint-token")
+	require.Equal(t, 0, code, "%v", minted)
+	record := minted["cluster"].(string)
+	status, registered := c.register(minted["registrationToken"].(string))
+	require.Equal(t, http.StatusCreated, status, "%v", registered)
+	actor, err := c.exchange(record, tokenURL)
+	require.NoError(t, err)
+
+	file := filepath.Join(t.TempDir(), "declare.json")
+	require.NoError(t, os.WriteFile(file, []byte(`{"cluster":"`+record+`","id":"e2e-bot","object":
+		{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"reviewer"},
+		 "spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"}}}}`), 0o600))
+	code, placed := clusterFixture(t, bin, env, "declare", file)
+	require.Equal(t, 0, code, "%v", placed)
+	bot := "grn:" + slug + "/iam/bot/e2e-bot"
+
+	status, token := c.exchangeBot(tokenURL, actor, bot)
+	require.Equal(t, http.StatusOK, status, "%v", token)
+	assert.Equal(t, "Bearer", token["token_type"])
+	assert.Equal(t, float64(3600), token["expires_in"])
+	assert.Equal(t, "urn:ietf:params:oauth:token-type:access_token", token["issued_token_type"])
+	value, _ := token["access_token"].(string)
+	require.True(t, strings.HasPrefix(value, "garam_bt_"), value)
+	status, refused, _ := c.poll(value, "", 0)
+	assert.Equal(t, http.StatusUnauthorized, status, "a bot's token is no cluster's: %v", refused)
+
+	status, never := c.exchangeBot(tokenURL, actor, "grn:"+slug+"/iam/bot/never-declared")
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Equal(t, "invalid_grant", never["error"], "a bot never declared")
+
+	code, tombstoned := clusterFixture(t, bin, env, "tombstone", "e2e-bot")
+	require.Equal(t, 0, code, "%v", tombstoned)
+	status, gone := c.exchangeBot(tokenURL, actor, bot)
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Equal(t, "invalid_grant", gone["error"], "the bot of a tombstoned declaration")
+}

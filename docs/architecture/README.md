@@ -1666,7 +1666,8 @@ ADRs:
   `spec.permissions`, decides at garam and at the place; tools are
   MCP in three auth modes with no Connection resource; static keys
   are sealed to the place; a bot declared at its place has no garam
-  identity; accepted, not built (#2027, #2049)
+  identity; accepted, partly built: the token exchange and the shared
+  identifier space (#2049)
 - [0190](./adr/0190-ai-gateway-is-an-interface-deployable-at-garam-or-in-the-organizations-own-environment-and-a-session-has-one-brain.md)
   — ai-gateway is an interface, garam-bot's interface 5, deployable
   at `ai.garam.sh` or in an organization's environment; a model call

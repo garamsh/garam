@@ -46,6 +46,19 @@ func (q *Queries) AdvanceDeclarationHead(ctx context.Context, clusterGrn string)
 	return head, err
 }
 
+const agentRecordExists = `-- name: AgentRecordExists :one
+SELECT EXISTS (SELECT 1 FROM agents WHERE grn = $1) AS held
+`
+
+// Whether the organization holds an agent record under the GRN
+// ADR-0179 renames into the identifier space a declaration takes.
+func (q *Queries) AgentRecordExists(ctx context.Context, grn string) (bool, error) {
+	row := q.db.QueryRow(ctx, agentRecordExists, grn)
+	var held bool
+	err := row.Scan(&held)
+	return held, err
+}
+
 const appendDeclarationChange = `-- name: AppendDeclarationChange :exec
 INSERT INTO cluster_declaration_changes (cluster_grn, seq, op, declaration_id, generation, object, written_at)
 VALUES ($1, $2, $3, $4,
@@ -388,6 +401,56 @@ func (q *Queries) HoldLiveClusterKey(ctx context.Context, arg HoldLiveClusterKey
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const holdPlacingDeclaration = `-- name: HoldPlacingDeclaration :one
+
+SELECT id FROM cluster_declarations
+WHERE id = $1 AND cluster_grn = $2 AND NOT tombstoned
+FOR SHARE
+`
+
+type HoldPlacingDeclarationParams struct {
+	ID         string
+	ClusterGrn string
+}
+
+// Bot tokens (ADR-0189).
+// The declaration that places the bot on the record, held against a
+// tombstone until the token is written; none answers zero rows.
+func (q *Queries) HoldPlacingDeclaration(ctx context.Context, arg HoldPlacingDeclarationParams) (string, error) {
+	row := q.db.QueryRow(ctx, holdPlacingDeclaration, arg.ID, arg.ClusterGrn)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertBotToken = `-- name: InsertBotToken :one
+INSERT INTO cluster_bot_tokens (token_hash, cluster_grn, declaration_id, scope, issued_at, expires_at)
+VALUES ($1, $2, $3, $4,
+        now(), now() + $5::interval)
+RETURNING expires_at
+`
+
+type InsertBotTokenParams struct {
+	TokenHash     string
+	ClusterGrn    string
+	DeclarationID string
+	Scope         []string
+	Ttl           pgtype.Interval
+}
+
+func (q *Queries) InsertBotToken(ctx context.Context, arg InsertBotTokenParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, insertBotToken,
+		arg.TokenHash,
+		arg.ClusterGrn,
+		arg.DeclarationID,
+		arg.Scope,
+		arg.Ttl,
+	)
+	var expires_at pgtype.Timestamptz
+	err := row.Scan(&expires_at)
+	return expires_at, err
 }
 
 const issueRegistrationToken = `-- name: IssueRegistrationToken :one
@@ -857,6 +920,15 @@ func (q *Queries) SpendRegistrationToken(ctx context.Context, tokenHash string) 
 	var i SpendRegistrationTokenRow
 	err := row.Scan(&i.ClusterGrn, &i.Live)
 	return i, err
+}
+
+const sweepBotTokens = `-- name: SweepBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1 AND expires_at <= now()
+`
+
+func (q *Queries) SweepBotTokens(ctx context.Context, clusterGrn string) error {
+	_, err := q.db.Exec(ctx, sweepBotTokens, clusterGrn)
+	return err
 }
 
 const sweepClusterJTIs = `-- name: SweepClusterJTIs :exec

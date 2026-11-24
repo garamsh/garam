@@ -111,7 +111,7 @@ type's names.
 | `iam` | `operator` | provisions agents from outside (ADR-0012); registered by its organization, which supplies the identifier (ADR-0045) | `grn:acme/iam/operator/field-one` |
 | `iam` | `supervisor` | runs one agent on a standalone host; garam mints the identifier and registers it for that agent on an administrator's approval (ADR-0082) | `grn:acme/iam/supervisor/0a1b2c3d4e5f6071` |
 | `iam` | `cluster` | a user's own cluster connected to garam through a connector it installs; registered by its organization; garam mints the identifier and answers it at registration (the record built, `platform/internal/cluster`; its registration planned, ADR-0184) | `grn:acme/iam/cluster/5f60710a1b2c3d4e` |
-| `iam` | `bot` | a bot garam declares, its identifier the declaration's; the agent records ADR-0179 renames move here and share its identifier space (planned, ADR-0189) | `grn:acme/iam/bot/decl-0a1b2c3d4e5f6071` |
+| `iam` | `bot` | a bot garam declares, its identifier the declaration's; the agent records ADR-0179 renames move here and share its identifier space (its token exchange built, `platform/internal/cluster/bot.go`; the agent records' move planned, ADR-0189) | `grn:acme/iam/bot/decl-0a1b2c3d4e5f6071` |
 | `iam` | `tool` | an MCP server a bot may call (planned, ADR-0189) | `grn:acme/iam/tool/github` |
 | `iam` | `model-provider` | a provider a bot's model calls reach through ai-gateway (planned, ADR-0189) | `grn:acme/iam/model-provider/openrouter` |
 | `iam` | `workspace` | the workspace a bot runs in (planned, ADR-0189, ADR-0180) | `grn:acme/iam/workspace/game-team` |

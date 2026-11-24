@@ -92,6 +92,51 @@ func (e AgentEnrollmentBindingPlacement) Valid() bool {
 	}
 }
 
+// Defines values for BotTokenExchangeRequestActorTokenType.
+const (
+	BotTokenExchangeRequestActorTokenTypeUrnIetfParamsOauthTokenTypeAccessToken BotTokenExchangeRequestActorTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the BotTokenExchangeRequestActorTokenType enum.
+func (e BotTokenExchangeRequestActorTokenType) Valid() bool {
+	switch e {
+	case BotTokenExchangeRequestActorTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BotTokenExchangeRequestGrantType.
+const (
+	UrnIetfParamsOauthGrantTypeTokenExchange BotTokenExchangeRequestGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the BotTokenExchangeRequestGrantType enum.
+func (e BotTokenExchangeRequestGrantType) Valid() bool {
+	switch e {
+	case UrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BotTokenExchangeRequestSubjectTokenType.
+const (
+	UrnGaramParamsOauthTokenTypeBot BotTokenExchangeRequestSubjectTokenType = "urn:garam:params:oauth:token-type:bot"
+)
+
+// Valid indicates whether the value is a known member of the BotTokenExchangeRequestSubjectTokenType enum.
+func (e BotTokenExchangeRequestSubjectTokenType) Valid() bool {
+	switch e {
+	case UrnGaramParamsOauthTokenTypeBot:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClientAssertionRequestClientAssertionType.
 const (
 	ClientAssertionRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer ClientAssertionRequestClientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
@@ -266,8 +311,10 @@ func (e MessageState) Valid() bool {
 // Defines values for OAuthErrorError.
 const (
 	InvalidClient          OAuthErrorError = "invalid_client"
+	InvalidGrant           OAuthErrorError = "invalid_grant"
 	InvalidRequest         OAuthErrorError = "invalid_request"
 	InvalidScope           OAuthErrorError = "invalid_scope"
+	InvalidTarget          OAuthErrorError = "invalid_target"
 	ServerError            OAuthErrorError = "server_error"
 	TemporarilyUnavailable OAuthErrorError = "temporarily_unavailable"
 	UnauthorizedClient     OAuthErrorError = "unauthorized_client"
@@ -279,9 +326,13 @@ func (e OAuthErrorError) Valid() bool {
 	switch e {
 	case InvalidClient:
 		return true
+	case InvalidGrant:
+		return true
 	case InvalidRequest:
 		return true
 	case InvalidScope:
+		return true
+	case InvalidTarget:
 		return true
 	case ServerError:
 		return true
@@ -290,6 +341,21 @@ func (e OAuthErrorError) Valid() bool {
 	case UnauthorizedClient:
 		return true
 	case UnsupportedGrantType:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OAuthTokenIssuedTokenType.
+const (
+	OAuthTokenIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken OAuthTokenIssuedTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the OAuthTokenIssuedTokenType enum.
+func (e OAuthTokenIssuedTokenType) Valid() bool {
+	switch e {
+	case OAuthTokenIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
 		return true
 	default:
 		return false
@@ -554,6 +620,32 @@ type AuthorityIntrospection struct {
 	// Authority The opaque authority, carried in the body so it never reaches a URL.
 	Authority string `json:"authority"`
 }
+
+// BotTokenExchangeRequest The RFC 8693 exchange a connected cluster's connector makes for a bot garam declared and placed on its record (ADR-0189). Each parameter appears once.
+type BotTokenExchangeRequest struct {
+	// ActorToken The connector's own access token, prefixed `garam_ct_`.
+	ActorToken     string                                `json:"actor_token"`
+	ActorTokenType BotTokenExchangeRequestActorTokenType `json:"actor_token_type"`
+	GrantType      BotTokenExchangeRequestGrantType      `json:"grant_type"`
+
+	// Scope What the bot is to call. No scope is defined yet, so any value is `invalid_scope`, and nothing is implied by its absence.
+	Scope *string `json:"scope,omitempty"`
+
+	// SubjectToken The bot's GRN, `grn:<org>/iam/bot/<declaration id>`.
+	SubjectToken string `json:"subject_token"`
+
+	// SubjectTokenType garam's own token type, whose value is a bot's GRN.
+	SubjectTokenType BotTokenExchangeRequestSubjectTokenType `json:"subject_token_type"`
+}
+
+// BotTokenExchangeRequestActorTokenType defines model for BotTokenExchangeRequest.ActorTokenType.
+type BotTokenExchangeRequestActorTokenType string
+
+// BotTokenExchangeRequestGrantType defines model for BotTokenExchangeRequest.GrantType.
+type BotTokenExchangeRequestGrantType string
+
+// BotTokenExchangeRequestSubjectTokenType garam's own token type, whose value is a bot's GRN.
+type BotTokenExchangeRequestSubjectTokenType string
 
 // BoundAssignment Where the agent ran when an operation on it was authorized. Present for `iam:agent.configure`, `iam:agent.recover`, `iam:agent.execution-read` and `iam:agent.replace` only.
 type BoundAssignment struct {
@@ -826,23 +918,29 @@ type MessageSubmission struct {
 
 // OAuthError RFC 6749's error response (ADR-0102).
 type OAuthError struct {
-	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_grant` for a bot no live declaration places on the exchanging cluster; `invalid_target` for an `audience` on a bot token exchange; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_grant` for a bot no live declaration places on the exchanging cluster; `invalid_target` for an `audience` on a bot token exchange; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 type OAuthErrorError string
 
-// OAuthToken RFC 6749's successful token response (ADR-0102).
+// OAuthToken RFC 6749's successful token response (ADR-0102), and RFC 8693's for a bot token exchange (ADR-0189).
 type OAuthToken struct {
-	// AccessToken The token, prefixed `garam_ot_` and opaque, presented as `Authorization: Bearer` or `Garam-Token`. garam stores only its hash.
+	// AccessToken The token, prefixed `garam_ot_` for an operator, `garam_ct_` for a connected cluster and `garam_bt_` for a bot, and opaque, presented as `Authorization: Bearer` or `Garam-Token`. garam stores only its hash.
 	AccessToken string `json:"access_token"`
 
 	// ExpiresIn Seconds the token is accepted for, 3600.
-	ExpiresIn int                 `json:"expires_in"`
-	TokenType OAuthTokenTokenType `json:"token_type"`
+	ExpiresIn int `json:"expires_in"`
+
+	// IssuedTokenType Answered to a bot token exchange alone (RFC 8693).
+	IssuedTokenType *OAuthTokenIssuedTokenType `json:"issued_token_type,omitempty"`
+	TokenType       OAuthTokenTokenType        `json:"token_type"`
 }
+
+// OAuthTokenIssuedTokenType Answered to a bot token exchange alone (RFC 8693).
+type OAuthTokenIssuedTokenType string
 
 // OAuthTokenTokenType defines model for OAuthToken.TokenType.
 type OAuthTokenTokenType string

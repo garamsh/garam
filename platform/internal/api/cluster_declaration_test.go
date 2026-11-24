@@ -177,6 +177,22 @@ func TestClusterDeclaration_AnIdentifierAndAnObjectNameOneDeclaration(t *testing
 	assert.Equal(t, http.StatusCreated, rec.Code, "the control: a tombstone frees the object it named")
 }
 
+// TestClusterDeclaration_AnIdentifierAnAgentRecordHoldsIsTaken holds
+// ADR-0189's shared identifier space on the route: a declaration placed
+// under an identifier an agent record of the organization holds is 409,
+// and another identifier is the control.
+func TestClusterDeclaration_AnIdentifierAnAgentRecordHoldsIsTaken(t *testing.T) {
+	f := newFixture(t)
+	owner, _, _, path := declaringOrg(t, f)
+	f.declared.agentIDs = map[string]bool{"mira": true}
+
+	rec := f.do(t, "PUT", path+"/mira", declarationWrite("mira"), owner)
+	assert.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "names a bot the organization already holds")
+	rec = f.do(t, "PUT", path+"/reviewer", declarationWrite("mira"), owner)
+	assert.Equal(t, http.StatusCreated, rec.Code, "the control: an identifier no agent record holds")
+}
+
 // TestClusterDeclaration_AnotherOrganizationsRecordIsReachedByNoRoute
 // mirrors the record's own cross-organization test for the declaration
 // routes: acme's admin holding every action is refused on globex's

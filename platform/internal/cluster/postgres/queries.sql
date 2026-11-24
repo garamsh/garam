@@ -240,3 +240,26 @@ SELECT EXISTS (
         'owner', 'cluster', 'kind', sqlc.arg('kind')::text,
         'namespace', sqlc.arg('namespace')::text, 'name', sqlc.arg('name')::text))
 ) AS held;
+
+-- Bot tokens (ADR-0189).
+
+-- The declaration that places the bot on the record, held against a
+-- tombstone until the token is written; none answers zero rows.
+-- name: HoldPlacingDeclaration :one
+SELECT id FROM cluster_declarations
+WHERE id = sqlc.arg('id') AND cluster_grn = sqlc.arg('cluster_grn') AND NOT tombstoned
+FOR SHARE;
+
+-- name: SweepBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1 AND expires_at <= now();
+
+-- name: InsertBotToken :one
+INSERT INTO cluster_bot_tokens (token_hash, cluster_grn, declaration_id, scope, issued_at, expires_at)
+VALUES (sqlc.arg('token_hash'), sqlc.arg('cluster_grn'), sqlc.arg('declaration_id'), sqlc.arg('scope'),
+        now(), now() + sqlc.arg('ttl')::interval)
+RETURNING expires_at;
+
+-- Whether the organization holds an agent record under the GRN
+-- ADR-0179 renames into the identifier space a declaration takes.
+-- name: AgentRecordExists :one
+SELECT EXISTS (SELECT 1 FROM agents WHERE grn = $1) AS held;

@@ -42,6 +42,13 @@ type CredentialStore interface {
 	// ResolveToken answers what the live token hash names, read beside
 	// the record and the key it rests on, or ErrTokenInvalid.
 	ResolveToken(ctx context.Context, hash string) (TokenHolder, error)
+	// RecordBotToken stores hash as a bot's token for g, issued for the
+	// live declaration id places on g and accepted for ttl from the
+	// database's time, and answers when it expires. It holds the
+	// declaration against a tombstone until the token is written, and
+	// sweeps g's expired bot tokens. A declaration not live on g is
+	// ErrBotNotPlaced.
+	RecordBotToken(ctx context.Context, g grn.GRN, id, hash string, ttl time.Duration) (time.Time, error)
 	// Rotate adds successor beside g's live keys, authorized by the
 	// live key whose row is authorizedBy, checks each of signed's dates
 	// at the database's time and spends its jti, in one transaction

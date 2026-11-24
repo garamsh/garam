@@ -42,7 +42,16 @@ func (s *Store) Declare(ctx context.Context, g grn.GRN, id string, object cluste
 			generation = current.Generation + 1
 		case errors.Is(err, pgx.ErrNoRows):
 			// An identifier no declaration holds was placed on a record
-			// since deleted, or is new.
+			// since deleted, or is new. It may still name an agent
+			// record of the organization, whose identifier space a
+			// declared bot shares (ADR-0189 decision 1).
+			agent, err := q.AgentRecordExists(ctx, cluster.AgentGRN(g.Organization, id).String())
+			if err != nil {
+				return pgxerr.Classify(err, "read agent record", nil, nil)
+			}
+			if agent {
+				return cluster.ErrDeclarationIDHeldByAgent
+			}
 			reserved, err := q.ReserveDeclarationID(ctx, id)
 			if err != nil {
 				return pgxerr.Classify(err, "reserve declaration id", nil, nil)

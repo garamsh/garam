@@ -121,6 +121,13 @@ var actionRules = map[string]actionRule{
 	org.ActionOperatorReissue:  {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionOperatorDelegate: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByDelegation},
 
+	// Every cluster route is decided on its organization (ADR-0184).
+	org.ActionClusterRead:     {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionClusterRegister: {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionClusterUpdate:   {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionClusterReissue:  {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionClusterDelete:   {on: []apigen.PermissionResourceType{onOrg}},
+
 	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
 	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},
 	org.ActionAgentRename:          {on: []apigen.PermissionResourceType{kindAgent}},

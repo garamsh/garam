@@ -916,6 +916,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List an organization's connected clusters. Requires the `member` role.
+         * @description The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
+         */
+        get: operations["listClusters"];
+        put?: never;
+        /**
+         * Create a connected cluster's record. Requires the `admin` role.
+         * @description Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+         */
+        post: operations["createCluster"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/clusters/{cluster}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one of an organization's connected clusters. Requires the `member` role.
+         * @description Authorized as `iam:cluster.read` on the organization.
+         */
+        get: operations["getCluster"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a connected cluster's record. Requires the `admin` role.
+         * @description Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
+         */
+        delete: operations["deleteCluster"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename or describe a connected cluster. Requires the `admin` role.
+         * @description Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+         */
+        patch: operations["updateCluster"];
+        trace?: never;
+    };
     "/orgs/{org}/operators": {
         parameters: {
             query?: never;
@@ -2259,6 +2311,42 @@ export interface components {
                 description?: components["schemas"]["OperatorDescription"];
             };
         };
+        /** @description A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster. */
+        Cluster: {
+            /**
+             * @description The GRN, whose identifier garam minted.
+             * @example grn:acme/iam/cluster/5f60710a1b2c3d4e
+             */
+            grn: string;
+            /**
+             * @description What the organization calls the cluster. It is not unique and not an identity. A creation that named none is called by its identifier.
+             * @example EKS production
+             */
+            name: string;
+            /** @description What the organization says the cluster is for, empty where it says nothing. */
+            description: string;
+            orgGrn: string;
+            /** @description The member that created the record. */
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ClusterCreation: {
+            name?: components["schemas"]["ClusterName"];
+            description?: components["schemas"]["ClusterDescription"];
+        };
+        /** @description A change to what the organization says about a cluster. A field left out keeps its value; the identifier is not a field. */
+        ClusterPatch: {
+            name?: components["schemas"]["ClusterName"];
+            description?: components["schemas"]["ClusterDescription"];
+        };
+        /**
+         * @description At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+         * @example EKS production
+         */
+        ClusterName: string;
+        /** @description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was. */
+        ClusterDescription: string;
         /** @description A change to what the organization says about an operator. A field left out keeps its value; the identifier is not a field. */
         OperatorPatch: {
             name?: components["schemas"]["OperatorName"];
@@ -2403,6 +2491,8 @@ export interface components {
         agent: string;
         /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
         kid: string;
+        /** @description Cluster identifier (the last GRN segment). */
+        cluster: string;
         /** @description Operator identifier (the last GRN segment). */
         operator: string;
         /** @description The action asked about. */
@@ -4028,6 +4118,152 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+        };
+    };
+    listClusters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's clusters. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cluster"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createCluster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClusterCreation"];
+            };
+        };
+        responses: {
+            /** @description Cluster created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cluster"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getCluster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cluster. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cluster"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteCluster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cluster deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateCluster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClusterPatch"];
+            };
+        };
+        responses: {
+            /** @description The cluster as stored after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cluster"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listOperators: {

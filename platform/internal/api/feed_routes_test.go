@@ -57,7 +57,12 @@ var feedClassification = map[string]string{
 	"setOperatorControlEndpoint":   "writes operators.control_endpoint, which no trigger watches",
 	"clearOperatorControlEndpoint": "writes operators.control_endpoint, which no trigger watches",
 	"mintOperationAuthority":       "mints a token",
-	"createInvitation":             "writes invitations", "revokeInvitation": "writes invitations",
+	// Iam::Cluster is @caller("none") and decided on its organization
+	// (ADR-0184), so nothing feeds a cluster.
+	"createCluster":    "writes clusters, which no trigger watches",
+	"updateCluster":    "writes clusters, which no trigger watches",
+	"deleteCluster":    "writes clusters, which no trigger watches",
+	"createInvitation": "writes invitations", "revokeInvitation": "writes invitations",
 	// The relayed writes (ADR-0169): the service stores in the call.
 	"createIamPolicy": relayed, "createIamPolicyVersion": relayed,
 	"activateIamPolicy": relayed, "rollbackIamPolicy": relayed,

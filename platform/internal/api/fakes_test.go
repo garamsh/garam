@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/authn"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -1198,6 +1199,78 @@ func (s *fakePasswordAttemptStore) releaseOne() {
 		delete(s.expiryOf, held)
 		return
 	}
+}
+
+// fakeClusterStore holds clusters in memory and answers as the
+// Postgres store does.
+type fakeClusterStore struct {
+	mu       sync.Mutex
+	clusters map[string]*cluster.Cluster
+}
+
+func newFakeClusterStore() *fakeClusterStore {
+	return &fakeClusterStore{clusters: map[string]*cluster.Cluster{}}
+}
+
+func (s *fakeClusterStore) Create(_ context.Context, c *cluster.Cluster) (*cluster.Cluster, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored := *c
+	s.clusters[c.GRN.String()] = &stored
+	answered := stored
+	return &answered, nil
+}
+
+func (s *fakeClusterStore) Get(_ context.Context, g grn.GRN) (*cluster.Cluster, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.clusters[g.String()]
+	if !ok {
+		return nil, cluster.ErrClusterNotFound
+	}
+	answered := *c
+	return &answered, nil
+}
+
+func (s *fakeClusterStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*cluster.Cluster, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*cluster.Cluster
+	for _, c := range s.clusters {
+		if c.Organization == orgGRN {
+			answered := *c
+			out = append(out, &answered)
+		}
+	}
+	slices.SortFunc(out, func(a, b *cluster.Cluster) int { return strings.Compare(a.GRN.String(), b.GRN.String()) })
+	return out, nil
+}
+
+func (s *fakeClusterStore) UpdateDetails(_ context.Context, g grn.GRN, patch cluster.DetailsPatch) (*cluster.Cluster, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.clusters[g.String()]
+	if !ok {
+		return nil, cluster.ErrClusterNotFound
+	}
+	if n := patch.Name(); n != nil {
+		c.Name = *n
+	}
+	if d := patch.Description(); d != nil {
+		c.Description = *d
+	}
+	answered := *c
+	return &answered, nil
+}
+
+func (s *fakeClusterStore) Delete(_ context.Context, g grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.clusters[g.String()]; !ok {
+		return cluster.ErrClusterNotFound
+	}
+	delete(s.clusters, g.String())
+	return nil
 }
 
 type fakeOperatorStore struct {

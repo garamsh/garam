@@ -1185,6 +1185,48 @@ type AuditRecordPage struct {
 	Records       []AuditRecord `json:"records"`
 }
 
+// Cluster A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster.
+type Cluster struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy The member that created the record.
+	CreatedBy string `json:"createdBy"`
+
+	// Description What the organization says the cluster is for, empty where it says nothing.
+	Description string `json:"description"`
+
+	// Grn The GRN, whose identifier garam minted.
+	Grn string `json:"grn"`
+
+	// Name What the organization calls the cluster. It is not unique and not an identity. A creation that named none is called by its identifier.
+	Name   string `json:"name"`
+	OrgGrn string `json:"orgGrn"`
+}
+
+// ClusterCreation defines model for ClusterCreation.
+type ClusterCreation struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *ClusterDescription `json:"description,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+	Name *ClusterName `json:"name,omitempty"`
+}
+
+// ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+type ClusterDescription = string
+
+// ClusterName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+type ClusterName = string
+
+// ClusterPatch A change to what the organization says about a cluster. A field left out keeps its value; the identifier is not a field.
+type ClusterPatch struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *ClusterDescription `json:"description,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+	Name *ClusterName `json:"name,omitempty"`
+}
+
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
 	Url string `json:"url"`
@@ -2172,6 +2214,9 @@ type User struct {
 // AgentSlug defines model for agent.
 type AgentSlug = string
 
+// ClusterSlug defines model for cluster.
+type ClusterSlug = string
+
 // ContractVersion defines model for contractVersion.
 type ContractVersion = string
 
@@ -2421,6 +2466,12 @@ type ApproveAgentEnrollmentJSONRequestBody = AgentEnrollmentApproval
 // RenameAgentJSONRequestBody defines body for RenameAgent for application/json ContentType.
 type RenameAgentJSONRequestBody = AgentPatch
 
+// CreateClusterJSONRequestBody defines body for CreateCluster for application/json ContentType.
+type CreateClusterJSONRequestBody = ClusterCreation
+
+// UpdateClusterJSONRequestBody defines body for UpdateCluster for application/json ContentType.
+type UpdateClusterJSONRequestBody = ClusterPatch
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
 
@@ -2585,6 +2636,21 @@ type ServerInterface interface {
 	// ListAuditRecords Read an organization's audit records, newest first.
 	// (GET /orgs/{org}/audit-records)
 	ListAuditRecords(w http.ResponseWriter, r *http.Request, org Org, params ListAuditRecordsParams)
+	// ListClusters List an organization's connected clusters. Requires the `member` role.
+	// (GET /orgs/{org}/clusters)
+	ListClusters(w http.ResponseWriter, r *http.Request, org Org)
+	// CreateCluster Create a connected cluster's record. Requires the `admin` role.
+	// (POST /orgs/{org}/clusters)
+	CreateCluster(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteCluster Delete a connected cluster's record. Requires the `admin` role.
+	// (DELETE /orgs/{org}/clusters/{cluster})
+	DeleteCluster(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
+	// GetCluster Read one of an organization's connected clusters. Requires the `member` role.
+	// (GET /orgs/{org}/clusters/{cluster})
+	GetCluster(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
+	// UpdateCluster Rename or describe a connected cluster. Requires the `admin` role.
+	// (PATCH /orgs/{org}/clusters/{cluster})
+	UpdateCluster(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	// (GET /orgs/{org}/consents)
 	ListOrgConsents(w http.ResponseWriter, r *http.Request, org Org)
@@ -3686,6 +3752,163 @@ func (siw *ServerInterfaceWrapper) ListAuditRecords(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAuditRecords(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClusters operation middleware
+func (siw *ServerInterfaceWrapper) ListClusters(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClusters(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCluster operation middleware
+func (siw *ServerInterfaceWrapper) CreateCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCluster(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCluster operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCluster(w, r, org, clusterSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCluster operation middleware
+func (siw *ServerInterfaceWrapper) GetCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCluster(w, r, org, clusterSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCluster operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCluster(w, r, org, clusterSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6009,6 +6232,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-supervisors", wrapper.ListAgentSupervisors)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-supervisors/{supervisor}", wrapper.RevokeAgentSupervisor)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/credential-events", wrapper.ListCredentialEvents)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters", wrapper.ListClusters)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters", wrapper.CreateCluster)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.DeleteCluster)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.GetCluster)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.UpdateCluster)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)

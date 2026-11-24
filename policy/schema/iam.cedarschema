@@ -52,6 +52,10 @@ namespace Iam {
   entity Supervisor in [OrgMembers, Org] { org: Org, agent?: Agent };
   @grn("service") @caller("none")
   entity Service in [Org] { org: Org };
+  // A connected cluster (ADR-0184). Its routes are decided on its
+  // organization, so no decision names one and nothing feeds it.
+  @grn("cluster") @caller("none")
+  entity Cluster in [Org] { org: Org };
   @grn("agent") @caller("platform")
   entity Agent in [OrgMembers, Org, Team, Project] { org: Org };
   @grn("user") @caller("platform")
@@ -122,6 +126,15 @@ namespace Iam {
     "operator.reissue", "operator.delegate"
     in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Operator] };
+
+  // A connected cluster's record, decided on its organization
+  // (ADR-0184). Named one at a time, as the operator's are.
+  action "cluster.read" in ["role-owner", "role-admin", "role-member"]
+    appliesTo { principal: [User, Agent], resource: [Org] };
+  action "cluster.register", "cluster.update", "cluster.reissue",
+    "cluster.delete"
+    in ["role-owner", "role-admin"]
+    appliesTo { principal: [User, Agent], resource: [Org] };
 
   action "agent.read", "agent.rename"
     in ["role-owner", "role-admin", "role-member"]

@@ -11,6 +11,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/authn"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -73,6 +74,9 @@ type Server struct {
 	// policy service (ADR-0169). Nil answers those endpoints as
 	// unavailable.
 	policyRelay policyrelay.Service
+	// clusters keeps connected clusters (ADR-0184); nil answers the
+	// cluster routes unavailable.
+	clusters cluster.Store
 }
 
 // Compile-time check that Server satisfies the generated interface.

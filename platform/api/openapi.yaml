@@ -61,6 +61,11 @@ tags:
       issued on each. A record says garam holds the operator and
       nothing more (ADR-0045); an operator authenticates by exchanging
       an assertion its key signed for a token (ADR-0102, ADR-0117).
+  - name: cluster
+    description: >-
+      The clusters an organization has connected (ADR-0184): a user's
+      own cluster, whose connector dials garam and authenticates as
+      the record. garam never dials the cluster.
   - name: agent
     description: >-
       The agents an organization holds. Nothing on this listener
@@ -1882,6 +1887,143 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/clusters:
+    post:
+      operationId: createCluster
+      tags: [cluster]
+      summary: Create a connected cluster's record. Requires the `admin` role.
+      description: >-
+        Records that this organization has a connected cluster, under
+        an identifier garam mints and answers in the GRN (ADR-0184).
+        Authorized as `iam:cluster.register` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClusterCreation'
+      responses:
+        '201':
+          description: Cluster created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listClusters
+      tags: [cluster]
+      summary: List an organization's connected clusters. Requires the `member` role.
+      description: >-
+        The clusters this organization has created, ordered by GRN.
+        Authorized as `iam:cluster.read` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization's clusters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cluster'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/clusters/{cluster}:
+    get:
+      operationId: getCluster
+      tags: [cluster]
+      summary: Read one of an organization's connected clusters. Requires the `member` role.
+      description: Authorized as `iam:cluster.read` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+      responses:
+        '200':
+          description: The cluster.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateCluster
+      tags: [cluster]
+      summary: Rename or describe a connected cluster. Requires the `admin` role.
+      description: >-
+        Changes what the organization calls the cluster and what it
+        says the cluster is for, and nothing else. A field left out
+        keeps its value. Authorized as `iam:cluster.update` on the
+        organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClusterPatch'
+      responses:
+        '200':
+          description: The cluster as stored after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteCluster
+      tags: [cluster]
+      summary: Delete a connected cluster's record. Requires the `admin` role.
+      description: >-
+        Removes the organization's record of the cluster, and with it
+        what the cluster's connector authenticates as (ADR-0184
+        decision 7). Nothing in the cluster is touched: garam never
+        dials it. Authorized as `iam:cluster.delete` on the
+        organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+      responses:
+        '204':
+          description: Cluster deleted.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/operators:
     post:
       operationId: registerOperator
@@ -3041,6 +3183,14 @@ components:
       required: true
       description: A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint.
       x-go-name: KeyID
+      schema:
+        type: string
+    cluster:
+      name: cluster
+      in: path
+      required: true
+      description: Cluster identifier (the last GRN segment).
+      x-go-name: ClusterSlug
       schema:
         type: string
     operator:
@@ -4743,6 +4893,64 @@ components:
               $ref: '#/components/schemas/OperatorName'
             description:
               $ref: '#/components/schemas/OperatorDescription'
+    Cluster:
+      type: object
+      description: >-
+        A connected cluster this organization has created (ADR-0184).
+        Nothing on it is a report from the cluster.
+      required: [grn, name, description, orgGrn, createdBy, createdAt]
+      properties:
+        grn:
+          type: string
+          description: The GRN, whose identifier garam minted.
+          example: grn:acme/iam/cluster/5f60710a1b2c3d4e
+        name:
+          type: string
+          description: >-
+            What the organization calls the cluster. It is not unique
+            and not an identity. A creation that named none is called
+            by its identifier.
+          example: EKS production
+        description:
+          type: string
+          description: What the organization says the cluster is for, empty where it says nothing.
+        orgGrn:
+          type: string
+        createdBy:
+          type: string
+          description: The member that created the record.
+        createdAt:
+          type: string
+          format: date-time
+    ClusterCreation:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/ClusterName'
+        description:
+          $ref: '#/components/schemas/ClusterDescription'
+    ClusterPatch:
+      type: object
+      description: >-
+        A change to what the organization says about a cluster. A field
+        left out keeps its value; the identifier is not a field.
+      properties:
+        name:
+          $ref: '#/components/schemas/ClusterName'
+        description:
+          $ref: '#/components/schemas/ClusterDescription'
+    ClusterName:
+      type: string
+      description: >-
+        At most 100 characters once surrounding space is trimmed, and
+        at least one. Left out of a creation, the name is the
+        identifier.
+      example: EKS production
+    ClusterDescription:
+      type: string
+      description: >-
+        At most 1000 characters once surrounding space is trimmed. Empty
+        is no description, and on an update clears the one there was.
     OperatorPatch:
       type: object
       description: >-

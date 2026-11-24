@@ -52,6 +52,7 @@ type fixture struct {
 	authority   *operatormocks.MockAuthorityService
 	standalone  *agentmocks.MockStandaloneService
 	devices     *fakeDeviceStore
+	clusters    *fakeClusterStore
 }
 
 // fixtureTokenURL is the token endpoint every fixture is configured
@@ -84,6 +85,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		authority:   operatormocks.NewMockAuthorityService(t),
 		standalone:  agentmocks.NewMockStandaloneService(t),
 		devices:     &fakeDeviceStore{},
+		clusters:    newFakeClusterStore(),
 	}
 	// The events a stream carries were forwarded to another process, so
 	// this one delivers what the relay announces to the watches it holds
@@ -95,7 +97,8 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
 	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.authorities, f.authority, f.standalone, cfg).
-		WithDeviceGrant(f.devices)
+		WithDeviceGrant(f.devices).
+		WithClusters(f.clusters)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.
 	f.server = srv

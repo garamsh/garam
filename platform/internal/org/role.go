@@ -113,6 +113,18 @@ const (
 	// a service, which registering an operator alone does not do.
 	ActionOperatorDelegate = "iam:operator.delegate"
 
+	// A connected cluster's record (ADR-0184): reading the ones an org
+	// holds, creating one, renaming and describing it, re-registering
+	// it, which answers a new one-time token and withdraws every key it
+	// held, and deleting it, which stops its connector. They are named
+	// one at a time, and the org owns them for the reason it owns the
+	// operator's.
+	ActionClusterRead     = "iam:cluster.read"
+	ActionClusterRegister = "iam:cluster.register"
+	ActionClusterUpdate   = "iam:cluster.update"
+	ActionClusterReissue  = "iam:cluster.reissue"
+	ActionClusterDelete   = "iam:cluster.delete"
+
 	// Reading the agents an org holds and watching one work. The org
 	// owns the constants for the reason it owns the policy ones: the
 	// api server enforces them, and internal/agent does not import
@@ -229,6 +241,8 @@ var actions = []string{
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
+	ActionClusterRead, ActionClusterRegister, ActionClusterUpdate,
+	ActionClusterReissue, ActionClusterDelete,
 	ActionAgentRead, ActionAgentWatch, ActionAgentRename, ActionAgentCreate,
 	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentReplace,
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
@@ -252,20 +266,22 @@ func IsAction(a string) bool {
 	return slices.Contains(actions, a)
 }
 
-// machineActions is every agent, operator and execution action a role
-// grants, one row each and in the order Actions answers them. An owner
-// and an admin hold every row. A member holds the rows marked for it:
-// it reads the operators an org has registered and registers none,
-// because standing a machine identity up for the organization is the
-// administrative act registering already looks like. It may create an
-// agent from an allowed profile and read the published templates and
-// profiles it chooses from, and may not configure an agent, publish a
-// template or read an agent's execution.
+// machineActions is every agent, operator, cluster and execution
+// action a role grants, one row each and in the order Actions answers
+// them. An owner and an admin hold every row. A member holds the rows
+// marked for it: it reads the operators and clusters an org has
+// registered and registers neither, because standing a machine
+// identity up for the organization is the administrative act
+// registering already looks like (ADR-0184 for a cluster). It may
+// create an agent from an allowed profile and read the published
+// templates and profiles it chooses from, and may not configure an
+// agent, publish a template or read an agent's execution.
 //
-// Agent and operator actions are granted one at a time and never as
-// `iam:agent.*` or `iam:operator.*`: ADR-0012 puts provisioning outside
-// garam, so a wildcard would grant in advance the actions no endpoint
-// may offer. Deleting an operator is what that caution was for — it
+// Agent, operator and cluster actions are granted one at a time and
+// never as a wildcard such as `iam:operator.*`: ADR-0012 puts
+// provisioning outside garam, so a wildcard would grant in advance the
+// actions no endpoint may offer. Deleting an operator is what that
+// caution was for — it
 // arrived after registering and reading, and a wildcard would have
 // granted it before anyone decided it (ADR-0070).
 var machineActions = []struct {
@@ -278,6 +294,11 @@ var machineActions = []struct {
 	{ActionOperatorDelete, false},
 	{ActionOperatorReissue, false},
 	{ActionOperatorDelegate, false},
+	{ActionClusterRead, true},
+	{ActionClusterRegister, false},
+	{ActionClusterUpdate, false},
+	{ActionClusterReissue, false},
+	{ActionClusterDelete, false},
 	{ActionAgentRead, true},
 	{ActionAgentRename, true},
 	{ActionAgentCreate, true},

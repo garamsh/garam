@@ -19,6 +19,7 @@ import (
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	clusterpg "github.com/garamsh/garam/platform/internal/cluster/postgres"
 	"github.com/garamsh/garam/platform/internal/health"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -137,7 +138,8 @@ func serveAPI(cmd *cobra.Command) error {
 	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
 		WithIdentity(issuer).
-		WithPolicyRelay(relay)
+		WithPolicyRelay(relay).
+		WithClusters(clusterpg.New(pool))
 
 	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger, obs.registry)
 	if err != nil {

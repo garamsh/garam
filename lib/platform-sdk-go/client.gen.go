@@ -1188,6 +1188,48 @@ type AuditRecordPage struct {
 	Records       []AuditRecord `json:"records"`
 }
 
+// Cluster A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster.
+type Cluster struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy The member that created the record.
+	CreatedBy string `json:"createdBy"`
+
+	// Description What the organization says the cluster is for, empty where it says nothing.
+	Description string `json:"description"`
+
+	// Grn The GRN, whose identifier garam minted.
+	Grn string `json:"grn"`
+
+	// Name What the organization calls the cluster. It is not unique and not an identity. A creation that named none is called by its identifier.
+	Name   string `json:"name"`
+	OrgGrn string `json:"orgGrn"`
+}
+
+// ClusterCreation defines model for ClusterCreation.
+type ClusterCreation struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *ClusterDescription `json:"description,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+	Name *ClusterName `json:"name,omitempty"`
+}
+
+// ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+type ClusterDescription = string
+
+// ClusterName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+type ClusterName = string
+
+// ClusterPatch A change to what the organization says about a cluster. A field left out keeps its value; the identifier is not a field.
+type ClusterPatch struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *ClusterDescription `json:"description,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+	Name *ClusterName `json:"name,omitempty"`
+}
+
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
 	Url string `json:"url"`
@@ -2175,6 +2217,9 @@ type User struct {
 // AgentSlug defines model for agent.
 type AgentSlug = string
 
+// ClusterSlug defines model for cluster.
+type ClusterSlug = string
+
 // ContractVersion defines model for contractVersion.
 type ContractVersion = string
 
@@ -2423,6 +2468,12 @@ type ApproveAgentEnrollmentJSONRequestBody = AgentEnrollmentApproval
 
 // RenameAgentJSONRequestBody defines body for RenameAgent for application/json ContentType.
 type RenameAgentJSONRequestBody = AgentPatch
+
+// CreateClusterJSONRequestBody defines body for CreateCluster for application/json ContentType.
+type CreateClusterJSONRequestBody = ClusterCreation
+
+// UpdateClusterJSONRequestBody defines body for UpdateCluster for application/json ContentType.
+type UpdateClusterJSONRequestBody = ClusterPatch
 
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
@@ -2950,6 +3001,63 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
 	ListAuditRecords(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListClusters List an organization's connected clusters. Requires the `member` role.
+	//
+	// The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/clusters (the `ListClusters` operationId).
+	ListClusters(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateClusterWithBody Create a connected cluster's record. Requires the `admin` role.
+	//
+	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
+	CreateClusterWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateCluster Create a connected cluster's record. Requires the `admin` role.
+	//
+	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
+	CreateCluster(ctx context.Context, org Org, body CreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteCluster Delete a connected cluster's record. Requires the `admin` role.
+	//
+	// Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
+	//
+	// Corresponds with DELETE /orgs/{org}/clusters/{cluster} (the `DeleteCluster` operationId).
+	DeleteCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetCluster Read one of an organization's connected clusters. Requires the `member` role.
+	//
+	// Authorized as `iam:cluster.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster} (the `GetCluster` operationId).
+	GetCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateClusterWithBody Rename or describe a connected cluster. Requires the `admin` role.
+	//
+	// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
+	UpdateClusterWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateCluster Rename or describe a connected cluster. Requires the `admin` role.
+	//
+	// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
+	UpdateCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	//
@@ -4427,6 +4535,133 @@ func (c *Client) WatchAgent(ctx context.Context, org Org, agentSlug AgentSlug, r
 // Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
 func (c *Client) ListAuditRecords(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAuditRecordsRequest(c.Server, org, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListClusters List an organization's connected clusters. Requires the `member` role.
+//
+// The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/clusters (the `ListClusters` operationId).
+func (c *Client) ListClusters(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListClustersRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateClusterWithBody Create a connected cluster's record. Requires the `admin` role.
+//
+// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
+func (c *Client) CreateClusterWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateClusterRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateCluster Create a connected cluster's record. Requires the `admin` role.
+//
+// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
+func (c *Client) CreateCluster(ctx context.Context, org Org, body CreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateClusterRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteCluster Delete a connected cluster's record. Requires the `admin` role.
+//
+// Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
+//
+// Corresponds with DELETE /orgs/{org}/clusters/{cluster} (the `DeleteCluster` operationId).
+func (c *Client) DeleteCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteClusterRequest(c.Server, org, clusterSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetCluster Read one of an organization's connected clusters. Requires the `member` role.
+//
+// Authorized as `iam:cluster.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster} (the `GetCluster` operationId).
+func (c *Client) GetCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterRequest(c.Server, org, clusterSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateClusterWithBody Rename or describe a connected cluster. Requires the `admin` role.
+//
+// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
+func (c *Client) UpdateClusterWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateClusterRequestWithBody(c.Server, org, clusterSlug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateCluster Rename or describe a connected cluster. Requires the `admin` role.
+//
+// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
+func (c *Client) UpdateCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateClusterRequest(c.Server, org, clusterSlug, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7270,6 +7505,223 @@ func NewListAuditRecordsRequest(server string, org Org, params *ListAuditRecords
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewListClustersRequest constructs an http.Request for the ListClusters method
+func NewListClustersRequest(server string, org Org) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateClusterRequest calls the generic CreateCluster builder with application/json body
+func NewCreateClusterRequest(server string, org Org, body CreateClusterJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateClusterRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateClusterRequestWithBody constructs an http.Request for the CreateCluster method, with any body, and a specified content type
+func NewCreateClusterRequestWithBody(server string, org Org, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteClusterRequest constructs an http.Request for the DeleteCluster method
+func NewDeleteClusterRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetClusterRequest constructs an http.Request for the GetCluster method
+func NewGetClusterRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateClusterRequest calls the generic UpdateCluster builder with application/json body
+func NewUpdateClusterRequest(server string, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateClusterRequestWithBody(server, org, clusterSlug, "application/json", bodyReader)
+}
+
+// NewUpdateClusterRequestWithBody constructs an http.Request for the UpdateCluster method, with any body, and a specified content type
+func NewUpdateClusterRequestWithBody(server string, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -10468,6 +10920,69 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
 	ListAuditRecordsWithResponse(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*ListAuditRecordsResponse, error)
 
+	// ListClustersWithResponse List an organization's connected clusters. Requires the `member` role.
+	//
+	// The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/clusters (the `ListClusters` operationId).
+	ListClustersWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListClustersResponse, error)
+
+	// CreateClusterWithBodyWithResponse Create a connected cluster's record. Requires the `admin` role.
+	//
+	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
+	CreateClusterWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClusterResponse, error)
+
+	// CreateClusterWithResponse Create a connected cluster's record. Requires the `admin` role.
+	//
+	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
+	CreateClusterWithResponse(ctx context.Context, org Org, body CreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClusterResponse, error)
+
+	// DeleteClusterWithResponse Delete a connected cluster's record. Requires the `admin` role.
+	//
+	// Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/clusters/{cluster} (the `DeleteCluster` operationId).
+	DeleteClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*DeleteClusterResponse, error)
+
+	// GetClusterWithResponse Read one of an organization's connected clusters. Requires the `member` role.
+	//
+	// Authorized as `iam:cluster.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster} (the `GetCluster` operationId).
+	GetClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*GetClusterResponse, error)
+
+	// UpdateClusterWithBodyWithResponse Rename or describe a connected cluster. Requires the `admin` role.
+	//
+	// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
+	UpdateClusterWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error)
+
+	// UpdateClusterWithResponse Rename or describe a connected cluster. Requires the `admin` role.
+	//
+	// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
+	UpdateClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error)
+
 	// ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
 	//
 	// Every relation the organization is a side of, standing or waiting on one half (ADR-0035). A message crosses between the two organizations only while both halves stand.
@@ -13149,6 +13664,337 @@ func (r ListAuditRecordsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAuditRecordsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListClustersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]Cluster
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListClustersResponse) GetJSON200() *[]Cluster {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListClustersResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListClustersResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListClustersResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ListClustersResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListClustersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListClustersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListClustersResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateClusterResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Cluster
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateClusterResponse) GetJSON201() *Cluster {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateClusterResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateClusterResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateClusterResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateClusterResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateClusterResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateClusterResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateClusterResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteClusterResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteClusterResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteClusterResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteClusterResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteClusterResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteClusterResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteClusterResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteClusterResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetClusterResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Cluster
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetClusterResponse) GetJSON200() *Cluster {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetClusterResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetClusterResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetClusterResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetClusterResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetClusterResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetClusterResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetClusterResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateClusterResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Cluster
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateClusterResponse) GetJSON200() *Cluster {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r UpdateClusterResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r UpdateClusterResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r UpdateClusterResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r UpdateClusterResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateClusterResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateClusterResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateClusterResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17694,6 +18540,111 @@ func (c *ClientWithResponses) ListAuditRecordsWithResponse(ctx context.Context, 
 	return ParseListAuditRecordsResponse(rsp)
 }
 
+// ListClustersWithResponse List an organization's connected clusters. Requires the `member` role.
+//
+// The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/clusters (the `ListClusters` operationId).
+func (c *ClientWithResponses) ListClustersWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListClustersResponse, error) {
+	rsp, err := c.ListClusters(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListClustersResponse(rsp)
+}
+
+// CreateClusterWithBodyWithResponse Create a connected cluster's record. Requires the `admin` role.
+//
+// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
+func (c *ClientWithResponses) CreateClusterWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClusterResponse, error) {
+	rsp, err := c.CreateClusterWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateClusterResponse(rsp)
+}
+
+// CreateClusterWithResponse Create a connected cluster's record. Requires the `admin` role.
+//
+// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
+func (c *ClientWithResponses) CreateClusterWithResponse(ctx context.Context, org Org, body CreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClusterResponse, error) {
+	rsp, err := c.CreateCluster(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateClusterResponse(rsp)
+}
+
+// DeleteClusterWithResponse Delete a connected cluster's record. Requires the `admin` role.
+//
+// Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/clusters/{cluster} (the `DeleteCluster` operationId).
+func (c *ClientWithResponses) DeleteClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*DeleteClusterResponse, error) {
+	rsp, err := c.DeleteCluster(ctx, org, clusterSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteClusterResponse(rsp)
+}
+
+// GetClusterWithResponse Read one of an organization's connected clusters. Requires the `member` role.
+//
+// Authorized as `iam:cluster.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster} (the `GetCluster` operationId).
+func (c *ClientWithResponses) GetClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*GetClusterResponse, error) {
+	rsp, err := c.GetCluster(ctx, org, clusterSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetClusterResponse(rsp)
+}
+
+// UpdateClusterWithBodyWithResponse Rename or describe a connected cluster. Requires the `admin` role.
+//
+// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
+func (c *ClientWithResponses) UpdateClusterWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error) {
+	rsp, err := c.UpdateClusterWithBody(ctx, org, clusterSlug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateClusterResponse(rsp)
+}
+
+// UpdateClusterWithResponse Rename or describe a connected cluster. Requires the `admin` role.
+//
+// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
+func (c *ClientWithResponses) UpdateClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error) {
+	rsp, err := c.UpdateCluster(ctx, org, clusterSlug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateClusterResponse(rsp)
+}
+
 // ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
 //
 // Every relation the organization is a side of, standing or waiting on one half (ADR-0035). A message crosses between the two organizations only while both halves stand.
@@ -20356,6 +21307,265 @@ func ParseListAuditRecordsResponse(rsp *http.Response) (*ListAuditRecordsRespons
 			return nil, err
 		}
 		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListClustersResponse parses an HTTP response from a ListClustersWithResponse call
+func ParseListClustersResponse(rsp *http.Response) (*ListClustersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListClustersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Cluster
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateClusterResponse parses an HTTP response from a CreateClusterWithResponse call
+func ParseCreateClusterResponse(rsp *http.Response) (*CreateClusterResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Cluster
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteClusterResponse parses an HTTP response from a DeleteClusterWithResponse call
+func ParseDeleteClusterResponse(rsp *http.Response) (*DeleteClusterResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetClusterResponse parses an HTTP response from a GetClusterWithResponse call
+func ParseGetClusterResponse(rsp *http.Response) (*GetClusterResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Cluster
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateClusterResponse parses an HTTP response from a UpdateClusterWithResponse call
+func ParseUpdateClusterResponse(rsp *http.Response) (*UpdateClusterResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Cluster
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

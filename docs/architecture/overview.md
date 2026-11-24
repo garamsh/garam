@@ -225,8 +225,10 @@ garam's retired templates and the browser's `operatorGrn`
   What is out of scope is the whole of it: no resource, no store, no
   surface, and the `secret` service type stands in the catalogue as
   planned ([grn-model.md](./grn-model.md)).
-- Clusters as a resource an organization connects. Decided and
-  unbuilt: a connected cluster is a machine identity,
+- Clusters as a resource an organization connects, beyond the record.
+  The record and its browser routes are built
+  ([clusters.md](./clusters.md)); the rest is decided and unbuilt: a
+  connected cluster is a machine identity,
   `grn:<org>/iam/cluster/<id>`, that registers once by spending a
   one-time token with a key it generated, and serves as the target of
   the bots and workspaces declared for it. Its registration route will

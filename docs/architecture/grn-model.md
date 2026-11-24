@@ -110,7 +110,7 @@ type's names.
 | `iam` | `project` | unit of work | `grn:acme/iam/project/frontend` |
 | `iam` | `operator` | provisions agents from outside (ADR-0012); registered by its organization, which supplies the identifier (ADR-0045) | `grn:acme/iam/operator/field-one` |
 | `iam` | `supervisor` | runs one agent on a standalone host; garam mints the identifier and registers it for that agent on an administrator's approval (ADR-0082) | `grn:acme/iam/supervisor/0a1b2c3d4e5f6071` |
-| `iam` | `cluster` | a user's own cluster connected to garam through a connector it installs; registered by its organization; garam mints the identifier and answers it at registration (planned, ADR-0184) | `grn:acme/iam/cluster/5f60710a1b2c3d4e` |
+| `iam` | `cluster` | a user's own cluster connected to garam through a connector it installs; registered by its organization; garam mints the identifier and answers it at registration (the record built, `platform/internal/cluster`; its registration planned, ADR-0184) | `grn:acme/iam/cluster/5f60710a1b2c3d4e` |
 | `iam` | `policy` | stored policy document | `grn:acme/iam/policy/a1b2c3d4` |
 | `iam` | `service` | a first-party service acting in one organization, one per organization and service, the identifier the service's name (built for cowork and codehub, written with the organization and by migrations `000073` and `000074`, ADR-0129, ADR-0141; `platform/internal/identity/principal.go`) | `grn:acme/iam/service/cowork` |
 | `codehub` | `repo` | a repository codehub stores, owned by an organization, or by a project as `project/<id>/repo/<id>` once that step is taken (ADR-0141, ADR-0149; declared by the `Codehub` manifest) | `grn:acme/codehub/repo/4821` |

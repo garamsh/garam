@@ -196,6 +196,30 @@ func (e AuditRecordKind) Valid() bool {
 	}
 }
 
+// Defines values for ClusterDeclarationOutcomeOutcome.
+const (
+	Applied             ClusterDeclarationOutcomeOutcome = "applied"
+	Conflict            ClusterDeclarationOutcomeOutcome = "conflict"
+	Invalid             ClusterDeclarationOutcomeOutcome = "invalid"
+	NamespaceNotWatched ClusterDeclarationOutcomeOutcome = "namespaceNotWatched"
+)
+
+// Valid indicates whether the value is a known member of the ClusterDeclarationOutcomeOutcome enum.
+func (e ClusterDeclarationOutcomeOutcome) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Conflict:
+		return true
+	case Invalid:
+		return true
+	case NamespaceNotWatched:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClusterKeyState.
 const (
 	ClusterKeyActive   ClusterKeyState = "active"
@@ -211,6 +235,66 @@ func (e ClusterKeyState) Valid() bool {
 	case ClusterKeyRetiring:
 		return true
 	case ClusterKeyRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClusterReportConnectorMode.
+const (
+	Apply      ClusterReportConnectorMode = "apply"
+	ReportOnly ClusterReportConnectorMode = "reportOnly"
+)
+
+// Valid indicates whether the value is a known member of the ClusterReportConnectorMode enum.
+func (e ClusterReportConnectorMode) Valid() bool {
+	switch e {
+	case Apply:
+		return true
+	case ReportOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClusterReportedObjectKind.
+const (
+	Bot            ClusterReportedObjectKind = "Bot"
+	BotPool        ClusterReportedObjectKind = "BotPool"
+	Workspace      ClusterReportedObjectKind = "Workspace"
+	WorkspaceClass ClusterReportedObjectKind = "WorkspaceClass"
+)
+
+// Valid indicates whether the value is a known member of the ClusterReportedObjectKind enum.
+func (e ClusterReportedObjectKind) Valid() bool {
+	switch e {
+	case Bot:
+		return true
+	case BotPool:
+		return true
+	case Workspace:
+		return true
+	case WorkspaceClass:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClusterReportedObjectOwner.
+const (
+	ClusterReportedObjectOwnerCluster ClusterReportedObjectOwner = "cluster"
+	ClusterReportedObjectOwnerGaram   ClusterReportedObjectOwner = "garam"
+)
+
+// Valid indicates whether the value is a known member of the ClusterReportedObjectOwner enum.
+func (e ClusterReportedObjectOwner) Valid() bool {
+	switch e {
+	case ClusterReportedObjectOwnerCluster:
+		return true
+	case ClusterReportedObjectOwnerGaram:
 		return true
 	default:
 		return false
@@ -1254,6 +1338,19 @@ type ClusterDeclarationList struct {
 	Declarations []ClusterDeclaration `json:"declarations"`
 }
 
+// ClusterDeclarationOutcome What the connector made of one declaration placed on this cluster.
+type ClusterDeclarationOutcome struct {
+	Generation int64  `json:"generation"`
+	Id         string `json:"id"`
+
+	// Message Display data, rendered as text.
+	Message *string                          `json:"message,omitempty"`
+	Outcome ClusterDeclarationOutcomeOutcome `json:"outcome"`
+}
+
+// ClusterDeclarationOutcomeOutcome defines model for ClusterDeclarationOutcome.Outcome.
+type ClusterDeclarationOutcomeOutcome string
+
 // ClusterDeclarationWrite defines model for ClusterDeclarationWrite.
 type ClusterDeclarationWrite struct {
 	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
@@ -1304,6 +1401,70 @@ type ClusterRegistrationToken struct {
 	ExpiresAt         time.Time `json:"expiresAt"`
 	RegistrationToken string    `json:"registrationToken"`
 }
+
+// ClusterReport A connected cluster's report (cluster-connection v1alpha1 REP-1), as garam kept it.
+type ClusterReport struct {
+	Connector    ClusterReportConnector      `json:"connector"`
+	Declarations []ClusterDeclarationOutcome `json:"declarations"`
+	Objects      []ClusterReportedObject     `json:"objects"`
+	ObservedAt   time.Time                   `json:"observedAt"`
+}
+
+// ClusterReportConnector defines model for ClusterReportConnector.
+type ClusterReportConnector struct {
+	// ClaimedElsewhere The watched namespaces another release holds, or none does.
+	ClaimedElsewhere *[]string                  `json:"claimedElsewhere,omitempty"`
+	Mode             ClusterReportConnectorMode `json:"mode"`
+
+	// Namespaces The namespaces the connector acts in.
+	Namespaces []string `json:"namespaces"`
+	Version    string   `json:"version"`
+}
+
+// ClusterReportConnectorMode defines model for ClusterReportConnector.Mode.
+type ClusterReportConnectorMode string
+
+// ClusterReportView What garam holds of a connected cluster's reports.
+type ClusterReportView struct {
+	// Cluster The cluster's GRN.
+	Cluster string `json:"cluster"`
+
+	// LastContactAt When the cluster's latest authenticated request reached garam, to within a second; null where none has.
+	LastContactAt *time.Time     `json:"lastContactAt"`
+	Report        *ClusterReport `json:"report"`
+}
+
+// ClusterReportedObject One object of a declared kind the connector reported. A cluster-owned one is shown read-only, with the cluster as its source.
+type ClusterReportedObject struct {
+	ApiVersion string `json:"apiVersion"`
+
+	// Cluster A garam-owned object's record, always this cluster.
+	Cluster *string `json:"cluster,omitempty"`
+
+	// DeclarationId A garam-owned object's declaration.
+	DeclarationId *string                   `json:"declarationId,omitempty"`
+	Generation    int64                     `json:"generation"`
+	Kind          ClusterReportedObjectKind `json:"kind"`
+	Name          string                    `json:"name"`
+	Namespace     string                    `json:"namespace"`
+
+	// Orphaned A garam-owned object no live declaration names.
+	Orphaned *bool                      `json:"orphaned,omitempty"`
+	Owner    ClusterReportedObjectOwner `json:"owner"`
+
+	// Spec A cluster-owned object's spec. Display data, rendered as text.
+	Spec *json.RawMessage `json:"spec,omitempty"`
+
+	// Status Display data, rendered as text.
+	Status json.RawMessage `json:"status"`
+	Uid    string          `json:"uid"`
+}
+
+// ClusterReportedObjectKind defines model for ClusterReportedObject.Kind.
+type ClusterReportedObjectKind string
+
+// ClusterReportedObjectOwner defines model for ClusterReportedObject.Owner.
+type ClusterReportedObjectOwner string
 
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
@@ -2771,6 +2932,9 @@ type ServerInterface interface {
 	// ReissueClusterRegistrationToken Answer a new registration token for a cluster. Requires the `admin` role.
 	// (POST /orgs/{org}/clusters/{cluster}/registration-token)
 	ReissueClusterRegistrationToken(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
+	// GetClusterReport Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
+	// (GET /orgs/{org}/clusters/{cluster}/report)
+	GetClusterReport(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	// (GET /orgs/{org}/consents)
 	ListOrgConsents(w http.ResponseWriter, r *http.Request, org Org)
@@ -4345,6 +4509,41 @@ func (siw *ServerInterfaceWrapper) ReissueClusterRegistrationToken(w http.Respon
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReissueClusterRegistrationToken(w, r, org, clusterSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClusterReport operation middleware
+func (siw *ServerInterfaceWrapper) GetClusterReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClusterReport(w, r, org, clusterSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6676,6 +6875,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/registration-token", wrapper.ReissueClusterRegistrationToken)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/keys", wrapper.ListClusterKeys)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/keys/{kid}", wrapper.RevokeClusterKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/report", wrapper.GetClusterReport)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations", wrapper.ListClusterDeclarations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations", wrapper.CreateClusterDeclaration)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations/{declaration}", wrapper.DeleteClusterDeclaration)

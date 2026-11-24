@@ -23,6 +23,9 @@ serves from `platform/internal/machineapi` §ClusterConnection.
 | `Declaration` | one declaration placed on a record: its identifier, generation and object, or none once tombstoned |
 | `DeclarationStore` | places, tombstones, reads and lists a record's declarations, and answers a page of its log after a cursor; `Declare` checks a write before it reaches the store |
 | `Wakes` | the polls a process holds, by record, which a write wakes |
+| `Report` | a connector's report as garam keeps it: the members the interface names, every `spec` and `status` kept as sent and never read |
+| `ReportStore` | which identifiers a record's declarations hold, the record's kept report, replaced only by one observed later, and its latest contact |
+| `KeptReport` | what garam holds of a record's reports: its latest contact and its latest report, each absent where there is none |
 
 ## Current decisions
 
@@ -56,8 +59,8 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   describe, `iam:cluster.delete` to delete, `iam:cluster.reissue` to
   answer a new registration token and to revoke a key, and
   `iam:cluster.declare` to place, change and tombstone a declaration.
-  Listing the keys and reading the declarations take
-  `iam:cluster.read`.
+  Listing the keys, reading the declarations and reading the report
+  take `iam:cluster.read`.
 - **Which roles hold each**, decided where it was built (#2045, and
   #2048 for `.declare`): every role holds `iam:cluster.read`; the
   owner and the administrator hold `iam:cluster.register`, `.update`,
@@ -159,7 +162,13 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   `cluster.ParseDeclaredObject` is the check. Two live
   declarations of a record never name one object, and
   `platform/migrations/000085_cluster_declarations.up.sql`
-  §cluster_declarations_live_object_idx holds that too.
+  §cluster_declarations_live_object_idx holds that too. A declaration
+  of a kind, namespace and name the record's kept report shows held by
+  a cluster-owned object is refused 409, whether it is new or a next
+  generation moved onto that name. That refusal is a courtesy, read in
+  the write's transaction: the connector's `conflict` is what holds
+  ([ADR-0188](./adr/0188-garam-keeps-a-connected-clusters-latest-report-as-untrusted-display-data-and-its-last-contact-from-its-token.md)
+  decision 6).
 - **An identifier names one declaration, once, across every record.**
   It is 1 to 128 letters, digits, `.`, `_` or `-`, and one garam draws
   is `decl-` and sixteen hex digits. A tombstoned declaration's
@@ -192,14 +201,32 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   the record's GRN. `clusterpg.ListenDeclarations` holds one connection
   per process, and a held poll reads again every five seconds besides,
   so a notification lost to a reconnect costs at most that long.
+- **A record keeps its latest report, as untrusted display data**
+  (ADR-0188). `report` on the machine listener answers 204, and
+  replaces the kept report only with one observed later. Before it is
+  kept, garam drops:
+  - each outcome and object naming an identifier no declaration of
+    the record holds, live or tombstoned;
+  - each garam-owned object whose marker names another record.
+
+  A Secret, a ConfigMap or any kind not declared is refused 400
+  `invalid_request`, and a body over 4 MiB 413 `report_too_large`, the
+  one body the listener bounds past its 1 MiB. Each cluster's reports
+  are bounded, 120 a minute. Every `spec`, `status` and `message` is
+  kept as sent and never read. `getClusterReport` answers the kept
+  report under `iam:cluster.read`, for a console to render as text.
+  `platform/migrations/000086_cluster_reports.up.sql` holds the rows.
+- **`lastContactAt` is the time a record's token last resolved**, to
+  within a second (ADR-0188 decision 4). The query that resolves a
+  cluster's token records it and skips the write while the kept time
+  is under a second old, so a busy record writes once a second.
 - **The wire is the interface's own specification, vendored**
   ([ADR-0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)).
   `platform/api/cluster-connection/v1alpha1/openapi.yaml` is
   authoritative for the shapes, and garam-bot-operator's `README.md`
   beside the original for the behaviour. The pin is
-  `CLUSTER_CONNECTION_PIN` in `platform/Makefile`. A route the
-  interface defines and garam has not built answers 501 with the code
-  `internal`, which the connector backs off from (T-6).
+  `CLUSTER_CONNECTION_PIN` in `platform/Makefile`. garam serves every
+  route the interface defines.
 
 ## Rationale
 
@@ -216,6 +243,9 @@ serves from `platform/internal/machineapi` §ClusterConnection.
 - Why placing a declaration is an action of its own rather than
   `iam:cluster.update`, why an identifier is never placed twice, and
   why the wake goes through Postgres: ADR-0187.
+- Why one report per record, why a tombstoned declaration's
+  identifier still counts as placed, and why `lastContactAt` is
+  written at most once a second: ADR-0188.
 - Why every route is decided on the organization and the roles mirror
   the operator's: standing a machine identity up or taking it away is
   the administrative act registering and deleting an operator already
@@ -225,13 +255,11 @@ serves from `platform/internal/machineapi` §ClusterConnection.
 ## Open questions
 
 - Not yet built, each its own issue: the server conformance suite in
-  CI (#2047), which waits for garam-bot-operator#439 to build it; the
-  bot-token mint for a cluster (#2049); reports (#2050), with the
-  refusal of a declaration whose namespace and name the latest report
-  shows held by a cluster-owned object. The fixture the suite will run
-  is built for what the server already serves,
-  `platform/tests/clusterfixture` (its `README.md` is the contract),
-  and each issue adds its own subcommands.
+  CI (#2047), which waits for garam-bot-operator#439 to build it, and
+  the bot-token mint for a cluster (#2049), which follows #2027. The
+  fixture the suite will run, `platform/tests/clusterfixture` (its
+  `README.md` is the contract), carries every subcommand the suite
+  names.
 - The per-address bounds read the machine listener's TCP peer, per
   replica, so behind a balancer that rewrites the source one address
   stands for every connector

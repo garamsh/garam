@@ -150,6 +150,7 @@ func TestCluster_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
 		{"declare", org.ActionClusterDeclare, "POST", "/declarations", declarationWrite("other"), http.StatusCreated},
 		{"declare under an id", org.ActionClusterDeclare, "PUT", "/declarations/placed", declarationWrite("reviewer"), http.StatusOK},
 		{"tombstone", org.ActionClusterDeclare, "DELETE", "/declarations/placed", "", http.StatusNoContent},
+		{"read the report", org.ActionClusterRead, "GET", "/report", "", http.StatusOK},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

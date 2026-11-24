@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -85,9 +86,13 @@ func (c *ClusterConnection) RotateKey(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// errConnectionRouteUnbuilt answers a route of the interface garam
-// does not serve yet, as a 5xx the connector backs off from (T-6).
-var errConnectionRouteUnbuilt = errorx.New(errorx.KindUnimplemented, "garam does not serve this route yet")
+// ReportPath is the report route's path, whose body is bounded at
+// cluster.ReportMaxBytes rather than the listener's own bound.
+const ReportPath = "/cluster-connection/v1alpha1/clusters/self/reports"
+
+// errReportTooLarge answers a report past cluster.ReportMaxBytes
+// (REP-6).
+var errReportTooLarge = errorx.New(errorx.KindInvalidArgument, "the report is over 4 MiB")
 
 // declarationPage and change are DeclarationPage and Change as the wire
 // carries them. The generated Change decodes its object into maps,
@@ -135,12 +140,33 @@ func (c *ClusterConnection) WatchDeclarations(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, out)
 }
 
-// Report is #2050's. Until it lands, an authenticated cluster is
-// answered that garam does not serve it.
+// Report keeps the calling cluster's report where it is its latest
+// (REP-1 to REP-9), answering 204 whether it was kept or was older.
 func (c *ClusterConnection) Report(w http.ResponseWriter, r *http.Request) {
-	if _, ok := connectedCluster(w, r); ok {
-		writeConnectionError(w, errConnectionRouteUnbuilt)
+	caller, ok := connectedCluster(w, r)
+	if !ok {
+		return
 	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, cluster.ReportMaxBytes))
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		writeConnectionError(w, errReportTooLarge)
+		return
+	}
+	if err != nil {
+		writeConnectionError(w, errorx.Wrap(err, "read report", errorx.KindInvalidArgument))
+		return
+	}
+	report, err := cluster.ParseReport(raw)
+	if err != nil {
+		writeConnectionError(w, err)
+		return
+	}
+	if err := c.clusters.Report(r.Context(), caller, report); err != nil {
+		writeConnectionError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // connectedCluster is the cluster the request's token stands for, and
@@ -180,8 +206,10 @@ var connectionCodes = []struct {
 	{cluster.ErrRegistrationRefused, "registration_refused", 0},
 	{cluster.ErrInvalidProof, "invalid_proof", 0},
 	{cluster.ErrTooManyKeys, "too_many_keys", 0},
-	// No kind maps to 410, which DECL-6 answers.
+	// No kind maps to 410, which DECL-6 answers, or to 413, which REP-6
+	// answers.
 	{cluster.ErrCursorExpired, "cursor_expired", http.StatusGone},
+	{errReportTooLarge, "report_too_large", http.StatusRequestEntityTooLarge},
 }
 
 // connectionStatus is the status a refusal is answered at.

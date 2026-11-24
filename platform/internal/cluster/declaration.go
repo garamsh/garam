@@ -54,6 +54,11 @@ var (
 	// ErrDeclaredObjectTaken answers an object another live declaration
 	// of the record already names.
 	ErrDeclaredObjectTaken = errorx.New(errorx.KindAlreadyExists, "another live declaration of this cluster names the object")
+	// ErrDeclaredObjectHeld answers an object the record's latest
+	// report shows held by a cluster-owned object. It is a courtesy:
+	// the report may be stale, and the connector's conflict is what
+	// holds (gbo ADR 0089 decision 4).
+	ErrDeclaredObjectHeld = errorx.New(errorx.KindAlreadyExists, "the cluster's latest report shows a cluster-owned object under this kind, namespace and name")
 	// ErrCursorInvalid answers an after value that is no cursor of the
 	// record.
 	ErrCursorInvalid = errorx.New(errorx.KindInvalidArgument, "after is not a cursor of this cluster")

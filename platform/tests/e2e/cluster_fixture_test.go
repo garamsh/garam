@@ -336,3 +336,101 @@ func TestClusterFixture_DeclarationsReachTheConnectorsLongPoll(t *testing.T) {
 	assert.Equal(t, "invalid_request", refused["error"], "DECL-9 is refused at garam, before any connector reads it")
 	assert.Contains(t, refused["message"], "spec.image", "the refusal names the field")
 }
+
+// TestClusterFixture_ReportsReachLatestReport holds the report route
+// (#2050) through the built servers, by what latest-report reads back
+// through `serve api` of what a connector sent `serve machine`:
+//
+//   - a report is answered 204 and kept, without the outcome and the
+//     object naming another record's declaration (REP-8), and the
+//     request's time is the record's lastContactAt (REP-5);
+//   - an older report is answered 204 and changes nothing;
+//   - a Secret is 400 invalid_request (REP-7), and a body over 4 MiB is
+//     413 report_too_large (REP-6), past the listener's own bound;
+//   - a declaration of a name the report shows cluster-owned is
+//     refused (gbo ADR 0089 decision 4).
+func TestClusterFixture_ReportsReachLatestReport(t *testing.T) {
+	bin, env, c, tokenURL, _ := startFixtureStack(t)
+	code, minted := clusterFixture(t, bin, env, "mint-token")
+	require.Equal(t, 0, code, "%v", minted)
+	record := minted["cluster"].(string)
+	status, registered := c.register(minted["registrationToken"].(string))
+	require.Equal(t, http.StatusCreated, status, "%v", registered)
+	token, err := c.exchange(record, tokenURL)
+	require.NoError(t, err)
+	code, other := clusterFixture(t, bin, env, "mint-token")
+	require.Equal(t, 0, code, "%v", other)
+
+	code, before := clusterFixture(t, bin, env, "latest-report", record)
+	require.Equal(t, 0, code, "%v", before)
+	assert.Equal(t, map[string]any{"cluster": record, "lastContactAt": nil, "report": nil}, before)
+
+	bot := `{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"%s"},
+		"spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"}}}`
+	for _, d := range []struct{ on, id, name string }{{record, "e2e-ours", "reviewer"}, {other["cluster"].(string), "e2e-theirs", "theirs"}} {
+		file := filepath.Join(t.TempDir(), "declare.json")
+		require.NoError(t, os.WriteFile(file, []byte(`{"cluster":"`+d.on+`","id":"`+d.id+`","object":`+
+			fmt.Sprintf(bot, d.name)+`}`), 0o600))
+		code, placed := clusterFixture(t, bin, env, "declare", file)
+		require.Equal(t, 0, code, "%v", placed)
+	}
+
+	reportPath := "/cluster-connection/v1alpha1/clusters/self/reports"
+	object := func(owner, name, extra string) string {
+		return `{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","namespace":"team-a","name":"` + name +
+			`","uid":"u-` + name + `","owner":"` + owner + `","generation":1,"status":{"phase":"Ready"}` + extra + `}`
+	}
+	report := func(observedAt, objects string) []byte {
+		return []byte(`{"observedAt":"` + observedAt + `","connector":{"version":"0.1.0","mode":"apply","namespaces":["team-a"]},
+			"declarations":[{"id":"e2e-ours","generation":1,"outcome":"applied"},
+				{"id":"e2e-theirs","generation":1,"outcome":"applied"}],
+			"objects":[` + objects + `]}`)
+	}
+	sent := report("2026-11-24T12:00:00Z", strings.Join([]string{
+		object("garam", "reviewer", `,"cluster":"`+record+`","declarationId":"e2e-ours","orphaned":false`),
+		object("garam", "theirs", `,"cluster":"`+record+`","declarationId":"e2e-theirs","orphaned":false`),
+		object("cluster", "mira", `,"spec":{"persona":{"role":"Lead"}}`),
+	}, ","))
+	status, answered := c.send(http.MethodPost, reportPath, token, sent)
+	require.Equal(t, http.StatusNoContent, status, "%v", answered)
+
+	code, kept := clusterFixture(t, bin, env, "latest-report", record)
+	require.Equal(t, 0, code, "%v", kept)
+	assert.NotNil(t, kept["lastContactAt"], "the report's request is the record's contact")
+	keptReport, _ := kept["report"].(map[string]any)
+	require.NotNil(t, keptReport, "%v", kept)
+	var outcomes, objects []string
+	for _, o := range keptReport["declarations"].([]any) {
+		outcomes = append(outcomes, o.(map[string]any)["id"].(string))
+	}
+	for _, o := range keptReport["objects"].([]any) {
+		objects = append(objects, o.(map[string]any)["name"].(string))
+	}
+	assert.Equal(t, []string{"e2e-ours"}, outcomes, "another record's declaration is not recorded")
+	assert.Equal(t, []string{"reviewer", "mira"}, objects, "nor an object naming it")
+
+	status, answered = c.send(http.MethodPost, reportPath, token, report("2026-11-24T11:59:59Z", object("cluster", "older", "")))
+	require.Equal(t, http.StatusNoContent, status, "%v", answered)
+	code, again := clusterFixture(t, bin, env, "latest-report", record)
+	require.Equal(t, 0, code, "%v", again)
+	assert.Equal(t, kept["report"], again["report"], "an older report changes nothing")
+
+	secret := strings.Replace(object("cluster", "token", ""), `"kind":"Bot"`, `"kind":"Secret"`, 1)
+	status, refused := c.send(http.MethodPost, reportPath, token, report("2026-11-24T12:00:01Z", secret))
+	assert.Equal(t, http.StatusBadRequest, status, "%v", refused)
+	assert.Equal(t, "invalid_request", refused["error"])
+	big := object("cluster", "big", `,"spec":{"note":"`+strings.Repeat("x", 4<<20)+`"}`)
+	status, refused = c.send(http.MethodPost, reportPath, token, report("2026-11-24T12:00:01Z", big))
+	assert.Equal(t, http.StatusRequestEntityTooLarge, status, "%v", refused)
+	assert.Equal(t, "report_too_large", refused["error"])
+	twoMiB := object("cluster", "large", `,"spec":{"note":"`+strings.Repeat("x", 2<<20)+`"}`)
+	status, answered = c.send(http.MethodPost, reportPath, token, report("2026-11-24T12:00:02Z", twoMiB+","+
+		object("cluster", "mira", "")))
+	assert.Equal(t, http.StatusNoContent, status, "the control: a report past the listener's 1 MiB is read: %v", answered)
+
+	file := filepath.Join(t.TempDir(), "held.json")
+	require.NoError(t, os.WriteFile(file, []byte(`{"cluster":"`+record+`","object":`+fmt.Sprintf(bot, "mira")+`}`), 0o600))
+	code, held := clusterFixture(t, bin, env, "declare", file)
+	assert.Equal(t, 1, code, "%v", held)
+	assert.Contains(t, held["message"], "cluster-owned", "the latest report shows mira held by the cluster")
+}

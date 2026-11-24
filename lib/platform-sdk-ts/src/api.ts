@@ -1028,6 +1028,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/clusters/{cluster}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
+         * @description The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
+         */
+        get: operations["getClusterReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/clusters/{cluster}/declarations": {
         parameters: {
             query?: never;
@@ -2515,6 +2535,71 @@ export interface components {
         };
         ClusterDeclarationList: {
             declarations: components["schemas"]["ClusterDeclaration"][];
+        };
+        /** @description What garam holds of a connected cluster's reports. */
+        ClusterReportView: {
+            /** @description The cluster's GRN. */
+            cluster: string;
+            /**
+             * Format: date-time
+             * @description When the cluster's latest authenticated request reached garam, to within a second; null where none has.
+             */
+            lastContactAt: string | null;
+            report: components["schemas"]["ClusterReport"] | null;
+        };
+        /** @description A connected cluster's report (cluster-connection v1alpha1 REP-1), as garam kept it. */
+        ClusterReport: {
+            /** Format: date-time */
+            observedAt: string;
+            connector: components["schemas"]["ClusterReportConnector"];
+            declarations: components["schemas"]["ClusterDeclarationOutcome"][];
+            objects: components["schemas"]["ClusterReportedObject"][];
+        };
+        ClusterReportConnector: {
+            version: string;
+            /** @enum {string} */
+            mode: "apply" | "reportOnly";
+            /** @description The namespaces the connector acts in. */
+            namespaces: string[];
+            /** @description The watched namespaces another release holds, or none does. */
+            claimedElsewhere?: string[];
+        };
+        /** @description What the connector made of one declaration placed on this cluster. */
+        ClusterDeclarationOutcome: {
+            id: string;
+            /** Format: int64 */
+            generation: number;
+            /** @enum {string} */
+            outcome: "applied" | "conflict" | "invalid" | "namespaceNotWatched";
+            /** @description Display data, rendered as text. */
+            message?: string;
+        };
+        /** @description One object of a declared kind the connector reported. A cluster-owned one is shown read-only, with the cluster as its source. */
+        ClusterReportedObject: {
+            apiVersion: string;
+            /** @enum {string} */
+            kind: "Bot" | "Workspace" | "WorkspaceClass" | "BotPool";
+            namespace: string;
+            name: string;
+            uid: string;
+            /** @enum {string} */
+            owner: "garam" | "cluster";
+            /** Format: int64 */
+            generation: number;
+            /** @description A garam-owned object's record, always this cluster. */
+            cluster?: string;
+            /** @description A garam-owned object's declaration. */
+            declarationId?: string;
+            /** @description A garam-owned object no live declaration names. */
+            orphaned?: boolean;
+            /** @description A cluster-owned object's spec. Display data, rendered as text. */
+            spec?: {
+                [key: string]: unknown;
+            };
+            /** @description Display data, rendered as text. */
+            status: {
+                [key: string]: unknown;
+            };
         };
         /** @description A change to what the organization says about an operator. A field left out keeps its value; the identifier is not a field. */
         OperatorPatch: {
@@ -4528,6 +4613,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getClusterReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What garam holds of the cluster's reports. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterReportView"];
+                };
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];

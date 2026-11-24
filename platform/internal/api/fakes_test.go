@@ -1752,3 +1752,26 @@ func (s *fakeDeclarations) ListDeclarations(ctx context.Context, g grn.GRN) ([]c
 	slices.SortFunc(out, func(a, b cluster.Declaration) int { return int(s.written[a.ID] - s.written[b.ID]) })
 	return out, nil
 }
+
+// fakeReports is cluster.ReportStore holding what each record's tests
+// put there.
+type fakeReports struct {
+	cluster.ReportStore
+	records *fakeClusterStore
+	kept    map[string]cluster.KeptReport
+}
+
+func (s *fakeReports) LatestReport(ctx context.Context, g grn.GRN) (cluster.KeptReport, error) {
+	if _, err := s.records.Get(ctx, g); err != nil {
+		return cluster.KeptReport{}, err
+	}
+	kept, ok := s.kept[g.String()]
+	if !ok {
+		return cluster.KeptReport{Cluster: g}, nil
+	}
+	return kept, nil
+}
+
+func newFakeReports(records *fakeClusterStore) *fakeReports {
+	return &fakeReports{records: records, kept: map[string]cluster.KeptReport{}}
+}

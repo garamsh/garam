@@ -41,6 +41,13 @@ type connectionClusters struct {
 	page  cluster.Page
 	after *string
 	wait  time.Duration
+	// report is what Report was handed.
+	report *cluster.Report
+}
+
+func (c *connectionClusters) Report(_ context.Context, caller grn.GRN, r cluster.Report) error {
+	c.caller, c.report = caller, &r
+	return c.err
 }
 
 func (c *connectionClusters) WatchDeclarations(_ context.Context, caller grn.GRN, after *string, wait time.Duration) (cluster.Page, error) {
@@ -189,18 +196,91 @@ func TestClusterConnection_RoutesButRegistrationAnswerAClustersTokenAlone(t *tes
 	assert.Equal(t, connectedGRN, clusters.caller)
 }
 
-// TestClusterConnection_UnbuiltRoutesAnswerAFailureTheConnectorBacksOff
-// holds that a route garam does not serve yet is a 5xx in the
-// interface's body, which T-6 has the connector back off from.
-func TestClusterConnection_UnbuiltRoutesAnswerAFailureTheConnectorBacksOff(t *testing.T) {
+// TestClusterConnection_ARouteParameterTheRouterCannotBindIsRefused
+// holds that a binding failure is answered in the interface's body.
+func TestClusterConnection_ARouteParameterTheRouterCannotBindIsRefused(t *testing.T) {
 	base, client := serveConnection(t, &connectionClusters{})
-	status, body, _ := connect(t, client, http.MethodPost, base+"/clusters/self/reports", "cluster", "{}")
-	assert.Equal(t, http.StatusNotImplemented, status)
-	assert.Equal(t, "internal", body["error"])
-
-	status, body, _ = connect(t, client, http.MethodGet, base+"/clusters/self/declarations?wait=fifty", "cluster", "")
+	status, body, _ := connect(t, client, http.MethodGet, base+"/clusters/self/declarations?wait=fifty", "cluster", "")
 	assert.Equal(t, http.StatusBadRequest, status, "a parameter the router cannot bind")
 	assert.Equal(t, "invalid_request", body["error"])
+}
+
+// connectionReport is a report REP-1 and REP-2 admit, objects being
+// added in place of its empty list.
+const connectionReport = `{"observedAt":"2026-11-24T12:00:00Z",
+	"connector":{"version":"0.1.0","mode":"apply","namespaces":["team-a"]},
+	"declarations":[{"id":"decl-a","generation":1,"outcome":"applied"}],"objects":[]}`
+
+func withObject(object string) string {
+	return strings.Replace(connectionReport, `"objects":[]`, `"objects":[`+object+`]`, 1)
+}
+
+// postReport sends body as the connected cluster's report, answering
+// the status and the body as text.
+func postReport(t *testing.T, client *http.Client, base, body string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, base+"/clusters/self/reports", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", machine.TokenScheme+" cluster")
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return resp.StatusCode, string(raw)
+}
+
+// TestClusterConnection_AReportIsHandedOnAndAnswered204 holds REP-5's
+// answer: the report reaches the service as the caller's, with what it
+// said kept as sent.
+func TestClusterConnection_AReportIsHandedOnAndAnswered204(t *testing.T) {
+	clusters := &connectionClusters{}
+	base, client := serveConnection(t, clusters)
+	status, body := postReport(t, client, base, withObject(`{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot",
+		"namespace":"team-a","name":"mira","uid":"u1","owner":"cluster","generation":2,
+		"spec":{"persona":{"role":"Lead"}},"status":{"phase":"Ready"},"unknownMember":true}`))
+	require.Equal(t, http.StatusNoContent, status, body)
+	assert.Empty(t, body)
+	assert.Equal(t, connectedGRN, clusters.caller)
+	require.Len(t, clusters.report.Objects, 1)
+	assert.JSONEq(t, `{"persona":{"role":"Lead"}}`, string(clusters.report.Objects[0].Spec))
+	assert.Equal(t, "decl-a", clusters.report.Declarations[0].ID)
+}
+
+// TestClusterConnection_AReportIsRefusedAsREP6AndREP7Refuse holds the
+// refusals a report is answered before the service reads it.
+func TestClusterConnection_AReportIsRefusedAsREP6AndREP7Refuse(t *testing.T) {
+	object := func(kind string) string {
+		return `{"apiVersion":"v1","kind":"` + kind + `","namespace":"team-a","name":"x","uid":"u","owner":"cluster",
+			"generation":1,"status":{}}`
+	}
+	big := withObject(`{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","namespace":"team-a","name":"x","uid":"u",
+		"owner":"cluster","generation":1,"status":{"note":"` + strings.Repeat("x", cluster.ReportMaxBytes) + `"}}`)
+	for name, tc := range map[string]struct {
+		body, code string
+		status     int
+	}{
+		"a Secret (REP-7)":           {withObject(object("Secret")), "invalid_request", http.StatusBadRequest},
+		"a ConfigMap (REP-7)":        {withObject(object("ConfigMap")), "invalid_request", http.StatusBadRequest},
+		"an undeclared kind (REP-7)": {withObject(object("Deployment")), "invalid_request", http.StatusBadRequest},
+		"not a report":               {`[]`, "invalid_request", http.StatusBadRequest},
+		"over 4 MiB (REP-6)":         {big, "report_too_large", http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(name, func(t *testing.T) {
+			clusters := &connectionClusters{}
+			base, client := serveConnection(t, clusters)
+			status, body := postReport(t, client, base, tc.body)
+			assert.Equal(t, tc.status, status, body)
+			var refusal map[string]any
+			require.NoError(t, json.Unmarshal([]byte(body), &refusal))
+			assert.Equal(t, tc.code, refusal["error"])
+			assert.Nil(t, clusters.report, "the service is not asked")
+		})
+	}
+	clusters := &connectionClusters{}
+	base, client := serveConnection(t, clusters)
+	status, body := postReport(t, client, base, withObject(object("Workspace")))
+	assert.Equal(t, http.StatusNoContent, status, "the control: a declared kind is handed on: %s", body)
 }
 
 // TestExchangeClientAssertion_SendsAClustersAssertionToItsRecord holds

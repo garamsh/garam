@@ -198,6 +198,30 @@ func (e AuditRecordKind) Valid() bool {
 	}
 }
 
+// Defines values for ClusterDeclarationOutcomeOutcome.
+const (
+	Applied             ClusterDeclarationOutcomeOutcome = "applied"
+	Conflict            ClusterDeclarationOutcomeOutcome = "conflict"
+	Invalid             ClusterDeclarationOutcomeOutcome = "invalid"
+	NamespaceNotWatched ClusterDeclarationOutcomeOutcome = "namespaceNotWatched"
+)
+
+// Valid indicates whether the value is a known member of the ClusterDeclarationOutcomeOutcome enum.
+func (e ClusterDeclarationOutcomeOutcome) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Conflict:
+		return true
+	case Invalid:
+		return true
+	case NamespaceNotWatched:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClusterKeyState.
 const (
 	ClusterKeyActive   ClusterKeyState = "active"
@@ -213,6 +237,66 @@ func (e ClusterKeyState) Valid() bool {
 	case ClusterKeyRetiring:
 		return true
 	case ClusterKeyRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClusterReportConnectorMode.
+const (
+	Apply      ClusterReportConnectorMode = "apply"
+	ReportOnly ClusterReportConnectorMode = "reportOnly"
+)
+
+// Valid indicates whether the value is a known member of the ClusterReportConnectorMode enum.
+func (e ClusterReportConnectorMode) Valid() bool {
+	switch e {
+	case Apply:
+		return true
+	case ReportOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClusterReportedObjectKind.
+const (
+	Bot            ClusterReportedObjectKind = "Bot"
+	BotPool        ClusterReportedObjectKind = "BotPool"
+	Workspace      ClusterReportedObjectKind = "Workspace"
+	WorkspaceClass ClusterReportedObjectKind = "WorkspaceClass"
+)
+
+// Valid indicates whether the value is a known member of the ClusterReportedObjectKind enum.
+func (e ClusterReportedObjectKind) Valid() bool {
+	switch e {
+	case Bot:
+		return true
+	case BotPool:
+		return true
+	case Workspace:
+		return true
+	case WorkspaceClass:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClusterReportedObjectOwner.
+const (
+	ClusterReportedObjectOwnerCluster ClusterReportedObjectOwner = "cluster"
+	ClusterReportedObjectOwnerGaram   ClusterReportedObjectOwner = "garam"
+)
+
+// Valid indicates whether the value is a known member of the ClusterReportedObjectOwner enum.
+func (e ClusterReportedObjectOwner) Valid() bool {
+	switch e {
+	case ClusterReportedObjectOwnerCluster:
+		return true
+	case ClusterReportedObjectOwnerGaram:
 		return true
 	default:
 		return false
@@ -1256,6 +1340,19 @@ type ClusterDeclarationList struct {
 	Declarations []ClusterDeclaration `json:"declarations"`
 }
 
+// ClusterDeclarationOutcome What the connector made of one declaration placed on this cluster.
+type ClusterDeclarationOutcome struct {
+	Generation int64  `json:"generation"`
+	Id         string `json:"id"`
+
+	// Message Display data, rendered as text.
+	Message *string                          `json:"message,omitempty"`
+	Outcome ClusterDeclarationOutcomeOutcome `json:"outcome"`
+}
+
+// ClusterDeclarationOutcomeOutcome defines model for ClusterDeclarationOutcome.Outcome.
+type ClusterDeclarationOutcomeOutcome string
+
 // ClusterDeclarationWrite defines model for ClusterDeclarationWrite.
 type ClusterDeclarationWrite struct {
 	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
@@ -1306,6 +1403,70 @@ type ClusterRegistrationToken struct {
 	ExpiresAt         time.Time `json:"expiresAt"`
 	RegistrationToken string    `json:"registrationToken"`
 }
+
+// ClusterReport A connected cluster's report (cluster-connection v1alpha1 REP-1), as garam kept it.
+type ClusterReport struct {
+	Connector    ClusterReportConnector      `json:"connector"`
+	Declarations []ClusterDeclarationOutcome `json:"declarations"`
+	Objects      []ClusterReportedObject     `json:"objects"`
+	ObservedAt   time.Time                   `json:"observedAt"`
+}
+
+// ClusterReportConnector defines model for ClusterReportConnector.
+type ClusterReportConnector struct {
+	// ClaimedElsewhere The watched namespaces another release holds, or none does.
+	ClaimedElsewhere *[]string                  `json:"claimedElsewhere,omitempty"`
+	Mode             ClusterReportConnectorMode `json:"mode"`
+
+	// Namespaces The namespaces the connector acts in.
+	Namespaces []string `json:"namespaces"`
+	Version    string   `json:"version"`
+}
+
+// ClusterReportConnectorMode defines model for ClusterReportConnector.Mode.
+type ClusterReportConnectorMode string
+
+// ClusterReportView What garam holds of a connected cluster's reports.
+type ClusterReportView struct {
+	// Cluster The cluster's GRN.
+	Cluster string `json:"cluster"`
+
+	// LastContactAt When the cluster's latest authenticated request reached garam, to within a second; null where none has.
+	LastContactAt *time.Time     `json:"lastContactAt"`
+	Report        *ClusterReport `json:"report"`
+}
+
+// ClusterReportedObject One object of a declared kind the connector reported. A cluster-owned one is shown read-only, with the cluster as its source.
+type ClusterReportedObject struct {
+	ApiVersion string `json:"apiVersion"`
+
+	// Cluster A garam-owned object's record, always this cluster.
+	Cluster *string `json:"cluster,omitempty"`
+
+	// DeclarationId A garam-owned object's declaration.
+	DeclarationId *string                   `json:"declarationId,omitempty"`
+	Generation    int64                     `json:"generation"`
+	Kind          ClusterReportedObjectKind `json:"kind"`
+	Name          string                    `json:"name"`
+	Namespace     string                    `json:"namespace"`
+
+	// Orphaned A garam-owned object no live declaration names.
+	Orphaned *bool                      `json:"orphaned,omitempty"`
+	Owner    ClusterReportedObjectOwner `json:"owner"`
+
+	// Spec A cluster-owned object's spec. Display data, rendered as text.
+	Spec *json.RawMessage `json:"spec,omitempty"`
+
+	// Status Display data, rendered as text.
+	Status json.RawMessage `json:"status"`
+	Uid    string          `json:"uid"`
+}
+
+// ClusterReportedObjectKind defines model for ClusterReportedObject.Kind.
+type ClusterReportedObjectKind string
+
+// ClusterReportedObjectOwner defines model for ClusterReportedObject.Owner.
+type ClusterReportedObjectOwner string
 
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
@@ -3232,6 +3393,13 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
 	ReissueClusterRegistrationToken(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetClusterReport Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
+	//
+	// The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster}/report (the `GetClusterReport` operationId).
+	GetClusterReport(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	//
 	// Every relation the organization is a side of, standing or waiting on one half (ADR-0035). A message crosses between the two organizations only while both halves stand.
@@ -5013,6 +5181,23 @@ func (c *Client) RevokeClusterKey(ctx context.Context, org Org, clusterSlug Clus
 // Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
 func (c *Client) ReissueClusterRegistrationToken(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReissueClusterRegistrationTokenRequest(c.Server, org, clusterSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetClusterReport Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
+//
+// The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster}/report (the `GetClusterReport` operationId).
+func (c *Client) GetClusterReport(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterReportRequest(c.Server, org, clusterSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -8459,6 +8644,47 @@ func NewReissueClusterRegistrationTokenRequest(server string, org Org, clusterSl
 	return req, nil
 }
 
+// NewGetClusterReportRequest constructs an http.Request for the GetClusterReport method
+func NewGetClusterReportRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/report", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListOrgConsentsRequest constructs an http.Request for the ListOrgConsents method
 func NewListOrgConsentsRequest(server string, org Org) (*http.Request, error) {
 	var err error
@@ -11805,6 +12031,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
 	ReissueClusterRegistrationTokenWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ReissueClusterRegistrationTokenResponse, error)
+
+	// GetClusterReportWithResponse Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
+	//
+	// The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster}/report (the `GetClusterReport` operationId).
+	GetClusterReportWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*GetClusterReportResponse, error)
 
 	// ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
 	//
@@ -15412,6 +15647,75 @@ func (r ReissueClusterRegistrationTokenResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ReissueClusterRegistrationTokenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetClusterReportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterReportView
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetClusterReportResponse) GetJSON200() *ClusterReportView {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetClusterReportResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetClusterReportResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetClusterReportResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetClusterReportResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetClusterReportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetClusterReportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetClusterReportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetClusterReportResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20212,6 +20516,21 @@ func (c *ClientWithResponses) ReissueClusterRegistrationTokenWithResponse(ctx co
 	return ParseReissueClusterRegistrationTokenResponse(rsp)
 }
 
+// GetClusterReportWithResponse Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
+//
+// The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster}/report (the `GetClusterReport` operationId).
+func (c *ClientWithResponses) GetClusterReportWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*GetClusterReportResponse, error) {
+	rsp, err := c.GetClusterReport(ctx, org, clusterSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetClusterReportResponse(rsp)
+}
+
 // ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
 //
 // Every relation the organization is a side of, standing or waiting on one half (ADR-0035). A message crosses between the two organizations only while both halves stand.
@@ -23626,6 +23945,60 @@ func ParseReissueClusterRegistrationTokenResponse(rsp *http.Response) (*ReissueC
 			headers.CacheControl = &value
 		}
 		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetClusterReportResponse parses an HTTP response from a GetClusterReportWithResponse call
+func ParseGetClusterReportResponse(rsp *http.Response) (*GetClusterReportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClusterReportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterReportView
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
 	}
 
 	return response, nil

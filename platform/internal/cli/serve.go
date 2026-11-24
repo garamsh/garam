@@ -142,7 +142,7 @@ func serveAPI(cmd *cobra.Command) error {
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
 		WithIdentity(issuer).
 		WithPolicyRelay(relay).
-		WithClusters(clusters, clusters, clusters)
+		WithClusters(clusters, clusters, clusters, clusters)
 
 	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger, obs.registry)
 	if err != nil {

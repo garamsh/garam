@@ -2131,6 +2131,38 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/clusters/{cluster}/report:
+    get:
+      operationId: getClusterReport
+      tags: [cluster]
+      summary: Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
+      description: >-
+        The cluster's latest report, the one its connector observed
+        last (ADR-0188), and the time of its latest authenticated
+        request, each null where there is none. The report keeps only
+        the outcomes and objects naming a declaration placed on this
+        cluster, or naming none. Every `spec`, `status` and `message`
+        in it is what the cluster said: display data, to be rendered
+        as text and never acted on. Authorized as `iam:cluster.read` on
+        the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+      responses:
+        '200':
+          description: What garam holds of the cluster's reports.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterReportView'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/clusters/{cluster}/declarations:
     get:
       operationId: listClusterDeclarations
@@ -5342,6 +5374,123 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ClusterDeclaration'
+    ClusterReportView:
+      type: object
+      description: What garam holds of a connected cluster's reports.
+      required: [cluster, lastContactAt, report]
+      properties:
+        cluster:
+          type: string
+          description: The cluster's GRN.
+        lastContactAt:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            When the cluster's latest authenticated request reached
+            garam, to within a second; null where none has.
+        report:
+          oneOf:
+            - $ref: '#/components/schemas/ClusterReport'
+            - type: 'null'
+    ClusterReport:
+      type: object
+      description: >-
+        A connected cluster's report (cluster-connection v1alpha1
+        REP-1), as garam kept it.
+      required: [observedAt, connector, declarations, objects]
+      properties:
+        observedAt:
+          type: string
+          format: date-time
+        connector:
+          $ref: '#/components/schemas/ClusterReportConnector'
+        declarations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClusterDeclarationOutcome'
+        objects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClusterReportedObject'
+    ClusterReportConnector:
+      type: object
+      required: [version, mode, namespaces]
+      properties:
+        version:
+          type: string
+        mode:
+          type: string
+          enum: [apply, reportOnly]
+        namespaces:
+          type: array
+          description: The namespaces the connector acts in.
+          items:
+            type: string
+        claimedElsewhere:
+          type: array
+          description: The watched namespaces another release holds, or none does.
+          items:
+            type: string
+    ClusterDeclarationOutcome:
+      type: object
+      description: What the connector made of one declaration placed on this cluster.
+      required: [id, generation, outcome]
+      properties:
+        id:
+          type: string
+        generation:
+          type: integer
+          format: int64
+        outcome:
+          type: string
+          enum: [applied, conflict, invalid, namespaceNotWatched]
+        message:
+          type: string
+          description: Display data, rendered as text.
+    ClusterReportedObject:
+      type: object
+      description: >-
+        One object of a declared kind the connector reported. A
+        cluster-owned one is shown read-only, with the cluster as its
+        source.
+      required: [apiVersion, kind, namespace, name, uid, owner, generation, status]
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+          enum: [Bot, Workspace, WorkspaceClass, BotPool]
+        namespace:
+          type: string
+        name:
+          type: string
+        uid:
+          type: string
+        owner:
+          type: string
+          enum: [garam, cluster]
+        generation:
+          type: integer
+          format: int64
+        cluster:
+          type: string
+          description: A garam-owned object's record, always this cluster.
+        declarationId:
+          type: string
+          description: A garam-owned object's declaration.
+        orphaned:
+          type: boolean
+          description: A garam-owned object no live declaration names.
+        spec:
+          type: object
+          description: A cluster-owned object's spec. Display data, rendered as text.
+          additionalProperties: true
+          x-go-type: json.RawMessage
+        status:
+          type: object
+          description: Display data, rendered as text.
+          additionalProperties: true
+          x-go-type: json.RawMessage
     OperatorPatch:
       type: object
       description: >-

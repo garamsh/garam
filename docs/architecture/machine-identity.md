@@ -327,28 +327,56 @@ listener.
 
 ## A declared bot's token
 
-**Unbuilt (#2049).** A bot garam declares and places on a connected
-cluster is `grn:<org>/iam/bot/<declaration id>`
+**The exchange is built (#2049); nothing accepts the token yet.** A bot
+garam declares and places on a connected cluster is
+`grn:<org>/iam/bot/<declaration id>`
 ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)),
 and its place's connector obtains its token. The claims are garam-bot's
 `docs/architecture/bot-system.md` §Authentication at
 `18f95d28443ccdb47b1202ce8cf5bd16dc0db2a0`.
 
-- **An RFC 8693 exchange at the machine listener's token endpoint.**
-  `actor_token` is the connector's own access token, and
-  `subject_token` is of a garam-defined type whose value is the bot's
-  GRN, which #2049 names in `platform/api/machine.yaml`. `audience` is
-  garam's, and `scope` lists what the bot may call, with nothing
-  implied.
-- **The token answers `sub` the bot, `act.sub` the place**, `aud`
-  garam's audience, `scope` what was asked and allowed, and an expiry
-  within an hour. It is opaque and held as a hash, read on every
-  request as a connector's is, and answered to introspection.
-- **Only a bot placed on that place by a live declaration** (ADR-0184
-  decision 10, AUTH-5). A tombstone refuses the next exchange.
-- **A party that verifies offline**, ai-gateway among them, gets a
-  narrower JWT bound to its audience by a further exchange of the
-  bot's token, which lives no longer than it (ADR-0141).
+- **An RFC 8693 exchange at the machine listener's token endpoint**
+  (`platform/internal/machineapi/bot_token.go`). `grant_type` is
+  `urn:ietf:params:oauth:grant-type:token-exchange`, `actor_token` the
+  connector's own access token, of type
+  `urn:ietf:params:oauth:token-type:access_token`, and
+  `subject_token` the bot's GRN, of garam's own type
+  `urn:garam:params:oauth:token-type:bot`. `platform/api/machine.yaml`
+  §exchangeClientAssertion is authoritative for the form and its
+  refusals.
+- **Garam's audience is the token endpoint's URL.** ADR-0189 decision 2
+  has the connector send `audience` as garam's. That value is the
+  endpoint's own URL, `GARAM_MACHINE_TOKEN_URL`, which a connector
+  already puts in its assertion's `aud` (AUTH-1), so neither side is
+  configured with another. An absent `audience` means the same, and any
+  other is `invalid_target`. No scope is defined yet, so a `scope` is
+  `invalid_scope` and nothing is implied by its absence.
+- **Refusals follow RFC 8693 §2.2.2.** An actor token that does not
+  authenticate a connected cluster, and a subject the policy below
+  refuses, are `invalid_request`. The actor is read as every request's
+  token is, and again as the token is written, so a key withdrawn
+  meanwhile mints nothing.
+- **Only a bot placed on that place by a live `Bot` declaration**
+  (ADR-0184 decision 10, AUTH-5). A bot never declared, declared as
+  another kind, tombstoned, placed on another record or of another
+  organization is refused.
+- **The token is `garam_bt_` and opaque, accepted for an hour.**
+  `cluster_bot_tokens` (migration 000087) keeps its hash beside its
+  `sub`, the bot, by the declaration that places it; its `act.sub`, the
+  record; the connector key whose token acted; and the scope allowed,
+  empty. Its `aud` is garam's. A record exchanges at most 600 a minute.
+- **A token goes with what it rests on, in the transaction that
+  withdraws it.** Tombstoning its declaration or declaring another kind
+  under its identifier, revoking the connector key it was minted
+  under, registering the record again, and deleting the record each
+  delete it. A record's expired tokens are swept at its next exchange.
+- **What is not built.** No route resolves a bot's token, so it reaches
+  no operation, and nothing introspects it. A read that resolves one
+  will also check its expiry and that its key has not retired, which no
+  delete covers. A party that verifies offline, ai-gateway among them,
+  is to get a narrower JWT bound to its audience by a further exchange
+  of the bot's token, which lives no longer than it (ADR-0141). Each
+  waits for the first consumer.
 
 ## The issuer
 

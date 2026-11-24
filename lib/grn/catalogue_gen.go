@@ -16,6 +16,7 @@ var generatedTypes = map[string]map[string]TypeInfo{
 	},
 	"iam": {
 		"agent":      {Entity: "Iam::Agent", Parents: []string{"Iam::OrgMembers", "Iam::Org", "Iam::Team", "Iam::Project"}},
+		"bot":        {Entity: "Iam::Bot", Parents: []string{"Iam::Org"}},
 		"cluster":    {Entity: "Iam::Cluster", Parents: []string{"Iam::Org"}},
 		"operator":   {Entity: "Iam::Operator", Parents: []string{"Iam::OrgMembers", "Iam::Org"}},
 		"org":        {Entity: "Iam::Org", Parents: []string{}},

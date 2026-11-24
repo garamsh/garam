@@ -33,13 +33,23 @@ func writeJSON(t *testing.T, w http.ResponseWriter, status int, body any) {
 	require.NoError(t, json.NewEncoder(w).Encode(body))
 }
 
-func assertionRequest() machine.ClientAssertionRequest {
-	return machine.ClientAssertionRequest{
-		ClientAssertion:     "header.payload.signature",
-		ClientAssertionType: machine.ClientAssertionRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer,
-		ClientId:            "grn:garam:acme:operator/op1",
+func assertionRequest() machine.TokenRequest {
+	assertion, client := "header.payload.signature", "grn:garam:acme:operator/op1"
+	assertionType := machine.TokenRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer
+	return machine.TokenRequest{
+		ClientAssertion:     &assertion,
+		ClientAssertionType: &assertionType,
+		ClientId:            &client,
 		GrantType:           machine.ClientCredentials,
 	}
+}
+
+func keysOf(form map[string][]string) []string {
+	out := make([]string, 0, len(form))
+	for k := range form {
+		out = append(out, k)
+	}
+	return out
 }
 
 func TestExchangeClientAssertion_ReadsToken(t *testing.T) {
@@ -51,6 +61,8 @@ func TestExchangeClientAssertion_ReadsToken(t *testing.T) {
 		assert.Equal(t, "client_credentials", r.PostForm.Get("grant_type"))
 		assert.Equal(t, "header.payload.signature", r.PostForm.Get("client_assertion"))
 		assert.Equal(t, "grn:garam:acme:operator/op1", r.PostForm.Get("client_id"))
+		assert.ElementsMatch(t, []string{"grant_type", "client_assertion", "client_assertion_type", "client_id"},
+			keysOf(r.PostForm), "a parameter left unset is not sent, so the other grant's are absent")
 		writeJSON(t, w, http.StatusOK, map[string]any{
 			"access_token": "garam_ot_abc",
 			"expires_in":   3600,
@@ -181,4 +193,37 @@ func TestReportProvisioningState_ReadsStaleEpoch(t *testing.T) {
 	require.NotNil(t, resp.JSON409)
 	assert.Equal(t, "failed_precondition", resp.JSON409.Kind)
 	assert.Equal(t, "stale epoch", resp.JSON409.Message)
+}
+
+// TestExchangeClientAssertion_SendsABotTokenExchange holds that the one
+// token request form-encodes RFC 8693's exchange (ADR-0189), and reads
+// issued_token_type back.
+func TestExchangeClientAssertion_SendsABotTokenExchange(t *testing.T) {
+	client := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, r.ParseForm())
+		assert.Equal(t, map[string][]string{
+			"grant_type":         {"urn:ietf:params:oauth:grant-type:token-exchange"},
+			"subject_token":      {"grn:acme/iam/bot/decl-a"},
+			"subject_token_type": {"urn:garam:params:oauth:token-type:bot"},
+			"actor_token":        {"garam_ct_abc"},
+			"actor_token_type":   {"urn:ietf:params:oauth:token-type:access_token"},
+		}, map[string][]string(r.PostForm))
+		writeJSON(t, w, http.StatusOK, map[string]any{
+			"access_token": "garam_bt_abc", "expires_in": 3600, "token_type": "Bearer",
+			"issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+		})
+	})
+	subject, actor := "grn:acme/iam/bot/decl-a", "garam_ct_abc"
+	subjectType := machine.UrnGaramParamsOauthTokenTypeBot
+	actorType := machine.TokenRequestActorTokenTypeUrnIetfParamsOauthTokenTypeAccessToken
+
+	resp, err := client.ExchangeClientAssertionWithFormdataBodyWithResponse(context.Background(), machine.TokenRequest{
+		GrantType: machine.UrnIetfParamsOauthGrantTypeTokenExchange, SubjectToken: &subject,
+		SubjectTokenType: &subjectType, ActorToken: &actor, ActorTokenType: &actorType,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp.JSON200)
+	assert.Equal(t, "garam_bt_abc", resp.JSON200.AccessToken)
+	require.NotNil(t, resp.JSON200.IssuedTokenType)
 }

@@ -143,15 +143,18 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## A bot garam declares
 
-**Unbuilt (#2049).** A bot placed on a connected cluster by a
-declaration
+**Its GRN, its token exchange and its identifier space are built
+(#2049); its policy and the agent records' move are not.** A bot placed
+on a connected cluster by a declaration
 ([clusters.md](./clusters.md)) is an IAM principal of its own
 ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)):
 
 - **Its GRN is `grn:<org>/iam/bot/<declaration id>`.** It shares the
   `iam/bot` identifier space with the agent records ADR-0179 renames,
   so a declaration whose identifier names an existing agent's id is
-  refused 409.
+  refused 409 (`cluster.ErrDeclarationIDHeldByAgent`). An agent
+  created later under an identifier a declaration holds is not yet
+  checked; ADR-0179's migration checks it.
 - **Its connector obtains its token** by an RFC 8693 exchange at the
   machine listener's token endpoint, with the connector's own token as
   the actor. The token lives at most an hour, is opaque, and is held

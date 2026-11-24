@@ -42,7 +42,16 @@ func (s *Store) Declare(ctx context.Context, g grn.GRN, id string, object cluste
 			generation = current.Generation + 1
 		case errors.Is(err, pgx.ErrNoRows):
 			// An identifier no declaration holds was placed on a record
-			// since deleted, or is new.
+			// since deleted, or is new. It may still name an agent
+			// record of the organization, whose identifier space a
+			// declared bot shares (ADR-0189 decision 1).
+			agent, err := q.AgentRecordExists(ctx, cluster.AgentGRN(g.Organization, id).String())
+			if err != nil {
+				return pgxerr.Classify(err, "read agent record", nil, nil)
+			}
+			if agent {
+				return cluster.ErrDeclarationIDHeldByAgent
+			}
 			reserved, err := q.ReserveDeclarationID(ctx, id)
 			if err != nil {
 				return pgxerr.Classify(err, "reserve declaration id", nil, nil)
@@ -125,6 +134,12 @@ func (s *Store) write(ctx context.Context, q *db.Queries, g grn.GRN, d db.WriteD
 		ClusterGrn: g.String(), Before: pgxtype.Timestamptz(now.Add(-cluster.ChangeRetention)),
 	}); err != nil {
 		return db.ClusterDeclaration{}, pgxerr.Classify(err, "purge declaration changes", nil, nil)
+	}
+	if d.Tombstoned || d.Kind != cluster.BotKind {
+		// The bot it placed is gone, so the tokens minted for it go too.
+		if err := q.DeleteDeclarationBotTokens(ctx, d.ID); err != nil {
+			return db.ClusterDeclaration{}, pgxerr.Classify(err, "delete declaration bot tokens", nil, nil)
+		}
 	}
 	if err := q.NotifyDeclarations(ctx, g.String()); err != nil {
 		return db.ClusterDeclaration{}, pgxerr.Classify(err, "announce declarations", nil, nil)

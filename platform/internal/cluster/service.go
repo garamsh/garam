@@ -86,6 +86,12 @@ type Service interface {
 	// *operator.Exceeded, and a record deleted meanwhile is
 	// operator.ErrClientInvalid.
 	Report(ctx context.Context, caller grn.GRN, r Report) error
+	// MintBotToken answers a token for the bot a connector's exchange
+	// names, to the record whose token is its actor, where a live
+	// declaration places the bot on that record (ADR-0189 decision 2,
+	// AUTH-5). Past BotTokensPerCluster it answers
+	// *operator.Exceeded.
+	MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error)
 }
 
 type service struct {
@@ -99,10 +105,12 @@ type service struct {
 	perSource     *operator.Limiter
 	perClient     *operator.Limiter
 	// rotations bounds each cluster's rotation requests, watches its
-	// declaration polls and reportsLimit its reports.
+	// declaration polls, reportsLimit its reports and botTokens its bot
+	// token exchanges.
 	rotations    *operator.Limiter
 	watches      *operator.Limiter
 	reportsLimit *operator.Limiter
+	botTokens    *operator.Limiter
 }
 
 // NewService constructs the service over a cluster's credentials, the
@@ -134,5 +142,6 @@ func NewService(credentials CredentialStore, declarations DeclarationStore, repo
 		rotations:     limiter(RotationsPerCluster),
 		watches:       limiter(WatchesPerCluster),
 		reportsLimit:  limiter(ReportsPerCluster),
+		botTokens:     limiter(BotTokensPerCluster),
 	}
 }

@@ -46,6 +46,19 @@ func (q *Queries) AdvanceDeclarationHead(ctx context.Context, clusterGrn string)
 	return head, err
 }
 
+const agentRecordExists = `-- name: AgentRecordExists :one
+SELECT EXISTS (SELECT 1 FROM agents WHERE grn = $1) AS held
+`
+
+// Whether the organization holds an agent record under the GRN
+// ADR-0179 renames into the identifier space a declaration takes.
+func (q *Queries) AgentRecordExists(ctx context.Context, grn string) (bool, error) {
+	row := q.db.QueryRow(ctx, agentRecordExists, grn)
+	var held bool
+	err := row.Scan(&held)
+	return held, err
+}
+
 const appendDeclarationChange = `-- name: AppendDeclarationChange :exec
 INSERT INTO cluster_declaration_changes (cluster_grn, seq, op, declaration_id, generation, object, written_at)
 VALUES ($1, $2, $3, $4,
@@ -188,6 +201,15 @@ func (q *Queries) DeleteCluster(ctx context.Context, grn string) (int64, error) 
 	return result.RowsAffected(), nil
 }
 
+const deleteClusterBotTokens = `-- name: DeleteClusterBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1
+`
+
+func (q *Queries) DeleteClusterBotTokens(ctx context.Context, clusterGrn string) error {
+	_, err := q.db.Exec(ctx, deleteClusterBotTokens, clusterGrn)
+	return err
+}
+
 const deleteClusterKeyTokens = `-- name: DeleteClusterKeyTokens :exec
 DELETE FROM cluster_tokens WHERE key_id = $1
 `
@@ -203,6 +225,24 @@ DELETE FROM cluster_tokens WHERE cluster_grn = $1
 
 func (q *Queries) DeleteClusterTokens(ctx context.Context, clusterGrn string) error {
 	_, err := q.db.Exec(ctx, deleteClusterTokens, clusterGrn)
+	return err
+}
+
+const deleteDeclarationBotTokens = `-- name: DeleteDeclarationBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE declaration_id = $1
+`
+
+func (q *Queries) DeleteDeclarationBotTokens(ctx context.Context, declarationID string) error {
+	_, err := q.db.Exec(ctx, deleteDeclarationBotTokens, declarationID)
+	return err
+}
+
+const deleteKeyBotTokens = `-- name: DeleteKeyBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE key_id = $1
+`
+
+func (q *Queries) DeleteKeyBotTokens(ctx context.Context, keyID int64) error {
+	_, err := q.db.Exec(ctx, deleteKeyBotTokens, keyID)
 	return err
 }
 
@@ -388,6 +428,44 @@ func (q *Queries) HoldLiveClusterKey(ctx context.Context, arg HoldLiveClusterKey
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const insertBotToken = `-- name: InsertBotToken :one
+INSERT INTO cluster_bot_tokens (token_hash, cluster_grn, key_id, declaration_id, scope, issued_at, expires_at)
+SELECT $1, t.cluster_grn, t.key_id, $2, $3,
+       now(), now() + $4::interval
+FROM cluster_tokens t
+JOIN cluster_keys k ON k.id = t.key_id
+WHERE t.token_hash = $5 AND t.cluster_grn = $6
+  AND t.expires_at > now()
+  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+RETURNING expires_at
+`
+
+type InsertBotTokenParams struct {
+	TokenHash     string
+	DeclarationID string
+	Scope         []string
+	Ttl           pgtype.Interval
+	ActorHash     string
+	ClusterGrn    string
+}
+
+// The token goes in under the key the actor's token was exchanged
+// under, read again here, so a key revoked since the actor resolved
+// writes nothing and answers zero rows.
+func (q *Queries) InsertBotToken(ctx context.Context, arg InsertBotTokenParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, insertBotToken,
+		arg.TokenHash,
+		arg.DeclarationID,
+		arg.Scope,
+		arg.Ttl,
+		arg.ActorHash,
+		arg.ClusterGrn,
+	)
+	var expires_at pgtype.Timestamptz
+	err := row.Scan(&expires_at)
+	return expires_at, err
 }
 
 const issueRegistrationToken = `-- name: IssueRegistrationToken :one
@@ -678,6 +756,31 @@ func (q *Queries) NotifyDeclarations(ctx context.Context, clusterGrn string) err
 	return err
 }
 
+const placingDeclarationExists = `-- name: PlacingDeclarationExists :one
+
+SELECT id FROM cluster_declarations
+WHERE id = $1 AND cluster_grn = $2 AND kind = $3 AND NOT tombstoned
+`
+
+type PlacingDeclarationExistsParams struct {
+	ID         string
+	ClusterGrn string
+	Kind       string
+}
+
+// Bot tokens (ADR-0189).
+// The live Bot declaration that places the bot on the record; none
+// answers zero rows. It takes no lock of its own: RecordBotToken runs
+// inside HoldCluster, the record row's FOR NO KEY UPDATE that every
+// declaration write also takes, so no tombstone lands before the token
+// is written.
+func (q *Queries) PlacingDeclarationExists(ctx context.Context, arg PlacingDeclarationExistsParams) (string, error) {
+	row := q.db.QueryRow(ctx, placingDeclarationExists, arg.ID, arg.ClusterGrn, arg.Kind)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const purgeDeclarationChanges = `-- name: PurgeDeclarationChanges :exec
 WITH purged AS (
     DELETE FROM cluster_declaration_changes c
@@ -857,6 +960,15 @@ func (q *Queries) SpendRegistrationToken(ctx context.Context, tokenHash string) 
 	var i SpendRegistrationTokenRow
 	err := row.Scan(&i.ClusterGrn, &i.Live)
 	return i, err
+}
+
+const sweepBotTokens = `-- name: SweepBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1 AND expires_at <= now()
+`
+
+func (q *Queries) SweepBotTokens(ctx context.Context, clusterGrn string) error {
+	_, err := q.db.Exec(ctx, sweepBotTokens, clusterGrn)
+	return err
 }
 
 const sweepClusterJTIs = `-- name: SweepClusterJTIs :exec

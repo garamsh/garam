@@ -1674,6 +1674,9 @@ type fakeDeclarations struct {
 	// seq orders the declarations as last written.
 	seq     int64
 	written map[string]int64
+	// agentIDs are the identifiers the organization's agent records
+	// hold, which no new declaration takes (ADR-0189).
+	agentIDs map[string]bool
 }
 
 func newFakeDeclarations(records *fakeClusterStore) *fakeDeclarations {
@@ -1692,6 +1695,8 @@ func (s *fakeDeclarations) Declare(ctx context.Context, g grn.GRN, id string, ob
 		return cluster.Declaration{}, false, cluster.ErrDeclarationTaken
 	case exists && d.Tombstoned:
 		return cluster.Declaration{}, false, cluster.ErrDeclarationTombstoned
+	case !exists && s.agentIDs[id]:
+		return cluster.Declaration{}, false, cluster.ErrDeclarationIDHeldByAgent
 	}
 	for otherID, other := range s.declarations {
 		if otherID != id && other.Cluster == g && !other.Tombstoned && other.Object.Kind() == object.Kind() &&

@@ -56,6 +56,11 @@ namespace Iam {
   // organization, so no decision names one and nothing feeds it.
   @grn("cluster") @caller("none")
   entity Cluster in [Org] { org: Org };
+  // A bot garam declares (ADR-0189), named by its declaration's
+  // identifier. Its token reaches no decision yet, so nothing feeds
+  // it; the agent records ADR-0179 renames join it.
+  @grn("bot") @caller("none")
+  entity Bot in [Org] { org: Org };
   @grn("agent") @caller("platform")
   entity Agent in [OrgMembers, Org, Team, Project] { org: Org };
   @grn("user") @caller("platform")

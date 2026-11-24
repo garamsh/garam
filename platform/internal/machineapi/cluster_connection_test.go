@@ -43,6 +43,8 @@ type connectionClusters struct {
 	wait  time.Duration
 	// report is what Report was handed.
 	report *cluster.Report
+	// exchange is what MintBotToken was handed.
+	exchange *cluster.BotExchange
 }
 
 func (c *connectionClusters) Report(_ context.Context, caller grn.GRN, r cluster.Report) error {
@@ -66,6 +68,15 @@ func (c *connectionClusters) ExchangeAssertion(_ context.Context, _ string, clie
 		return nil, c.err
 	}
 	return &cluster.Token{Value: cluster.TokenPrefix + "answered", Cluster: client, ExpiresAt: time.Now().Add(time.Hour)}, nil
+}
+
+func (c *connectionClusters) MintBotToken(_ context.Context, exchange cluster.BotExchange) (*cluster.BotToken, error) {
+	c.exchange = &exchange
+	if c.err != nil {
+		return nil, c.err
+	}
+	return &cluster.BotToken{Value: cluster.BotTokenPrefix + "answered", Bot: grn.New("acme", cluster.BotServiceType, "decl-a"),
+		Place: connectedGRN, Scope: []string{}, ExpiresAt: time.Now().Add(cluster.BotTokenTTL)}, nil
 }
 
 func (c *connectionClusters) Rotate(_ context.Context, caller grn.GRN, jwk []byte, _, _ string) (cluster.Rotation, error) {

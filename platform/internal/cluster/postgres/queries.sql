@@ -240,3 +240,45 @@ SELECT EXISTS (
         'owner', 'cluster', 'kind', sqlc.arg('kind')::text,
         'namespace', sqlc.arg('namespace')::text, 'name', sqlc.arg('name')::text))
 ) AS held;
+
+-- Bot tokens (ADR-0189).
+
+-- The live Bot declaration that places the bot on the record; none
+-- answers zero rows. It takes no lock of its own: RecordBotToken runs
+-- inside HoldCluster, the record row's FOR NO KEY UPDATE that every
+-- declaration write also takes, so no tombstone lands before the token
+-- is written.
+-- name: PlacingDeclarationExists :one
+SELECT id FROM cluster_declarations
+WHERE id = sqlc.arg('id') AND cluster_grn = sqlc.arg('cluster_grn') AND kind = sqlc.arg('kind') AND NOT tombstoned;
+
+-- name: SweepBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1 AND expires_at <= now();
+
+-- The token goes in under the key the actor's token was exchanged
+-- under, read again here, so a key revoked since the actor resolved
+-- writes nothing and answers zero rows.
+-- name: InsertBotToken :one
+INSERT INTO cluster_bot_tokens (token_hash, cluster_grn, key_id, declaration_id, scope, issued_at, expires_at)
+SELECT sqlc.arg('token_hash'), t.cluster_grn, t.key_id, sqlc.arg('declaration_id'), sqlc.arg('scope'),
+       now(), now() + sqlc.arg('ttl')::interval
+FROM cluster_tokens t
+JOIN cluster_keys k ON k.id = t.key_id
+WHERE t.token_hash = sqlc.arg('actor_hash') AND t.cluster_grn = sqlc.arg('cluster_grn')
+  AND t.expires_at > now()
+  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+RETURNING expires_at;
+
+-- name: DeleteClusterBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE cluster_grn = $1;
+
+-- name: DeleteKeyBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE key_id = $1;
+
+-- name: DeleteDeclarationBotTokens :exec
+DELETE FROM cluster_bot_tokens WHERE declaration_id = $1;
+
+-- Whether the organization holds an agent record under the GRN
+-- ADR-0179 renames into the identifier space a declaration takes.
+-- name: AgentRecordExists :one
+SELECT EXISTS (SELECT 1 FROM agents WHERE grn = $1) AS held;

@@ -44,7 +44,14 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 	header.Set("Cache-Control", "no-store")
 	header.Set("Pragma", "no-cache")
 
-	form, refusal := clientCredentialsForm(r)
+	form, refusal := assertionForm(r)
+	if refusal == nil && form.Get("grant_type") == cluster.GrantTypeTokenExchange {
+		s.exchangeBotToken(w, r, form)
+		return
+	}
+	if refusal == nil {
+		refusal = clientCredentials(form)
+	}
 	if refusal != nil {
 		writeOAuthError(w, refusal)
 		return
@@ -164,35 +171,31 @@ func sourceOf(r *http.Request) string {
 	return host
 }
 
-// clientCredentialsForm reads the request as this profile's form, or
-// answers the refusal its first defect earns.
-func clientCredentialsForm(r *http.Request) (url.Values, *oauthRefusal) {
-	form, refusal := assertionForm(r)
-	if refusal != nil {
-		return nil, refusal
-	}
+// clientCredentials answers the refusal the first defect of form, read
+// as the client credentials profile's, earns, or nil.
+func clientCredentials(form url.Values) *oauthRefusal {
 	switch grant, ok := form["grant_type"]; {
 	case !ok:
-		return nil, &oauthRefusal{machinegen.InvalidRequest, "grant_type is required"}
+		return &oauthRefusal{machinegen.InvalidRequest, "grant_type is required"}
 	case grant[0] != operator.GrantTypeClientCredentials:
-		return nil, &oauthRefusal{machinegen.UnsupportedGrantType, "the grant is client_credentials"}
+		return &oauthRefusal{machinegen.UnsupportedGrantType, "the grant is client_credentials or token-exchange"}
 	}
 	if _, ok := form["scope"]; ok {
-		return nil, &oauthRefusal{machinegen.InvalidScope, "this profile accepts no scope"}
+		return &oauthRefusal{machinegen.InvalidScope, "this profile accepts no scope"}
 	}
 	if _, ok := form["client_secret"]; ok {
-		return nil, &oauthRefusal{machinegen.InvalidRequest, "this profile accepts no client secret"}
+		return &oauthRefusal{machinegen.InvalidRequest, "this profile accepts no client secret"}
 	}
 	if form.Get("client_assertion_type") != operator.ClientAssertionTypeJWT {
-		return nil, &oauthRefusal{machinegen.InvalidRequest,
+		return &oauthRefusal{machinegen.InvalidRequest,
 			"client_assertion_type is " + operator.ClientAssertionTypeJWT}
 	}
 	for _, name := range []string{"client_id", "client_assertion"} {
 		if form.Get(name) == "" {
-			return nil, &oauthRefusal{machinegen.InvalidRequest, name + " is required"}
+			return &oauthRefusal{machinegen.InvalidRequest, name + " is required"}
 		}
 	}
-	return form, nil
+	return nil
 }
 
 // assertionForm reads the request's body as a form of one value for
@@ -243,6 +246,14 @@ func writeOAuthError(w http.ResponseWriter, err error) {
 	case errors.As(err, &exceeded):
 		status = http.StatusTooManyRequests
 		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))
+	case errors.Is(err, cluster.ErrBotNotPlaced), errors.Is(err, cluster.ErrActorTokenRefused):
+		// RFC 8693 §2.2.2: a subject or actor token that is invalid or
+		// unacceptable by policy is invalid_request.
+		status, body.Error = http.StatusBadRequest, machinegen.InvalidRequest
+	case errors.Is(err, cluster.ErrAudienceRefused):
+		status, body.Error = http.StatusBadRequest, machinegen.InvalidTarget
+	case errors.Is(err, cluster.ErrScopeUndefined):
+		status, body.Error = http.StatusBadRequest, machinegen.InvalidScope
 	case errors.Is(err, identity.ErrOrganizationUnknown):
 		status, body.Error = http.StatusBadRequest, machinegen.UnauthorizedClient
 	case errors.Is(err, operator.ErrAudienceInvalid):

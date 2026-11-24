@@ -36,6 +36,16 @@ type connectionClusters struct {
 	caller grn.GRN
 	jwk    []byte
 	token  string
+	// page is what WatchDeclarations answers, and after and wait what
+	// it was asked.
+	page  cluster.Page
+	after *string
+	wait  time.Duration
+}
+
+func (c *connectionClusters) WatchDeclarations(_ context.Context, caller grn.GRN, after *string, wait time.Duration) (cluster.Page, error) {
+	c.caller, c.after, c.wait = caller, after, wait
+	return c.page, c.err
 }
 
 func (c *connectionClusters) Register(_ context.Context, _, token string, jwk []byte) (grn.GRN, error) {
@@ -184,7 +194,7 @@ func TestClusterConnection_RoutesButRegistrationAnswerAClustersTokenAlone(t *tes
 // interface's body, which T-6 has the connector back off from.
 func TestClusterConnection_UnbuiltRoutesAnswerAFailureTheConnectorBacksOff(t *testing.T) {
 	base, client := serveConnection(t, &connectionClusters{})
-	status, body, _ := connect(t, client, http.MethodGet, base+"/clusters/self/declarations", "cluster", "")
+	status, body, _ := connect(t, client, http.MethodPost, base+"/clusters/self/reports", "cluster", "{}")
 	assert.Equal(t, http.StatusNotImplemented, status)
 	assert.Equal(t, "internal", body["error"])
 
@@ -219,4 +229,57 @@ func TestExchangeClientAssertion_SendsAClustersAssertionToItsRecord(t *testing.T
 	resp, body = exchangeForm(t, anonymous(t), base, validForm().Encode(), nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode, body)
 	assert.Len(t, operators.calls, 1, "the control: an operator's assertion reaches the operator service")
+}
+
+// TestClusterConnection_WatchAnswersThePageAsGaramKeptIt holds DECL-1's
+// page on the wire: the caller's record is read after the cursor and
+// for the wait sent, an apply carries its object byte for byte, so no
+// number of spec is rounded, and a delete carries none.
+func TestClusterConnection_WatchAnswersThePageAsGaramKeptIt(t *testing.T) {
+	clusters := &connectionClusters{page: cluster.Page{Cursor: "c.2", More: true, Changes: []cluster.Change{
+		{Op: cluster.OpApply, ID: "decl-a", Generation: 1, Object: json.RawMessage(`{"spec":{"replicas":12345678901234567890}}`)},
+		{Op: cluster.OpDelete, ID: "decl-b", Generation: 3},
+	}}}
+	base, client := serveConnection(t, clusters)
+	req, err := http.NewRequest(http.MethodGet, base+"/clusters/self/declarations?after=c.0&wait=7", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", machine.TokenScheme+" cluster")
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(raw))
+	assert.JSONEq(t, `{"cursor":"c.2","more":true,"changes":[
+		{"op":"apply","id":"decl-a","generation":1,"object":{"spec":{"replicas":12345678901234567890}}},
+		{"op":"delete","id":"decl-b","generation":3}]}`, string(raw))
+	assert.Contains(t, string(raw), "12345678901234567890")
+	assert.Equal(t, connectedGRN, clusters.caller)
+	require.NotNil(t, clusters.after)
+	assert.Equal(t, "c.0", *clusters.after)
+	assert.Equal(t, 7*time.Second, clusters.wait)
+
+	_, _, _ = connect(t, client, http.MethodGet, base+"/clusters/self/declarations", "cluster", "")
+	assert.Nil(t, clusters.after, "an absent cursor reaches the service as none")
+	assert.Equal(t, cluster.MaxWait, clusters.wait, "an absent wait is DECL-3's fifty seconds")
+}
+
+// TestClusterConnection_WatchAnswersAPurgedCursorGone holds DECL-6: a
+// cursor at or before the purged position is 410 cursor_expired, the
+// one refusal no kind maps to. A cursor that is no cursor is 400, the
+// control.
+func TestClusterConnection_WatchAnswersAPurgedCursorGone(t *testing.T) {
+	for _, c := range []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{cluster.ErrCursorExpired, http.StatusGone, "cursor_expired"},
+		{cluster.ErrCursorInvalid, http.StatusBadRequest, "invalid_request"},
+	} {
+		base, client := serveConnection(t, &connectionClusters{err: c.err})
+		status, body, _ := connect(t, client, http.MethodGet, base+"/clusters/self/declarations?after=c.0&wait=0", "cluster", "")
+		assert.Equal(t, c.status, status, c.code)
+		assert.Equal(t, c.code, body["error"])
+	}
 }

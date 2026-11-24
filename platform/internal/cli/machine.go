@@ -123,6 +123,13 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	defer closeDecisions()
 
+	// A declaration written through `serve api` wakes the polls this
+	// process holds on its record (ADR-0187).
+	wakes := cluster.NewWakes()
+	go clusterpg.ListenDeclarations(ctx, clusterpg.New(pool), wakes, func(err error, in time.Duration) {
+		obs.logger.Warn("declarations listener reconnecting", slog.String("error", err.Error()), slog.Duration("in", in))
+	})
+
 	srv, err := NewMachineServer(pool, MachineConfig{
 		Sealer:           keys.sealer,
 		SigningCustodian: signingCustodian,
@@ -135,6 +142,7 @@ func serveMachine(cmd *cobra.Command) error {
 		Delivery:                 message.Config{},
 		AgentTokenLifetime:       tokenLifetime,
 		ClusterRegistrationLimit: registrationLimit,
+		DeclarationWakes:         wakes,
 		TokenURL:                 tokenURL,
 		Identity:                 idIssuer,
 		ServiceKeys:              idKeys,
@@ -204,6 +212,9 @@ type MachineConfig struct {
 	// registrations per client address per minute; zero takes the
 	// cluster package's default (REG-8).
 	ClusterRegistrationLimit int
+	// DeclarationWakes is where a held declarations poll waits for a
+	// write to its record. Nil holds each poll until its recheck.
+	DeclarationWakes *cluster.Wakes
 	// TokenURL is the token endpoint URL an operator's assertion names
 	// as its audience, which operator.ParseTokenEndpoint read
 	// (ADR-0102). Empty serves no assertion exchange.
@@ -326,8 +337,9 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
 	authority := NewAuthorityService(pool, cfg.Decisions)
-	clusters := cluster.NewService(clusterStore, cluster.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
-		RotationURL: clusterRotationURL(cfg.TokenURL), RegistrationLimit: cfg.ClusterRegistrationLimit})
+	clusters := cluster.NewService(clusterStore, clusterStore, cluster.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
+		RotationURL: clusterRotationURL(cfg.TokenURL), RegistrationLimit: cfg.ClusterRegistrationLimit,
+		Wakes: cfg.DeclarationWakes})
 	// One mux carries both specifications' routes: the machine
 	// specification's, and cluster-connection's under its own prefix
 	// with its own error body (ADR-0186).

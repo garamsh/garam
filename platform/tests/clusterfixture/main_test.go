@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +27,7 @@ const (
 type browserAPI struct {
 	mu       sync.Mutex
 	requests []string
+	bodies   []string
 	keys     string
 }
 
@@ -34,8 +38,12 @@ func (b *browserAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"kind":"unauthenticated","message":"sign in"}`))
 		return
 	}
+	body, _ := io.ReadAll(r.Body)
 	b.mu.Lock()
 	b.requests = append(b.requests, r.Method+" "+r.URL.Path)
+	if len(body) > 0 {
+		b.bodies = append(b.bodies, string(body))
+	}
 	b.mu.Unlock()
 	record := "/orgs/acme/clusters/5f60710a1b2c3d4e"
 	switch r.Method + " " + r.URL.Path {
@@ -47,8 +55,20 @@ func (b *browserAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"registrationToken":"garam_crt_reissued"}`))
 	case "GET " + record + "/keys":
 		_, _ = w.Write([]byte(b.keys))
-	case "DELETE " + record + "/keys/live", "DELETE " + record + "/keys/retiring", "DELETE " + record:
+	case "DELETE " + record + "/keys/live", "DELETE " + record + "/keys/retiring", "DELETE " + record,
+		"DELETE " + record + "/declarations/chosen":
 		w.WriteHeader(http.StatusNoContent)
+	case "GET /orgs/acme/clusters":
+		_, _ = w.Write([]byte(`[{"grn":"grn:acme/iam/cluster/0000000000000000"},{"grn":"` + testRecord + `"}]`))
+	case "GET " + record:
+		_, _ = w.Write([]byte(`{"grn":"` + testRecord + `"}`))
+	case "POST " + record + "/declarations":
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"decl-drawn","generation":1}`))
+	case "PUT " + record + "/declarations/chosen":
+		_, _ = w.Write([]byte(`{"id":"chosen","generation":4}`))
+	case "GET " + record + "/declarations/chosen":
+		_, _ = w.Write([]byte(`{"id":"chosen","generation":4}`))
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"kind":"not_found","message":"cluster not found"}`))
@@ -154,7 +174,8 @@ func TestFixture_PrintsARefusalInTheInterfacesErrorBody(t *testing.T) {
 	assert.Equal(t, 1, code)
 	assert.Equal(t, "invalid_request", answer["error"])
 
-	for _, args := range [][]string{{}, {"declare", "file.json"}, {"delete-cluster"}, {"mint-token", "extra"}} {
+	for _, args := range [][]string{{}, {"declare"}, {"tombstone"}, {"tombstone", "a", "b"}, {"expire-cursors"},
+		{"delete-cluster"}, {"mint-token", "extra"}} {
 		code, _, out := runFixture(t, srv.URL, nil, args...)
 		assert.Equal(t, 2, code, strings.Join(args, " "))
 		assert.Contains(t, out, "usage:")
@@ -162,4 +183,82 @@ func TestFixture_PrintsARefusalInTheInterfacesErrorBody(t *testing.T) {
 
 	code, _, _ = runFixture(t, srv.URL, nil, "delete-cluster", testRecord)
 	assert.Equal(t, 0, code, "the control: the record's own delete succeeds")
+}
+
+// declareFile writes a declare FILE into the test's directory.
+func writeDeclareFile(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "declare.json")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	return path
+}
+
+// TestDeclare_PlacesTheFilesObjectUnderItsIdentifierOrADrawnOne holds
+// declare's two forms against the routes each takes, the object sent
+// on as the file carries it.
+func TestDeclare_PlacesTheFilesObjectUnderItsIdentifierOrADrawnOne(t *testing.T) {
+	api := &browserAPI{}
+	srv := httptest.NewServer(api)
+	t.Cleanup(srv.Close)
+	object := `{"kind":"Bot","spec":{"replicas":12345678901234567890}}`
+
+	code, answer, _ := runFixture(t, srv.URL, nil, "declare", writeDeclareFile(t, `{"cluster":"`+testRecord+`","object":`+object+`}`))
+	require.Equal(t, 0, code)
+	assert.Equal(t, map[string]any{"id": "decl-drawn", "generation": float64(1)}, answer)
+
+	code, answer, _ = runFixture(t, srv.URL, nil, "declare",
+		writeDeclareFile(t, `{"cluster":"`+testRecord+`","id":"chosen","object":`+object+`}`))
+	require.Equal(t, 0, code)
+	assert.Equal(t, map[string]any{"id": "chosen", "generation": float64(4)}, answer)
+	record := "/orgs/acme/clusters/5f60710a1b2c3d4e"
+	assert.Equal(t, []string{"POST " + record + "/declarations", "PUT " + record + "/declarations/chosen"}, api.requests)
+	for _, body := range api.bodies {
+		assert.JSONEq(t, `{"object":`+object+`}`, body)
+		assert.Contains(t, body, "12345678901234567890", "the object is sent on unrounded")
+	}
+
+	code, answer, _ = runFixture(t, srv.URL, nil, "declare", writeDeclareFile(t, `{"cluster":"grn:acme/iam/operator/one","object":{}}`))
+	assert.Equal(t, 1, code)
+	assert.Equal(t, "invalid_request", answer["error"], "an operator is not a record")
+	code, answer, _ = runFixture(t, srv.URL, nil, "declare", filepath.Join(t.TempDir(), "missing.json"))
+	assert.Equal(t, 1, code)
+	assert.Equal(t, "invalid_request", answer["error"], "a file that is not there")
+}
+
+// TestTombstone_FindsTheRecordHoldingTheIdentifier holds that
+// tombstone searches the organization's records, skips one that holds
+// no such declaration, and answers the generation the delete carries.
+func TestTombstone_FindsTheRecordHoldingTheIdentifier(t *testing.T) {
+	api := &browserAPI{}
+	srv := httptest.NewServer(api)
+	t.Cleanup(srv.Close)
+
+	code, answer, _ := runFixture(t, srv.URL, nil, "tombstone", "chosen")
+	require.Equal(t, 0, code)
+	assert.Equal(t, map[string]any{"id": "chosen", "generation": float64(5)}, answer)
+	record := "/orgs/acme/clusters/5f60710a1b2c3d4e"
+	assert.Equal(t, []string{"GET /orgs/acme/clusters", "GET /orgs/acme/clusters/0000000000000000/declarations/chosen",
+		"GET " + record + "/declarations/chosen", "DELETE " + record + "/declarations/chosen"}, api.requests)
+
+	code, answer, _ = runFixture(t, srv.URL, nil, "tombstone", "absent")
+	assert.Equal(t, 1, code)
+	assert.Equal(t, "not_found", answer["error"])
+}
+
+// TestExpireCursors_RefusesADatabaseOffThisMachineBeforeAnything holds
+// that expire-cursors checks its database before it reaches garam.
+func TestExpireCursors_RefusesADatabaseOffThisMachineBeforeAnything(t *testing.T) {
+	api := &browserAPI{}
+	srv := httptest.NewServer(api)
+	t.Cleanup(srv.Close)
+	for name, url := range map[string]string{
+		"no database":     "",
+		"a remote server": "postgres://u:p@db.example.com:5432/garam",
+	} {
+		code, answer, out := runFixture(t, srv.URL, map[string]string{envDatabaseURL: url}, "expire-cursors", testRecord)
+		assert.Equal(t, 1, code, name)
+		assert.Equal(t, "invalid_request", answer["error"], name)
+		assert.NotContains(t, out, "u:p", name+": the connection string is not repeated")
+	}
+	assert.Empty(t, api.requests, "a refused expire-cursors reached nothing")
 }

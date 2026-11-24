@@ -1028,6 +1028,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/clusters/{cluster}/declarations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the declarations placed on a connected cluster. Requires the `member` role.
+         * @description The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
+         */
+        get: operations["listClusterDeclarations"];
+        put?: never;
+        /**
+         * Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+         * @description Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+         */
+        post: operations["createClusterDeclaration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/clusters/{cluster}/declarations/{declaration}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one live declaration placed on a connected cluster. Requires the `member` role.
+         * @description A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
+         */
+        get: operations["getClusterDeclaration"];
+        /**
+         * Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+         * @description An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+         */
+        put: operations["putClusterDeclaration"];
+        post?: never;
+        /**
+         * Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+         * @description Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+         */
+        delete: operations["deleteClusterDeclaration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/operators": {
         parameters: {
             query?: never;
@@ -2437,6 +2489,33 @@ export interface components {
         ClusterName: string;
         /** @description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was. */
         ClusterDescription: string;
+        ClusterDeclarationWrite: {
+            object: components["schemas"]["ClusterDeclaredObject"];
+        };
+        /** @description An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept. */
+        ClusterDeclaredObject: {
+            [key: string]: unknown;
+        };
+        /** @description One declaration placed on a connected cluster, which its connector applies (ADR-0187). */
+        ClusterDeclaration: {
+            /** @example decl-5f60710a1b2c3d4e */
+            id: string;
+            /** @description The GRN of the cluster it is placed on. */
+            cluster: string;
+            /**
+             * Format: int64
+             * @description 1 when placed, and one more at every write.
+             */
+            generation: number;
+            object: components["schemas"]["ClusterDeclaredObject"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ClusterDeclarationList: {
+            declarations: components["schemas"]["ClusterDeclaration"][];
+        };
         /** @description A change to what the organization says about an operator. A field left out keeps its value; the identifier is not a field. */
         OperatorPatch: {
             name?: components["schemas"]["OperatorName"];
@@ -2583,6 +2662,8 @@ export interface components {
         kid: string;
         /** @description Cluster identifier (the last GRN segment). */
         cluster: string;
+        /** @description A declaration's identifier: 1 to 128 letters, digits, `.`, `_` or `-`. */
+        declaration: string;
         /** @description Operator identifier (the last GRN segment). */
         operator: string;
         /** @description The action asked about. */
@@ -4442,6 +4523,176 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Key withdrawn, with its tokens. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listClusterDeclarations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cluster's live declarations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterDeclarationList"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createClusterDeclaration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClusterDeclarationWrite"];
+            };
+        };
+        responses: {
+            /** @description The declaration as stored. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterDeclaration"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getClusterDeclaration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+                /** @description A declaration's identifier: 1 to 128 letters, digits, `.`, `_` or `-`. */
+                declaration: components["parameters"]["declaration"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The declaration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterDeclaration"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    putClusterDeclaration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+                /** @description A declaration's identifier: 1 to 128 letters, digits, `.`, `_` or `-`. */
+                declaration: components["parameters"]["declaration"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClusterDeclarationWrite"];
+            };
+        };
+        responses: {
+            /** @description The declaration's next generation, as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterDeclaration"];
+                };
+            };
+            /** @description The declaration, placed. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterDeclaration"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteClusterDeclaration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+                /** @description A declaration's identifier: 1 to 128 letters, digits, `.`, `_` or `-`. */
+                declaration: components["parameters"]["declaration"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declaration tombstoned. */
             204: {
                 headers: {
                     [name: string]: unknown;

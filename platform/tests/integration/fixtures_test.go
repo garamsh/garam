@@ -132,13 +132,16 @@ func connect(t *testing.T, url string, tune func(*pgxpool.Config)) *pgxpool.Pool
 // truncate resets every table so tests are independent.
 func truncate(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
+	// cluster_declaration_ids outlives every organization by design
+	// (ADR-0187), so no cascade from orgs empties it.
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
 		oauth_states, password_credentials, password_attempts,
 		agents, agent_assignments, operators, certificate_authorities,
 		operator_assertions,
 		messages, message_consents, message_signing_keys, agent_watches,
-		audit_send_events, policy_outbox CASCADE`)
+		audit_send_events, policy_outbox,
+		cluster_declaration_ids CASCADE`)
 	require.NoError(t, err)
 	// A suite that turned the feed on and died before it turned it off
 	// would otherwise leave every later test writing marks.

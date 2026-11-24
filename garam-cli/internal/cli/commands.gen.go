@@ -369,6 +369,59 @@ var apiOperations = []apiOperation{
 		},
 	},
 	{
+		ID: "listClusterDeclarations", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/declarations",
+		Words: []string{"clusters", "declarations"}, Verb: "list", Short: "List the declarations placed on a connected cluster. Requires the `member` role.",
+		Args: []string{"cluster"}, FromOrg: true,
+		Columns: []string{"id", "cluster", "generation", "createdAt", "updatedAt"},
+		Rows:    "declarations",
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewListClusterDeclarationsRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "createClusterDeclaration", Method: "POST", Path: "/orgs/{org}/clusters/{cluster}/declarations",
+		Words: []string{"clusters", "declarations"}, Verb: "create", Short: "Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.",
+		Args: []string{"cluster"}, FromOrg: true,
+		Fields: []apiField{
+			{Name: "object", In: "body", Kind: "json", Required: true, Help: "An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"id", "cluster", "generation", "createdAt", "updatedAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewCreateClusterDeclarationRequestWithBody(server, path[0], path[1], contentType, body)
+		},
+	},
+	{
+		ID: "getClusterDeclaration", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/declarations/{declaration}",
+		Words: []string{"clusters", "declarations"}, Verb: "get", Short: "Read one live declaration placed on a connected cluster. Requires the `member` role.",
+		Args: []string{"cluster", "declaration"}, FromOrg: true,
+		Columns: []string{"id", "cluster", "generation", "createdAt", "updatedAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewGetClusterDeclarationRequest(server, path[0], path[1], path[2])
+		},
+	},
+	{
+		ID: "putClusterDeclaration", Method: "PUT", Path: "/orgs/{org}/clusters/{cluster}/declarations/{declaration}",
+		Words: []string{"clusters", "declarations"}, Verb: "put", Short: "Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.",
+		Args: []string{"cluster", "declaration"}, FromOrg: true,
+		Fields: []apiField{
+			{Name: "object", In: "body", Kind: "json", Required: true, Help: "An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"id", "cluster", "generation", "createdAt", "updatedAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewPutClusterDeclarationRequestWithBody(server, path[0], path[1], path[2], contentType, body)
+		},
+	},
+	{
+		ID: "deleteClusterDeclaration", Method: "DELETE", Path: "/orgs/{org}/clusters/{cluster}/declarations/{declaration}",
+		Words: []string{"clusters", "declarations"}, Verb: "delete", Short: "Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.",
+		Args: []string{"cluster", "declaration"}, FromOrg: true,
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewDeleteClusterDeclarationRequest(server, path[0], path[1], path[2])
+		},
+	},
+	{
 		ID: "listOperators", Method: "GET", Path: "/orgs/{org}/operators",
 		Words: []string{"operators"}, Verb: "list", Short: "List an organization's operators. Requires the `member` role.",
 		Args: []string(nil), FromOrg: true,

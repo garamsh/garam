@@ -132,7 +132,7 @@ namespace Iam {
   action "cluster.read" in ["role-owner", "role-admin", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org] };
   action "cluster.register", "cluster.update", "cluster.reissue",
-    "cluster.delete"
+    "cluster.delete", "cluster.declare"
     in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org] };
 

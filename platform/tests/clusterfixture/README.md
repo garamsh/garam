@@ -23,9 +23,13 @@ lands with the pull request that builds its side (#2047):
 | `mint-token … --expired` | as above, then moves that token's expiry into the past | `registrationToken`, `cluster` | the database |
 | `revoke-keys <grn>` | withdraws every key of the record not yet withdrawn | `cluster` | `listClusterKeys`, `revokeClusterKey` |
 | `delete-cluster <grn>` | deletes the record | `cluster` | `deleteCluster` |
+| `declare <file>` | places the file's object on its record, as a new declaration or the next generation of the one it names | `id`, `generation` | `createClusterDeclaration`, or `putClusterDeclaration` where the file names an `id` |
+| `tombstone <id>` | tombstones the live declaration `id` on whichever of the organization's records holds it | `id`, `generation` | `listClusters`, `getClusterDeclaration`, `deleteClusterDeclaration` |
+| `expire-cursors <grn>` | purges the record's log and every cursor answered so far: the purged position becomes the head, the head moves one past it, and the record's held polls are woken | `cluster` | `getCluster`, then the database |
 
-`declare`, `tombstone` and `expire-cursors` land with #2048, and
-`latest-report` with #2050.
+`declare`'s file is one JSON object: `cluster`, the record's GRN;
+`id`, optional; and `object`, the declared object. `latest-report`
+lands with #2050.
 
 ## Invocation
 
@@ -43,17 +47,18 @@ GARAM_FIXTURE_DATABASE_URL=postgres://... \
 - `GARAM_FIXTURE_API_URL`: `serve api`'s base URL, its routes at the
   root as the console's `/api/*` rewrite reaches them.
 - `GARAM_FIXTURE_SESSION_TOKEN`: the session of a principal holding
-  `iam:cluster.register`, `.read`, `.reissue` and `.delete` in the
-  organization, sent as the `garam_session` cookie. `testprincipal
-  prepare` answers one, and that principal owns any organization it
-  creates.
+  `iam:cluster.register`, `.read`, `.reissue`, `.delete` and
+  `.declare` in the organization, sent as the `garam_session`
+  cookie. `testprincipal prepare` answers one, and that principal owns
+  any organization it creates.
 - `GARAM_FIXTURE_ORG`: the organization a new record is created in. A
   subcommand naming a record by GRN reaches it in the GRN's own
   organization.
-- `GARAM_FIXTURE_DATABASE_URL`: read by `--expired` alone. It must reach
-  a Postgres on this machine (a loopback address, `localhost` or a unix
-  socket, every dial checked), and the check runs before anything is
-  minted.
+- `GARAM_FIXTURE_DATABASE_URL`: read by `--expired` and
+  `expire-cursors` alone, the two writes no browser route makes. It
+  must reach a Postgres on this machine (a loopback address,
+  `localhost` or a unix socket, every dial checked), and the check runs
+  before garam is reached.
 
 `serve machine` refuses past `GARAM_CLUSTER_REGISTRATION_LIMIT`
 registrations per address a minute, ten unless set. The suite

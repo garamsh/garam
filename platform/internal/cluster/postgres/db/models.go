@@ -16,3 +16,27 @@ type Cluster struct {
 	Name        string
 	Description string
 }
+
+type ClusterDeclaration struct {
+	ID         string
+	ClusterGrn string
+	Generation int64
+	Kind       string
+	Namespace  string
+	Name       string
+	Object     []byte
+	LastSeq    int64
+	Tombstoned bool
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+}
+
+type ClusterDeclarationChange struct {
+	ClusterGrn    string
+	Seq           int64
+	Op            string
+	DeclarationID string
+	Generation    int64
+	Object        []byte
+	WrittenAt     pgtype.Timestamptz
+}

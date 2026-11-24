@@ -459,7 +459,8 @@ Responsibility documents:
 - [operators.md](./operators.md) — what an organization records about an
   operator and what it authenticates with
 - [clusters.md](./clusters.md) — what an organization records about a
-  cluster it connected, whose connector authenticates as that record
+  cluster it connected, whose connector authenticates as that record,
+  and the declarations it places on it
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the
@@ -1635,3 +1636,12 @@ ADRs:
   byte for byte at a commit the PM pins and `check-vendor` holds;
   accepted, built (#2046); supersedes 0019 in part, for those paths
   only
+- [0187](./adr/0187-a-declaration-placed-on-a-cluster-is-written-under-iam-cluster-declare-into-a-log-per-record-the-connector-long-polls.md)
+  — a declaration placed on a connected cluster is written under
+  `iam:cluster.declare`, held by the owner and the administrator, into
+  a log per record at positions drawn one at a time; changes are kept
+  30 days behind a recorded purge point, an identifier names one
+  declaration once across every record, DECL-7 to DECL-9 are refused
+  at the write, and a write wakes the connector's long poll through
+  Postgres; accepted, built (#2048); amends 0184 decision 9, adding an
+  action to its list

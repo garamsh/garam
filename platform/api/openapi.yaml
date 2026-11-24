@@ -2131,6 +2131,170 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/clusters/{cluster}/declarations:
+    get:
+      operationId: listClusterDeclarations
+      tags: [cluster]
+      summary: List the declarations placed on a connected cluster. Requires the `member` role.
+      description: >-
+        The live declarations placed on the cluster, in the order each
+        was last written. A tombstoned declaration is not listed.
+        Authorized as `iam:cluster.read` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+      responses:
+        '200':
+          description: The cluster's live declarations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterDeclarationList'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createClusterDeclaration
+      tags: [cluster]
+      summary: Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+      description: >-
+        Places the object on the cluster for its connector to apply
+        (ADR-0187), at generation 1. An object the parser of
+        garam-bot's interface 1 refuses, or one with no namespace,
+        answers 422 naming what was refused: the connector would hold
+        it as invalid. garam keeps only the members a declared object
+        has. Authorized as `iam:cluster.declare` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClusterDeclarationWrite'
+      responses:
+        '201':
+          description: The declaration as stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterDeclaration'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/clusters/{cluster}/declarations/{declaration}:
+    get:
+      operationId: getClusterDeclaration
+      tags: [cluster]
+      summary: Read one live declaration placed on a connected cluster. Requires the `member` role.
+      description: >-
+        A tombstoned declaration answers 404. Authorized as
+        `iam:cluster.read` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/declaration'
+      responses:
+        '200':
+          description: The declaration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterDeclaration'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putClusterDeclaration
+      tags: [cluster]
+      summary: Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+      description: >-
+        An identifier never placed is placed at generation 1 and
+        answers 201. One live on this cluster takes the object as its
+        next generation and answers 200. One placed on another cluster,
+        or tombstoned, answers 409: an identifier names one
+        declaration, once. The object is checked as
+        `createClusterDeclaration` checks it. Authorized as
+        `iam:cluster.declare` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/declaration'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClusterDeclarationWrite'
+      responses:
+        '200':
+          description: The declaration's next generation, as stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterDeclaration'
+        '201':
+          description: The declaration, placed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterDeclaration'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteClusterDeclaration
+      tags: [cluster]
+      summary: Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+      description: >-
+        Sends the connector a delete at the declaration's next
+        generation. The identifier is never placed again. A declaration
+        already tombstoned answers 404. Authorized as
+        `iam:cluster.declare` on the organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/declaration'
+      responses:
+        '204':
+          description: Declaration tombstoned.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/operators:
     post:
       operationId: registerOperator
@@ -3298,6 +3462,16 @@ components:
       required: true
       description: Cluster identifier (the last GRN segment).
       x-go-name: ClusterSlug
+      schema:
+        type: string
+    declaration:
+      name: declaration
+      in: path
+      required: true
+      description: >-
+        A declaration's identifier: 1 to 128 letters, digits, `.`, `_`
+        or `-`.
+      x-go-name: DeclarationID
       schema:
         type: string
     operator:
@@ -5115,6 +5289,59 @@ components:
       description: >-
         At most 1000 characters once surrounding space is trimmed. Empty
         is no description, and on an update clears the one there was.
+    ClusterDeclarationWrite:
+      type: object
+      required: [object]
+      properties:
+        object:
+          $ref: '#/components/schemas/ClusterDeclaredObject'
+    ClusterDeclaredObject:
+      type: object
+      description: >-
+        An object of a kind cluster-connection v1alpha1 declares
+        (DECL-7): `apiVersion`, `kind`, `metadata.namespace`,
+        `metadata.name`, optional `metadata.labels` and
+        `metadata.annotations`, and `spec`. garam keeps these members
+        alone. The object must be one the parser of garam-bot's
+        interface 1 admits, which refuses an unknown field, a field
+        naming an image (DECL-9) and a secret named other than as
+        `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
+      additionalProperties: true
+      # Carried as written, so no number in spec is rounded on the way.
+      x-go-type: json.RawMessage
+    ClusterDeclaration:
+      type: object
+      description: >-
+        One declaration placed on a connected cluster, which its
+        connector applies (ADR-0187).
+      required: [id, cluster, generation, object, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          example: decl-5f60710a1b2c3d4e
+        cluster:
+          type: string
+          description: The GRN of the cluster it is placed on.
+        generation:
+          type: integer
+          format: int64
+          description: 1 when placed, and one more at every write.
+        object:
+          $ref: '#/components/schemas/ClusterDeclaredObject'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ClusterDeclarationList:
+      type: object
+      required: [declarations]
+      properties:
+        declarations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClusterDeclaration'
     OperatorPatch:
       type: object
       description: >-

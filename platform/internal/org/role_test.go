@@ -89,6 +89,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionClusterUpdate, "iam:cluster.update"},
 		{org.ActionClusterReissue, "iam:cluster.reissue"},
 		{org.ActionClusterDelete, "iam:cluster.delete"},
+		{org.ActionClusterDeclare, "iam:cluster.declare"},
 
 		{org.ActionAgentRead, "iam:agent.read"},
 		{org.ActionAgentWatch, "iam:agent.watch"},
@@ -139,7 +140,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
 			org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate,
-			org.ActionClusterReissue, org.ActionClusterDelete, org.ActionAgentRead,
+			org.ActionClusterReissue, org.ActionClusterDelete, org.ActionClusterDeclare, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -161,7 +162,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
 			org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate,
-			org.ActionClusterReissue, org.ActionClusterDelete, org.ActionAgentRead,
+			org.ActionClusterReissue, org.ActionClusterDelete, org.ActionClusterDeclare, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -247,14 +248,16 @@ func TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator(t *testing.T) {
 // TestRoleActions_OnlyOwnerAndAdminStandAClusterUp pins ADR-0184
 // decision 9 as #2045 decided it: every role reads the clusters an org
 // connected, and only the two administrative roles create, change,
-// re-register or delete one, each named and none by `iam:cluster.*`.
+// re-register or delete one, or place a declaration on it (ADR-0187),
+// each named and none by `iam:cluster.*`.
 // The read is the control for the member's refusals.
 func TestRoleActions_OnlyOwnerAndAdminStandAClusterUp(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
 		assert.Contains(t, r.Actions(), org.ActionClusterRead, string(r))
 		assert.NotContains(t, r.Actions(), "iam:cluster.*", string(r))
 	}
-	for _, action := range []string{org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue, org.ActionClusterDelete} {
+	for _, action := range []string{org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue,
+		org.ActionClusterDelete, org.ActionClusterDeclare} {
 		assert.Contains(t, org.RoleOwner.Actions(), action)
 		assert.Contains(t, org.RoleAdmin.Actions(), action)
 		assert.NotContains(t, org.RoleMember.Actions(), action)
@@ -358,7 +361,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorReissue, org.ActionOperatorDelegate,
 			org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue,
-			org.ActionClusterDelete, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
+			org.ActionClusterDelete, org.ActionClusterDeclare, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
 			org.ActionCodehubRepoWrite, org.ActionCodehubRepoCreate, org.ActionCodehubRunnerAdminister,

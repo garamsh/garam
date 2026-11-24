@@ -1660,3 +1660,95 @@ func (s *fakeAuthorityReader) HasAuthority(_ context.Context, orgGRN grn.GRN) (b
 	}
 	return s.holds[orgGRN.String()], nil
 }
+
+// fakeDeclarations holds the declarations placed on each record in
+// memory, and answers the browser routes' four calls as the Postgres
+// store does: identifiers are global and never placed twice, and two
+// live declarations of a record never name one object. The long poll
+// is left to the embedded interface, which no browser route calls.
+type fakeDeclarations struct {
+	cluster.DeclarationStore
+	records      *fakeClusterStore
+	mu           sync.Mutex
+	declarations map[string]*cluster.Declaration
+	// seq orders the declarations as last written.
+	seq     int64
+	written map[string]int64
+}
+
+func newFakeDeclarations(records *fakeClusterStore) *fakeDeclarations {
+	return &fakeDeclarations{records: records, declarations: map[string]*cluster.Declaration{}, written: map[string]int64{}}
+}
+
+func (s *fakeDeclarations) Declare(ctx context.Context, g grn.GRN, id string, object cluster.DeclaredObject) (cluster.Declaration, bool, error) {
+	if _, err := s.records.Get(ctx, g); err != nil {
+		return cluster.Declaration{}, false, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, exists := s.declarations[id]
+	switch {
+	case exists && d.Cluster != g:
+		return cluster.Declaration{}, false, cluster.ErrDeclarationTaken
+	case exists && d.Tombstoned:
+		return cluster.Declaration{}, false, cluster.ErrDeclarationTombstoned
+	}
+	for otherID, other := range s.declarations {
+		if otherID != id && other.Cluster == g && !other.Tombstoned && other.Object.Kind() == object.Kind() &&
+			other.Object.Namespace() == object.Namespace() && other.Object.Name() == object.Name() {
+			return cluster.Declaration{}, false, cluster.ErrDeclaredObjectTaken
+		}
+	}
+	now := time.Now().UTC()
+	if !exists {
+		d = &cluster.Declaration{ID: id, Cluster: g, CreatedAt: now}
+		s.declarations[id] = d
+	}
+	d.Generation++
+	d.Object = object
+	d.UpdatedAt = now
+	s.seq++
+	s.written[id] = s.seq
+	return *d, !exists, nil
+}
+
+func (s *fakeDeclarations) Tombstone(_ context.Context, g grn.GRN, id string) (cluster.Declaration, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.declarations[id]
+	if !ok || d.Cluster != g || d.Tombstoned {
+		return cluster.Declaration{}, cluster.ErrDeclarationNotFound
+	}
+	d.Tombstoned = true
+	d.Generation++
+	d.Object = cluster.DeclaredObject{}
+	s.seq++
+	s.written[id] = s.seq
+	return *d, nil
+}
+
+func (s *fakeDeclarations) GetDeclaration(_ context.Context, g grn.GRN, id string) (cluster.Declaration, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.declarations[id]
+	if !ok || d.Cluster != g || d.Tombstoned {
+		return cluster.Declaration{}, cluster.ErrDeclarationNotFound
+	}
+	return *d, nil
+}
+
+func (s *fakeDeclarations) ListDeclarations(ctx context.Context, g grn.GRN) ([]cluster.Declaration, error) {
+	if _, err := s.records.Get(ctx, g); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []cluster.Declaration
+	for _, d := range s.declarations {
+		if d.Cluster == g && !d.Tombstoned {
+			out = append(out, *d)
+		}
+	}
+	slices.SortFunc(out, func(a, b cluster.Declaration) int { return int(s.written[a.ID] - s.written[b.ID]) })
+	return out, nil
+}

@@ -33,6 +33,48 @@ func (q *Queries) AddClusterKey(ctx context.Context, arg AddClusterKeyParams) er
 	return err
 }
 
+const advanceDeclarationHead = `-- name: AdvanceDeclarationHead :one
+INSERT INTO cluster_declaration_heads (cluster_grn, head) VALUES ($1, 1)
+ON CONFLICT (cluster_grn) DO UPDATE SET head = cluster_declaration_heads.head + 1
+RETURNING head
+`
+
+func (q *Queries) AdvanceDeclarationHead(ctx context.Context, clusterGrn string) (int64, error) {
+	row := q.db.QueryRow(ctx, advanceDeclarationHead, clusterGrn)
+	var head int64
+	err := row.Scan(&head)
+	return head, err
+}
+
+const appendDeclarationChange = `-- name: AppendDeclarationChange :exec
+INSERT INTO cluster_declaration_changes (cluster_grn, seq, op, declaration_id, generation, object, written_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7)
+`
+
+type AppendDeclarationChangeParams struct {
+	ClusterGrn    string
+	Seq           int64
+	Op            string
+	DeclarationID string
+	Generation    int64
+	Object        []byte
+	WrittenAt     pgtype.Timestamptz
+}
+
+func (q *Queries) AppendDeclarationChange(ctx context.Context, arg AppendDeclarationChangeParams) error {
+	_, err := q.db.Exec(ctx, appendDeclarationChange,
+		arg.ClusterGrn,
+		arg.Seq,
+		arg.Op,
+		arg.DeclarationID,
+		arg.Generation,
+		arg.Object,
+		arg.WrittenAt,
+	)
+	return err
+}
+
 const bindClusterKey = `-- name: BindClusterKey :exec
 INSERT INTO cluster_keys (cluster_grn, kid, public_jwk, created_at)
 VALUES ($1, $2, $3, now())
@@ -152,6 +194,51 @@ func (q *Queries) GetCluster(ctx context.Context, grn string) (Cluster, error) {
 	return i, err
 }
 
+const getDeclarationForWrite = `-- name: GetDeclarationForWrite :one
+
+SELECT id, cluster_grn, generation, kind, namespace, name, object, last_seq, tombstoned, created_at, updated_at FROM cluster_declarations WHERE id = $1 FOR UPDATE
+`
+
+// Declarations (ADR-0187). Every write runs inside HoldCluster, so a
+// record's positions are drawn and committed in one order.
+func (q *Queries) GetDeclarationForWrite(ctx context.Context, id string) (ClusterDeclaration, error) {
+	row := q.db.QueryRow(ctx, getDeclarationForWrite, id)
+	var i ClusterDeclaration
+	err := row.Scan(
+		&i.ID,
+		&i.ClusterGrn,
+		&i.Generation,
+		&i.Kind,
+		&i.Namespace,
+		&i.Name,
+		&i.Object,
+		&i.LastSeq,
+		&i.Tombstoned,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getDeclarationPosition = `-- name: GetDeclarationPosition :one
+SELECT COALESCE(h.head, 0)::bigint AS head, COALESCE(h.purged_through, -1)::bigint AS purged_through
+FROM clusters c LEFT JOIN cluster_declaration_heads h ON h.cluster_grn = c.grn
+WHERE c.grn = $1
+`
+
+type GetDeclarationPositionRow struct {
+	Head          int64
+	PurgedThrough int64
+}
+
+// A record that wrote nothing stands at position 0, purged through -1.
+func (q *Queries) GetDeclarationPosition(ctx context.Context, grn string) (GetDeclarationPositionRow, error) {
+	row := q.db.QueryRow(ctx, getDeclarationPosition, grn)
+	var i GetDeclarationPositionRow
+	err := row.Scan(&i.Head, &i.PurgedThrough)
+	return i, err
+}
+
 const getLiveClusterKey = `-- name: GetLiveClusterKey :one
 SELECT k.id, k.cluster_grn, k.kid, k.public_jwk, k.created_at, k.retires_at, k.revoked_at
 FROM cluster_keys k
@@ -185,6 +272,34 @@ func (q *Queries) GetLiveClusterKey(ctx context.Context, arg GetLiveClusterKeyPa
 		&i.CreatedAt,
 		&i.RetiresAt,
 		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getLiveDeclaration = `-- name: GetLiveDeclaration :one
+SELECT id, cluster_grn, generation, kind, namespace, name, object, last_seq, tombstoned, created_at, updated_at FROM cluster_declarations WHERE cluster_grn = $1 AND id = $2 AND NOT tombstoned
+`
+
+type GetLiveDeclarationParams struct {
+	ClusterGrn string
+	ID         string
+}
+
+func (q *Queries) GetLiveDeclaration(ctx context.Context, arg GetLiveDeclarationParams) (ClusterDeclaration, error) {
+	row := q.db.QueryRow(ctx, getLiveDeclaration, arg.ClusterGrn, arg.ID)
+	var i ClusterDeclaration
+	err := row.Scan(
+		&i.ID,
+		&i.ClusterGrn,
+		&i.Generation,
+		&i.Kind,
+		&i.Namespace,
+		&i.Name,
+		&i.Object,
+		&i.LastSeq,
+		&i.Tombstoned,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -325,6 +440,159 @@ func (q *Queries) ListClustersByOrg(ctx context.Context, orgGrn string) ([]Clust
 	return items, nil
 }
 
+const listDeclarationChangesAfter = `-- name: ListDeclarationChangesAfter :many
+SELECT cluster_grn, seq, op, declaration_id, generation, object, written_at FROM cluster_declaration_changes
+WHERE cluster_grn = $1 AND seq > $2
+ORDER BY seq LIMIT $3
+`
+
+type ListDeclarationChangesAfterParams struct {
+	ClusterGrn string
+	After      int64
+	MaxRows    int32
+}
+
+func (q *Queries) ListDeclarationChangesAfter(ctx context.Context, arg ListDeclarationChangesAfterParams) ([]ClusterDeclarationChange, error) {
+	rows, err := q.db.Query(ctx, listDeclarationChangesAfter, arg.ClusterGrn, arg.After, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClusterDeclarationChange
+	for rows.Next() {
+		var i ClusterDeclarationChange
+		if err := rows.Scan(
+			&i.ClusterGrn,
+			&i.Seq,
+			&i.Op,
+			&i.DeclarationID,
+			&i.Generation,
+			&i.Object,
+			&i.WrittenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLiveDeclarations = `-- name: ListLiveDeclarations :many
+SELECT id, cluster_grn, generation, kind, namespace, name, object, last_seq, tombstoned, created_at, updated_at FROM cluster_declarations WHERE cluster_grn = $1 AND NOT tombstoned ORDER BY last_seq
+`
+
+func (q *Queries) ListLiveDeclarations(ctx context.Context, clusterGrn string) ([]ClusterDeclaration, error) {
+	rows, err := q.db.Query(ctx, listLiveDeclarations, clusterGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClusterDeclaration
+	for rows.Next() {
+		var i ClusterDeclaration
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClusterGrn,
+			&i.Generation,
+			&i.Kind,
+			&i.Namespace,
+			&i.Name,
+			&i.Object,
+			&i.LastSeq,
+			&i.Tombstoned,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLiveDeclarationsAfter = `-- name: ListLiveDeclarationsAfter :many
+SELECT id, cluster_grn, generation, kind, namespace, name, object, last_seq, tombstoned, created_at, updated_at FROM cluster_declarations
+WHERE cluster_grn = $1 AND NOT tombstoned AND last_seq > $2
+ORDER BY last_seq LIMIT $3
+`
+
+type ListLiveDeclarationsAfterParams struct {
+	ClusterGrn string
+	After      int64
+	MaxRows    int32
+}
+
+func (q *Queries) ListLiveDeclarationsAfter(ctx context.Context, arg ListLiveDeclarationsAfterParams) ([]ClusterDeclaration, error) {
+	rows, err := q.db.Query(ctx, listLiveDeclarationsAfter, arg.ClusterGrn, arg.After, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClusterDeclaration
+	for rows.Next() {
+		var i ClusterDeclaration
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClusterGrn,
+			&i.Generation,
+			&i.Kind,
+			&i.Namespace,
+			&i.Name,
+			&i.Object,
+			&i.LastSeq,
+			&i.Tombstoned,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const notifyDeclarations = `-- name: NotifyDeclarations :exec
+SELECT pg_notify('garam_cluster_declarations', $1::text)
+`
+
+func (q *Queries) NotifyDeclarations(ctx context.Context, clusterGrn string) error {
+	_, err := q.db.Exec(ctx, notifyDeclarations, clusterGrn)
+	return err
+}
+
+const purgeDeclarationChanges = `-- name: PurgeDeclarationChanges :exec
+WITH purged AS (
+    DELETE FROM cluster_declaration_changes c
+    WHERE c.cluster_grn = $1 AND c.written_at < $2
+    RETURNING c.seq
+)
+UPDATE cluster_declaration_heads h
+SET purged_through = GREATEST(h.purged_through, (SELECT max(p.seq) FROM purged p))
+WHERE h.cluster_grn = $1 AND EXISTS (SELECT 1 FROM purged)
+`
+
+type PurgeDeclarationChangesParams struct {
+	ClusterGrn string
+	Before     pgtype.Timestamptz
+}
+
+// The changes past retention go, and the record's purged position
+// moves to the last of them (DECL-6). A record's positions are written
+// in time order, so what goes is a prefix of its log.
+func (q *Queries) PurgeDeclarationChanges(ctx context.Context, arg PurgeDeclarationChangesParams) error {
+	_, err := q.db.Exec(ctx, purgeDeclarationChanges, arg.ClusterGrn, arg.Before)
+	return err
+}
+
 const recordClusterToken = `-- name: RecordClusterToken :exec
 INSERT INTO cluster_tokens (token_hash, cluster_grn, key_id, issued_at, expires_at)
 VALUES ($1, $2, $3,
@@ -348,6 +616,20 @@ func (q *Queries) RecordClusterToken(ctx context.Context, arg RecordClusterToken
 		arg.ExpiresAt,
 	)
 	return err
+}
+
+const reserveDeclarationID = `-- name: ReserveDeclarationID :execrows
+INSERT INTO cluster_declaration_ids (id) VALUES ($1) ON CONFLICT (id) DO NOTHING
+`
+
+// An identifier is reserved the first time it is placed, and never
+// released: none answers a row where the identifier was taken before.
+func (q *Queries) ReserveDeclarationID(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.Exec(ctx, reserveDeclarationID, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const resolveClusterToken = `-- name: ResolveClusterToken :one
@@ -513,6 +795,62 @@ func (q *Queries) UpdateClusterDetails(ctx context.Context, arg UpdateClusterDet
 		&i.CreatedAt,
 		&i.Name,
 		&i.Description,
+	)
+	return i, err
+}
+
+const writeDeclaration = `-- name: WriteDeclaration :one
+INSERT INTO cluster_declarations (id, cluster_grn, generation, kind, namespace, name,
+                                  object, last_seq, tombstoned, created_at, updated_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7, $8,
+        $9, $10, $10)
+ON CONFLICT (id) DO UPDATE
+SET generation = EXCLUDED.generation, kind = EXCLUDED.kind, namespace = EXCLUDED.namespace,
+    name = EXCLUDED.name, object = EXCLUDED.object, last_seq = EXCLUDED.last_seq,
+    tombstoned = EXCLUDED.tombstoned, updated_at = EXCLUDED.updated_at
+RETURNING id, cluster_grn, generation, kind, namespace, name, object, last_seq, tombstoned, created_at, updated_at
+`
+
+type WriteDeclarationParams struct {
+	ID         string
+	ClusterGrn string
+	Generation int64
+	Kind       string
+	Namespace  string
+	Name       string
+	Object     []byte
+	LastSeq    int64
+	Tombstoned bool
+	WrittenAt  pgtype.Timestamptz
+}
+
+func (q *Queries) WriteDeclaration(ctx context.Context, arg WriteDeclarationParams) (ClusterDeclaration, error) {
+	row := q.db.QueryRow(ctx, writeDeclaration,
+		arg.ID,
+		arg.ClusterGrn,
+		arg.Generation,
+		arg.Kind,
+		arg.Namespace,
+		arg.Name,
+		arg.Object,
+		arg.LastSeq,
+		arg.Tombstoned,
+		arg.WrittenAt,
+	)
+	var i ClusterDeclaration
+	err := row.Scan(
+		&i.ID,
+		&i.ClusterGrn,
+		&i.Generation,
+		&i.Kind,
+		&i.Namespace,
+		&i.Name,
+		&i.Object,
+		&i.LastSeq,
+		&i.Tombstoned,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

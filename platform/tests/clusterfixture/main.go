@@ -1,9 +1,10 @@
 // Command clusterfixture is the server fixture garam-bot-operator's
 // cluster-connection v1alpha1 conformance suite runs against garam
 // (`conformance.md` §The server fixture). Each subcommand acts through
-// garam's browser API as a signed-in principal, and --expired alone
-// writes to the database. It is test-only and no garam binary or image
-// carries it; README.md beside it is the contract.
+// garam's browser API as a signed-in principal, and --expired and
+// expire-cursors alone write to the database. It is test-only and no
+// garam binary or image carries it; README.md beside it is the
+// contract.
 package main
 
 import (
@@ -15,7 +16,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -44,9 +47,12 @@ const requestTimeout = 30 * time.Second
 
 const usage = `usage: clusterfixture <subcommand> [arguments]
   mint-token [--cluster GRN] [--expired]
+  declare FILE            FILE is {"cluster": GRN, "id": ID (optional), "object": DeclaredObject}
+  tombstone ID
   revoke-keys GRN
   delete-cluster GRN
-environment: ` + envAPIURL + `, ` + envSessionToken + `, ` + envOrg + `, and ` + envDatabaseURL + ` for --expired`
+  expire-cursors GRN
+environment: ` + envAPIURL + `, ` + envSessionToken + `, ` + envOrg + `, and ` + envDatabaseURL + ` for --expired and expire-cursors`
 
 func main() {
 	os.Exit(run(context.Background(), os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
@@ -104,7 +110,21 @@ func dispatch(ctx context.Context, args []string, getenv func(string) string) (a
 			return nil, errUsage
 		}
 		return f.mintToken(ctx, *named, *expired, getenv(envDatabaseURL))
-	case "revoke-keys", "delete-cluster":
+	case "declare":
+		if len(rest) != 1 {
+			return nil, errUsage
+		}
+		read, err := os.ReadFile(rest[0])
+		if err != nil {
+			return nil, &refusal{Code: "invalid_request", Message: "the declare file could not be read"}
+		}
+		return f.declare(ctx, read)
+	case "tombstone":
+		if len(rest) != 1 {
+			return nil, errUsage
+		}
+		return f.tombstone(ctx, rest[0])
+	case "revoke-keys", "delete-cluster", "expire-cursors":
 		if len(rest) != 1 {
 			return nil, errUsage
 		}
@@ -112,10 +132,13 @@ func dispatch(ctx context.Context, args []string, getenv func(string) string) (a
 		if err != nil {
 			return nil, err
 		}
-		if name == "revoke-keys" {
+		switch name {
+		case "revoke-keys":
 			return f.revokeKeys(ctx, g)
+		case "delete-cluster":
+			return f.deleteCluster(ctx, g)
 		}
-		return f.deleteCluster(ctx, g)
+		return f.expireCursors(ctx, g, getenv(envDatabaseURL))
 	}
 	return nil, errUsage
 }
@@ -167,7 +190,7 @@ func (f *fixture) mintToken(ctx context.Context, named string, expired bool, dat
 	var out minted
 	if named == "" {
 		var created apigen.CreatedCluster
-		if err := f.call(ctx, http.MethodPost, "/orgs/"+f.org+"/clusters", `{}`, http.StatusCreated, &created); err != nil {
+		if err := f.call(ctx, http.MethodPost, "/orgs/"+f.org+"/clusters", `{}`, &created, http.StatusCreated); err != nil {
 			return minted{}, err
 		}
 		out = minted{RegistrationToken: created.Registration.RegistrationToken, Cluster: created.Cluster.Grn}
@@ -177,7 +200,7 @@ func (f *fixture) mintToken(ctx context.Context, named string, expired bool, dat
 			return minted{}, err
 		}
 		var reissued apigen.ClusterRegistrationToken
-		if err := f.call(ctx, http.MethodPost, recordPath(g)+"/registration-token", "", http.StatusCreated, &reissued); err != nil {
+		if err := f.call(ctx, http.MethodPost, recordPath(g)+"/registration-token", "", &reissued, http.StatusCreated); err != nil {
 			return minted{}, err
 		}
 		out = minted{RegistrationToken: reissued.RegistrationToken, Cluster: g.String()}
@@ -190,11 +213,11 @@ func (f *fixture) mintToken(ctx context.Context, named string, expired bool, dat
 	return out, nil
 }
 
-// localDatabase parses --expired's database, refusing one off this
-// machine, as testprincipal does.
+// localDatabase parses the database --expired and expire-cursors
+// write, refusing one off this machine, as testprincipal does.
 func localDatabase(databaseURL string) (*pgxpool.Config, error) {
 	if databaseURL == "" {
-		return nil, &refusal{Code: "invalid_request", Message: envDatabaseURL + " is required for --expired"}
+		return nil, &refusal{Code: "invalid_request", Message: envDatabaseURL + " is required for --expired and expire-cursors"}
 	}
 	cfg, err := loopback.ParseConfig(databaseURL)
 	if err != nil {
@@ -229,14 +252,14 @@ type named struct {
 // revokeKeys withdraws every key of g the record has not withdrawn.
 func (f *fixture) revokeKeys(ctx context.Context, g grn.GRN) (named, error) {
 	var keys apigen.ClusterKeyList
-	if err := f.call(ctx, http.MethodGet, recordPath(g)+"/keys", "", http.StatusOK, &keys); err != nil {
+	if err := f.call(ctx, http.MethodGet, recordPath(g)+"/keys", "", &keys, http.StatusOK); err != nil {
 		return named{}, err
 	}
 	for _, k := range keys.Keys {
 		if k.State == apigen.ClusterKeyRevoked {
 			continue
 		}
-		if err := f.call(ctx, http.MethodDelete, recordPath(g)+"/keys/"+k.Kid, "", http.StatusNoContent, nil); err != nil {
+		if err := f.call(ctx, http.MethodDelete, recordPath(g)+"/keys/"+k.Kid, "", nil, http.StatusNoContent); err != nil {
 			return named{}, err
 		}
 	}
@@ -244,7 +267,7 @@ func (f *fixture) revokeKeys(ctx context.Context, g grn.GRN) (named, error) {
 }
 
 func (f *fixture) deleteCluster(ctx context.Context, g grn.GRN) (named, error) {
-	if err := f.call(ctx, http.MethodDelete, recordPath(g), "", http.StatusNoContent, nil); err != nil {
+	if err := f.call(ctx, http.MethodDelete, recordPath(g), "", nil, http.StatusNoContent); err != nil {
 		return named{}, err
 	}
 	return named{Cluster: g.String()}, nil
@@ -265,9 +288,9 @@ func recordPath(g grn.GRN) string {
 	return "/orgs/" + g.Organization + "/clusters/" + g.Identifier
 }
 
-// call sends one request as the principal and decodes an answer of
-// status into out. Any other answer is a refusal in T-5's shape.
-func (f *fixture) call(ctx context.Context, method, path, body string, status int, out any) error {
+// call sends one request as the principal and decodes an answer of one
+// of statuses into out. Any other answer is a refusal in T-5's shape.
+func (f *fixture) call(ctx context.Context, method, path, body string, out any, statuses ...int) error {
 	req, err := http.NewRequestWithContext(ctx, method, f.api+path, bytes.NewReader([]byte(body)))
 	if err != nil {
 		return errors.New("the request could not be built")
@@ -285,7 +308,7 @@ func (f *fixture) call(ctx context.Context, method, path, body string, status in
 	if err != nil {
 		return errors.New("garam's answer could not be read")
 	}
-	if resp.StatusCode != status {
+	if !slices.Contains(statuses, resp.StatusCode) {
 		var e apigen.Error
 		_ = json.Unmarshal(raw, &e)
 		return &refusal{Code: codeOf(resp.StatusCode), Message: e.Message}
@@ -313,4 +336,120 @@ func codeOf(status int) string {
 		return "internal"
 	}
 	return "invalid_request"
+}
+
+// declared is what declare and tombstone print.
+type declared struct {
+	ID         string `json:"id"`
+	Generation int64  `json:"generation"`
+}
+
+// declareFile is declare's FILE.
+type declareFile struct {
+	Cluster string          `json:"cluster"`
+	ID      string          `json:"id"`
+	Object  json.RawMessage `json:"object"`
+}
+
+// declare places the file's object on its record: under an identifier
+// garam draws where the file names none, or as the next generation of
+// the one it names.
+func (f *fixture) declare(ctx context.Context, file []byte) (declared, error) {
+	var q declareFile
+	if err := json.Unmarshal(file, &q); err != nil {
+		return declared{}, &refusal{Code: "invalid_request", Message: "the declare file is not {cluster, id, object}"}
+	}
+	g, err := clusterGRN(q.Cluster)
+	if err != nil {
+		return declared{}, err
+	}
+	body, err := json.Marshal(struct {
+		Object json.RawMessage `json:"object"`
+	}{q.Object})
+	if err != nil {
+		return declared{}, &refusal{Code: "invalid_request", Message: "the declare file's object is not JSON"}
+	}
+	var out apigen.ClusterDeclaration
+	if q.ID == "" {
+		err = f.call(ctx, http.MethodPost, recordPath(g)+"/declarations", string(body), &out, http.StatusCreated)
+	} else {
+		err = f.call(ctx, http.MethodPut, recordPath(g)+"/declarations/"+url.PathEscape(q.ID), string(body), &out,
+			http.StatusCreated, http.StatusOK)
+	}
+	if err != nil {
+		return declared{}, err
+	}
+	return declared{ID: out.Id, Generation: out.Generation}, nil
+}
+
+// tombstone deletes the live declaration id, on whichever record of
+// the organization holds it, and answers the generation the delete
+// carries.
+func (f *fixture) tombstone(ctx context.Context, id string) (declared, error) {
+	var records []apigen.Cluster
+	if err := f.call(ctx, http.MethodGet, "/orgs/"+f.org+"/clusters", "", &records, http.StatusOK); err != nil {
+		return declared{}, err
+	}
+	for _, c := range records {
+		g, err := clusterGRN(c.Grn)
+		if err != nil {
+			return declared{}, err
+		}
+		path := recordPath(g) + "/declarations/" + url.PathEscape(id)
+		var live apigen.ClusterDeclaration
+		err = f.call(ctx, http.MethodGet, path, "", &live, http.StatusOK)
+		var r *refusal
+		if errors.As(err, &r) && r.Code == "not_found" {
+			continue
+		}
+		if err != nil {
+			return declared{}, err
+		}
+		if err := f.call(ctx, http.MethodDelete, path, "", nil, http.StatusNoContent); err != nil {
+			return declared{}, err
+		}
+		return declared{ID: id, Generation: live.Generation + 1}, nil
+	}
+	return declared{}, &refusal{Code: "not_found", Message: "no live declaration " + id + " in the organization"}
+}
+
+// expireCursors purges g's log and every cursor answered so far
+// (DECL-6), the one write no browser route makes: the purged position
+// becomes the head, and the head moves one past it, so the full set
+// read next answers a cursor that is live. It wakes g's held polls.
+func (f *fixture) expireCursors(ctx context.Context, g grn.GRN, databaseURL string) (named, error) {
+	cfg, err := localDatabase(databaseURL)
+	if err != nil {
+		return named{}, err
+	}
+	// The record is read through garam first, so one the principal
+	// cannot reach is refused as every other subcommand refuses it.
+	if err := f.call(ctx, http.MethodGet, recordPath(g), "", nil, http.StatusOK); err != nil {
+		return named{}, err
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return named{}, errors.New("the database could not be reached")
+	}
+	defer pool.Close()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return named{}, errors.New("the database could not be reached")
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	for _, statement := range []string{
+		`INSERT INTO cluster_declaration_heads (cluster_grn, head, purged_through) VALUES ($1, 1, 0)
+		 ON CONFLICT (cluster_grn) DO UPDATE
+		 SET purged_through = cluster_declaration_heads.head, head = cluster_declaration_heads.head + 1`,
+		`DELETE FROM cluster_declaration_changes WHERE cluster_grn = $1`,
+		`SELECT pg_notify('garam_cluster_declarations', $1)`,
+	} {
+		if _, err := tx.Exec(ctx, statement, g.String()); err != nil {
+			return named{}, errors.New("the record's cursors could not be expired")
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return named{}, errors.New("the record's cursors could not be expired")
+	}
+	return named{Cluster: g.String()}, nil
 }

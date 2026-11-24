@@ -18,7 +18,11 @@ serves from `platform/internal/machineapi` §ClusterConnection.
 | `PublicKey` | the public half of a connector's RSA key, parsed from the JWK it sent, with its RFC 7638 thumbprint as `kid` |
 | `Key` | a key the record holds, live or withdrawn, and the row an exchange or a rotation verified with |
 | `CredentialStore` | what a record authenticates with: the hash of its registration token, its keys, the hashes of its tokens and the jtis its signed requests spent |
-| `Service` | registers a connector, exchanges its assertion for a token, and rotates its key |
+| `Service` | registers a connector, exchanges its assertion for a token, rotates its key, and holds its declarations poll until a change, a wake or the wait |
+| `DeclaredObject` | an object DECL-7 to DECL-9 admit, kept to DECL-7's members, with the kind, namespace and name two live declarations never share |
+| `Declaration` | one declaration placed on a record: its identifier, generation and object, or none once tombstoned |
+| `DeclarationStore` | places, tombstones, reads and lists a record's declarations, and answers a page of its log after a cursor; `Declare` checks a write before it reaches the store |
+| `Wakes` | the polls a process holds, by record, which a write wakes |
 
 ## Current decisions
 
@@ -46,14 +50,18 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   `updateCluster` and `deleteCluster`. `platform/api/openapi.yaml`
   §cluster is authoritative for them.
 - **Every cluster route is decided on the organization's GRN**, each
-  on an action of its own (ADR-0184 decision 9): `iam:cluster.read`
-  for the list and a read, `iam:cluster.register` to create,
-  `iam:cluster.update` to rename and describe, `iam:cluster.delete`
-  to delete, `iam:cluster.reissue` to answer a new registration token
-  and to revoke a key. Listing the keys takes `iam:cluster.read`.
-- **Which roles hold each**, decided where it was built (#2045): every
-  role holds `iam:cluster.read`; the owner and the administrator hold
-  `iam:cluster.register`, `.update`, `.reissue` and `.delete`. Each is
+  on an action of its own (ADR-0184 decision 9, and ADR-0187 decision
+  1 for declarations): `iam:cluster.read` for the list and a read,
+  `iam:cluster.register` to create, `iam:cluster.update` to rename and
+  describe, `iam:cluster.delete` to delete, `iam:cluster.reissue` to
+  answer a new registration token and to revoke a key, and
+  `iam:cluster.declare` to place, change and tombstone a declaration.
+  Listing the keys and reading the declarations take
+  `iam:cluster.read`.
+- **Which roles hold each**, decided where it was built (#2045, and
+  #2048 for `.declare`): every role holds `iam:cluster.read`; the
+  owner and the administrator hold `iam:cluster.register`, `.update`,
+  `.reissue`, `.delete` and `.declare`. Each is
   named and none is granted as `iam:cluster.*`, for the operator's
   reason: a wildcard grants in advance an action nobody has decided.
   `platform/internal/org/role.go` §machineActions and
@@ -123,8 +131,67 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   record**, and each takes effect on the connector's next request
   (ADR-0184 decision 7): `revokeClusterKey` withdraws one key and its
   tokens, a registration withdraws every key held before, and deleting
-  the record cascades to its keys and tokens. `listClusterKeys`
+  the record cascades to its keys and tokens, and to its declarations
+  and their log, all but the identifiers. `listClusterKeys`
   answers each key held, with its state.
+- **An organization places declarations on a record, and its
+  connector long-polls them**
+  ([ADR-0187](./adr/0187-a-declaration-placed-on-a-cluster-is-written-under-iam-cluster-declare-into-a-log-per-record-the-connector-long-polls.md)).
+  The browser routes are `listClusterDeclarations`,
+  `createClusterDeclaration` (garam draws the identifier),
+  `getClusterDeclaration`, `putClusterDeclaration` (a new identifier,
+  or the next generation of a live one) and `deleteClusterDeclaration`,
+  which tombstones. `platform/api/openapi.yaml` §cluster is
+  authoritative for them. Each write is the next generation, and a
+  tombstone is a delete at the next generation carrying the identifier
+  alone.
+- **A declared object is refused at the write unless the connector
+  would admit it**, and is stored as admitted:
+  - interface 1's own parser, `manifest.Parse` of
+    `github.com/garamsh/garam-bot/api` at the version `platform/go.mod`
+    pins, admits it, which refuses an unknown field, an image (DECL-9)
+    and a secret named other than as `<secret-name>/<key>` (DECL-8);
+  - it has a namespace;
+  - it is at most 64 KiB once kept;
+  - DECL-7's members alone are kept, numbers as written.
+
+  A refusal of the first two is answered 422 naming the field.
+  `cluster.ParseDeclaredObject` is the check. Two live
+  declarations of a record never name one object, and
+  `platform/migrations/000085_cluster_declarations.up.sql`
+  §cluster_declarations_live_object_idx holds that too.
+- **An identifier names one declaration, once, across every record.**
+  It is 1 to 128 letters, digits, `.`, `_` or `-`, and one garam draws
+  is `decl-` and sixteen hex digits. A tombstoned declaration's
+  identifier is refused 409, as is one placed on another record, and
+  `cluster_declaration_ids` keeps each one after its record and its
+  organization are gone.
+- **Each record keeps a log of its changes, at positions drawn while
+  the write holds the record's row**, so they commit in order. The
+  long poll is `watchDeclarations` on the machine listener:
+  - with no cursor it answers the full set of live declarations as
+    applies, paged, then the log cursor at the position the set began
+    at;
+  - after a cursor it answers the changes in write order, a hundred
+    to a page with `more` where more remain;
+  - an empty page is held up to `wait` seconds, fifty unless asked,
+    and a full set is answered at once.
+
+  Cursors are `c.<n>` and `f.<base>.<sent>`; `cluster.ParseCursor` is
+  authoritative for them. Each cluster's polls are bounded, 300 a
+  minute, and past it answered 429 `throttled`. A record deleted while
+  a poll is held is answered 401.
+- **A change is kept 30 days** (DECL-6). Each write purges its
+  record's older ones and moves the purged position to the last
+  deleted, and a cursor at or before that position is answered 410
+  `cursor_expired`. A full set is never purged.
+- **A write wakes the polls held on its record on every `serve
+  machine` process** through Postgres, as a watch crosses processes
+  ([ADR-0027](./adr/0027-a-watch-crosses-processes-through-postgres.md)).
+  The write's transaction notifies `garam_cluster_declarations` with
+  the record's GRN. `clusterpg.ListenDeclarations` holds one connection
+  per process, and a held poll reads again every five seconds besides,
+  so a notification lost to a reconnect costs at most that long.
 - **The wire is the interface's own specification, vendored**
   ([ADR-0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)).
   `platform/api/cluster-connection/v1alpha1/openapi.yaml` is
@@ -146,6 +213,9 @@ serves from `platform/internal/machineapi` §ClusterConnection.
 - Why the wire is vendored rather than restated in
   `platform/api/machine.yaml`: a second copy of the interface's contract
   would drift from the one its conformance suite tests (ADR-0186).
+- Why placing a declaration is an action of its own rather than
+  `iam:cluster.update`, why an identifier is never placed twice, and
+  why the wake goes through Postgres: ADR-0187.
 - Why every route is decided on the organization and the roles mirror
   the operator's: standing a machine identity up or taking it away is
   the administrative act registering and deleting an operator already
@@ -155,10 +225,11 @@ serves from `platform/internal/machineapi` §ClusterConnection.
 ## Open questions
 
 - Not yet built, each its own issue: the server conformance suite in
-  CI (#2047), which waits for garam-bot-operator#439 to build it;
-  declarations placed on a cluster (#2048); the bot-token mint for a
-  cluster (#2049); reports (#2050). The fixture the suite will run is
-  built for what the server already serves,
+  CI (#2047), which waits for garam-bot-operator#439 to build it; the
+  bot-token mint for a cluster (#2049); reports (#2050), with the
+  refusal of a declaration whose namespace and name the latest report
+  shows held by a cluster-owned object. The fixture the suite will run
+  is built for what the server already serves,
   `platform/tests/clusterfixture` (its `README.md` is the contract),
   and each issue adds its own subcommands.
 - The per-address bounds read the machine listener's TCP peer, per

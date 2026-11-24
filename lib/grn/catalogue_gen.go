@@ -57,6 +57,7 @@ var generatedActions = []ActionInfo{
 	{Name: "iam:agent.replace", Principals: []string{"Iam::User", "Iam::Agent", "Iam::Operator"}, Resources: []string{"Iam::Org", "Iam::Agent"}},
 	{Name: "iam:agent.watch", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Iam::Agent"}},
 	{Name: "iam:audit.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
+	{Name: "iam:cluster.declare", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:cluster.delete", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:cluster.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:cluster.register", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},

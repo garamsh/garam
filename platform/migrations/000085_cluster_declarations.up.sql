@@ -49,7 +49,10 @@ CREATE TABLE cluster_declarations (
 -- Two live declarations on one record never name one object.
 CREATE UNIQUE INDEX cluster_declarations_live_object_idx
     ON cluster_declarations (cluster_grn, kind, namespace, name) WHERE NOT tombstoned;
-CREATE INDEX cluster_declarations_cluster_idx ON cluster_declarations (cluster_grn, last_seq);
+-- A full set reads a record's live declarations past last_seq without
+-- reading its tombstones; the leading cluster_grn also serves the
+-- cascade from clusters, which a partial index would not.
+CREATE INDEX cluster_declarations_cluster_idx ON cluster_declarations (cluster_grn, tombstoned, last_seq);
 
 -- Each change, in the order it was written: an apply carrying the
 -- whole object, or a delete carrying the identifier alone.

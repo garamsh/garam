@@ -69,14 +69,15 @@ LISTEN/NOTIFY.
    another record. The reservation outlives the record and its
    organization, so a report or an object's marker naming an
    identifier can mean no other declaration.
-5. **garam refuses at the write what DECL-7 to DECL-9 refuse, and
-   stores the object as it admitted it.** The object keeps DECL-7's
-   members alone, its numbers as written. Until garam-bot's interface 1
-   names its fields (`garamsh/garam-bot#1193`), a member of `spec` is
-   judged by its name, as garam-bot-operator's reference server judges
-   it. A member named `images` or ending in `image` is refused, and one
-   ending in `secret` or `secretRef` must be a `<secret-name>/<key>`
-   reference. Two live declarations of a record never name one object.
+5. **garam refuses at the write what the connector refuses, with
+   interface 1's own parser, and stores the object as it admitted
+   it.** `manifest.Parse` of `github.com/garamsh/garam-bot/api`, at the
+   version `platform/go.mod` pins, is the check, so garam never
+   stores or sends an object the connector would hold as invalid
+   (DECL-12), a secret's value among them (DECL-8). An object it
+   refuses, or one with no namespace, is answered 422 naming the field.
+   The object keeps DECL-7's members alone, its numbers as written. Two
+   live declarations of a record never name one object.
 6. **A write wakes the polls held on its record through Postgres.** The
    write's transaction sends a notification naming the record, and
    each `serve machine` process holds one LISTEN connection and wakes

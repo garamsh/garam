@@ -1246,7 +1246,7 @@ type ClusterDeclaration struct {
 	Generation int64  `json:"generation"`
 	Id         string `json:"id"`
 
-	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 	Object    ClusterDeclaredObject `json:"object"`
 	UpdatedAt time.Time             `json:"updatedAt"`
 }
@@ -1258,11 +1258,11 @@ type ClusterDeclarationList struct {
 
 // ClusterDeclarationWrite defines model for ClusterDeclarationWrite.
 type ClusterDeclarationWrite struct {
-	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 	Object ClusterDeclaredObject `json:"object"`
 }
 
-// ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+// ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 type ClusterDeclaredObject = json.RawMessage
 
 // ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
@@ -3163,7 +3163,7 @@ type ClientInterface interface {
 
 	// CreateClusterDeclarationWithBody Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3172,7 +3172,7 @@ type ClientInterface interface {
 
 	// CreateClusterDeclaration Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4864,7 +4864,7 @@ func (c *Client) ListClusterDeclarations(ctx context.Context, org Org, clusterSl
 
 // CreateClusterDeclarationWithBody Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4883,7 +4883,7 @@ func (c *Client) CreateClusterDeclarationWithBody(ctx context.Context, org Org, 
 
 // CreateClusterDeclaration Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -11727,7 +11727,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateClusterDeclarationWithBodyWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11736,7 +11736,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateClusterDeclarationWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -14922,6 +14922,8 @@ type CreateClusterDeclarationResponse struct {
 	JSON404 *Error
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *Error
+	// JSON422 the response for an HTTP 422 `application/json` response
+	JSON422 *Error
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -14952,6 +14954,11 @@ func (r CreateClusterDeclarationResponse) GetJSON404() *Error {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r CreateClusterDeclarationResponse) GetJSON409() *Error {
 	return r.JSON409
+}
+
+// GetJSON422 returns the response for an HTTP 422 `application/json` response
+func (r CreateClusterDeclarationResponse) GetJSON422() *Error {
+	return r.JSON422
 }
 
 // GetBody returns the raw response body bytes
@@ -15131,6 +15138,8 @@ type PutClusterDeclarationResponse struct {
 	JSON404 *Error
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *Error
+	// JSON422 the response for an HTTP 422 `application/json` response
+	JSON422 *Error
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -15166,6 +15175,11 @@ func (r PutClusterDeclarationResponse) GetJSON404() *Error {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PutClusterDeclarationResponse) GetJSON409() *Error {
 	return r.JSON409
+}
+
+// GetJSON422 returns the response for an HTTP 422 `application/json` response
+func (r PutClusterDeclarationResponse) GetJSON422() *Error {
+	return r.JSON422
 }
 
 // GetBody returns the raw response body bytes
@@ -20065,7 +20079,7 @@ func (c *ClientWithResponses) ListClusterDeclarationsWithResponse(ctx context.Co
 
 // CreateClusterDeclarationWithBodyWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20080,7 +20094,7 @@ func (c *ClientWithResponses) CreateClusterDeclarationWithBodyWithResponse(ctx c
 
 // CreateClusterDeclarationWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -23255,6 +23269,13 @@ func ParseCreateClusterDeclarationResponse(rsp *http.Response) (*CreateClusterDe
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
 	}
 
 	return response, nil
@@ -23426,6 +23447,13 @@ func ParsePutClusterDeclarationResponse(rsp *http.Response) (*PutClusterDeclarat
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	}
 

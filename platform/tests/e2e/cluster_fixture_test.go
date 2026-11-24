@@ -281,8 +281,8 @@ func TestClusterFixture_DeclarationsReachTheConnectorsLongPoll(t *testing.T) {
 
 	file := filepath.Join(t.TempDir(), "declare.json")
 	require.NoError(t, os.WriteFile(file, []byte(`{"cluster":"`+record+`","id":"e2e-bot","object":
-		{"apiVersion":"garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"reviewer"},
-		 "spec":{"tokenSecretRef":"bot-token/value"}}}`), 0o600))
+		{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"reviewer"},
+		 "spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"},"permissions":{"secrets":["bot-token/value"]}}}}`), 0o600))
 	held := make(chan struct{})
 	type answer struct {
 		status int
@@ -329,9 +329,10 @@ func TestClusterFixture_DeclarationsReachTheConnectorsLongPoll(t *testing.T) {
 
 	bad := filepath.Join(t.TempDir(), "image.json")
 	require.NoError(t, os.WriteFile(bad, []byte(`{"cluster":"`+record+`","object":
-		{"apiVersion":"garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"x"},
-		 "spec":{"image":"evil:latest"}}}`), 0o600))
+		{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"x"},
+		 "spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"},"image":"evil:latest"}}}`), 0o600))
 	code, refused := clusterFixture(t, bin, env, "declare", bad)
 	assert.Equal(t, 1, code)
 	assert.Equal(t, "invalid_request", refused["error"], "DECL-9 is refused at garam, before any connector reads it")
+	assert.Contains(t, refused["message"], "spec.image", "the refusal names the field")
 }

@@ -36,11 +36,13 @@ func declarationRecords(t *testing.T, p *pgxpool.Pool, s *clusterpg.Store, n int
 	return out
 }
 
-// object is a Bot named name, as ParseDeclaredObject admits it.
+// object is an interface-1 Bot named name, as ParseDeclaredObject
+// admits it.
 func object(t *testing.T, name string) cluster.DeclaredObject {
 	t.Helper()
-	o, err := cluster.ParseDeclaredObject([]byte(`{"apiVersion":"garam.sh/v1alpha1","kind":"Bot",
-		"metadata":{"namespace":"team-a","name":"` + name + `"},"spec":{"replicas":1}}`))
+	o, err := cluster.ParseDeclaredObject([]byte(`{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot",
+		"metadata":{"namespace":"team-a","name":"` + name + `"},
+		"spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"}}}`))
 	require.NoError(t, err)
 	return o
 }
@@ -128,8 +130,9 @@ func ptrTo(s string) *string { return &s }
 
 // TestClusterDeclarations_AnIdentifierNamesOneDeclarationOnce holds the
 // store's refusals: a tombstoned identifier, one placed on another
-// record, one whose record was deleted, and an object another live
-// declaration names. Each refused write leaves the record's position
+// record, one whose record was deleted, an object another live
+// declaration names, and a declaration read or tombstoned through
+// another record. Each refused write leaves the record's position
 // where it was.
 func TestClusterDeclarations_AnIdentifierNamesOneDeclarationOnce(t *testing.T) {
 	ctx := context.Background()
@@ -170,6 +173,13 @@ func TestClusterDeclarations_AnIdentifierNamesOneDeclarationOnce(t *testing.T) {
 
 	_, err = s.GetDeclaration(ctx, other, "two")
 	assert.ErrorIs(t, err, cluster.ErrDeclarationNotFound, "another record's declaration is not read through this one")
+	head = page(t, s, g, "", 100).Cursor
+	_, err = s.Tombstone(ctx, other, "two")
+	assert.ErrorIs(t, err, cluster.ErrDeclarationNotFound, "another record's declaration is not tombstoned through this one")
+	two, err := s.GetDeclaration(ctx, g, "two")
+	require.NoError(t, err, "the declaration stands on its own record")
+	assert.Equal(t, int64(1), two.Generation)
+	assert.Equal(t, head, page(t, s, g, "", 100).Cursor, "its record's log is unchanged")
 }
 
 // TestClusterDeclarations_ACursorBeforeThePurgedPositionIsExpired holds
@@ -302,13 +312,13 @@ func TestClusterDeclarations_ListAnswersTheLiveOnesInWriteOrder(t *testing.T) {
 	_, err = s.ListDeclarations(ctx, grn.New("acme", cluster.ServiceType, "0000000000000000"))
 	assert.ErrorIs(t, err, cluster.ErrClusterNotFound)
 
-	// jsonb keeps a number as numeric, so none is rounded on the way.
-	big, err := cluster.ParseDeclaredObject([]byte(`{"apiVersion":"garam.sh/v1alpha1","kind":"Bot",
-		"metadata":{"namespace":"team-a","name":"big"},"spec":{"replicas":12345678901234567890.5}}`))
+	// jsonb keeps a number as numeric, so it reads back as written.
+	big, err := cluster.ParseDeclaredObject([]byte(`{"apiVersion":"bot.garam.sh/v1alpha1","kind":"BotPool",
+		"metadata":{"namespace":"team-a","name":"big"},"spec":{"maxBotsPerPod":50}}`))
 	require.NoError(t, err)
 	_, _, err = s.Declare(ctx, g, "big", big)
 	require.NoError(t, err)
 	got, err = s.GetDeclaration(ctx, g, "big")
 	require.NoError(t, err)
-	assert.Contains(t, string(got.Object.JSON()), "12345678901234567890.5")
+	assert.Contains(t, string(got.Object.JSON()), `"maxBotsPerPod":50`)
 }

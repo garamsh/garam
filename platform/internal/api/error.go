@@ -10,6 +10,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/wire"
@@ -109,8 +110,12 @@ type causeRecorder interface {
 // surface.
 func writeError(w http.ResponseWriter, err error) {
 	status := wire.StatusOf(errorx.KindOf(err))
-	if errors.Is(err, errBodyTooLarge) {
+	switch {
+	case errors.Is(err, errBodyTooLarge):
 		status = http.StatusRequestEntityTooLarge
+	case errors.Is(err, cluster.ErrDeclaredObjectInvalid):
+		// A well-formed request whose object the connector refuses.
+		status = http.StatusUnprocessableEntity
 	}
 	var exceeded *operator.Exceeded
 	if errors.As(err, &exceeded) {

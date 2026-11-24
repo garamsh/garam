@@ -145,20 +145,18 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   authoritative for them. Each write is the next generation, and a
   tombstone is a delete at the next generation carrying the identifier
   alone.
-- **A declared object is refused at the write unless DECL-7 to DECL-9
-  admit it**, and is stored as admitted:
-  - its kind is Bot, Workspace, WorkspaceClass or BotPool, its
-    namespace a DNS label and its name a DNS subdomain;
-  - it has a `spec`;
+- **A declared object is refused at the write unless the connector
+  would admit it**, and is stored as admitted:
+  - interface 1's own parser, `manifest.Parse` of
+    `github.com/garamsh/garam-bot/api` at the version `platform/go.mod`
+    pins, admits it, which refuses an unknown field, an image (DECL-9)
+    and a secret named other than as `<secret-name>/<key>` (DECL-8);
+  - it has a namespace;
   - it is at most 64 KiB once kept;
   - DECL-7's members alone are kept, numbers as written.
 
-  Until garam-bot's interface 1 names its fields
-  (`garamsh/garam-bot#1193`), a member of `spec` is judged by its name,
-  case ignored, as the reference server judges it. A member named
-  `images` or ending in `image` is refused (DECL-9), and one ending in
-  `secret` or `secretRef` must be a `<secret-name>/<key>` string
-  (DECL-8). `cluster.ParseDeclaredObject` is the check. Two live
+  A refusal of the first two is answered 422 naming the field.
+  `cluster.ParseDeclaredObject` is the check. Two live
   declarations of a record never name one object, and
   `platform/migrations/000085_cluster_declarations.up.sql`
   §cluster_declarations_live_object_idx holds that too.
@@ -234,10 +232,6 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   is built for what the server already serves,
   `platform/tests/clusterfixture` (its `README.md` is the contract),
   and each issue adds its own subcommands.
-- DECL-8 and DECL-9 are judged by member name until interface 1 names
-  a Bot's fields (`garamsh/garam-bot#1193`); replacing that stand-in
-  is garam-bot-operator#448's on the reference side, and garam's
-  follows it.
 - The per-address bounds read the machine listener's TCP peer, per
   replica, so behind a balancer that rewrites the source one address
   stands for every connector

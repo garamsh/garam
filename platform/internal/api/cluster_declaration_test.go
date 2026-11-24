@@ -16,10 +16,11 @@ import (
 	"github.com/garamsh/garam/platform/internal/org"
 )
 
-// declaredBot is a Bot named name that DECL-7 to DECL-9 admit.
+// declaredBot is an interface-1 Bot named name, which the connector
+// admits.
 func declaredBot(name string) string {
-	return `{"apiVersion":"garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"` + name +
-		`"},"spec":{"replicas":12345678901234567890,"tokenSecretRef":"bot-token/value"}}`
+	return `{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"` + name +
+		`"},"spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"},"permissions":{"secrets":["bot-token/value"]}}}`
 }
 
 // declarationWrite is a declaration route's body placing declaredBot.
@@ -70,13 +71,13 @@ func TestClusterDeclaration_EachWriteIsTheNextGenerationAndATombstoneIsFinal(t *
 	assert.Regexp(t, regexp.MustCompile(`^decl-[0-9a-f]{16}$`), created.Id)
 	assert.Equal(t, clusterGRN, created.Cluster)
 	assert.Equal(t, int64(1), created.Generation)
-	assert.Contains(t, string(created.Object), "12345678901234567890", "the object is answered as kept, its numbers unrounded")
+	assert.Contains(t, string(created.Object), `"secrets":["bot-token/value"]`, "the object is answered as kept")
 
-	rec = f.do(t, "PUT", path+"/"+created.Id, `{"object":`+strings.Replace(declaredBot("reviewer"), `"replicas"`, `"paused":true,"replicas"`, 1)+`}`, owner)
+	rec = f.do(t, "PUT", path+"/"+created.Id, `{"object":`+strings.Replace(declaredBot("reviewer"), `"Reviewer"`, `"Lead Reviewer"`, 1)+`}`, owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	next := decodeBody[apigen.ClusterDeclaration](t, rec)
 	assert.Equal(t, int64(2), next.Generation)
-	assert.Contains(t, string(next.Object), `"paused":true`)
+	assert.Contains(t, string(next.Object), `"Lead Reviewer"`)
 
 	rec = f.do(t, "PUT", path+"/chosen-id", declarationWrite("writer"), owner)
 	require.Equal(t, http.StatusCreated, rec.Code, "an identifier never placed is placed")
@@ -104,25 +105,37 @@ func TestClusterDeclaration_EachWriteIsTheNextGenerationAndATombstoneIsFinal(t *
 }
 
 // TestClusterDeclaration_RefusesWhatNoDeclarationMayBe covers each
-// refusal a write answers before anything is stored; the accepted
-// write is the control.
+// refusal a write answers before anything is stored: 422 naming the
+// field for an object the connector refuses, 400 for a request not in
+// the required form. The accepted write is the control.
 func TestClusterDeclaration_RefusesWhatNoDeclarationMayBe(t *testing.T) {
 	f := newFixture(t)
 	owner, _, _, path := declaringOrg(t, f)
+	withObject := func(from, to string) string {
+		return `{"object":` + strings.Replace(declaredBot("a"), from, to, 1) + `}`
+	}
 	for name, tc := range map[string]struct {
 		method, path, body string
+		status             int
+		field              string
 	}{
-		"an image (DECL-9)":          {"POST", "", `{"object":` + strings.Replace(declaredBot("a"), `"replicas"`, `"image":"x","replicas"`, 1) + `}`},
-		"a secret's value":           {"POST", "", `{"object":` + strings.Replace(declaredBot("a"), `"bot-token/value"`, `"hunter2"`, 1) + `}`},
-		"a kind not declared":        {"POST", "", `{"object":` + strings.Replace(declaredBot("a"), `"Bot"`, `"Pod"`, 1) + `}`},
-		"no object":                  {"POST", "", `{}`},
-		"an object not an object":    {"POST", "", `{"object":[]}`},
-		"an identifier too long":     {"PUT", "/" + strings.Repeat("a", 129), declarationWrite("a")},
-		"an identifier with a space": {"PUT", "/a%20b", declarationWrite("a")},
+		"an image (DECL-9)":          {"POST", "", withObject(`"persona"`, `"image":"x","persona"`), http.StatusUnprocessableEntity, "spec.image"},
+		"a secret's value (DECL-8)":  {"POST", "", withObject(`"bot-token/value"`, `"hunter2"`), http.StatusUnprocessableEntity, "spec.permissions.secrets[0]"},
+		"an unknown field":           {"POST", "", withObject(`"persona"`, `"unknownField":true,"persona"`), http.StatusUnprocessableEntity, "spec.unknownField"},
+		"a kind not declared":        {"PUT", "/a", withObject(`"Bot"`, `"Pod"`), http.StatusUnprocessableEntity, "Pod"},
+		"no namespace":               {"POST", "", withObject(`"namespace":"team-a",`, ``), http.StatusUnprocessableEntity, "metadata.namespace"},
+		"no object":                  {"POST", "", `{}`, http.StatusUnprocessableEntity, ""},
+		"an object not an object":    {"POST", "", `{"object":[]}`, http.StatusUnprocessableEntity, ""},
+		"a body not JSON":            {"POST", "", `{"object":`, http.StatusBadRequest, ""},
+		"an identifier too long":     {"PUT", "/" + strings.Repeat("a", 129), declarationWrite("a"), http.StatusBadRequest, ""},
+		"an identifier with a space": {"PUT", "/a%20b", declarationWrite("a"), http.StatusBadRequest, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := f.do(t, tc.method, path+tc.path, tc.body, owner)
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			require.Equal(t, tc.status, rec.Code)
+			refusal := decodeBody[apigen.Error](t, rec)
+			assert.Contains(t, refusal.Message, tc.field, "the refusal names what it refused")
+			assert.NotContains(t, refusal.Message, "hunter2", "a refusal never repeats a secret's value")
 		})
 	}
 	rec := f.do(t, "GET", path, "", owner)

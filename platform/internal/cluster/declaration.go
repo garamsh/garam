@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/garamsh/garam-bot/api/declaration/v1alpha1/manifest"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -37,13 +38,13 @@ const (
 	OpDelete = "delete"
 )
 
-// DeclaredKinds are DECL-7's kinds, interface 1's at v1alpha1.
-var DeclaredKinds = []string{"Bot", "Workspace", "WorkspaceClass", "BotPool"}
-
 var (
 	// ErrDeclarationNotFound answers an identifier no live declaration
 	// of the record holds.
 	ErrDeclarationNotFound = errorx.New(errorx.KindNotFound, "declaration not found")
+	// ErrDeclaredObjectInvalid answers an object the connector would
+	// hold as invalid (DECL-12), which the browser surface answers 422.
+	ErrDeclaredObjectInvalid = errorx.New(errorx.KindInvalidArgument, "the object is not one the connector admits")
 	// ErrDeclarationTaken answers an identifier already placed on
 	// another record, which it names for good.
 	ErrDeclarationTaken = errorx.New(errorx.KindAlreadyExists, "the identifier names a declaration placed on another record")
@@ -104,93 +105,40 @@ type declaredObject struct {
 	Spec map[string]any `json:"spec"`
 }
 
-var (
-	dns1123Label     = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-	dns1123Subdomain = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
-	secretKey        = regexp.MustCompile(`^[-._a-zA-Z0-9]+$`)
-	declarationID    = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
-)
+var declarationID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
-// ParseDeclaredObject proves raw holds DECL-7's members, names no image
-// (DECL-9) and names each secret only as <secret-name>/<key> (DECL-8),
-// and answers it with only those members. Until interface 1 names its
-// fields, a spec member is judged by its name, as garam-bot-operator's
-// reference server judges it: one named images or ending in image names
-// an image, and one ending in secret or secretRef names a secret.
+// ParseDeclaredObject admits raw where interface 1's own parser
+// admits it, as the connector parses it (DECL-12): a declared kind
+// (DECL-7), each secret by reference alone (DECL-8) and no image, since
+// no field names one (DECL-9). It also refuses an object with no
+// namespace, which the connector refuses, and answers the object with
+// only DECL-7's members.
 func ParseDeclaredObject(raw []byte) (DeclaredObject, error) {
+	if _, err := manifest.Parse(raw); err != nil {
+		// The parser's message names the field it refused, and quotes
+		// only what this caller sent.
+		return DeclaredObject{}, errorx.Wrap(ErrDeclaredObjectInvalid, err.Error())
+	}
 	var parsed declaredObject
 	// UseNumber keeps every number of spec as it was written.
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	if err := decoder.Decode(&parsed); err != nil {
-		return DeclaredObject{}, invalidObject("DECL-7: the object is not a declared object")
+		return DeclaredObject{}, errorx.Wrap(err, "decode an object interface 1 admits", errorx.KindInternal)
 	}
-	switch {
-	case parsed.APIVersion == "":
-		return DeclaredObject{}, invalidObject("DECL-7: apiVersion is missing")
-	case !slices.Contains(DeclaredKinds, parsed.Kind):
-		return DeclaredObject{}, invalidObject("DECL-7: kind is not Bot, Workspace, WorkspaceClass or BotPool")
-	case len(parsed.Metadata.Namespace) > 63 || !dns1123Label.MatchString(parsed.Metadata.Namespace):
-		return DeclaredObject{}, invalidObject("DECL-7: metadata.namespace is not a namespace name")
-	case len(parsed.Metadata.Name) > 253 || !dns1123Subdomain.MatchString(parsed.Metadata.Name):
-		return DeclaredObject{}, invalidObject("DECL-7: metadata.name is not an object name")
-	case parsed.Spec == nil:
-		return DeclaredObject{}, invalidObject("DECL-7: spec is missing")
-	}
-	if err := checkMembers("spec", parsed.Spec); err != nil {
-		return DeclaredObject{}, err
+	if parsed.Metadata.Namespace == "" {
+		return DeclaredObject{}, errorx.Wrap(ErrDeclaredObjectInvalid, "DECL-7: metadata.namespace is missing")
 	}
 	normalized, err := json.Marshal(parsed)
 	if err != nil {
 		return DeclaredObject{}, errorx.Wrap(err, "encode a declared object", errorx.KindInternal)
 	}
 	if len(normalized) > DeclaredObjectMaxBytes {
-		return DeclaredObject{}, invalidObject("the object is over " + strconv.Itoa(DeclaredObjectMaxBytes) + " bytes")
+		return DeclaredObject{}, errorx.New(errorx.KindInvalidArgument,
+			"the object is over "+strconv.Itoa(DeclaredObjectMaxBytes)+" bytes")
 	}
 	return DeclaredObject{kind: parsed.Kind, namespace: parsed.Metadata.Namespace,
 		name: parsed.Metadata.Name, raw: normalized}, nil
-}
-
-func invalidObject(message string) error {
-	return errorx.New(errorx.KindInvalidArgument, message)
-}
-
-// checkMembers walks a spec for DECL-8 and DECL-9.
-func checkMembers(path string, value any) error {
-	switch v := value.(type) {
-	case map[string]any:
-		for name, member := range v {
-			at := path + "." + name
-			lower := strings.ToLower(name)
-			switch {
-			case lower == "images" || strings.HasSuffix(lower, "image"):
-				return invalidObject("DECL-9: " + at + " names an image")
-			case strings.HasSuffix(lower, "secret") || strings.HasSuffix(lower, "secretref"):
-				if ref, ok := member.(string); !ok || !isSecretReference(ref) {
-					return invalidObject("DECL-8: " + at + " is not a <secret-name>/<key> reference")
-				}
-			}
-			if err := checkMembers(at, member); err != nil {
-				return err
-			}
-		}
-	case []any:
-		for i, item := range v {
-			if err := checkMembers(fmt.Sprintf("%s[%d]", path, i), item); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// isSecretReference reports whether ref is DECL-8's
-// <secret-name>/<key>: a Secret's name and one of its keys, as
-// Kubernetes bounds each.
-func isSecretReference(ref string) bool {
-	name, key, ok := strings.Cut(ref, "/")
-	return ok && len(name) <= 253 && dns1123Subdomain.MatchString(name) &&
-		len(key) <= 253 && secretKey.MatchString(key)
 }
 
 // CheckDeclarationID refuses an identifier cluster-connection's Change

@@ -314,7 +314,11 @@ as unknown.
   (`docs/architecture/overview.md` §Non-functional goals,
   `docs/architecture/domains.md` §Shared code below the domains). It
   is stated here because the table is one of `errorx` kinds, which
-  this file's rules give every error.
+  this file's rules give every error. The one exception is a status an
+  interface pins to a sentinel no kind maps to, which the transport's
+  one translator names by the sentinel, as
+  `platform/internal/machineapi/message.go:95-99` answers
+  `ErrSubmissionExpired` 410.
 
 ## 5. Logging & observability
 

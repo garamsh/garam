@@ -1043,7 +1043,7 @@ export interface paths {
         put?: never;
         /**
          * Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-         * @description Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+         * @description Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
          */
         post: operations["createClusterDeclaration"];
         delete?: never;
@@ -2492,7 +2492,7 @@ export interface components {
         ClusterDeclarationWrite: {
             object: components["schemas"]["ClusterDeclaredObject"];
         };
-        /** @description An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept. */
+        /** @description An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept. */
         ClusterDeclaredObject: {
             [key: string]: unknown;
         };
@@ -4596,6 +4596,7 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     getClusterDeclaration: {
@@ -4672,6 +4673,7 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     deleteClusterDeclaration: {

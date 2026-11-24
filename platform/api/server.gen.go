@@ -1244,7 +1244,7 @@ type ClusterDeclaration struct {
 	Generation int64  `json:"generation"`
 	Id         string `json:"id"`
 
-	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 	Object    ClusterDeclaredObject `json:"object"`
 	UpdatedAt time.Time             `json:"updatedAt"`
 }
@@ -1256,11 +1256,11 @@ type ClusterDeclarationList struct {
 
 // ClusterDeclarationWrite defines model for ClusterDeclarationWrite.
 type ClusterDeclarationWrite struct {
-	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 	Object ClusterDeclaredObject `json:"object"`
 }
 
-// ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+// ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 type ClusterDeclaredObject = json.RawMessage
 
 // ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.

@@ -18,15 +18,17 @@ import (
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
-// bot is a declared object DECL-7 to DECL-9 admit; each case of the
+// bot is an interface-1 Bot the connector admits; each case of the
 // refusal table below changes one member of it.
-const bot = `{"apiVersion":"garam.sh/v1alpha1","kind":"Bot",
-	"metadata":{"namespace":"team-a","name":"reviewer","labels":{"tier":"one"}},
-	"spec":{"replicas":12345678901234567890,"tokenSecretRef":"bot-token/value","nested":[{"apiKeySecret":"keys/api"}]}}`
+const (
+	spec = `"spec":{"persona":{"role":"Reviewer"},"agent":{"harness":"claude-code"},"permissions":{"secrets":["bot-token/value"]}}`
+	bot  = `{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot",
+	"metadata":{"namespace":"team-a","name":"reviewer","labels":{"tier":"one"}},` + spec + `}`
+)
 
-func TestParseDeclaredObject_KeepsDECL7sMembersAndEveryNumberAsWritten(t *testing.T) {
+func TestParseDeclaredObject_KeepsDECL7sMembersAsWritten(t *testing.T) {
 	o, err := cluster.ParseDeclaredObject([]byte(strings.Replace(bot, `"kind":"Bot",`,
-		`"kind":"Bot","status":{"ready":true},`, 1)))
+		`"kind":"Bot","status":{},`, 1)))
 	require.NoError(t, err)
 	assert.Equal(t, "Bot", o.Kind())
 	assert.Equal(t, "team-a", o.Namespace())
@@ -34,34 +36,38 @@ func TestParseDeclaredObject_KeepsDECL7sMembersAndEveryNumberAsWritten(t *testin
 	var kept map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(o.JSON(), &kept))
 	assert.NotContains(t, kept, "status", "a member DECL-7 does not name is dropped")
-	assert.Contains(t, string(kept["spec"]), "12345678901234567890", "a number is not rounded through float64")
+	assert.NotContains(t, string(kept["spec"]), "placement", "the parser's defaults are the connector's to apply")
 	assert.Contains(t, string(kept["metadata"]), `"labels":{"tier":"one"}`)
 }
 
-func TestParseDeclaredObject_RefusesWhatDECL7To9Refuse(t *testing.T) {
+func TestParseDeclaredObject_RefusesWhatInterface1Refuses(t *testing.T) {
 	for _, tc := range []struct {
-		name, from, to string
+		name, from, to, field string
 	}{
-		{"no apiVersion", `"apiVersion":"garam.sh/v1alpha1",`, ``},
-		{"a kind not declared", `"kind":"Bot"`, `"kind":"Deployment"`},
-		{"a namespace that is no label", `"namespace":"team-a"`, `"namespace":"Team.A"`},
-		{"an empty name", `"name":"reviewer"`, `"name":""`},
-		{"a name that is no subdomain", `"name":"reviewer"`, `"name":"Reviewer_1"`},
-		{"no spec", `"spec":{"replicas"`, `"other":{"replicas"`},
-		{"a spec that is null", `"spec":{"replicas":12345678901234567890,"tokenSecretRef":"bot-token/value","nested":[{"apiKeySecret":"keys/api"}]}`, `"spec":null`},
-		{"an image (DECL-9)", `"replicas"`, `"image":"x","replicas"`},
-		{"an image list (DECL-9)", `"replicas"`, `"Images":[],"replicas"`},
-		{"a nested image (DECL-9)", `{"apiKeySecret":"keys/api"}`, `{"sidecarImage":"x"}`},
-		{"a secret's value (DECL-8)", `"bot-token/value"`, `"hunter2"`},
-		{"a secret that is no string (DECL-8)", `"keys/api"`, `{"name":"keys","key":"api"}`},
-		{"a secret with no key (DECL-8)", `"bot-token/value"`, `"bot-token/"`},
-		{"not an object", bot, `[]`},
+		{"no apiVersion", `"apiVersion":"bot.garam.sh/v1alpha1",`, ``, "Bot"},
+		{"another apiVersion", `"bot.garam.sh/v1alpha1"`, `"garam.sh/v1alpha1"`, "garam.sh/v1alpha1"},
+		{"a kind not declared", `"kind":"Bot"`, `"kind":"Deployment"`, "Deployment"},
+		{"a namespace that is no label", `"namespace":"team-a"`, `"namespace":"Team.A"`, "metadata.namespace"},
+		{"no namespace", `"namespace":"team-a",`, ``, "metadata.namespace"},
+		{"an empty name", `"name":"reviewer"`, `"name":""`, "metadata.name"},
+		{"a name that is no subdomain", `"name":"reviewer"`, `"name":"Reviewer_1"`, "metadata.name"},
+		{"an unknown metadata field", `"name":"reviewer"`, `"name":"reviewer","owner":"x"`, "metadata.owner"},
+		{"a spec that is null", spec, `"spec":null`, "spec"},
+		{"a required field missing", `"agent":{"harness":"claude-code"},`, ``, "spec.agent"},
+		{"an unknown spec field", `"persona"`, `"unknownField":true,"persona"`, "spec.unknownField"},
+		{"an image (DECL-9)", `"persona"`, `"image":"x","persona"`, "spec.image"},
+		{"a secret's value (DECL-8)", `"bot-token/value"`, `"hunter2"`, "spec.permissions.secrets[0]"},
+		{"a secret with no key (DECL-8)", `"bot-token/value"`, `"bot-token/"`, "spec.permissions.secrets[0]"},
+		{"a secret that is no string (DECL-8)", `"bot-token/value"`, `{"name":"bot-token","key":"value"}`, "spec.permissions.secrets[0]"},
+		{"not an object", bot, `[]`, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := strings.Replace(bot, tc.from, tc.to, 1)
 			require.NotEqual(t, bot, raw, "the case changes the object")
 			_, err := cluster.ParseDeclaredObject([]byte(raw))
-			assert.Equal(t, errorx.KindInvalidArgument, errorx.KindOf(err), "%v", err)
+			require.ErrorIs(t, err, cluster.ErrDeclaredObjectInvalid)
+			assert.Contains(t, err.Error(), tc.field, "the refusal names what it refused")
+			assert.NotContains(t, err.Error(), "hunter2", "a refusal never repeats a secret's value")
 		})
 	}
 	_, err := cluster.ParseDeclaredObject([]byte(bot))
@@ -69,9 +75,10 @@ func TestParseDeclaredObject_RefusesWhatDECL7To9Refuse(t *testing.T) {
 }
 
 func TestParseDeclaredObject_RefusesAnObjectOverItsBound(t *testing.T) {
-	big := strings.Replace(bot, `"replicas"`, `"note":"`+strings.Repeat("x", cluster.DeclaredObjectMaxBytes)+`","replicas"`, 1)
+	big := strings.Replace(bot, `"labels"`, `"annotations":{"note":"`+strings.Repeat("x", cluster.DeclaredObjectMaxBytes)+`"},"labels"`, 1)
 	_, err := cluster.ParseDeclaredObject([]byte(big))
 	assert.Equal(t, errorx.KindInvalidArgument, errorx.KindOf(err))
+	assert.NotErrorIs(t, err, cluster.ErrDeclaredObjectInvalid, "the bound is garam's, not interface 1's")
 }
 
 func TestCheckDeclarationID_TakesWhatAChangeCarries(t *testing.T) {

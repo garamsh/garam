@@ -462,8 +462,8 @@ Responsibility documents:
   cluster it connected, whose connector authenticates as that record,
   the declarations it places on it and what the cluster reports back
 - [apps.md](./apps.md) — how every system that connects to garam is
-  registered, installed in an organization and authenticated, and what
-  each app's settings decide; not yet built
+  registered, reviewed, installed in an organization and
+  authenticated, and what each app's settings decide; not yet built
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the
@@ -1146,8 +1146,9 @@ ADRs:
   organization's agents, decided by `iam:message.send`; the deployment
   holds the key and revokes a principal, which stops that
   organization's cowork; not yet built; how an open WebSocket stops is
-  superseded by 0139; amended by 0192, the principal becoming cowork's
-  automatic installation
+  superseded by 0139; decision 1's principal and decision 5's three
+  operations superseded in part by 0192, the principal becoming
+  cowork's automatic installation
 - [0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
   — the policy engine becomes `policy/`, a Rust service deciding Cedar
   policies through the reference crates behind an AuthZEN-shaped gRPC
@@ -1637,8 +1638,8 @@ ADRs:
   connector and its one-time registration token, and garam issues no
   PEM for a cluster; accepted, unbuilt (#2054); amends 0184 by
   reference, its "a user's own cluster" read as any cluster garam
-  reaches; amended by 0192, each connector an instance of the
-  connector app
+  reaches; 0192 reads "every cluster garam reaches" as every
+  connector, each an instance of the `garam-bot-connector` app
 - [0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)
   — the paths under `/cluster-connection/v1alpha1/` are served on the
   machine listener from garam-bot-operator's specification, vendored
@@ -1673,8 +1674,8 @@ ADRs:
   MCP in three auth modes with no Connection resource; static keys
   are sealed to the place; a bot declared at its place has no garam
   identity; accepted, partly built: the token exchange and the shared
-  identifier space (#2049); amended by 0192, the actor an instance
-  whose installation holds `iam:bot.host`
+  identifier space (#2049); decision 2's actor superseded in part by
+  0192, an instance whose installation holds `iam:bot.host`
 - [0190](./adr/0190-ai-gateway-is-an-interface-deployable-at-garam-or-in-the-organizations-own-environment-and-a-session-has-one-brain.md)
   — ai-gateway is an interface, garam-bot's interface 5, deployable
   at `ai.garam.sh` or in an organization's environment; a model call
@@ -1684,14 +1685,21 @@ ADRs:
   supersedes 0126 in part and decides 0180's decision 3
 - [0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
   — every system that connects to garam is an app, registered by the
-  platform or by an organization, private or public; an organization's
-  owner installs it, writing its requested existing actions as
-  `permit`s on `grn:<org>/iam/installation/<slug>`; each running copy
+  platform or by an organization, private or, after the platform's
+  review, public; an organization's owner installs it over the whole
+  organization or chosen projects, writing its requested single
+  existing actions, none that grants or changes membership, roles,
+  policies or the organization, as `permit`s on
+  `grn:<org>/iam/installation/<slug>`; each running copy
   is `grn:<org>/iam/instance/<id>`, registered with a one-time token
   and a key it generated, its kind opaque; an app key authenticates an
-  installation; instances, delivery (pull or webhook) and bot hosting
-  are app settings, and no path branches on the app; `iam:cluster.*`
+  installation, and reaches the issuer's paths as a service principal
+  does; instances, delivery (pull, or a webhook signed as
+  `garam-event+jwt` to a public address) and bot hosting are app
+  settings, and no path branches on the app; `iam:cluster.*`
   becomes `iam:app.*`, `iam:installation.*` and `iam:instance.*`, and
   placing a bot `iam:bot.place`; accepted, not built (#2079);
-  supersedes 0184 decisions 1, 2 and 9 and 0187 decision 1, and amends
-  0185, 0189 and 0129
+  supersedes in part 0184 (decisions 1, 2 and 9), 0187 (decision 1),
+  0129 (decision 1's principal and decision 5's three operations) and
+  0189 (decision 2's actor), and reads 0185's "every cluster" as every
+  connector

@@ -697,6 +697,19 @@ With none, none is registered and nothing else changes.
   `policy`, and answered the issuer's JWT for the policy service
   ([machine-identity.md](./machine-identity.md) §cowork's principal).
 
+**Unbuilt, decided by
+[ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md):
+apps replace the callers named here.** The cluster-connection
+surface's caller becomes an instance of the `garam-bot-connector` app,
+registering with no token and then presenting an instance's token.
+Introspection and a principal's `policy` token admit an installation
+authenticated by its app key, `grn:<org>/iam/installation/<slug>`, for
+the audiences its app's record lists, in place of
+`grn:<org>/iam/service/<name>`. The browser-facing surface gains
+`/orgs/{org}/apps`, `/orgs/{org}/installations` and
+`/orgs/{org}/installations/{installation}/instances` in place of the
+cluster routes ([apps.md](./apps.md)).
+
 ## What a specification is authoritative for
 
 One specification per listener, and a third listener repeats that

@@ -18,6 +18,15 @@ deployment revokes and re-issues it, and while it is revoked every
 `cowork:` action on the organization is refused
 ([machine-identity.md](./machine-identity.md) §cowork's principal).
 
+**Unbuilt, decided by
+[ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md):
+an organization is written with its automatic installations.** The
+cowork and codehub principals above become
+`grn:<org>/iam/installation/cowork` and `…/codehub`, written in the
+same transaction and taken by the same cascade, with the fixed
+policies their app records name. Every other app is installed in an
+organization by its owner ([apps.md](./apps.md)).
+
 **What a store writes and reads back is an exported field on the
 aggregate**
 ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)),

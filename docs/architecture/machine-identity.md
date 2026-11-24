@@ -478,9 +478,13 @@ unbuilt, and decided by
 [ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md):
 the principal becomes cowork's automatic installation,
 `grn:<org>/iam/installation/cowork`, its deployment key cowork's app
-key, and the three operations below the machine operations cowork's
-app record lists ([apps.md](./apps.md)). One per organization, the
-deployment's revocation and the machine-listener-only audience stand.
+key, the three operations below the machine operations cowork's app
+record lists, and its own-organization and agents-only floor and the
+system `permit` of `message:send` the fixed policies that record names
+([apps.md](./apps.md)). Its exchange for a `policy` token and
+codehub's introspection carry over as the issuer audiences each
+record lists (§The issuer). One per organization, the deployment's
+revocation and the machine-listener-only audience stand.
 
 - **One per organization.** `grn:<org>/iam/service/cowork`, a
   record the platform writes with the organization and a migration

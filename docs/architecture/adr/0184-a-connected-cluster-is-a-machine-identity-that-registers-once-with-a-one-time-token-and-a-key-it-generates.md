@@ -1,7 +1,8 @@
 # ADR 0184: A connected cluster is a machine identity that registers once with a one-time token and a key it generates
 
-> Status: accepted; decisions 1, 2 and 9 are superseded by
+> Status: accepted; superseded in part by
 > [ADR-0192](./0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
+> (decisions 1, 2 and 9)
 > Date: 2026-11-24
 
 Append-only: once merged, the body below is not rewritten. A fact later

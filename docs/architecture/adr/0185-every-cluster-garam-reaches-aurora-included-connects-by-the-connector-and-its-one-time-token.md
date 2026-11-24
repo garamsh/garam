@@ -1,8 +1,6 @@
 # ADR 0185: Every cluster garam reaches, aurora's included, connects by the connector and its one-time token
 
-> Status: accepted; amended by
-> [ADR-0192](./0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md),
-> which connects every cluster as an instance of the connector app
+> Status: accepted
 > Date: 2026-11-24
 
 Append-only: once merged, the body below is not rewritten. A fact later

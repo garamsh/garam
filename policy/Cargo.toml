@@ -12,7 +12,7 @@ publish = false
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 base64 = "0.23"
 cedar-policy = "4.14.0"
-cedar-policy-symcc = "0.8.0"
+cedar-policy-symcc = "0.9.0"
 jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto", "use_pem"] }
 prost = "0.14"
 prost-types = "0.14"

@@ -7,7 +7,7 @@
 
 include ../../tooling/make/go.mk
 
-.PHONY: ci chart-publish chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
+.PHONY: ci chart-publish chart-lint chart-render chart-identity chart-names chart-labels chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
 
 # helm is not a tool directive: helm.sh/helm/v4 requires a
 # google.golang.org/protobuf newer than protoc-gen-go's, and merging its
@@ -64,7 +64,7 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
+ci: chart-lint chart-render chart-identity chart-names chart-labels chart-guards chart-security chart-replicas chart-owner-files chart-key-material chart-package
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
 	@test -n '$(CHART_TEMPLATES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/templates holds no template'; exit 1; }
@@ -190,6 +190,32 @@ chart-names:
 		over="$$(awk 'length($$0) > 63 { print length($$0)" "$$0 }' "$$out/names" | sort -u)"; \
 		test -z "$$over" || { echo 'chart-names: over the 63-character limit, which an apply refuses and a render does not:'; echo "$$over"; exit 1; }; \
 		echo "chart-names: $$total distinct object names, longest $$(awk '{ if (length($$0) > m) m = length($$0) } END { print m }' "$$out/names"), none over 63"
+
+# chart-labels packages the chart under a version holding SemVer build
+# metadata, the form a pull by digest gives (`0.1.0-dev.18+<digest>`),
+# and holds every label value of the render to what the apiserver
+# accepts: at most 63 characters, alphanumeric at both ends, and only
+# alphanumerics, `-`, `_` and `.` between (#2051). A render under the
+# chart's own version cannot see it, since that carries no `+`.
+CHART_LABEL_VERSION := 0.1.0-dev.18+sha256.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+chart-labels:
+	@echo 'chart-labels: $(words $(CHART_VALUES)) value files rendered under version $(CHART_LABEL_VERSION) — label values only, $(CHART_DIR)/README.md §What the checks are complete over'
+	@test -n '$(CHART_VALUES)' || { echo 'chart-labels: nothing to render — $(CHART_DIR)/ci holds no value file'; exit 1; }
+	@set -e; \
+		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		$(HELM) package $(CHART_DIR) --version '$(CHART_LABEL_VERSION)' --destination "$$out" >/dev/null; \
+		for v in $(CHART_VALUES); do \
+			$(HELM) template garam "$$out"/garam-*.tgz --values "$$v" >> "$$out/render"; \
+		done; \
+		sed -n 's/^ *\(app\.kubernetes\.io\/[a-z-]*\|helm\.sh\/chart\): \(.*\)$$/\2/p' "$$out/render" | tr -d '"' | sort -u > "$$out/values"; \
+		total="$$(wc -l < "$$out/values")"; \
+		test "$$total" -gt 0 || { echo 'chart-labels: the render carried no label value — the label parse is broken'; exit 1; }; \
+		grep -q '^garam-0\.1\.0-dev\.18_sha256' "$$out/values" \
+			|| { echo 'chart-labels: helm.sh/chart does not carry the packaged version, so the render did not take it'; exit 1; }; \
+		bad="$$(grep -vE '^([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?$$' "$$out/values" || true)"; \
+		test -z "$$bad" || { echo 'chart-labels: not a valid label value:'; echo "$$bad"; exit 1; }; \
+		echo "chart-labels: $$total distinct label values, all valid"
 
 # chart-guards renders each values file under ci/refused/ and holds that
 # helm refuses it with `execution error at (<template>): <value> `,

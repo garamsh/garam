@@ -10,10 +10,17 @@ import (
 
 // Rotate verifies both JWSs before the store is asked, so the bearer
 // token alone reaches no write (ROT-2). Every way they fail to prove
-// both keys answers ErrInvalidProof.
+// both keys answers ErrInvalidProof. Each cluster's rotations are
+// bounded before any signature is verified, since each verifies two.
 func (s *service) Rotate(ctx context.Context, caller grn.GRN, jwk []byte, authorization, proof string) (Rotation, error) {
-	if caller.ServiceType != ServiceType || s.cfg.RotationURL == "" {
+	if s.cfg.RotationURL == "" {
+		return Rotation{}, ErrRotationUnavailable
+	}
+	if !IsClusterGRN(caller) {
 		return Rotation{}, ErrInvalidProof
+	}
+	if err := s.rotations.Check(caller.String()); err != nil {
+		return Rotation{}, err
 	}
 	successor, err := ParsePublicJWK(jwk)
 	if err != nil {

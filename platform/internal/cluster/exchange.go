@@ -17,7 +17,7 @@ func (s *service) ExchangeAssertion(ctx context.Context, source string, client g
 	if err := s.perSource.Check(source); err != nil {
 		return nil, err
 	}
-	if client.ServiceType != ServiceType {
+	if !IsClusterGRN(client) {
 		return nil, operator.ErrClientInvalid
 	}
 	parsed, err := operator.ParseClientAssertion(assertion)

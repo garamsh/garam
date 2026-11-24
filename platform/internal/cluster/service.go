@@ -20,6 +20,12 @@ const (
 // replaces it.
 const RegistrationsPerSource = 10
 
+// RotationsPerCluster bounds the rotation requests one cluster sends
+// per operator.ExchangeWindow, counted before a signature is verified.
+// A connector rotates once a key's life and repeats only a lost answer
+// (ROT-5), so the bound is far past what one needs.
+const RotationsPerCluster = 10
+
 // Config holds the clock and the two absolute URLs a cluster's signed
 // requests name as their audience.
 type Config struct {
@@ -63,6 +69,8 @@ type service struct {
 	registrations *operator.Limiter
 	perSource     *operator.Limiter
 	perClient     *operator.Limiter
+	// rotations bounds each cluster's rotation requests.
+	rotations *operator.Limiter
 }
 
 // NewService constructs the service over a cluster's credentials.
@@ -81,5 +89,6 @@ func NewService(credentials CredentialStore, cfg Config) Service {
 		registrations: limiter(cfg.RegistrationLimit),
 		perSource:     limiter(operator.ExchangesPerSource),
 		perClient:     limiter(operator.ExchangesPerClient),
+		rotations:     limiter(RotationsPerCluster),
 	}
 }

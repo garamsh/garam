@@ -61,8 +61,14 @@ CLUSTER_CONNECTION_PIN := 552a69f28e7fb254c443c669b18ce27f54ac9eb1
 CLUSTER_CONNECTION_SPEC := api/cluster-connection/v1alpha1/openapi.yaml
 CLUSTER_CONNECTION_SOURCE := https://raw.githubusercontent.com/garamsh/garam-bot-operator/$(CLUSTER_CONNECTION_PIN)/interfaces/cluster-connection/v1alpha1/openapi.yaml
 
+# The file is fetched before it is compared, so a failed fetch is
+# reported as one and not as drift (#2057). The trailing x keeps the
+# file's last newlines through the command substitution; a YAML file
+# holds no NUL a shell variable would lose.
 check-vendor:
-	@curl -fsSL --retry 3 '$(CLUSTER_CONNECTION_SOURCE)' | cmp -s - $(CLUSTER_CONNECTION_SPEC) || \
+	@pinned="$$(curl -fsSL --retry 3 '$(CLUSTER_CONNECTION_SOURCE)' && echo x)" || \
+		{ echo "check-vendor: could not fetch $(CLUSTER_CONNECTION_SPEC) from garam-bot-operator at $(CLUSTER_CONNECTION_PIN)"; exit 1; }; \
+	printf '%s' "$${pinned%x}" | cmp -s - $(CLUSTER_CONNECTION_SPEC) || \
 		{ echo "check-vendor: $(CLUSTER_CONNECTION_SPEC) is not garam-bot-operator's at $(CLUSTER_CONNECTION_PIN)"; exit 1; }
 	@echo "check-vendor: $(CLUSTER_CONNECTION_SPEC) is garam-bot-operator's at $(CLUSTER_CONNECTION_PIN)"
 

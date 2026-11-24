@@ -780,9 +780,18 @@ every connection of `openPool`.
   previous release for one release. Review holds it; nothing detects it.
 - **What a deployment still owes.** At least two schedulable Nodes; a
   database `max_connections` that fits two of each workload.
-- **Limiters are per replica.** The operator key and exchange bounds
-  are per process, so at the balancer they are N times with N
-  replicas.
+- **Limiters are per replica, and keyed on the connection's peer.**
+  The operator key and exchange bounds, and a connected cluster's
+  registration and rotation bounds, are per process, so at the
+  balancer they are N times with N replicas. A per-address bound reads
+  the TCP peer of the machine listener's connection
+  (`platform/internal/machineapi/oauth.go` §sourceOf); garam reads no
+  forwarded address and no PROXY protocol. Behind an L4 balancer that
+  rewrites the source, every caller is one address, so the cluster
+  registration bound (`GARAM_CLUSTER_REGISTRATION_LIMIT`) is shared by
+  every connector a replica serves. The cluster and the operator
+  exchanges each keep their own per-address budget, so one address
+  gets both.
 - **Not changed by replicas:** a lost replica's queued policy denials
   are lost and counted, a Watcher count over-reports for up to 45 s,
   and per-replica metrics are summed by the deployment.

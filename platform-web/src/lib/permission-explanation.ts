@@ -32,6 +32,7 @@ const ResourceParser = z.object({
     "cowork-channel",
     "cowork-task",
     "cowork-artifact",
+    "installation",
   ]),
   id: z.string(),
 });

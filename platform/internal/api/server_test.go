@@ -53,6 +53,7 @@ type fixture struct {
 	standalone  *agentmocks.MockStandaloneService
 	devices     *fakeDeviceStore
 	clusters    *fakeClusterStore
+	clusterKeys *fakeClusterCredentials
 }
 
 // fixtureTokenURL is the token endpoint every fixture is configured
@@ -87,6 +88,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		devices:     &fakeDeviceStore{},
 		clusters:    newFakeClusterStore(),
 	}
+	f.clusterKeys = newFakeClusterCredentials(f.clusters)
 	// The events a stream carries were forwarded to another process, so
 	// this one delivers what the relay announces to the watches it holds
 	// (ADR-0017) — the goroutine `serve api` runs. The lease is short so
@@ -98,7 +100,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	go func() { _ = watches.Receive(ctx) }()
 	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.authorities, f.authority, f.standalone, cfg).
 		WithDeviceGrant(f.devices).
-		WithClusters(f.clusters)
+		WithClusters(f.clusters, f.clusterKeys)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.
 	f.server = srv

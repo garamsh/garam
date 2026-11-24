@@ -1215,6 +1215,9 @@ func newFakeClusterStore() *fakeClusterStore {
 func (s *fakeClusterStore) Create(_ context.Context, c *cluster.Cluster) (*cluster.Cluster, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, ok := s.clusters[c.GRN.String()]; ok {
+		return nil, errorx.New(errorx.KindAlreadyExists, "cluster already exists")
+	}
 	stored := *c
 	s.clusters[c.GRN.String()] = &stored
 	answered := stored
@@ -1271,6 +1274,71 @@ func (s *fakeClusterStore) Delete(_ context.Context, g grn.GRN) error {
 	}
 	delete(s.clusters, g.String())
 	return nil
+}
+
+// fakeClusterCredentials holds the browser half of a cluster's
+// credentials in memory: the registration token's hash, and keys a
+// test places. The machine half is left to the embedded interface,
+// which no browser route calls.
+type fakeClusterCredentials struct {
+	cluster.CredentialStore
+	records *fakeClusterStore
+	mu      sync.Mutex
+	tokens  map[string]string
+	keys    map[string][]cluster.Key
+}
+
+func newFakeClusterCredentials(records *fakeClusterStore) *fakeClusterCredentials {
+	return &fakeClusterCredentials{records: records, tokens: map[string]string{}, keys: map[string][]cluster.Key{}}
+}
+
+func (s *fakeClusterCredentials) IssueRegistrationToken(ctx context.Context, g grn.GRN, hash string, ttl time.Duration) (time.Time, error) {
+	if _, err := s.records.Get(ctx, g); err != nil {
+		return time.Time{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokens[g.String()] = hash
+	return time.Now().Add(ttl).UTC(), nil
+}
+
+// place holds key on the cluster g names.
+func (s *fakeClusterCredentials) place(g string, key cluster.Key) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.keys[g] = append(s.keys[g], key)
+}
+
+// tokenHash is the registration token hash held for the cluster g
+// names.
+func (s *fakeClusterCredentials) tokenHash(g string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tokens[g]
+}
+
+func (s *fakeClusterCredentials) ListKeys(ctx context.Context, g grn.GRN) ([]cluster.Key, error) {
+	if _, err := s.records.Get(ctx, g); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.keys[g.String()]), nil
+}
+
+func (s *fakeClusterCredentials) RevokeKey(_ context.Context, g grn.GRN, kid string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, k := range s.keys[g.String()] {
+		if k.KID == kid {
+			if k.State != cluster.KeyStateRevoked {
+				now := time.Now().UTC()
+				s.keys[g.String()][i].State, s.keys[g.String()][i].RevokedAt = cluster.KeyStateRevoked, &now
+			}
+			return nil
+		}
+	}
+	return cluster.ErrKeyNotFound
 }
 
 type fakeOperatorStore struct {

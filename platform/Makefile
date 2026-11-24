@@ -6,14 +6,14 @@
 include ../tooling/make/go.mk
 include ../tooling/make/stack.mk
 
-.PHONY: ci format lint test build gen check-gen stack-up suites integration policy-service e2e workload-integration standalone-e2e mutation
+.PHONY: ci format lint test build gen check-gen check-vendor stack-up suites integration policy-service e2e workload-integration standalone-e2e mutation
 
 # A third tool directive on the terms go.mk states, and the only one no
 # whole-set name reaches: `mutation` is invoked by hand and by nothing
 # else, for the reasons stated at that target (#875).
 GREMLINS := go tool gremlins
 
-ci: format lint test build check-gen
+ci: format lint test build check-gen check-vendor
 
 format:
 	$(go-format)
@@ -36,6 +36,7 @@ build:
 gen:
 	$(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
 	$(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml
+	$(OAPI_CODEGEN) --config api/cluster-connection-codegen.yaml $(CLUSTER_CONNECTION_SPEC)
 	$(SQLC) generate
 	$(MOCKERY)
 
@@ -44,12 +45,26 @@ gen:
 # producing. The paths are literal rather than globs: a glob expands
 # against the working tree, so a deleted generated directory would fall
 # outside it and read as clean (#360).
-GEN_PATHS := $(shell { sed -n 's|^output: ||p' api/oapi-codegen.yaml api/machine-codegen.yaml; \
+GEN_PATHS := $(shell { sed -n 's|^output: ||p' api/oapi-codegen.yaml api/machine-codegen.yaml api/cluster-connection-codegen.yaml; \
 	sed -n 's|^        out: ||p' sqlc.yaml; \
 	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; } | sort -u)
 
 check-gen:
 	$(go-check-gen)
+
+# cluster-connection v1alpha1 is garam-bot-operator's interface, and
+# its specification is vendored byte for byte at the commit below
+# (ADR-0186). The PM moves the pin; check-vendor fails where the copy
+# is not that commit's file, so the copy moves with the pin alone. A
+# commit-addressed file cannot change under a fixed SHA.
+CLUSTER_CONNECTION_PIN := 552a69f28e7fb254c443c669b18ce27f54ac9eb1
+CLUSTER_CONNECTION_SPEC := api/cluster-connection/v1alpha1/openapi.yaml
+CLUSTER_CONNECTION_SOURCE := https://raw.githubusercontent.com/garamsh/garam-bot-operator/$(CLUSTER_CONNECTION_PIN)/interfaces/cluster-connection/v1alpha1/openapi.yaml
+
+check-vendor:
+	@curl -fsSL --retry 3 '$(CLUSTER_CONNECTION_SOURCE)' | cmp -s - $(CLUSTER_CONNECTION_SPEC) || \
+		{ echo "check-vendor: $(CLUSTER_CONNECTION_SPEC) is not garam-bot-operator's at $(CLUSTER_CONNECTION_PIN)"; exit 1; }
+	@echo "check-vendor: $(CLUSTER_CONNECTION_SPEC) is garam-bot-operator's at $(CLUSTER_CONNECTION_PIN)"
 
 # The stack the suites below run against: postgres, the openbao
 # `integration` signs against and the rustfs it shares with cowork's,

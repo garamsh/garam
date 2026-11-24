@@ -18,6 +18,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
@@ -64,13 +65,29 @@ func (liveAgentTokens) ResolveAccessToken(_ context.Context, hash string) (agent
 		IssuedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
+// liveClusterTokens is the cluster CredentialStore's read half: the one
+// token it answers is liveClusterToken, for liveCluster.
+type liveClusterTokens struct{ cluster.CredentialStore }
+
+var (
+	liveCluster      = grn.New("acme", cluster.ServiceType, "5f60710a1b2c3d4e")
+	liveClusterToken = cluster.TokenPrefix + strings.Repeat("f", 64)
+)
+
+func (liveClusterTokens) ResolveToken(_ context.Context, hash string) (cluster.TokenHolder, error) {
+	if hash != cluster.HashSecret(liveClusterToken) {
+		return cluster.TokenHolder{}, cluster.ErrTokenInvalid
+	}
+	return cluster.TokenHolder{Cluster: liveCluster, ExpiresAt: time.Now().Add(time.Hour)}, nil
+}
+
 // TestIdentityTokens_AnswersAGaramTokenAndNothingElse covers the seam's
 // adapter: a live token minted for garam is the operator it names, and
 // one minted for a hosted operator, one with another prefix and one no
 // row stands for are each refused as unauthenticated.
 func TestIdentityTokens_AnswersAGaramTokenAndNothingElse(t *testing.T) {
 	// Internal: NewMachineServer resolves a live token in Postgres.
-	tokens := identityTokens{operators: liveTokens{}, agents: liveAgentTokens{}}
+	tokens := identityTokens{operators: liveTokens{}, agents: liveAgentTokens{}, clusters: liveClusterTokens{}}
 
 	bearer, err := tokens.Resolve(context.Background(), liveToken)
 	require.NoError(t, err)
@@ -82,10 +99,16 @@ func TestIdentityTokens_AnswersAGaramTokenAndNothingElse(t *testing.T) {
 	assert.Equal(t, liveAgent, bearer.Subject)
 	assert.Equal(t, liveAgentSerial, bearer.Serial, "an agent's token carries the serial the fence reads")
 
+	bearer, err = tokens.Resolve(context.Background(), liveClusterToken)
+	require.NoError(t, err)
+	assert.Equal(t, liveCluster, bearer.Subject, "a connected cluster's token is its record")
+
 	for name, token := range map[string]string{
-		"another audience":        audiencedToken,
-		"no live row":             operator.TokenPrefix + strings.Repeat("c", 64),
-		"an agent's, no live row": agent.AccessTokenPrefix + strings.Repeat("c", 64),
+		"another audience":         audiencedToken,
+		"no live row":              operator.TokenPrefix + strings.Repeat("c", 64),
+		"an agent's, no live row":  agent.AccessTokenPrefix + strings.Repeat("c", 64),
+		"a cluster's, no live row": cluster.TokenPrefix + strings.Repeat("c", 64),
+		"a cluster's registration": cluster.RegistrationTokenPrefix + strings.Repeat("f", 64),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := tokens.Resolve(context.Background(), token)

@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
@@ -18,7 +19,8 @@ import (
 // identityTokens answers what a token presented on the machine
 // listener stands for, from the domain that issued it, which its
 // prefix names (ADR-0100): an operator's from internal/operator, an
-// agent's and a supervisor's from internal/agent. It is read on every
+// agent's and a supervisor's from internal/agent, and a connected
+// cluster's from internal/cluster (ADR-0184). It is read on every
 // request that presents a token, so what it reads beside the token —
 // the operator's registration, the agent's assignment and lineage, or
 // the supervisor's registration — refuses a deleted operator, a
@@ -28,6 +30,7 @@ type identityTokens struct {
 	operators   operator.TokenStore
 	agents      agent.AccessTokenStore
 	supervisors agent.SupervisorTokenStore
+	clusters    cluster.CredentialStore
 }
 
 func (k identityTokens) Resolve(ctx context.Context, token string) (machine.Bearer, error) {
@@ -40,6 +43,8 @@ func (k identityTokens) Resolve(ctx context.Context, token string) (machine.Bear
 		return k.agent(ctx, token)
 	case agent.WellFormedSupervisorSecret(token, agent.SupervisorTokenPrefix):
 		return k.supervisor(ctx, token)
+	case cluster.WellFormed(token, cluster.TokenPrefix):
+		return k.cluster(ctx, token)
 	}
 	return machine.Bearer{}, errorx.New(errorx.KindUnauthenticated, "machine: not a token garam issues")
 }
@@ -75,6 +80,16 @@ func (k identityTokens) supervisor(ctx context.Context, token string) (machine.B
 		return machine.Bearer{}, unresolved(err)
 	}
 	return machine.Bearer{Subject: holder.Supervisor, IssuedAt: holder.IssuedAt, ExpiresAt: holder.ExpiresAt}, nil
+}
+
+// cluster resolves a connected cluster's token, read joined to the
+// record and the key it rests on (ADR-0184 decision 5, AUTH-2).
+func (k identityTokens) cluster(ctx context.Context, token string) (machine.Bearer, error) {
+	holder, err := k.clusters.ResolveToken(ctx, cluster.HashSecret(token))
+	if err != nil {
+		return machine.Bearer{}, unresolved(err)
+	}
+	return machine.Bearer{Subject: holder.Cluster, ExpiresAt: holder.ExpiresAt}, nil
 }
 
 // registeredOperators answers whether an organization holds a record

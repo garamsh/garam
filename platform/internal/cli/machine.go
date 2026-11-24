@@ -13,12 +13,15 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/garamsh/garam/lib/errorx"
+	connectiongen "github.com/garamsh/garam/platform/api/cluster-connection/v1alpha1"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 	"github.com/garamsh/garam/platform/internal/ca"
+	"github.com/garamsh/garam/platform/internal/cluster"
+	clusterpg "github.com/garamsh/garam/platform/internal/cluster/postgres"
 	"github.com/garamsh/garam/platform/internal/health"
 	"github.com/garamsh/garam/platform/internal/identity"
 	identitypg "github.com/garamsh/garam/platform/internal/identity/postgres"
@@ -276,7 +279,9 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 
 	// A lifecycle decision reads the caller's token dates and record
 	// again, on the same clock.
-	recheck := machine.NewRecheck(identityRegistrations{operators: operatorStore, supervisors: agentpg.New(pool)}, cfg.Now)
+	clusterStore := clusterpg.New(pool)
+	recheck := machine.NewRecheck(identityRegistrations{operators: operatorStore, supervisors: agentpg.New(pool),
+		clusters: clusterStore}, cfg.Now)
 	// The listener notes how each request authenticated, and the issuing
 	// routes what they issued (ADR-0109).
 	evidence := machine.NewEvidence(machinepg.New(pool), evidenceWindow, cfg.Now)
@@ -312,7 +317,13 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
 	authority := NewAuthorityService(pool, cfg.Decisions)
-	handler := machinegen.HandlerWithOptions(
+	clusters := cluster.NewService(clusterStore, cluster.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
+		RotationURL: clusterRotationURL(cfg.TokenURL)})
+	// One mux carries both specifications' routes: the machine
+	// specification's, and cluster-connection's under its own prefix
+	// with its own error body (ADR-0186).
+	mux := http.NewServeMux()
+	machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, watches,
 			authority, recheck, newProofService(pool, cfg.Decisions, cfg.Now),
 			newExecutionService(pool, cfg.Decisions, authority, cfg.Now),
@@ -321,16 +332,27 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			WithCredentialAudit(auditpg.NewCredentialStore(pool)).
 			WithSendPolicy(cfg.Decisions, agentStore).
 			WithFeed(cfg.Feed).
-			WithIdentity(cfg.Identity, principals),
+			WithIdentity(cfg.Identity, principals).
+			WithClusters(clusters),
 		machinegen.StdHTTPServerOptions{
-			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.RecoverPanics,
+			BaseRouter: mux,
+			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.ConfineClusters, machineapi.RecoverPanics,
 				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges), recordIssuances(evidence)},
 			// A parameter the router cannot bind is refused before any
 			// handler runs, so this is the only place the surface's own
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	return obs.machineServer(identityTokens{operators: operatorStore, agents: agentStore, supervisors: agentpg.New(pool)}, evidence, cfg.Certificate, handler), nil
+	connectiongen.HandlerWithOptions(machineapi.NewClusterConnection(clusters, cfg.TokenURL),
+		connectiongen.StdHTTPServerOptions{
+			BaseRouter: mux,
+			Middlewares: []connectiongen.MiddlewareFunc{machineapi.RecoverPanics,
+				obs.logMachineRequests, countMachineRequests(requests)},
+			ErrorHandlerFunc: machineapi.ConnectionBindingError,
+		})
+	handler := http.Handler(mux)
+	return obs.machineServer(identityTokens{operators: operatorStore, agents: agentStore, supervisors: agentpg.New(pool),
+		clusters: clusterStore}, evidence, cfg.Certificate, handler), nil
 }
 
 // machineServer is the listener `serve machine` serves: server TLS
@@ -355,7 +377,7 @@ func (o *observability) machineServer(tokens machine.Tokens, evidence *machine.E
 
 // machineProbeHandler is what `serve machine` answers on the port
 // beside its TLS one, because the listener above answers a probe on no
-// route: what it serves is the machine specification's operations. It
+// route: what it serves is two specifications' operations. It
 // carries /metrics beside the probes: the count of requests by how
 // they authenticated (ADR-0100). recoverPanics
 // is outermost, as on every listener a serve command runs.

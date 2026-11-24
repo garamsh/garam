@@ -16,17 +16,21 @@ import (
 	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
-// Store implements cluster.Store.
+// Store implements cluster.Store and cluster.CredentialStore.
 type Store struct {
-	q *db.Queries
+	pool *pgxpool.Pool
+	q    *db.Queries
 }
 
-// Compile-time check that Store satisfies cluster.Store.
-var _ cluster.Store = (*Store)(nil)
+// Compile-time checks that Store satisfies both stores.
+var (
+	_ cluster.Store           = (*Store)(nil)
+	_ cluster.CredentialStore = (*Store)(nil)
+)
 
 // New constructs a Postgres-backed cluster store.
 func New(pool *pgxpool.Pool) *Store {
-	return &Store{q: db.New(pool)}
+	return &Store{pool: pool, q: db.New(pool)}
 }
 
 // Create inserts the record and answers the row it wrote.

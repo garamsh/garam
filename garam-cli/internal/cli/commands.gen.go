@@ -305,7 +305,7 @@ var apiOperations = []apiOperation{
 			{Name: "description", In: "body", Kind: "string", Required: false, Help: "At most 1000 characters once surrounding space is trimmed."},
 		},
 		BodyType: "application/json",
-		Columns:  []string{"grn", "name", "description", "orgGrn", "createdBy", "createdAt"},
+		Columns:  []string{"cluster.grn", "cluster.name", "cluster.description", "cluster.orgGrn", "cluster.createdBy", "cluster.createdAt", "registration.registrationToken", "registration.expiresAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			return sdk.NewCreateClusterRequestWithBody(server, path[0], contentType, body)
 		},
@@ -339,6 +339,33 @@ var apiOperations = []apiOperation{
 		Args: []string{"cluster"}, FromOrg: true,
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			return sdk.NewDeleteClusterRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "reissueClusterRegistrationToken", Method: "POST", Path: "/orgs/{org}/clusters/{cluster}/registration-token",
+		Words: []string{"clusters", "registration-token"}, Verb: "reissue", Short: "Answer a new registration token for a cluster. Requires the `admin` role.",
+		Args: []string{"cluster"}, FromOrg: true,
+		Columns: []string{"registrationToken", "expiresAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewReissueClusterRegistrationTokenRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "listClusterKeys", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/keys",
+		Words: []string{"clusters", "keys"}, Verb: "list", Short: "List the keys a cluster's connector registered, with where each stands. Requires the `member` role.",
+		Args: []string{"cluster"}, FromOrg: true,
+		Columns: []string{"kid", "state", "createdAt", "retiresAt", "revokedAt"},
+		Rows:    "keys",
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewListClusterKeysRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "revokeClusterKey", Method: "DELETE", Path: "/orgs/{org}/clusters/{cluster}/keys/{kid}",
+		Words: []string{"clusters", "keys"}, Verb: "revoke", Short: "Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.",
+		Args: []string{"cluster", "kid"}, FromOrg: true,
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewRevokeClusterKeyRequest(server, path[0], path[1], path[2])
 		},
 	},
 	{

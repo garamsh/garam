@@ -195,6 +195,27 @@ func (e AuditRecordKind) Valid() bool {
 	}
 }
 
+// Defines values for ClusterKeyState.
+const (
+	ClusterKeyActive   ClusterKeyState = "active"
+	ClusterKeyRetiring ClusterKeyState = "retiring"
+	ClusterKeyRevoked  ClusterKeyState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the ClusterKeyState enum.
+func (e ClusterKeyState) Valid() bool {
+	switch e {
+	case ClusterKeyActive:
+		return true
+	case ClusterKeyRetiring:
+		return true
+	case ClusterKeyRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CredentialEventAction.
 const (
 	EventIssue CredentialEventAction = "issue"
@@ -1215,6 +1236,27 @@ type ClusterCreation struct {
 // ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 type ClusterDescription = string
 
+// ClusterKey The public record of one key a cluster's connector generated. It carries no private material.
+type ClusterKey struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Kid The base64url SHA-256 RFC 7638 thumbprint of the public key.
+	Kid       string     `json:"kid"`
+	RetiresAt *time.Time `json:"retiresAt,omitempty"`
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+
+	// State Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+	State ClusterKeyState `json:"state"`
+}
+
+// ClusterKeyState Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+type ClusterKeyState string
+
+// ClusterKeyList defines model for ClusterKeyList.
+type ClusterKeyList struct {
+	Keys []ClusterKey `json:"keys"`
+}
+
 // ClusterName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
 type ClusterName = string
 
@@ -1227,9 +1269,24 @@ type ClusterPatch struct {
 	Name *ClusterName `json:"name,omitempty"`
 }
 
+// ClusterRegistrationToken A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
+type ClusterRegistrationToken struct {
+	ExpiresAt         time.Time `json:"expiresAt"`
+	RegistrationToken string    `json:"registrationToken"`
+}
+
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
 	Url string `json:"url"`
+}
+
+// CreatedCluster defines model for CreatedCluster.
+type CreatedCluster struct {
+	// Cluster A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster.
+	Cluster Cluster `json:"cluster"`
+
+	// Registration A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
+	Registration ClusterRegistrationToken `json:"registration"`
 }
 
 // CredentialEvent defines model for CredentialEvent.
@@ -2651,6 +2708,15 @@ type ServerInterface interface {
 	// UpdateCluster Rename or describe a connected cluster. Requires the `admin` role.
 	// (PATCH /orgs/{org}/clusters/{cluster})
 	UpdateCluster(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
+	// ListClusterKeys List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
+	// (GET /orgs/{org}/clusters/{cluster}/keys)
+	ListClusterKeys(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
+	// RevokeClusterKey Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
+	// (DELETE /orgs/{org}/clusters/{cluster}/keys/{kid})
+	RevokeClusterKey(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug, keyID KeyID)
+	// ReissueClusterRegistrationToken Answer a new registration token for a cluster. Requires the `admin` role.
+	// (POST /orgs/{org}/clusters/{cluster}/registration-token)
+	ReissueClusterRegistrationToken(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	// (GET /orgs/{org}/consents)
 	ListOrgConsents(w http.ResponseWriter, r *http.Request, org Org)
@@ -3909,6 +3975,120 @@ func (siw *ServerInterfaceWrapper) UpdateCluster(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCluster(w, r, org, clusterSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClusterKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListClusterKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClusterKeys(w, r, org, clusterSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeClusterKey operation middleware
+func (siw *ServerInterfaceWrapper) RevokeClusterKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kid" -------------
+	var keyID KeyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kid", r.PathValue("kid"), &keyID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kid", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeClusterKey(w, r, org, clusterSlug, keyID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReissueClusterRegistrationToken operation middleware
+func (siw *ServerInterfaceWrapper) ReissueClusterRegistrationToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReissueClusterRegistrationToken(w, r, org, clusterSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6237,6 +6417,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.DeleteCluster)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.GetCluster)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}", wrapper.UpdateCluster)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/registration-token", wrapper.ReissueClusterRegistrationToken)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/keys", wrapper.ListClusterKeys)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/keys/{kid}", wrapper.RevokeClusterKey)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)

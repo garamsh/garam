@@ -931,7 +931,7 @@ export interface paths {
         put?: never;
         /**
          * Create a connected cluster's record. Requires the `admin` role.
-         * @description Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184). Authorized as `iam:cluster.register` on the organization.
+         * @description Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
          */
         post: operations["createCluster"];
         delete?: never;
@@ -966,6 +966,66 @@ export interface paths {
          * @description Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
          */
         patch: operations["updateCluster"];
+        trace?: never;
+    };
+    "/orgs/{org}/clusters/{cluster}/registration-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a new registration token for a cluster. Requires the `admin` role.
+         * @description Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
+         */
+        post: operations["reissueClusterRegistrationToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/clusters/{cluster}/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
+         * @description Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
+         */
+        get: operations["listClusterKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/clusters/{cluster}/keys/{kid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
+         * @description Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
+         */
+        delete: operations["revokeClusterKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/orgs/{org}/operators": {
@@ -2330,6 +2390,36 @@ export interface components {
             createdBy: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        CreatedCluster: {
+            cluster: components["schemas"]["Cluster"];
+            registration: components["schemas"]["ClusterRegistrationToken"];
+        };
+        /** @description A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3). */
+        ClusterRegistrationToken: {
+            /** @example garam_crt_0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0 */
+            registrationToken: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ClusterKeyList: {
+            keys: components["schemas"]["ClusterKey"][];
+        };
+        /** @description The public record of one key a cluster's connector generated. It carries no private material. */
+        ClusterKey: {
+            /** @description The base64url SHA-256 RFC 7638 thumbprint of the public key. */
+            kid: string;
+            /**
+             * @description Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+             * @enum {string}
+             */
+            state: "active" | "retiring" | "revoked";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            retiresAt?: string;
+            /** Format: date-time */
+            revokedAt?: string;
         };
         ClusterCreation: {
             name?: components["schemas"]["ClusterName"];
@@ -4162,19 +4252,29 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Cluster created. */
+            /** @description Cluster created, with its registration token. */
             201: {
                 headers: {
+                    "Cache-Control"?: "no-store";
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Cluster"];
+                    "application/json": components["schemas"]["CreatedCluster"];
                 };
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            /** @description The identifier garam minted is already a cluster's. It is drawn from 64 random bits, so the request is sent again. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getCluster: {
@@ -4259,6 +4359,94 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Cluster"];
                 };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    reissueClusterRegistrationToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The registration token. */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterRegistrationToken"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listClusterKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cluster's keys. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterKeyList"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    revokeClusterKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Cluster identifier (the last GRN segment). */
+                cluster: components["parameters"]["cluster"];
+                /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
+                kid: components["parameters"]["kid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key withdrawn, with its tokens. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];

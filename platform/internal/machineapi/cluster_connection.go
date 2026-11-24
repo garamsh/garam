@@ -1,0 +1,179 @@
+package machineapi
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
+	connectiongen "github.com/garamsh/garam/platform/api/cluster-connection/v1alpha1"
+	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/machine"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/wire"
+)
+
+// ClusterConnection serves cluster-connection v1alpha1, the protocol a
+// connected cluster's connector speaks (ADR-0184, ADR-0186), from the
+// interface's own specification, vendored at
+// api/cluster-connection/v1alpha1/. Its refusals carry that
+// interface's error body (T-5) rather than this listener's.
+type ClusterConnection struct {
+	clusters cluster.Service
+	tokenURL string
+}
+
+var _ connectiongen.ServerInterface = (*ClusterConnection)(nil)
+
+// NewClusterConnection serves clusters, answering tokenURL as where a
+// registered connector exchanges its assertions (REG-6).
+func NewClusterConnection(clusters cluster.Service, tokenURL string) *ClusterConnection {
+	return &ClusterConnection{clusters: clusters, tokenURL: tokenURL}
+}
+
+// Register spends the registration token and binds the connector's key
+// (REG-1 to REG-8). It reads no identity: a registration carries none.
+func (c *ClusterConnection) Register(w http.ResponseWriter, r *http.Request) {
+	// The jwk is read as the connector sent it, here and in RotateKey:
+	// the generated PublicJwk keeps only the members it declares, so it
+	// would drop the private members REG-2 has the server refuse.
+	var body struct {
+		RegistrationToken string          `json:"registrationToken"`
+		Jwk               json.RawMessage `json:"jwk"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeConnectionError(w, errorx.New(errorx.KindInvalidArgument, "the body is not a registration request"))
+		return
+	}
+	g, err := c.clusters.Register(r.Context(), sourceOf(r), body.RegistrationToken, body.Jwk)
+	if err != nil {
+		writeConnectionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, connectiongen.Registration{
+		Cluster: g.String(), ClientId: g.String(), TokenUrl: c.tokenURL,
+	})
+}
+
+// RotateKey adds the successor key the caller's current key authorized
+// and the successor proved (ROT-1 to ROT-4).
+func (c *ClusterConnection) RotateKey(w http.ResponseWriter, r *http.Request) {
+	caller, ok := connectedCluster(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Jwk           json.RawMessage `json:"jwk"`
+		Authorization string          `json:"authorization"`
+		Proof         string          `json:"proof"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeConnectionError(w, errorx.New(errorx.KindInvalidArgument, "the body is not a key rotation request"))
+		return
+	}
+	rotation, err := c.clusters.Rotate(r.Context(), caller, body.Jwk, body.Authorization, body.Proof)
+	if err != nil {
+		writeConnectionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, connectiongen.KeyRotation{
+		Kid: rotation.KID, PredecessorRetiresAt: rotation.PredecessorRetiresAt,
+	})
+}
+
+// errConnectionRouteUnbuilt answers a route of the interface garam
+// does not serve yet, as a 5xx the connector backs off from (T-6).
+var errConnectionRouteUnbuilt = errorx.New(errorx.KindUnimplemented, "garam does not serve this route yet")
+
+// WatchDeclarations is #2048's. Until it lands, an authenticated
+// cluster is answered that garam does not serve it.
+func (c *ClusterConnection) WatchDeclarations(w http.ResponseWriter, r *http.Request, _ connectiongen.WatchDeclarationsParams) {
+	if _, ok := connectedCluster(w, r); ok {
+		writeConnectionError(w, errConnectionRouteUnbuilt)
+	}
+}
+
+// Report is #2050's, answered as WatchDeclarations is until it lands.
+func (c *ClusterConnection) Report(w http.ResponseWriter, r *http.Request) {
+	if _, ok := connectedCluster(w, r); ok {
+		writeConnectionError(w, errConnectionRouteUnbuilt)
+	}
+}
+
+// connectedCluster is the cluster the request's token stands for, and
+// writes the refusal where it stands for none: a token that proved
+// nothing, or one of another kind of caller, is answered 401 (AUTH-2).
+func connectedCluster(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
+	identity, ok := machine.IdentityOf(r)
+	if !ok {
+		err := machine.RefusalOf(r)
+		if err == nil {
+			err = errorx.New(errorx.KindUnauthenticated, "the request carries no cluster's token")
+		}
+		writeConnectionError(w, err)
+		return grn.GRN{}, false
+	}
+	if identity.GRN().ServiceType != cluster.ServiceType {
+		writeConnectionError(w, errorx.New(errorx.KindUnauthenticated, "the token is not a cluster's"))
+		return grn.GRN{}, false
+	}
+	return identity.GRN(), true
+}
+
+// ConnectionBindingError answers a request the generated router
+// refused while binding its parameters, in the interface's error body.
+func ConnectionBindingError(w http.ResponseWriter, _ *http.Request, _ error) {
+	writeConnectionError(w, errorx.New(errorx.KindInvalidArgument, "a request parameter could not be read"))
+}
+
+// connectionCodes names each sentinel whose code the interface lists
+// (T-5); any other refusal takes its status's code, connectionCode's.
+var connectionCodes = []struct {
+	err  error
+	code string
+}{
+	{cluster.ErrRegistrationRefused, "registration_refused"},
+	{cluster.ErrInvalidProof, "invalid_proof"},
+	{cluster.ErrTooManyKeys, "too_many_keys"},
+}
+
+// connectionCode is the interface's code for a refusal at status.
+func connectionCode(err error, status int) string {
+	for _, c := range connectionCodes {
+		if errors.Is(err, c.err) {
+			return c.code
+		}
+	}
+	switch {
+	case status == http.StatusUnauthorized:
+		return "unauthorized"
+	case status == http.StatusNotFound:
+		return "not_found"
+	case status == http.StatusTooManyRequests:
+		return "throttled"
+	case status >= http.StatusInternalServerError:
+		return "internal"
+	}
+	return "invalid_request"
+}
+
+// writeConnectionError renders err as the interface's error body
+// (T-5), at the status this listener maps its kind to, with the
+// message withheld as writeErrorBody withholds it.
+func writeConnectionError(w http.ResponseWriter, err error) {
+	status := wire.StatusOf(errorx.KindOf(err))
+	var exceeded *operator.Exceeded
+	if errors.As(err, &exceeded) {
+		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))
+	}
+	message, disclosed := wire.MessageOf(err), wire.IsAuthored(err)
+	if status >= http.StatusInternalServerError {
+		message, disclosed = "internal error", false
+	}
+	if recorder, ok := w.(causeRecorder); ok && !disclosed {
+		recorder.RecordCause(err)
+	}
+	writeJSON(w, status, connectiongen.Error{Error: connectionCode(err, status), Message: message})
+}

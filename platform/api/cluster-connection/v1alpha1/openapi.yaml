@@ -1,0 +1,262 @@
+# The wire schemas of cluster-connection v1alpha1. README.md beside this file is normative for behaviour; this file is normative for shapes.
+openapi: 3.1.0
+info:
+  title: cluster-connection
+  version: v1alpha1
+  description: garam's connection service as a connector in a user's cluster calls it.
+servers:
+  - url: "{base}"
+    variables:
+      base:
+        default: https://garam.example
+paths:
+  /cluster-connection/v1alpha1/registrations:
+    post:
+      operationId: register
+      summary: Spend a one-time registration token and bind the connector's public key (REG-1 to REG-7).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegistrationRequest" }
+      responses:
+        "201":
+          description: Registered.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Registration" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Throttled" }
+  /cluster-connection/v1alpha1/clusters/self/keys:
+    post:
+      operationId: rotateKey
+      summary: Add the successor key, proved by its own signature (ROT-1 to ROT-4).
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KeyRotationRequest" }
+      responses:
+        "201":
+          description: Successor live; predecessor retiring.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KeyRotation" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Throttled" }
+  /cluster-connection/v1alpha1/clusters/self/declarations:
+    get:
+      operationId: watchDeclarations
+      summary: Long-poll the declarations placed on this cluster (DECL-1 to DECL-6).
+      security: [{ bearer: [] }]
+      parameters:
+        - name: after
+          in: query
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 512 }
+        - name: wait
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, maximum: 50, default: 50 }
+      responses:
+        "200":
+          description: Changes after the cursor, possibly none.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeclarationPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Throttled" }
+  /cluster-connection/v1alpha1/clusters/self/reports:
+    post:
+      operationId: report
+      summary: Replace the cluster's report with this one if it is newer (REP-1 to REP-6).
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Report" }
+      responses:
+        "204": { description: "Accepted, or ignored as older than the one kept." }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Throttled" }
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: A token exchanged at tokenUrl under garam's machine-token.v2 (AUTH-1).
+  responses:
+    Error:
+      description: A refusal.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Throttled:
+      description: Too many requests.
+      headers:
+        Retry-After:
+          required: true
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: >-
+            Known codes: invalid_request, registration_refused, invalid_proof,
+            too_many_keys, cursor_expired, report_too_large, throttled, unauthorized,
+            not_found, internal.
+        message: { type: string }
+    Grn:
+      type: string
+      pattern: "^grn:[^/]+/iam/cluster/[^/]+$"
+    PublicJwk:
+      type: object
+      description: The public half of an RSA key of at least 3072 bits. A member naming a private parameter (d, p, q, dp, dq, qi) is refused.
+      required: [kty, n, e]
+      properties:
+        kty: { const: RSA }
+        n: { type: string, minLength: 512 }
+        e: { type: string }
+        alg: { const: RS256 }
+        use: { const: sig }
+      not:
+        anyOf:
+          - required: [d]
+          - required: [p]
+          - required: [q]
+          - required: [dp]
+          - required: [dq]
+          - required: [qi]
+    Connector:
+      type: object
+      required: [version]
+      properties:
+        version: { type: string, minLength: 1, maxLength: 64 }
+    RegistrationRequest:
+      type: object
+      required: [registrationToken, jwk, connector]
+      properties:
+        registrationToken: { type: string, minLength: 1, maxLength: 512 }
+        jwk: { $ref: "#/components/schemas/PublicJwk" }
+        connector: { $ref: "#/components/schemas/Connector" }
+    Registration:
+      type: object
+      required: [cluster, clientId, tokenUrl]
+      properties:
+        cluster: { $ref: "#/components/schemas/Grn" }
+        clientId: { type: string }
+        tokenUrl: { type: string, format: uri }
+    KeyRotationRequest:
+      type: object
+      required: [jwk, authorization, proof]
+      properties:
+        jwk: { $ref: "#/components/schemas/PublicJwk" }
+        authorization: { type: string, description: "Compact JWS, typ key-rotation+jwt, signed by a live key of the record, its jkt the successor's thumbprint (ROT-1)." }
+        proof: { type: string, description: "Compact JWS, typ key-proof+jwt, signed by the successor (ROT-1)." }
+    KeyRotation:
+      type: object
+      required: [kid, predecessorRetiresAt]
+      properties:
+        kid: { type: string }
+        predecessorRetiresAt: { type: string, format: date-time }
+    DeclaredObject:
+      type: object
+      description: An object of a declared kind (DECL-7). spec is interface 1's, validated by the cluster's API server; this schema does not restate it.
+      required: [apiVersion, kind, metadata, spec]
+      properties:
+        apiVersion: { type: string }
+        kind: { enum: [Bot, Workspace, WorkspaceClass, BotPool] }
+        metadata:
+          type: object
+          required: [namespace, name]
+          properties:
+            namespace: { type: string, maxLength: 63 }
+            name: { type: string, maxLength: 253 }
+            labels: { type: object, additionalProperties: { type: string } }
+            annotations: { type: object, additionalProperties: { type: string } }
+        spec: { type: object }
+    Change:
+      type: object
+      required: [op, id, generation]
+      properties:
+        op: { enum: [apply, delete] }
+        id: { type: string, minLength: 1, maxLength: 128 }
+        generation: { type: integer, minimum: 1 }
+        object:
+          $ref: "#/components/schemas/DeclaredObject"
+          description: Present on apply, absent on delete.
+    DeclarationPage:
+      type: object
+      required: [cursor, changes]
+      properties:
+        cursor: { type: string, minLength: 1, maxLength: 512 }
+        full: { type: boolean, default: false }
+        more: { type: boolean, default: false }
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/Change" }
+    DeclarationOutcome:
+      type: object
+      required: [id, generation, outcome]
+      properties:
+        id: { type: string }
+        generation: { type: integer, minimum: 1 }
+        outcome: { enum: [applied, conflict, invalid, namespaceNotWatched] }
+        message: { type: string, maxLength: 1024 }
+    ReportedObject:
+      type: object
+      required: [apiVersion, kind, namespace, name, uid, owner, generation, status]
+      properties:
+        apiVersion: { type: string }
+        kind: { enum: [Bot, Workspace, WorkspaceClass, BotPool] }
+        namespace: { type: string }
+        name: { type: string }
+        uid: { type: string }
+        owner: { enum: [garam, cluster] }
+        generation: { type: integer, minimum: 1 }
+        cluster: { $ref: "#/components/schemas/Grn", description: "garam-owned objects only: the record its marker names, always the reporting record (REP-1)." }
+        declarationId: { type: string, description: garam-owned objects only. }
+        orphaned: { type: boolean, description: garam-owned objects only (DECL-13). }
+        spec: { type: object, description: cluster-owned objects only. }
+        status: { type: object }
+    Report:
+      type: object
+      required: [observedAt, connector, declarations, objects]
+      properties:
+        observedAt: { type: string, format: date-time }
+        connector:
+          type: object
+          required: [version, mode, namespaces]
+          properties:
+            version: { type: string }
+            mode: { enum: [apply, reportOnly] }
+            namespaces:
+              type: array
+              description: The watched namespaces whose claim names the client's release (CLAIM-2).
+              items: { type: string }
+            claimedElsewhere:
+              type: array
+              description: Watched namespaces with no claim, or a claim naming another release (CLAIM-2).
+              items: { type: string }
+        declarations:
+          type: array
+          items: { $ref: "#/components/schemas/DeclarationOutcome" }
+        objects:
+          type: array
+          items: { $ref: "#/components/schemas/ReportedObject" }

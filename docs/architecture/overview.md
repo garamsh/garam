@@ -31,12 +31,16 @@ garam's retired templates and the browser's `operatorGrn`
   ([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
   ADR-0118). A request that presents none carries no identity rather
   than being refused there — which is what leaves a standalone host's
-  enrollment and the token exchanges reachable to a caller that holds
-  none, and costs nothing elsewhere, because every other operation
-  refuses a request carrying no identity. An agent, an operator and a
-  supervisor authenticate the same way, and none authenticates through
-  a user row, a session or a membership.
-  What that listener serves has a specification of its own (ADR-0019).
+  enrollment, a connected cluster's registration and the token
+  exchanges reachable to a caller that holds none, and costs nothing
+  elsewhere, because every other operation refuses a request carrying
+  no identity. An agent, an operator, a supervisor and a connected
+  cluster authenticate the same way, and none authenticates through a
+  user row, a session or a membership.
+  What that listener serves has a specification of its own (ADR-0019),
+  except the cluster-connection routes, which it serves from
+  garam-bot-operator's, vendored at a pinned commit
+  ([ADR-0186](./adr/0186-the-cluster-connection-routes-are-served-from-the-interfaces-own-specification-vendored-at-a-pinned-commit.md)).
   garam is verified by a different root: the listener presents one
   certificate signed by a garam server authority the deployment holds
   and garam never does, every caller is given that root beside the
@@ -225,16 +229,17 @@ garam's retired templates and the browser's `operatorGrn`
   What is out of scope is the whole of it: no resource, no store, no
   surface, and the `secret` service type stands in the catalogue as
   planned ([grn-model.md](./grn-model.md)).
-- Clusters as a resource an organization connects, beyond the record.
-  The record and its browser routes are built
-  ([clusters.md](./clusters.md)); the rest is decided and unbuilt: a
-  connected cluster is a machine identity,
-  `grn:<org>/iam/cluster/<id>`, that registers once by spending a
-  one-time token with a key it generated, and serves as the target of
-  the bots and workspaces declared for it. Its registration route will
-  take no token, as a standalone host's enrollment does, and spends the
+- Clusters as a resource an organization connects, beyond its record
+  and its identity. A connected cluster is a machine identity,
+  `grn:<org>/iam/cluster/<id>`. Its record, its browser routes, its
+  registration, its exchange and its key rotation are built
+  ([clusters.md](./clusters.md)). The registration route takes no
+  token, as a standalone host's enrollment does, and spends the
   one-time token instead
   ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
+  What is decided and unbuilt is the cluster as the target of the bots
+  and workspaces declared for it: declarations, reports and the
+  bot-token mint.
   The wire between garam and the connector in that cluster is
   `garamsh/garam-bot-operator`'s interface
   `interfaces/cluster-connection/v1alpha1/`, whose server garam owes.

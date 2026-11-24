@@ -458,6 +458,8 @@ Responsibility documents:
   session that carries the proof afterwards
 - [operators.md](./operators.md) — what an organization records about an
   operator and what it authenticates with
+- [clusters.md](./clusters.md) — what an organization records about a
+  cluster it connected, whose connector authenticates as that record
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the
@@ -1617,8 +1619,8 @@ ADRs:
   one-time token with a key it generated, so its private key never
   leaves the cluster; it then exchanges `private_key_jwt` assertions,
   rotates its key under its current key's signature, and is revoked by
-  its organization; accepted, unbuilt (#2043); supersedes 0117 in part,
-  item 2's one-time token, for a connected cluster only
+  its organization; accepted, the record built (#2045); supersedes 0117
+  in part, item 2's one-time token, for a connected cluster only
 - [0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)
   — every cluster garam reaches, aurora's included, connects by the
   connector and its one-time registration token, and garam issues no

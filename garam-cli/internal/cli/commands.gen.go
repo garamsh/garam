@@ -288,6 +288,60 @@ var apiOperations = []apiOperation{
 		},
 	},
 	{
+		ID: "listClusters", Method: "GET", Path: "/orgs/{org}/clusters",
+		Words: []string{"clusters"}, Verb: "list", Short: "List an organization's connected clusters. Requires the `member` role.",
+		Args: []string(nil), FromOrg: true,
+		Columns: []string{"grn", "name", "description", "orgGrn", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewListClustersRequest(server, path[0])
+		},
+	},
+	{
+		ID: "createCluster", Method: "POST", Path: "/orgs/{org}/clusters",
+		Words: []string{"clusters"}, Verb: "create", Short: "Create a connected cluster's record. Requires the `admin` role.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "name", In: "body", Kind: "string", Required: false, Help: "At most 100 characters once surrounding space is trimmed, and at least one."},
+			{Name: "description", In: "body", Kind: "string", Required: false, Help: "At most 1000 characters once surrounding space is trimmed."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "description", "orgGrn", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewCreateClusterRequestWithBody(server, path[0], contentType, body)
+		},
+	},
+	{
+		ID: "getCluster", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}",
+		Words: []string{"clusters"}, Verb: "get", Short: "Read one of an organization's connected clusters. Requires the `member` role.",
+		Args: []string{"cluster"}, FromOrg: true,
+		Columns: []string{"grn", "name", "description", "orgGrn", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewGetClusterRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "updateCluster", Method: "PATCH", Path: "/orgs/{org}/clusters/{cluster}",
+		Words: []string{"clusters"}, Verb: "update", Short: "Rename or describe a connected cluster. Requires the `admin` role.",
+		Args: []string{"cluster"}, FromOrg: true,
+		Fields: []apiField{
+			{Name: "name", In: "body", Kind: "string", Required: false, Help: "At most 100 characters once surrounding space is trimmed, and at least one."},
+			{Name: "description", In: "body", Kind: "string", Required: false, Help: "At most 1000 characters once surrounding space is trimmed."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "description", "orgGrn", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewUpdateClusterRequestWithBody(server, path[0], path[1], contentType, body)
+		},
+	},
+	{
+		ID: "deleteCluster", Method: "DELETE", Path: "/orgs/{org}/clusters/{cluster}",
+		Words: []string{"clusters"}, Verb: "delete", Short: "Delete a connected cluster's record. Requires the `admin` role.",
+		Args: []string{"cluster"}, FromOrg: true,
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewDeleteClusterRequest(server, path[0], path[1])
+		},
+	},
+	{
 		ID: "listOperators", Method: "GET", Path: "/orgs/{org}/operators",
 		Words: []string{"operators"}, Verb: "list", Short: "List an organization's operators. Requires the `member` role.",
 		Args: []string(nil), FromOrg: true,

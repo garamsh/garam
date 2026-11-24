@@ -47,6 +47,8 @@ the Go package implementing it is in parentheses.
 - [operators.md](./operators.md) — what an organization records about
   an operator and what it authenticates with
   (`platform/internal/operator`)
+- [clusters.md](./clusters.md) — what an organization records about a
+  cluster it connected (`platform/internal/cluster`)
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam (`platform/internal/agent`)
 - [machine-identity.md](./machine-identity.md) — who is calling on the
@@ -80,10 +82,11 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**All eight have this shape today.** `platform/internal/user`,
+**All nine have this shape today.** `platform/internal/user`,
 `platform/internal/watch`, `platform/internal/org`,
-`platform/internal/operator`, `platform/internal/agent`,
-`platform/internal/message` and `platform/internal/authn` each keep
+`platform/internal/operator`, `platform/internal/cluster`,
+`platform/internal/agent`, `platform/internal/message` and
+`platform/internal/authn` each keep
 their store in `platform/internal/<domain>/postgres/` (#1083), and
 `platform/internal/machine` persists through
 `platform/internal/machine/postgres` and had no driver import to move.

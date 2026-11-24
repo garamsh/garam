@@ -84,6 +84,12 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionOperatorReissue, "iam:operator.reissue"},
 		{org.ActionOperatorDelegate, "iam:operator.delegate"},
 
+		{org.ActionClusterRead, "iam:cluster.read"},
+		{org.ActionClusterRegister, "iam:cluster.register"},
+		{org.ActionClusterUpdate, "iam:cluster.update"},
+		{org.ActionClusterReissue, "iam:cluster.reissue"},
+		{org.ActionClusterDelete, "iam:cluster.delete"},
+
 		{org.ActionAgentRead, "iam:agent.read"},
 		{org.ActionAgentWatch, "iam:agent.watch"},
 		{org.ActionAgentRename, "iam:agent.rename"},
@@ -131,7 +137,9 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
 			org.ActionAuditRead, org.ActionPermitWrite,
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
-			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
+			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
+			org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate,
+			org.ActionClusterReissue, org.ActionClusterDelete, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -151,7 +159,9 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
 			org.ActionAuditRead,
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
-			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
+			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
+			org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate,
+			org.ActionClusterReissue, org.ActionClusterDelete, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -170,7 +180,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionOperatorRead, org.ActionAgentRead,
+			org.ActionOperatorRead, org.ActionClusterRead, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
@@ -228,6 +238,23 @@ func TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator(t *testing.T) {
 		assert.NotContains(t, r.Actions(), "iam:operator.*", string(r))
 	}
 	for _, action := range []string{org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete, org.ActionOperatorReissue} {
+		assert.Contains(t, org.RoleOwner.Actions(), action)
+		assert.Contains(t, org.RoleAdmin.Actions(), action)
+		assert.NotContains(t, org.RoleMember.Actions(), action)
+	}
+}
+
+// TestRoleActions_OnlyOwnerAndAdminStandAClusterUp pins ADR-0184
+// decision 9 as #2045 decided it: every role reads the clusters an org
+// connected, and only the two administrative roles create, change,
+// re-register or delete one, each named and none by `iam:cluster.*`.
+// The read is the control for the member's refusals.
+func TestRoleActions_OnlyOwnerAndAdminStandAClusterUp(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.Contains(t, r.Actions(), org.ActionClusterRead, string(r))
+		assert.NotContains(t, r.Actions(), "iam:cluster.*", string(r))
+	}
+	for _, action := range []string{org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue, org.ActionClusterDelete} {
 		assert.Contains(t, org.RoleOwner.Actions(), action)
 		assert.Contains(t, org.RoleAdmin.Actions(), action)
 		assert.NotContains(t, org.RoleMember.Actions(), action)
@@ -317,7 +344,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionOperatorRead, org.ActionAgentRead,
+			org.ActionOperatorRead, org.ActionClusterRead, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
@@ -329,7 +356,9 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			"iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
 			org.ActionAuditRead,
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
-			org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
+			org.ActionOperatorReissue, org.ActionOperatorDelegate,
+			org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue,
+			org.ActionClusterDelete, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
 			org.ActionCodehubRepoWrite, org.ActionCodehubRepoCreate, org.ActionCodehubRunnerAdminister,

@@ -4266,6 +4266,15 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            /** @description The identifier garam minted is already a cluster's. It is drawn from 64 random bits, so the request is sent again. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getCluster: {

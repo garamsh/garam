@@ -1927,6 +1927,14 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '409':
+          description: >-
+            The identifier garam minted is already a cluster's. It is
+            drawn from 64 random bits, so the request is sent again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     get:
       operationId: listClusters
       tags: [cluster]

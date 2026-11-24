@@ -1215,6 +1215,9 @@ func newFakeClusterStore() *fakeClusterStore {
 func (s *fakeClusterStore) Create(_ context.Context, c *cluster.Cluster) (*cluster.Cluster, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, ok := s.clusters[c.GRN.String()]; ok {
+		return nil, errorx.New(errorx.KindAlreadyExists, "cluster already exists")
+	}
 	stored := *c
 	s.clusters[c.GRN.String()] = &stored
 	answered := stored

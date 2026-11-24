@@ -3,6 +3,7 @@ package api_test
 import (
 	"net/http"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,11 +104,13 @@ func TestCreateCluster_RefusesDetailsItCannotStore(t *testing.T) {
 		long[i] = 'a'
 	}
 	for name, body := range map[string]string{
-		"an empty name":         `{"name":"   "}`,
-		"a name over 100":       `{"name":"` + string(long) + `"}`,
-		"a NUL in the name":     `{"name":"a\u0000b"}`,
-		"a body not an object":  `[]`,
-		"a name that is a list": `{"name":[]}`,
+		"an empty name":            `{"name":"   "}`,
+		"a name over 100":          `{"name":"` + string(long) + `"}`,
+		"a NUL in the name":        `{"name":"a\u0000b"}`,
+		"a body not an object":     `[]`,
+		"a name that is a list":    `{"name":[]}`,
+		"a description over 1000":  `{"description":"` + strings.Repeat("d", 1001) + `"}`,
+		"a NUL in the description": `{"description":"a\u0000b"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := f.do(t, "POST", "/orgs/"+slug+"/clusters", body, owner)
@@ -116,7 +119,9 @@ func TestCreateCluster_RefusesDetailsItCannotStore(t *testing.T) {
 	}
 	rec := f.do(t, "POST", "/orgs/"+slug+"/clusters", `{"name":"`+string(long[:100])+`"}`, owner)
 	assert.Equal(t, http.StatusCreated, rec.Code)
-	assert.Len(t, f.clustersOf(t, slug), 1, "no refused creation was stored")
+	rec = f.do(t, "POST", "/orgs/"+slug+"/clusters", `{"description":"`+strings.Repeat("d", 1000)+`"}`, owner)
+	assert.Equal(t, http.StatusCreated, rec.Code, "the control: a description of 1000")
+	assert.Len(t, f.clustersOf(t, slug), 2, "no refused creation was stored")
 }
 
 // TestCluster_EachRouteOnARecordTakesItsOwnAction holds ADR-0184
@@ -256,4 +261,43 @@ func TestCluster_ARegistrationTokenIsAnsweredOnceAndStoredAsItsHash(t *testing.T
 
 	rec = f.do(t, "POST", "/orgs/"+slug+"/clusters/0000000000000000/registration-token", "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "no token for a record that does not exist")
+}
+
+// TestCluster_AnotherOrganizationsRecordIsReachedByNoRoute holds that a
+// record is addressed by its organization and identifier together: a
+// member of acme holding every cluster action is refused 403 on
+// globex's paths, and globex's identifier under acme's slug is 404, as
+// a record that does not exist is. globex's record is unchanged after
+// each, and its owner reading it is the control.
+func TestCluster_AnotherOrganizationsRecordIsReachedByNoRoute(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	otherOwner := f.sessionCookieFor(t, "other-owner-sub", "Other Owner")
+	otherSlug := createOrg(t, f, otherOwner, "globex")
+	var grants []permission
+	for _, a := range []string{org.ActionClusterRead, org.ActionClusterUpdate, org.ActionClusterDelete} {
+		grants = append(grants, permission{userGRNOf("holder-sub"), a}, permission{userGRNOf("other-owner-sub"), a})
+	}
+	f.permit(append(grants, permission{userGRNOf("other-owner-sub"), org.ActionClusterRegister})...)
+	holder := f.sessionCookieFor(t, "holder-sub", "Holder")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("holder-sub"), org.RoleAdmin)))
+
+	rec := f.do(t, "POST", "/orgs/"+otherSlug+"/clusters", `{"name":"theirs"}`, otherOwner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	theirs := decodeBody[apigen.CreatedCluster](t, rec).Cluster
+	id := theirs.Grn[len(theirs.Grn)-16:]
+
+	for _, route := range []struct{ method, body string }{
+		{"GET", ""}, {"PATCH", `{"name":"taken"}`}, {"DELETE", ""},
+	} {
+		rec = f.do(t, route.method, "/orgs/"+otherSlug+"/clusters/"+id, route.body, holder)
+		assert.Equal(t, http.StatusForbidden, rec.Code, route.method+" on globex's path")
+		rec = f.do(t, route.method, "/orgs/"+slug+"/clusters/"+id, route.body, holder)
+		assert.Equal(t, http.StatusNotFound, rec.Code, route.method+" with globex's identifier under acme")
+	}
+
+	rec = f.do(t, "GET", "/orgs/"+otherSlug+"/clusters/"+id, "", otherOwner)
+	require.Equal(t, http.StatusOK, rec.Code, "the control: globex's owner reads it")
+	assert.Equal(t, theirs, decodeBody[apigen.Cluster](t, rec), "globex's record is unchanged")
 }

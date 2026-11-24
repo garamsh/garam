@@ -409,8 +409,9 @@ app, or on an instance's kind.**
   is added under a cluster's name, and the cluster-connection
   interface's `v1alpha1` paths are served unchanged after it: they
   are `self`-relative and name no kind.
-- **Mirrors are owed in `garamsh/garam-bot`**: ADR 0036 decision 5 (a
-  place's kind becomes an instance's opaque kind), the operator's
+- **Mirrors are owed in `garamsh/garam-bot`** (garam-bot#1246): ADR
+  0036 decision 5 (a place's kind becomes an instance's opaque kind),
+  the operator's
   `operator/docs/architecture/adr/0088-register-a-connector-with-a-one-time-token-and-a-key-it-generates-in-the-cluster.md`
   decisions 1, 8 and 9, `docs/architecture/bot-system.md`, and ADR
   0038's "installation", which becomes an external app connection. The

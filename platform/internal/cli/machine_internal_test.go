@@ -368,8 +368,8 @@ func TestTransitCustodian_HoldsTheTokenOneWayOrTheOther(t *testing.T) {
 	})
 }
 
-// TestInstanceRegistrationLimit_TakesAPositiveBoundAndNoOther holds that
-// GARAM_INSTANCE_REGISTRATION_LIMIT sets the bound REG-8 names and
+// TestInstanceRegistrationLimit_TakesAPositiveBoundAndNoOther holds
+// that GARAM_INSTANCE_REGISTRATION_LIMIT sets the bound REG-8 names and
 // cannot turn it off: unset takes the service's default, a positive
 // number is the bound, and zero, a negative number and a word refuse
 // the start.

@@ -10,7 +10,8 @@ instance's, in `platform/internal/app` ([apps.md](./apps.md)). What a
 connected cluster has beyond that, its declarations, its reports and
 the bot tokens its connector mints, is `platform/internal/cluster`,
 which persists through `platform/internal/cluster/postgres`, keyed by
-the instance's GRN. The wire between garam and the connector is `garamsh/garam-bot-operator`'s interface
+the instance's GRN. The wire between garam and the connector is
+`garamsh/garam-bot-operator`'s interface
 `interfaces/cluster-connection/v1alpha1/`, whose server garam owes and
 serves from `platform/internal/machineapi` §ClusterConnection.
 

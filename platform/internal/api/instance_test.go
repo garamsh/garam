@@ -334,12 +334,12 @@ func TestInstance_ARegistrationTokenIsAnsweredOnceAndStoredAsItsHash(t *testing.
 	assert.Equal(t, http.StatusNotFound, rec.Code, "no token for a record that does not exist")
 }
 
-// TestInstance_AnotherOrganizationsRecordIsReachedByNoRoute holds that a
-// record is addressed by its organization and identifier together: a
+// TestInstance_AnotherOrganizationsRecordIsReachedByNoRoute holds that
+// a record is addressed by its organization and identifier together: a
 // member of acme holding every instance action is refused 403 on
 // globex's paths, and globex's identifier under acme's installation is
-// 404, as a record that does not exist is. globex's record is
-// unchanged after each, and its owner reading it is the control.
+// 404, as a record that does not exist is. globex's record is unchanged
+// after each, and its owner reading it is the control.
 func TestInstance_AnotherOrganizationsRecordIsReachedByNoRoute(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -405,9 +405,9 @@ func TestInstance_AnInstanceOfAnotherInstallationIsNotFoundUnderThisOne(t *testi
 	assert.Equal(t, http.StatusOK, rec.Code, "the control: under its own installation")
 }
 
-// TestCreateInstance_TakesTheAppsInstanceSetting holds ADR-0192 decision
-// 5: an app whose setting is none runs no instance, and one whose
-// setting is one refuses a second 409 while the first stands. The
+// TestCreateInstance_TakesTheAppsInstanceSetting holds ADR-0192
+// decision 5: an app whose setting is none runs no instance, and one
+// whose setting is one refuses a second 409 while the first stands. The
 // first instance of the second app is the control.
 func TestCreateInstance_TakesTheAppsInstanceSetting(t *testing.T) {
 	f := newFixture(t)

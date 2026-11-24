@@ -16,16 +16,16 @@ import (
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
-// identityTokens answers what a token presented on the machine
-// listener stands for, from the domain that issued it, which its
-// prefix names (ADR-0100): an operator's from internal/operator, an
-// agent's and a supervisor's from internal/agent, and an app's
-// instance's from internal/app (ADR-0184, ADR-0192). It is read on every
-// request that presents a token, so what it reads beside the token —
-// the operator's registration, the agent's assignment and lineage, or
-// the supervisor's registration — refuses a deleted operator, a
-// withdrawn key, a re-issued supervisor credential, a reassignment, a
-// recovery or a revocation from the next request.
+// identityTokens answers what a token presented on the machine listener
+// stands for, from the domain that issued it, which its prefix names
+// (ADR-0100): an operator's from internal/operator, an agent's and a
+// supervisor's from internal/agent, and an app's instance's from
+// internal/app (ADR-0184, ADR-0192). It is read on every request that
+// presents a token, so what it reads beside the token — the operator's
+// registration, the agent's assignment and lineage, or the supervisor's
+// registration — refuses a deleted operator, a withdrawn key, a
+// re-issued supervisor credential, a reassignment, a recovery or a
+// revocation from the next request.
 type identityTokens struct {
 	operators   operator.TokenStore
 	agents      agent.AccessTokenStore

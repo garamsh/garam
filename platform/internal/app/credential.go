@@ -16,8 +16,8 @@ import (
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
-// The prefixes an instance's secrets carry, so a scanner recognises one:
-// the one-time registration token, and a token a key was exchanged
+// The prefixes an instance's secrets carry, so a scanner recognises
+// one: the one-time registration token, and a token a key was exchanged
 // for.
 const (
 	RegistrationTokenPrefix = "garam_crt_"
@@ -39,8 +39,8 @@ const (
 	MaxKeyBits = operator.MaxKeyBits
 )
 
-// LiveKeysPerInstance is how many keys an instance may hold at once: the
-// key in use and its successor during the rollover (ROT-4).
+// LiveKeysPerInstance is how many keys an instance may hold at once:
+// the key in use and its successor during the rollover (ROT-4).
 const LiveKeysPerInstance = 2
 
 // RolloverWindow is how long a rotation keeps the predecessor live
@@ -170,8 +170,8 @@ func (k Key) Verifier() operator.Key {
 		Algorithm: operator.KeyAlgorithm, Public: k.Public}
 }
 
-// Token is a token an instance's key was exchanged for. It exists in this
-// value alone, and what is stored is its hash.
+// Token is a token an instance's key was exchanged for. It exists in
+// this value alone, and what is stored is its hash.
 type Token struct {
 	Value     string
 	Instance  grn.GRN

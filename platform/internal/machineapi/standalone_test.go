@@ -67,8 +67,8 @@ func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing
 	}
 }
 
-// TestConfineApps_AnInstanceReachesNoMachineRouteItsAppDoesNotList sends
-// every operation api/machine.yaml declares as the connector's
+// TestConfineApps_AnInstanceReachesNoMachineRouteItsAppDoesNotList
+// sends every operation api/machine.yaml declares as the connector's
 // instance's token and as an agent's. The instance is refused on each
 // (ADR-0192 decision 7, AUTH-4): its app lists the cluster-connection
 // routes alone, which this router does not serve. The agent, the
@@ -100,10 +100,10 @@ func TestConfineApps_AnInstanceReachesNoMachineRouteItsAppDoesNotList(t *testing
 	}
 }
 
-// TestConfineApps_AnInstanceReachesTheMachineOperationsItsAppLists holds
-// that the confinement is read off the record and not off the caller's
-// kind: an instance whose app lists `GET /identity` reaches it, and is
-// still refused a route its app does not list.
+// TestConfineApps_AnInstanceReachesTheMachineOperationsItsAppLists
+// holds that the confinement is read off the record and not off the
+// caller's kind: an instance whose app lists `GET /identity` reaches
+// it, and is still refused a route its app does not list.
 func TestConfineApps_AnInstanceReachesTheMachineOperationsItsAppLists(t *testing.T) {
 	listing := grn.New("acme", app.InstanceType, "00000000000000aa")
 	instanceReach[listing] = machine.ReachOf([]string{http.MethodGet + " /identity"})

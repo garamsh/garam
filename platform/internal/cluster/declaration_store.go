@@ -6,11 +6,11 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 )
 
-// DeclarationStore keeps the declarations placed on each record and
-// the log of their changes (ADR-0187). Each write holds the record's
-// row, appends one change at the record's next position, purges the
-// changes older than ChangeRetention and wakes the record's held polls
-// when it commits. app.ErrInstanceNotFound where the organization holds no
+// DeclarationStore keeps the declarations placed on each record and the
+// log of their changes (ADR-0187). Each write holds the record's row,
+// appends one change at the record's next position, purges the changes
+// older than ChangeRetention and wakes the record's held polls when it
+// commits. app.ErrInstanceNotFound where the organization holds no
 // record under g.
 type DeclarationStore interface {
 	// Declare places object on g under id: a new declaration at

@@ -27,8 +27,8 @@ import (
 
 const connectionTokenURL = "https://machine.garam.test/oauth/token"
 
-// connectedGRN is an instance of an app whose machine operations are the
-// connector's, and otherAppGRN one of an app that lists none.
+// connectedGRN is an instance of an app whose machine operations are
+// the connector's, and otherAppGRN one of an app that lists none.
 var (
 	connectedGRN = grn.New("acme", app.InstanceType, "5f60710a1b2c3d4e")
 	otherAppGRN  = grn.New("acme", app.InstanceType, "0000000000000001")
@@ -329,11 +329,11 @@ func TestClusterConnection_AReportIsRefusedAsREP6AndREP7Refuse(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, status, "the control: a declared kind is handed on: %s", body)
 }
 
-// TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord holds
-// that /oauth/token picks the instance's profile by client_id's GRN
-// type (ADR-0186 decision 4): an instance's assertion reaches the app
-// service and no operator's, and an audience refuses it. An operator's
-// assertion, the control, reaches the operator service.
+// TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord
+// holds that /oauth/token picks the instance's profile by client_id's
+// GRN type (ADR-0186 decision 4): an instance's assertion reaches the
+// app service and no operator's, and an audience refuses it. An
+// operator's assertion, the control, reaches the operator service.
 func TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord(t *testing.T) {
 	operators, clusters := &assertionService{}, &connectionClusters{}
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, operators, &messageService{}, unwatched(t),

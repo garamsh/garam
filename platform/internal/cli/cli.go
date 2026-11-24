@@ -281,9 +281,9 @@ const requestReadTimeout = 30 * time.Second
 const maxRequestBody = 1 << 20
 
 // instanceRegistrationLimit reads how many instance registrations one
-// client address may send a minute (REG-8); unset is zero, which the app
-// service takes as its default. A positive integer is required, so a
-// deployment cannot turn the bound off.
+// client address may send a minute (REG-8); unset is zero, which the
+// app service takes as its default. A positive integer is required, so
+// a deployment cannot turn the bound off.
 func instanceRegistrationLimit() (int, error) {
 	raw := envOr(envInstanceRegistrationLimit, "")
 	if raw == "" {

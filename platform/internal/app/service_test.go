@@ -347,9 +347,9 @@ func TestRegister_RefusesARecordDeletedBeforeItsKeyIsBound(t *testing.T) {
 }
 
 // TestRotate_IsBoundedPerInstanceBeforeAnySignatureIsVerified holds the
-// rotation route's bound: past RotationsPerInstance an instance's request
-// is answered *operator.Exceeded and reaches no verification, and
-// another instance's, the control, is not throttled by it.
+// rotation route's bound: past RotationsPerInstance an instance's
+// request is answered *operator.Exceeded and reaches no verification,
+// and another instance's, the control, is not throttled by it.
 func TestRotate_IsBoundedPerInstanceBeforeAnySignatureIsVerified(t *testing.T) {
 	svc, store := newService(t)
 	for range app.RotationsPerInstance {

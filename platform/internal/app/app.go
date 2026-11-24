@@ -176,9 +176,9 @@ type Installation struct {
 	CreatedAt   time.Time
 }
 
-// NewInstallation installs a in orgGRN over scope, for createdBy. An app
-// the organization may not install is ErrAppNotFound, as one it may not
-// see is.
+// NewInstallation installs a in orgGRN over scope, for createdBy. An
+// app the organization may not install is ErrAppNotFound, as one it may
+// not see is.
 func NewInstallation(orgGRN grn.GRN, a *App, createdBy grn.GRN, scope Scope) (*Installation, error) {
 	if !a.InstallableIn(orgGRN) {
 		return nil, ErrAppNotFound

@@ -86,9 +86,10 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**All ten have this shape today, one in part.** `platform/internal/user`,
-`platform/internal/watch`, `platform/internal/org`,
-`platform/internal/operator`, `platform/internal/app`,
+**All ten have this shape today, one in part.**
+`platform/internal/user`, `platform/internal/watch`,
+`platform/internal/org`, `platform/internal/operator`,
+`platform/internal/app`,
 `platform/internal/cluster`, `platform/internal/agent`,
 `platform/internal/message` and `platform/internal/authn` each keep
 their store in `platform/internal/<domain>/postgres/` (#1083), and

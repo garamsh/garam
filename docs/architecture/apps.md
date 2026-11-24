@@ -175,7 +175,8 @@ first-party service's principal is still ADR-0129's
 - **An installation and an instance are fed to the policy service**,
   as `Iam::Installation` in its organization's `Iam::OrgMembers` beside
   its `Iam::Org`, and `Iam::Instance` in its installation, each with
-  its organization (`platform/migrations/000089_policy_outbox_apps.up.sql`).
+  its organization
+  (`platform/migrations/000089_policy_outbox_apps.up.sql`).
   Creating and deleting either waits for the service to hold the
   change (ADR-0165).
 - **A token reaches the machine operations its app lists, read on

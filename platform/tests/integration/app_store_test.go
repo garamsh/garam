@@ -2,7 +2,10 @@ package integration_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -128,10 +131,13 @@ func TestAppStore_AnInstallationIsOneAndTakesItsInstancesOut(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, listed, 1, "this installation's instances and no other's")
 
-	require.NoError(t, s.DeleteInstallation(ctx, installation.GRN))
+	removed, err := s.DeleteInstallation(ctx, installation.GRN)
+	require.NoError(t, err)
+	assert.Equal(t, []grn.GRN{one.GRN}, removed, "it answers the instance it took, and not another installation's")
 	_, err = s.GetInstance(ctx, one.GRN)
 	assert.ErrorIs(t, err, app.ErrInstanceNotFound, "the installation took its instance")
-	assert.ErrorIs(t, s.DeleteInstallation(ctx, installation.GRN), app.ErrInstallationNotFound)
+	_, err = s.DeleteInstallation(ctx, installation.GRN)
+	assert.ErrorIs(t, err, app.ErrInstallationNotFound)
 	_, err = s.GetInstance(ctx, theirs)
 	assert.NoError(t, err, "the control: another installation's instance")
 
@@ -174,6 +180,81 @@ func TestAppStore_AnAppHoldsTheInstancesItsSettingAdmits(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.CreateInstance(ctx, refused)
 	assert.ErrorIs(t, err, app.ErrNoInstances)
+}
+
+// TestAppStore_ACreationWaitingOnTheInstallationCountsTheInstanceCommittedMeanwhile holds the
+// instance setting under concurrency, on an app set to `one`. A
+// creation holding the installation's row commits its instance while
+// the racers wait on that row, and each racer then counts it and is
+// refused ErrInstanceLimit: a count read before the wait would admit
+// them. A creation after it is deleted, the control, is admitted.
+func TestAppStore_ACreationWaitingOnTheInstallationCountsTheInstanceCommittedMeanwhile(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := apppg.New(p)
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	single := privateApp(t, p, "acme", "acme-deployer", app.InstancesOne)
+	i, err := app.NewInstallation(orgRootGRN("acme"), single, scopedGRN("acme", "user", "ada"), app.Scope{})
+	require.NoError(t, err)
+	installation, err := s.CreateInstallation(ctx, i)
+	require.NoError(t, err)
+
+	// The first creation holds the row, as CreateInstance does; the
+	// racers start while it holds it, and it writes and commits after
+	// they wait.
+	held, err := p.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = held.Rollback(ctx) }()
+	_, err = held.Exec(ctx, `SELECT 1 FROM installations WHERE grn = $1 FOR NO KEY UPDATE`, installation.GRN.String())
+	require.NoError(t, err)
+
+	const racers = 8
+	results := make(chan error, racers)
+	var wg sync.WaitGroup
+	for range racers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			one, err := app.NewInstance(installation, scopedGRN("acme", "user", "ada"), app.DetailsPatch{})
+			if err == nil {
+				_, err = s.CreateInstance(ctx, one)
+			}
+			results <- err
+		}()
+	}
+	require.Eventually(t, func() bool {
+		return countRows(t, p, `SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'`) >= racers
+	}, 10*time.Second, 20*time.Millisecond, "every racer waits on the held row")
+	first, err := app.NewInstance(installation, scopedGRN("acme", "user", "ada"), app.DetailsPatch{})
+	require.NoError(t, err)
+	_, err = held.Exec(ctx, `INSERT INTO instances (grn, org_grn, installation_grn, created_by, created_at, name)
+		VALUES ($1, $2, $3, $4, now(), $5)`, first.GRN.String(), first.Organization.String(),
+		installation.GRN.String(), first.CreatedBy.String(), first.Name)
+	require.NoError(t, err)
+	require.NoError(t, held.Commit(ctx))
+	wg.Wait()
+	close(results)
+
+	var admitted, refused int
+	for err := range results {
+		switch {
+		case err == nil:
+			admitted++
+		case errors.Is(err, app.ErrInstanceLimit):
+			refused++
+		default:
+			t.Fatal(err)
+		}
+	}
+	assert.Equal(t, 0, admitted, "no racer is admitted beside the instance committed while it waited")
+	assert.Equal(t, racers, refused)
+	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM instances WHERE installation_grn = $1`, installation.GRN.String()))
+
+	require.NoError(t, s.DeleteInstance(ctx, first.GRN))
+	again, err := app.NewInstance(installation, scopedGRN("acme", "user", "ada"), app.DetailsPatch{})
+	require.NoError(t, err)
+	_, err = s.CreateInstance(ctx, again)
+	assert.NoError(t, err, "the control: the one it held is gone")
 }
 
 // TestAppStore_RefusesAnInstanceNamingAnotherOrganization holds the

@@ -1308,19 +1308,21 @@ func (s *fakeAppStore) ListInstallations(_ context.Context, orgGRN grn.GRN) ([]*
 	return out, nil
 }
 
-func (s *fakeAppStore) DeleteInstallation(_ context.Context, g grn.GRN) error {
+func (s *fakeAppStore) DeleteInstallation(_ context.Context, g grn.GRN) ([]grn.GRN, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.installations[g.String()]; !ok {
-		return app.ErrInstallationNotFound
+		return nil, app.ErrInstallationNotFound
 	}
 	delete(s.installations, g.String())
+	var removed []grn.GRN
 	for k, i := range s.instances {
 		if i.Installation == g {
+			removed = append(removed, i.GRN)
 			delete(s.instances, k)
 		}
 	}
-	return nil
+	return removed, nil
 }
 
 func (s *fakeAppStore) CreateInstance(_ context.Context, i *app.Instance) (*app.Instance, error) {

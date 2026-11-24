@@ -167,11 +167,13 @@ first-party service's principal is still ADR-0129's
   000088 holds one installation per app and organization, an
   installation's GRN naming its app's slug, an instance's GRN naming
   its installation's organization, and an app's GRN naming its owner
-  or `root`. `CreateInstance` reads the app's instance setting while
-  it holds the installation's row, so two creations racing an app set
-  to `one` admit one. Deleting an installation deletes its instances,
-  and their keys and tokens with them; deleting an organization
-  deletes its installations and its own apps.
+  or `root`. `CreateInstance` holds the installation's row and then
+  counts its instances in a statement of its own, which reads after the
+  lock is granted, so two creations racing an app set to `one` admit
+  one. Deleting an installation holds the same row, deletes its
+  instances, and their keys and tokens with them, and answers the
+  instances it deleted, which the route waits on in the policy feed;
+  deleting an organization deletes its installations and its own apps.
 - **An installation and an instance are fed to the policy service**,
   as `Iam::Installation` in its organization's `Iam::OrgMembers` beside
   its `Iam::Org`, and `Iam::Instance` in its installation, each with

@@ -96,16 +96,33 @@ func (s *Store) ListInstallations(ctx context.Context, orgGRN grn.GRN) ([]*app.I
 }
 
 // DeleteInstallation removes the installation under g, and its
-// instances with it.
-func (s *Store) DeleteInstallation(ctx context.Context, g grn.GRN) error {
-	n, err := s.q.DeleteInstallation(ctx, g.String())
+// instances with it, in one transaction holding the installation's
+// row, and answers the instances it removed.
+func (s *Store) DeleteInstallation(ctx context.Context, g grn.GRN) ([]grn.GRN, error) {
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return pgxerr.Classify(err, "delete installation", nil, nil)
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	n, err := q.LockInstallation(ctx, g.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "lock installation", nil, nil)
 	}
 	if n == 0 {
-		return app.ErrInstallationNotFound
+		return nil, app.ErrInstallationNotFound
 	}
-	return nil
+	removed, err := q.DeleteInstallationInstances(ctx, g.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "delete instances", nil, nil)
+	}
+	if _, err := q.DeleteInstallation(ctx, g.String()); err != nil {
+		return nil, pgxerr.Classify(err, "delete installation", nil, nil)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errorx.Wrap(err, "commit", errorx.KindUnavailable)
+	}
+	return storedGRNs("instance", removed...)
 }
 
 // CreateInstance inserts the instance where its app's instance setting
@@ -121,7 +138,11 @@ func (s *Store) CreateInstance(ctx context.Context, i *app.Instance) (*app.Insta
 	if err != nil {
 		return nil, pgxerr.Classify(err, "hold installation", app.ErrInstallationNotFound, nil)
 	}
-	if err := app.Instances(held.Instances).Admit(int(held.Held)); err != nil {
+	count, err := q.CountInstances(ctx, i.Installation.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "count instances", nil, nil)
+	}
+	if err := app.Instances(held).Admit(int(count)); err != nil {
 		return nil, err
 	}
 	row, err := q.CreateInstance(ctx, db.CreateInstanceParams{

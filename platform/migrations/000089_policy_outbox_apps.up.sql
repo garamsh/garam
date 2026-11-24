@@ -158,7 +158,8 @@ LANGUAGE sql STABLE AS $$
             WHERE p_type = 'Iam::Installation' AND grn = p_id
         UNION ALL
         SELECT org_grn, NULL FROM instances
-            WHERE p_type = 'Iam::Instance' AND grn = p_id        UNION ALL
+            WHERE p_type = 'Iam::Instance' AND grn = p_id
+        UNION ALL
         SELECT g.org_grn, NULL FROM agent_supervisors v
             JOIN agents g ON g.grn = v.agent_grn
             WHERE p_type = 'Iam::Supervisor' AND v.grn = p_id

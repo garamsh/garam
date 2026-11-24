@@ -65,7 +65,9 @@ func TestPolicyOutbox_AnInstallationAndItsInstancesMarkThemselves(t *testing.T) 
 			func() {
 				second = instancesOf(t, p, installation, 1)[0]
 				execSQL(t, p, `DELETE FROM policy_outbox WHERE entity_type = 'Iam::Instance'`)
-				require.NoError(t, s.DeleteInstallation(ctx, installation.GRN))
+				removed, err := s.DeleteInstallation(ctx, installation.GRN)
+				require.NoError(t, err)
+				assert.Equal(t, []grn.GRN{second}, removed, "it answers the instance it took")
 			},
 			func() []string { return []string{installationMark(installation.GRN), instanceMark(second)} }},
 	}

@@ -52,6 +52,17 @@ func (q *Queries) BindInstanceKey(ctx context.Context, arg BindInstanceKeyParams
 	return err
 }
 
+const countInstances = `-- name: CountInstances :one
+SELECT count(*)::bigint FROM instances WHERE installation_grn = $1
+`
+
+func (q *Queries) CountInstances(ctx context.Context, installationGrn string) (int64, error) {
+	row := q.db.QueryRow(ctx, countInstances, installationGrn)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createInstallation = `-- name: CreateInstallation :one
 INSERT INTO installations (grn, org_grn, app_grn, scope, project_grns, created_by, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -144,6 +155,30 @@ func (q *Queries) DeleteInstallation(ctx context.Context, grn string) (int64, er
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const deleteInstallationInstances = `-- name: DeleteInstallationInstances :many
+DELETE FROM instances WHERE installation_grn = $1 RETURNING grn
+`
+
+func (q *Queries) DeleteInstallationInstances(ctx context.Context, installationGrn string) ([]string, error) {
+	rows, err := q.db.Query(ctx, deleteInstallationInstances, installationGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var grn string
+		if err := rows.Scan(&grn); err != nil {
+			return nil, err
+		}
+		items = append(items, grn)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteInstance = `-- name: DeleteInstance :execrows
@@ -278,27 +313,23 @@ func (q *Queries) GetLiveInstanceKey(ctx context.Context, arg GetLiveInstanceKey
 }
 
 const holdInstallation = `-- name: HoldInstallation :one
-SELECT a.instances,
-       (SELECT count(*) FROM instances i WHERE i.installation_grn = n.grn)::bigint AS held
+SELECT a.instances
 FROM installations n JOIN apps a ON a.grn = n.app_grn
 WHERE n.grn = $1
 FOR NO KEY UPDATE OF n
 `
 
-type HoldInstallationRow struct {
-	Instances string
-	Held      int64
-}
-
 // Held before an instance of it is written, so two creations of an
-// app's one instance commit one after the other and the second sees
-// the first. It answers the app's instance setting and how many
-// instances the installation holds.
-func (q *Queries) HoldInstallation(ctx context.Context, grn string) (HoldInstallationRow, error) {
+// app's one instance commit one after the other. It answers the app's
+// instance setting; CountInstances, a statement of its own, reads
+// after the lock is granted, so the second creation counts the
+// first's instance. A count in this statement would read the snapshot
+// taken before the lock was waited on.
+func (q *Queries) HoldInstallation(ctx context.Context, grn string) (string, error) {
 	row := q.db.QueryRow(ctx, holdInstallation, grn)
-	var i HoldInstallationRow
-	err := row.Scan(&i.Instances, &i.Held)
-	return i, err
+	var instances string
+	err := row.Scan(&instances)
+	return instances, err
 }
 
 const holdInstance = `-- name: HoldInstance :one
@@ -526,6 +557,22 @@ func (q *Queries) ListInstances(ctx context.Context, installationGrn string) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockInstallation = `-- name: LockInstallation :execrows
+SELECT 1 FROM installations WHERE grn = $1 FOR UPDATE
+`
+
+// Taken before an installation is deleted, so a creation of an
+// instance of it either commits first, and its instance is among those
+// DeleteInstallationInstances answers, or waits and finds the
+// installation gone.
+func (q *Queries) LockInstallation(ctx context.Context, grn string) (int64, error) {
+	result, err := q.db.Exec(ctx, lockInstallation, grn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const recordInstanceToken = `-- name: RecordInstanceToken :exec

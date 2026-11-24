@@ -228,19 +228,15 @@ func (s *Server) DeleteInstallation(w http.ResponseWriter, r *http.Request, orgS
 		return
 	}
 	// The deletion takes the installation's instances, and each of
-	// those marks its instance, so the answer waits for them too.
-	instances, err := stores.records.ListInstances(r.Context(), installation.GRN)
+	// those marks its instance, so the answer waits for those it took.
+	removed, err := stores.records.DeleteInstallation(r.Context(), installation.GRN)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	marks := []policyfeed.Entity{{Type: policyfeed.InstallationType, ID: installation.GRN.String()}}
-	for _, i := range instances {
-		marks = append(marks, policyfeed.Entity{Type: policyfeed.InstanceType, ID: i.GRN.String()})
-	}
-	if err := stores.records.DeleteInstallation(r.Context(), installation.GRN); err != nil {
-		writeError(w, err)
-		return
+	for _, g := range removed {
+		marks = append(marks, policyfeed.Entity{Type: policyfeed.InstanceType, ID: g.String()})
 	}
 	if err := s.awaitMarks(r.Context(), orgGRN(orgSlug).String(), marks...); err != nil {
 		writeError(w, err)

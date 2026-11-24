@@ -18,19 +18,33 @@ SELECT * FROM installations WHERE grn = $1;
 -- name: ListInstallations :many
 SELECT * FROM installations WHERE org_grn = $1 ORDER BY grn;
 
+-- Taken before an installation is deleted, so a creation of an
+-- instance of it either commits first, and its instance is among those
+-- DeleteInstallationInstances answers, or waits and finds the
+-- installation gone.
+-- name: LockInstallation :execrows
+SELECT 1 FROM installations WHERE grn = $1 FOR UPDATE;
+
+-- name: DeleteInstallationInstances :many
+DELETE FROM instances WHERE installation_grn = $1 RETURNING grn;
+
 -- name: DeleteInstallation :execrows
 DELETE FROM installations WHERE grn = $1;
 
 -- Held before an instance of it is written, so two creations of an
--- app's one instance commit one after the other and the second sees
--- the first. It answers the app's instance setting and how many
--- instances the installation holds.
+-- app's one instance commit one after the other. It answers the app's
+-- instance setting; CountInstances, a statement of its own, reads
+-- after the lock is granted, so the second creation counts the
+-- first's instance. A count in this statement would read the snapshot
+-- taken before the lock was waited on.
 -- name: HoldInstallation :one
-SELECT a.instances,
-       (SELECT count(*) FROM instances i WHERE i.installation_grn = n.grn)::bigint AS held
+SELECT a.instances
 FROM installations n JOIN apps a ON a.grn = n.app_grn
 WHERE n.grn = $1
 FOR NO KEY UPDATE OF n;
+
+-- name: CountInstances :one
+SELECT count(*)::bigint FROM instances WHERE installation_grn = $1;
 
 -- name: CreateInstance :one
 INSERT INTO instances (grn, org_grn, installation_grn, created_by, created_at, name, description, kind)

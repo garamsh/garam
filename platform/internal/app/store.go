@@ -26,8 +26,9 @@ type Store interface {
 	// ordered by GRN.
 	ListInstallations(ctx context.Context, orgGRN grn.GRN) ([]*Installation, error)
 	// DeleteInstallation removes the installation with its instances,
-	// their keys and their tokens, or answers ErrInstallationNotFound.
-	DeleteInstallation(ctx context.Context, g grn.GRN) error
+	// their keys and their tokens, and answers the instances it removed,
+	// or answers ErrInstallationNotFound.
+	DeleteInstallation(ctx context.Context, g grn.GRN) ([]grn.GRN, error)
 
 	// CreateInstance records the instance and answers it as stored,
 	// where the instance setting of its installation's app admits one

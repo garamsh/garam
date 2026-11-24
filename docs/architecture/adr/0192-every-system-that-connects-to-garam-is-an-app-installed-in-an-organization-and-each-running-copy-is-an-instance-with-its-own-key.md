@@ -277,8 +277,11 @@ branches on which app, or on an instance's kind.**
 
 - **What this supersedes and amends.**
   - ADR-0184 decisions 1, 2 and 9 are superseded by decisions 1 and 9:
-    the cluster record becomes an instance. Its decisions 3 to 8 and
-    10 stand, read for every instance (decision 5).
+    the cluster record becomes an instance. Its decisions 3 to 8
+    stand, read for every instance (decision 5). Its decision 10
+    stands for the connector, read through decision 7: the
+    connector's machine operations are the cluster-connection routes,
+    and the mint is the bot-token exchange of decision 10.
   - ADR-0187 decision 1 is superseded by decision 10. Its other
     decisions stand, in the bot domain.
   - ADR-0185 is amended: every connector garam reaches, aurora's and

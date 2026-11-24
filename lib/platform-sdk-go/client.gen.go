@@ -1236,6 +1236,35 @@ type ClusterCreation struct {
 	Name *ClusterName `json:"name,omitempty"`
 }
 
+// ClusterDeclaration One declaration placed on a connected cluster, which its connector applies (ADR-0187).
+type ClusterDeclaration struct {
+	// Cluster The GRN of the cluster it is placed on.
+	Cluster   string    `json:"cluster"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Generation 1 when placed, and one more at every write.
+	Generation int64  `json:"generation"`
+	Id         string `json:"id"`
+
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+	Object    ClusterDeclaredObject `json:"object"`
+	UpdatedAt time.Time             `json:"updatedAt"`
+}
+
+// ClusterDeclarationList defines model for ClusterDeclarationList.
+type ClusterDeclarationList struct {
+	Declarations []ClusterDeclaration `json:"declarations"`
+}
+
+// ClusterDeclarationWrite defines model for ClusterDeclarationWrite.
+type ClusterDeclarationWrite struct {
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+	Object ClusterDeclaredObject `json:"object"`
+}
+
+// ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+type ClusterDeclaredObject = json.RawMessage
+
 // ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 type ClusterDescription = string
 
@@ -2280,6 +2309,9 @@ type ClusterSlug = string
 // ContractVersion defines model for contractVersion.
 type ContractVersion = string
 
+// DeclarationID defines model for declaration.
+type DeclarationID = string
+
 // GroupSlug defines model for group.
 type GroupSlug = string
 
@@ -2531,6 +2563,12 @@ type CreateClusterJSONRequestBody = ClusterCreation
 
 // UpdateClusterJSONRequestBody defines body for UpdateCluster for application/json ContentType.
 type UpdateClusterJSONRequestBody = ClusterPatch
+
+// CreateClusterDeclarationJSONRequestBody defines body for CreateClusterDeclaration for application/json ContentType.
+type CreateClusterDeclarationJSONRequestBody = ClusterDeclarationWrite
+
+// PutClusterDeclarationJSONRequestBody defines body for PutClusterDeclaration for application/json ContentType.
+type PutClusterDeclarationJSONRequestBody = ClusterDeclarationWrite
 
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
@@ -3115,6 +3153,63 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
 	UpdateCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListClusterDeclarations List the declarations placed on a connected cluster. Requires the `member` role.
+	//
+	// The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations (the `ListClusterDeclarations` operationId).
+	ListClusterDeclarations(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateClusterDeclarationWithBody Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+	//
+	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
+	CreateClusterDeclarationWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateClusterDeclaration Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+	//
+	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
+	CreateClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteClusterDeclaration Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+	//
+	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `DeleteClusterDeclaration` operationId).
+	DeleteClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetClusterDeclaration Read one live declaration placed on a connected cluster. Requires the `member` role.
+	//
+	// A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `GetClusterDeclaration` operationId).
+	GetClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutClusterDeclarationWithBody Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+	//
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
+	PutClusterDeclarationWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutClusterDeclaration Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+	//
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
+	PutClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListClusterKeys List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
 	//
@@ -4740,6 +4835,133 @@ func (c *Client) UpdateClusterWithBody(ctx context.Context, org Org, clusterSlug
 // Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
 func (c *Client) UpdateCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateClusterRequest(c.Server, org, clusterSlug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListClusterDeclarations List the declarations placed on a connected cluster. Requires the `member` role.
+//
+// The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations (the `ListClusterDeclarations` operationId).
+func (c *Client) ListClusterDeclarations(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListClusterDeclarationsRequest(c.Server, org, clusterSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateClusterDeclarationWithBody Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+//
+// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
+func (c *Client) CreateClusterDeclarationWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateClusterDeclarationRequestWithBody(c.Server, org, clusterSlug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateClusterDeclaration Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+//
+// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
+func (c *Client) CreateClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateClusterDeclarationRequest(c.Server, org, clusterSlug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteClusterDeclaration Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+//
+// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+//
+// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `DeleteClusterDeclaration` operationId).
+func (c *Client) DeleteClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteClusterDeclarationRequest(c.Server, org, clusterSlug, declarationID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetClusterDeclaration Read one live declaration placed on a connected cluster. Requires the `member` role.
+//
+// A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `GetClusterDeclaration` operationId).
+func (c *Client) GetClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterDeclarationRequest(c.Server, org, clusterSlug, declarationID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutClusterDeclarationWithBody Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+//
+// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
+func (c *Client) PutClusterDeclarationWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutClusterDeclarationRequestWithBody(c.Server, org, clusterSlug, declarationID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutClusterDeclaration Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+//
+// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
+func (c *Client) PutClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutClusterDeclarationRequest(c.Server, org, clusterSlug, declarationID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7846,6 +8068,258 @@ func NewUpdateClusterRequestWithBody(server string, org Org, clusterSlug Cluster
 	}
 
 	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListClusterDeclarationsRequest constructs an http.Request for the ListClusterDeclarations method
+func NewListClusterDeclarationsRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateClusterDeclarationRequest calls the generic CreateClusterDeclaration builder with application/json body
+func NewCreateClusterDeclarationRequest(server string, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateClusterDeclarationRequestWithBody(server, org, clusterSlug, "application/json", bodyReader)
+}
+
+// NewCreateClusterDeclarationRequestWithBody constructs an http.Request for the CreateClusterDeclaration method, with any body, and a specified content type
+func NewCreateClusterDeclarationRequestWithBody(server string, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteClusterDeclarationRequest constructs an http.Request for the DeleteClusterDeclaration method
+func NewDeleteClusterDeclarationRequest(server string, org Org, clusterSlug ClusterSlug, declarationID DeclarationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetClusterDeclarationRequest constructs an http.Request for the GetClusterDeclaration method
+func NewGetClusterDeclarationRequest(server string, org Org, clusterSlug ClusterSlug, declarationID DeclarationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutClusterDeclarationRequest calls the generic PutClusterDeclaration builder with application/json body
+func NewPutClusterDeclarationRequest(server string, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutClusterDeclarationRequestWithBody(server, org, clusterSlug, declarationID, "application/json", bodyReader)
+}
+
+// NewPutClusterDeclarationRequestWithBody constructs an http.Request for the PutClusterDeclaration method, with any body, and a specified content type
+func NewPutClusterDeclarationRequestWithBody(server string, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -11242,6 +11716,69 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
 	UpdateClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error)
 
+	// ListClusterDeclarationsWithResponse List the declarations placed on a connected cluster. Requires the `member` role.
+	//
+	// The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations (the `ListClusterDeclarations` operationId).
+	ListClusterDeclarationsWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ListClusterDeclarationsResponse, error)
+
+	// CreateClusterDeclarationWithBodyWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+	//
+	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
+	CreateClusterDeclarationWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClusterDeclarationResponse, error)
+
+	// CreateClusterDeclarationWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+	//
+	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
+	CreateClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClusterDeclarationResponse, error)
+
+	// DeleteClusterDeclarationWithResponse Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+	//
+	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `DeleteClusterDeclaration` operationId).
+	DeleteClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*DeleteClusterDeclarationResponse, error)
+
+	// GetClusterDeclarationWithResponse Read one live declaration placed on a connected cluster. Requires the `member` role.
+	//
+	// A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `GetClusterDeclaration` operationId).
+	GetClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*GetClusterDeclarationResponse, error)
+
+	// PutClusterDeclarationWithBodyWithResponse Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+	//
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
+	PutClusterDeclarationWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutClusterDeclarationResponse, error)
+
+	// PutClusterDeclarationWithResponse Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+	//
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
+	PutClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*PutClusterDeclarationResponse, error)
+
 	// ListClusterKeysWithResponse List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
 	//
 	// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
@@ -14295,6 +14832,365 @@ func (r UpdateClusterResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateClusterResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListClusterDeclarationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterDeclarationList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListClusterDeclarationsResponse) GetJSON200() *ClusterDeclarationList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListClusterDeclarationsResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListClusterDeclarationsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListClusterDeclarationsResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListClusterDeclarationsResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ListClusterDeclarationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListClusterDeclarationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListClusterDeclarationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListClusterDeclarationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateClusterDeclarationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ClusterDeclaration
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateClusterDeclarationResponse) GetJSON201() *ClusterDeclaration {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateClusterDeclarationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateClusterDeclarationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateClusterDeclarationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateClusterDeclarationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateClusterDeclarationResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateClusterDeclarationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateClusterDeclarationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateClusterDeclarationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateClusterDeclarationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteClusterDeclarationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteClusterDeclarationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteClusterDeclarationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteClusterDeclarationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteClusterDeclarationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteClusterDeclarationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteClusterDeclarationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteClusterDeclarationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteClusterDeclarationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetClusterDeclarationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterDeclaration
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetClusterDeclarationResponse) GetJSON200() *ClusterDeclaration {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetClusterDeclarationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetClusterDeclarationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetClusterDeclarationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetClusterDeclarationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetClusterDeclarationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetClusterDeclarationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetClusterDeclarationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetClusterDeclarationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutClusterDeclarationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterDeclaration
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ClusterDeclaration
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutClusterDeclarationResponse) GetJSON200() *ClusterDeclaration {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PutClusterDeclarationResponse) GetJSON201() *ClusterDeclaration {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutClusterDeclarationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PutClusterDeclarationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutClusterDeclarationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PutClusterDeclarationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PutClusterDeclarationResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PutClusterDeclarationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutClusterDeclarationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutClusterDeclarationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutClusterDeclarationResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19152,6 +20048,111 @@ func (c *ClientWithResponses) UpdateClusterWithResponse(ctx context.Context, org
 	return ParseUpdateClusterResponse(rsp)
 }
 
+// ListClusterDeclarationsWithResponse List the declarations placed on a connected cluster. Requires the `member` role.
+//
+// The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations (the `ListClusterDeclarations` operationId).
+func (c *ClientWithResponses) ListClusterDeclarationsWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ListClusterDeclarationsResponse, error) {
+	rsp, err := c.ListClusterDeclarations(ctx, org, clusterSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListClusterDeclarationsResponse(rsp)
+}
+
+// CreateClusterDeclarationWithBodyWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+//
+// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
+func (c *ClientWithResponses) CreateClusterDeclarationWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClusterDeclarationResponse, error) {
+	rsp, err := c.CreateClusterDeclarationWithBody(ctx, org, clusterSlug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateClusterDeclarationResponse(rsp)
+}
+
+// CreateClusterDeclarationWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+//
+// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. The object is refused unless it is a declared kind with a namespace, a name and a spec, names no image and names each secret as `<secret-name>/<key>`; garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
+func (c *ClientWithResponses) CreateClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClusterDeclarationResponse, error) {
+	rsp, err := c.CreateClusterDeclaration(ctx, org, clusterSlug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateClusterDeclarationResponse(rsp)
+}
+
+// DeleteClusterDeclarationWithResponse Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+//
+// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `DeleteClusterDeclaration` operationId).
+func (c *ClientWithResponses) DeleteClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*DeleteClusterDeclarationResponse, error) {
+	rsp, err := c.DeleteClusterDeclaration(ctx, org, clusterSlug, declarationID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteClusterDeclarationResponse(rsp)
+}
+
+// GetClusterDeclarationWithResponse Read one live declaration placed on a connected cluster. Requires the `member` role.
+//
+// A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `GetClusterDeclaration` operationId).
+func (c *ClientWithResponses) GetClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*GetClusterDeclarationResponse, error) {
+	rsp, err := c.GetClusterDeclaration(ctx, org, clusterSlug, declarationID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetClusterDeclarationResponse(rsp)
+}
+
+// PutClusterDeclarationWithBodyWithResponse Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+//
+// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
+func (c *ClientWithResponses) PutClusterDeclarationWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutClusterDeclarationResponse, error) {
+	rsp, err := c.PutClusterDeclarationWithBody(ctx, org, clusterSlug, declarationID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutClusterDeclarationResponse(rsp)
+}
+
+// PutClusterDeclarationWithResponse Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+//
+// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
+func (c *ClientWithResponses) PutClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*PutClusterDeclarationResponse, error) {
+	rsp, err := c.PutClusterDeclaration(ctx, org, clusterSlug, declarationID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutClusterDeclarationResponse(rsp)
+}
+
 // ListClusterKeysWithResponse List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
 //
 // Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
@@ -22138,6 +23139,293 @@ func ParseUpdateClusterResponse(rsp *http.Response) (*UpdateClusterResponse, err
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListClusterDeclarationsResponse parses an HTTP response from a ListClusterDeclarationsWithResponse call
+func ParseListClusterDeclarationsResponse(rsp *http.Response) (*ListClusterDeclarationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListClusterDeclarationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterDeclarationList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateClusterDeclarationResponse parses an HTTP response from a CreateClusterDeclarationWithResponse call
+func ParseCreateClusterDeclarationResponse(rsp *http.Response) (*CreateClusterDeclarationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateClusterDeclarationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ClusterDeclaration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteClusterDeclarationResponse parses an HTTP response from a DeleteClusterDeclarationWithResponse call
+func ParseDeleteClusterDeclarationResponse(rsp *http.Response) (*DeleteClusterDeclarationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteClusterDeclarationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetClusterDeclarationResponse parses an HTTP response from a GetClusterDeclarationWithResponse call
+func ParseGetClusterDeclarationResponse(rsp *http.Response) (*GetClusterDeclarationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClusterDeclarationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterDeclaration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutClusterDeclarationResponse parses an HTTP response from a PutClusterDeclarationWithResponse call
+func ParsePutClusterDeclarationResponse(rsp *http.Response) (*PutClusterDeclarationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutClusterDeclarationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterDeclaration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ClusterDeclaration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

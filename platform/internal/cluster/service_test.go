@@ -139,7 +139,7 @@ var liveToken = "garam_crt_" + "0123456789abcdef0123456789abcdef0123456789abcdef
 func newService(t *testing.T) (cluster.Service, *credentials) {
 	testKeys(t)
 	store := &credentials{t: t}
-	return cluster.NewService(store, cluster.Config{TokenEndpoint: tokenURL, RotationURL: rotationURL}), store
+	return cluster.NewService(store, nil, cluster.Config{TokenEndpoint: tokenURL, RotationURL: rotationURL}), store
 }
 
 // TestRegister_SpendsTheTokenBeforeTheKeyIsRead holds REG-3: a token
@@ -199,7 +199,7 @@ func TestRegister_ThrottlesBeforeTheTokenIsRead(t *testing.T) {
 func TestRegister_TakesTheConfiguredBound(t *testing.T) {
 	testKeys(t)
 	throttled := func(cfg cluster.Config) bool {
-		svc := cluster.NewService(&credentials{t: t}, cfg)
+		svc := cluster.NewService(&credentials{t: t}, nil, cfg)
 		for range 2 {
 			_, _ = svc.Register(context.Background(), "192.0.2.1", "garam_crt_bad", nil)
 		}
@@ -374,7 +374,7 @@ func TestRotate_IsBoundedPerClusterBeforeAnySignatureIsVerified(t *testing.T) {
 // serving the route, the control, reaches the proof.
 func TestRotate_AnswersAListenerServingNoRotationAsGaramsFailure(t *testing.T) {
 	testKeys(t)
-	unserved := cluster.NewService(&credentials{t: t}, cluster.Config{TokenEndpoint: tokenURL})
+	unserved := cluster.NewService(&credentials{t: t}, nil, cluster.Config{TokenEndpoint: tokenURL})
 	_, err := unserved.Rotate(context.Background(), self, publicJWK(t, next), "", "")
 	assert.ErrorIs(t, err, cluster.ErrRotationUnavailable)
 

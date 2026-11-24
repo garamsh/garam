@@ -20,14 +20,20 @@ const (
 // replaces it.
 const RegistrationsPerSource = 10
 
+// WatchesPerCluster bounds the declaration polls one cluster sends per
+// operator.ExchangeWindow (ADR-0187 decision 7): three pages a second
+// through a full set, and far past one held poll's pace.
+const WatchesPerCluster = 300
+
 // RotationsPerCluster bounds the rotation requests one cluster sends
 // per operator.ExchangeWindow, counted before a signature is verified.
 // A connector rotates once a key's life and repeats only a lost answer
 // (ROT-5), so the bound is far past what one needs.
 const RotationsPerCluster = 10
 
-// Config holds the clock and the two absolute URLs a cluster's signed
-// requests name as their audience.
+// Config holds the clock, the two absolute URLs a cluster's signed
+// requests name as their audience, and how a declarations poll is
+// paged and held.
 type Config struct {
 	// Now supplies the current time; zero takes time.Now.
 	Now func() time.Time
@@ -41,11 +47,21 @@ type Config struct {
 	// sends per operator.ExchangeWindow; zero takes
 	// RegistrationsPerSource. A deployment always has a bound.
 	RegistrationLimit int
+	// Wakes is where a held declarations poll waits for a write to its
+	// record; nil holds each poll until its recheck.
+	Wakes *Wakes
+	// DeclarationPageSize is how many changes a page answers; zero
+	// takes DeclarationPageSize.
+	DeclarationPageSize int
+	// DeclarationRecheck is how often a held poll reads again unwoken;
+	// zero takes DeclarationRecheck.
+	DeclarationRecheck time.Duration
 }
 
 // Service is how a cluster's connector registers, exchanges its key
-// for tokens and rotates it (ADR-0184 decisions 3 to 6). A member's
-// half, the registration token, is [IssueRegistrationToken].
+// for tokens, rotates it (ADR-0184 decisions 3 to 6) and reads what is
+// declared for it (ADR-0187). A member's halves are
+// [IssueRegistrationToken] and [Declare].
 type Service interface {
 	// Register spends token and binds jwk to its cluster, answering
 	// the cluster. source is the client's address: past
@@ -59,36 +75,55 @@ type Service interface {
 	// authorization, signed by a live key and naming jwk's thumbprint,
 	// and proof, signed by jwk (ROT-1 to ROT-4).
 	Rotate(ctx context.Context, caller grn.GRN, jwk []byte, authorization, proof string) (Rotation, error)
+	// WatchDeclarations answers caller's changes after after, holding
+	// an empty page up to wait (DECL-1 to DECL-6). A full set's page is
+	// answered at once, empty or not, and a record deleted meanwhile is
+	// operator.ErrClientInvalid.
+	WatchDeclarations(ctx context.Context, caller grn.GRN, after *string, wait time.Duration) (Page, error)
 }
 
 type service struct {
-	credentials CredentialStore
-	cfg         Config
+	credentials  CredentialStore
+	declarations DeclarationStore
+	cfg          Config
 	// perSource bounds registrations and exchanges per address before
 	// anything is read; perClient each cluster's verified exchanges.
 	registrations *operator.Limiter
 	perSource     *operator.Limiter
 	perClient     *operator.Limiter
-	// rotations bounds each cluster's rotation requests.
+	// rotations bounds each cluster's rotation requests, and watches
+	// its declaration polls.
 	rotations *operator.Limiter
+	watches   *operator.Limiter
 }
 
-// NewService constructs the service over a cluster's credentials.
-func NewService(credentials CredentialStore, cfg Config) Service {
+// NewService constructs the service over a cluster's credentials and
+// the declarations placed on it.
+func NewService(credentials CredentialStore, declarations DeclarationStore, cfg Config) Service {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
 	if cfg.RegistrationLimit == 0 {
 		cfg.RegistrationLimit = RegistrationsPerSource
 	}
+	if cfg.Wakes == nil {
+		cfg.Wakes = NewWakes()
+	}
+	if cfg.DeclarationPageSize == 0 {
+		cfg.DeclarationPageSize = DeclarationPageSize
+	}
+	if cfg.DeclarationRecheck == 0 {
+		cfg.DeclarationRecheck = DeclarationRecheck
+	}
 	limiter := func(limit int) *operator.Limiter {
 		return operator.NewLimiter(operator.LimiterConfig{Limit: limit, Window: operator.ExchangeWindow,
 			MaxKeys: operator.TrackedClients, Now: cfg.Now})
 	}
-	return &service{credentials: credentials, cfg: cfg,
+	return &service{credentials: credentials, declarations: declarations, cfg: cfg,
 		registrations: limiter(cfg.RegistrationLimit),
 		perSource:     limiter(operator.ExchangesPerSource),
 		perClient:     limiter(operator.ExchangesPerClient),
 		rotations:     limiter(RotationsPerCluster),
+		watches:       limiter(WatchesPerCluster),
 	}
 }

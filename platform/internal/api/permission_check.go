@@ -127,6 +127,7 @@ var actionRules = map[string]actionRule{
 	org.ActionClusterUpdate:   {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionClusterReissue:  {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionClusterDelete:   {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionClusterDeclare:  {on: []apigen.PermissionResourceType{onOrg}},
 
 	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
 	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},

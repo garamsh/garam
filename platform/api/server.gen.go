@@ -6,6 +6,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -1233,6 +1234,35 @@ type ClusterCreation struct {
 	Name *ClusterName `json:"name,omitempty"`
 }
 
+// ClusterDeclaration One declaration placed on a connected cluster, which its connector applies (ADR-0187).
+type ClusterDeclaration struct {
+	// Cluster The GRN of the cluster it is placed on.
+	Cluster   string    `json:"cluster"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Generation 1 when placed, and one more at every write.
+	Generation int64  `json:"generation"`
+	Id         string `json:"id"`
+
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+	Object    ClusterDeclaredObject `json:"object"`
+	UpdatedAt time.Time             `json:"updatedAt"`
+}
+
+// ClusterDeclarationList defines model for ClusterDeclarationList.
+type ClusterDeclarationList struct {
+	Declarations []ClusterDeclaration `json:"declarations"`
+}
+
+// ClusterDeclarationWrite defines model for ClusterDeclarationWrite.
+type ClusterDeclarationWrite struct {
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+	Object ClusterDeclaredObject `json:"object"`
+}
+
+// ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. In `spec`, a member named `images` or ending in `image` is refused (DECL-9), and one ending in `secret` or `secretRef` must be a `<secret-name>/<key>` string (DECL-8); case is ignored. At most 65536 bytes once kept.
+type ClusterDeclaredObject = json.RawMessage
+
 // ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 type ClusterDescription = string
 
@@ -2277,6 +2307,9 @@ type ClusterSlug = string
 // ContractVersion defines model for contractVersion.
 type ContractVersion = string
 
+// DeclarationID defines model for declaration.
+type DeclarationID = string
+
 // GroupSlug defines model for group.
 type GroupSlug = string
 
@@ -2529,6 +2562,12 @@ type CreateClusterJSONRequestBody = ClusterCreation
 // UpdateClusterJSONRequestBody defines body for UpdateCluster for application/json ContentType.
 type UpdateClusterJSONRequestBody = ClusterPatch
 
+// CreateClusterDeclarationJSONRequestBody defines body for CreateClusterDeclaration for application/json ContentType.
+type CreateClusterDeclarationJSONRequestBody = ClusterDeclarationWrite
+
+// PutClusterDeclarationJSONRequestBody defines body for PutClusterDeclaration for application/json ContentType.
+type PutClusterDeclarationJSONRequestBody = ClusterDeclarationWrite
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
 
@@ -2708,6 +2747,21 @@ type ServerInterface interface {
 	// UpdateCluster Rename or describe a connected cluster. Requires the `admin` role.
 	// (PATCH /orgs/{org}/clusters/{cluster})
 	UpdateCluster(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
+	// ListClusterDeclarations List the declarations placed on a connected cluster. Requires the `member` role.
+	// (GET /orgs/{org}/clusters/{cluster}/declarations)
+	ListClusterDeclarations(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
+	// CreateClusterDeclaration Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+	// (POST /orgs/{org}/clusters/{cluster}/declarations)
+	CreateClusterDeclaration(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
+	// DeleteClusterDeclaration Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+	// (DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration})
+	DeleteClusterDeclaration(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug, declarationID DeclarationID)
+	// GetClusterDeclaration Read one live declaration placed on a connected cluster. Requires the `member` role.
+	// (GET /orgs/{org}/clusters/{cluster}/declarations/{declaration})
+	GetClusterDeclaration(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug, declarationID DeclarationID)
+	// PutClusterDeclaration Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+	// (PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration})
+	PutClusterDeclaration(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug, declarationID DeclarationID)
 	// ListClusterKeys List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
 	// (GET /orgs/{org}/clusters/{cluster}/keys)
 	ListClusterKeys(w http.ResponseWriter, r *http.Request, org Org, clusterSlug ClusterSlug)
@@ -3975,6 +4029,208 @@ func (siw *ServerInterfaceWrapper) UpdateCluster(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCluster(w, r, org, clusterSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClusterDeclarations operation middleware
+func (siw *ServerInterfaceWrapper) ListClusterDeclarations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClusterDeclarations(w, r, org, clusterSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateClusterDeclaration operation middleware
+func (siw *ServerInterfaceWrapper) CreateClusterDeclaration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateClusterDeclaration(w, r, org, clusterSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteClusterDeclaration operation middleware
+func (siw *ServerInterfaceWrapper) DeleteClusterDeclaration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "declaration" -------------
+	var declarationID DeclarationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteClusterDeclaration(w, r, org, clusterSlug, declarationID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClusterDeclaration operation middleware
+func (siw *ServerInterfaceWrapper) GetClusterDeclaration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "declaration" -------------
+	var declarationID DeclarationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClusterDeclaration(w, r, org, clusterSlug, declarationID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutClusterDeclaration operation middleware
+func (siw *ServerInterfaceWrapper) PutClusterDeclaration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var clusterSlug ClusterSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &clusterSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "declaration" -------------
+	var declarationID DeclarationID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "declaration", r.PathValue("declaration"), &declarationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "declaration", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutClusterDeclaration(w, r, org, clusterSlug, declarationID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6420,6 +6676,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/registration-token", wrapper.ReissueClusterRegistrationToken)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/keys", wrapper.ListClusterKeys)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/keys/{kid}", wrapper.RevokeClusterKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations", wrapper.ListClusterDeclarations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations", wrapper.CreateClusterDeclaration)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations/{declaration}", wrapper.DeleteClusterDeclaration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations/{declaration}", wrapper.GetClusterDeclaration)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/clusters/{cluster}/declarations/{declaration}", wrapper.PutClusterDeclaration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)

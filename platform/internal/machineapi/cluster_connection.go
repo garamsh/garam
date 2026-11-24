@@ -1,10 +1,12 @@
 package machineapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -87,15 +89,54 @@ func (c *ClusterConnection) RotateKey(w http.ResponseWriter, r *http.Request) {
 // does not serve yet, as a 5xx the connector backs off from (T-6).
 var errConnectionRouteUnbuilt = errorx.New(errorx.KindUnimplemented, "garam does not serve this route yet")
 
-// WatchDeclarations is #2048's. Until it lands, an authenticated
-// cluster is answered that garam does not serve it.
-func (c *ClusterConnection) WatchDeclarations(w http.ResponseWriter, r *http.Request, _ connectiongen.WatchDeclarationsParams) {
-	if _, ok := connectedCluster(w, r); ok {
-		writeConnectionError(w, errConnectionRouteUnbuilt)
-	}
+// declarationPage and change are DeclarationPage and Change as the wire
+// carries them. The generated Change decodes its object into maps,
+// which would round spec's numbers through float64; the object is sent
+// as garam normalized it.
+type declarationPage struct {
+	Cursor  string   `json:"cursor"`
+	Full    bool     `json:"full,omitempty"`
+	More    bool     `json:"more,omitempty"`
+	Changes []change `json:"changes"`
 }
 
-// Report is #2050's, answered as WatchDeclarations is until it lands.
+type change struct {
+	Op         string          `json:"op"`
+	ID         string          `json:"id"`
+	Generation int64           `json:"generation"`
+	Object     json.RawMessage `json:"object,omitempty"`
+}
+
+// WatchDeclarations long-polls the declarations placed on the calling
+// cluster (DECL-1 to DECL-6).
+func (c *ClusterConnection) WatchDeclarations(w http.ResponseWriter, r *http.Request, params connectiongen.WatchDeclarationsParams) {
+	caller, ok := connectedCluster(w, r)
+	if !ok {
+		return
+	}
+	wait := cluster.MaxWait
+	if params.Wait != nil {
+		wait = time.Duration(*params.Wait) * time.Second
+	}
+	page, err := c.clusters.WatchDeclarations(r.Context(), caller, params.After, wait)
+	if errors.Is(err, context.Canceled) {
+		// The connector went; there is no one to answer.
+		return
+	}
+	if err != nil {
+		writeConnectionError(w, err)
+		return
+	}
+	out := declarationPage{Cursor: page.Cursor, Full: page.Full, More: page.More,
+		Changes: make([]change, 0, len(page.Changes))}
+	for _, ch := range page.Changes {
+		out.Changes = append(out.Changes, change{Op: ch.Op, ID: ch.ID, Generation: ch.Generation, Object: ch.Object})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// Report is #2050's. Until it lands, an authenticated cluster is
+// answered that garam does not serve it.
 func (c *ClusterConnection) Report(w http.ResponseWriter, r *http.Request) {
 	if _, ok := connectedCluster(w, r); ok {
 		writeConnectionError(w, errConnectionRouteUnbuilt)
@@ -130,13 +171,27 @@ func ConnectionBindingError(w http.ResponseWriter, _ *http.Request, _ error) {
 
 // connectionCodes names each sentinel whose code the interface lists
 // (T-5); any other refusal takes its status's code, connectionCode's.
+// A status of 0 keeps the one the refusal's kind maps to.
 var connectionCodes = []struct {
-	err  error
-	code string
+	err    error
+	code   string
+	status int
 }{
-	{cluster.ErrRegistrationRefused, "registration_refused"},
-	{cluster.ErrInvalidProof, "invalid_proof"},
-	{cluster.ErrTooManyKeys, "too_many_keys"},
+	{cluster.ErrRegistrationRefused, "registration_refused", 0},
+	{cluster.ErrInvalidProof, "invalid_proof", 0},
+	{cluster.ErrTooManyKeys, "too_many_keys", 0},
+	// No kind maps to 410, which DECL-6 answers.
+	{cluster.ErrCursorExpired, "cursor_expired", http.StatusGone},
+}
+
+// connectionStatus is the status a refusal is answered at.
+func connectionStatus(err error) int {
+	for _, c := range connectionCodes {
+		if c.status != 0 && errors.Is(err, c.err) {
+			return c.status
+		}
+	}
+	return wire.StatusOf(errorx.KindOf(err))
 }
 
 // connectionCode is the interface's code for a refusal at status.
@@ -163,7 +218,7 @@ func connectionCode(err error, status int) string {
 // (T-5), at the status this listener maps its kind to, with the
 // message withheld as writeErrorBody withholds it.
 func writeConnectionError(w http.ResponseWriter, err error) {
-	status := wire.StatusOf(errorx.KindOf(err))
+	status := connectionStatus(err)
 	var exceeded *operator.Exceeded
 	if errors.As(err, &exceeded) {
 		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))

@@ -128,7 +128,8 @@ func TestCreateCluster_RefusesDetailsItCannotStore(t *testing.T) {
 // decision 9 route by route: each is decided on its own action, and a
 // caller holding every other cluster action is refused it.
 func TestCluster_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
-	all := []string{org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue, org.ActionClusterDelete}
+	all := []string{org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue,
+		org.ActionClusterDelete, org.ActionClusterDeclare}
 	tests := []struct {
 		name   string
 		action string
@@ -144,6 +145,11 @@ func TestCluster_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
 		{"reissue", org.ActionClusterReissue, "POST", "/registration-token", "", http.StatusCreated},
 		{"list keys", org.ActionClusterRead, "GET", "/keys", "", http.StatusOK},
 		{"revoke a key", org.ActionClusterReissue, "DELETE", "/keys/held", "", http.StatusNoContent},
+		{"list declarations", org.ActionClusterRead, "GET", "/declarations", "", http.StatusOK},
+		{"read a declaration", org.ActionClusterRead, "GET", "/declarations/placed", "", http.StatusOK},
+		{"declare", org.ActionClusterDeclare, "POST", "/declarations", declarationWrite("other"), http.StatusCreated},
+		{"declare under an id", org.ActionClusterDeclare, "PUT", "/declarations/placed", declarationWrite("reviewer"), http.StatusOK},
+		{"tombstone", org.ActionClusterDeclare, "DELETE", "/declarations/placed", "", http.StatusNoContent},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -170,6 +176,7 @@ func TestCluster_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
 			if tt.path != "list" {
 				g := decodeBody[apigen.CreatedCluster](t, rec).Cluster.Grn
 				f.clusterKeys.place(g, cluster.Key{KID: "held", State: cluster.KeyStateActive})
+				f.declare(t, g, "placed", "reviewer")
 				path += "/" + g[len(g)-16:] + tt.path
 			}
 

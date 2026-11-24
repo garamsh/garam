@@ -64,6 +64,9 @@ var feedClassification = map[string]string{
 	"deleteCluster":                   "writes clusters, which no trigger watches",
 	"reissueClusterRegistrationToken": "writes cluster_registration_tokens",
 	"revokeClusterKey":                "writes cluster_keys",
+	"createClusterDeclaration":        "writes cluster_declarations, which no trigger watches",
+	"putClusterDeclaration":           "writes cluster_declarations, which no trigger watches",
+	"deleteClusterDeclaration":        "writes cluster_declarations, which no trigger watches",
 	"createInvitation":                "writes invitations", "revokeInvitation": "writes invitations",
 	// The relayed writes (ADR-0169): the service stores in the call.
 	"createIamPolicy": relayed, "createIamPolicyVersion": relayed,

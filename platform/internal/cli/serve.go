@@ -114,6 +114,9 @@ func serveAPI(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	// One store keeps a connected cluster's record, its credentials and
+	// what is declared on it.
+	clusters := clusterpg.New(pool)
 	srv := api.NewServer(
 		userpg.New(pool),
 		orgpg.New(pool),
@@ -139,7 +142,7 @@ func serveAPI(cmd *cobra.Command) error {
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
 		WithIdentity(issuer).
 		WithPolicyRelay(relay).
-		WithClusters(clusterpg.New(pool), clusterpg.New(pool))
+		WithClusters(clusters, clusters, clusters)
 
 	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger, obs.registry)
 	if err != nil {

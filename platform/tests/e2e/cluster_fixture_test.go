@@ -10,7 +10,9 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -153,29 +155,7 @@ func (c *connector) send(method, path, token string, body []byte) (int, map[stri
 // The machine listener runs with GARAM_CLUSTER_REGISTRATION_LIMIT
 // raised, as the suite's run will raise it.
 func TestClusterFixture_DrivesTheBuiltServersThroughTheSuitesActions(t *testing.T) {
-	garam, bin := buildGaram(t), buildClusterFixture(t)
-	p := prepareDatabase(t, buildPrincipalFixture(t))
-	startPolicyFeed(t, garam, p.DatabaseURL)
-	apiAddr, machineAddr, machineHealthAddr := freeAddr(t), freeAddr(t), freeAddr(t)
-	tokenURL := "https://" + machineAddr + "/oauth/token"
-	serve(t, garam, "api", append([]string{
-		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + apiAddr, "GARAM_MACHINE_TOKEN_URL=" + tokenURL,
-	}, apiPolicyEnv(t)...), "http://"+apiAddr+readyPath)
-	certFile, keyFile, kekFile, rootFile := machineKeyMaterialFiles(t)
-	serve(t, garam, "machine", append([]string{
-		"GARAM_DATABASE_URL=" + p.DatabaseURL,
-		"GARAM_MACHINE_ADDR=" + machineAddr, "GARAM_MACHINE_HEALTH_ADDR=" + machineHealthAddr,
-		"GARAM_MACHINE_TLS_CERT_FILE=" + certFile, "GARAM_MACHINE_TLS_KEY_FILE=" + keyFile,
-		"GARAM_CA_KEY_FILE=" + kekFile, "GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
-		"GARAM_MACHINE_ISSUER=https://garam.test", "GARAM_MACHINE_TOKEN_URL=" + tokenURL,
-		"GARAM_CLUSTER_REGISTRATION_LIMIT=1000",
-	}, policyEnv(t, rootFile)...), "http://"+machineHealthAddr+readyPath)
-
-	slug := consumerClient{t: t, base: "http://" + apiAddr}.createOrg(p.Session.Token, "connected")
-	awaitDelivery(t, p.DatabaseURL)
-	env := []string{"GARAM_FIXTURE_API_URL=http://" + apiAddr, "GARAM_FIXTURE_SESSION_TOKEN=" + p.Session.Token,
-		"GARAM_FIXTURE_ORG=" + slug, "GARAM_FIXTURE_DATABASE_URL=" + p.DatabaseURL}
-	c := newConnector(t, "https://"+machineAddr, rootFile)
+	bin, env, c, tokenURL, slug := startFixtureStack(t)
 
 	code, minted := clusterFixture(t, bin, env, "mint-token")
 	require.Equal(t, 0, code, "%v", minted)
@@ -201,7 +181,7 @@ func TestClusterFixture_DrivesTheBuiltServersThroughTheSuitesActions(t *testing.
 	require.NoError(t, err)
 	declarations := "/cluster-connection/v1alpha1/clusters/self/declarations?wait=0"
 	status, _ = c.send(http.MethodGet, declarations, token, nil)
-	require.NotEqual(t, http.StatusUnauthorized, status, "the control: the token authenticates before revoke-keys")
+	require.Equal(t, http.StatusOK, status, "the control: the token authenticates before revoke-keys")
 	code, revoked := clusterFixture(t, bin, env, "revoke-keys", record)
 	require.Equal(t, 0, code, "%v", revoked)
 	assert.Equal(t, map[string]any{"cluster": record}, revoked)
@@ -214,4 +194,144 @@ func TestClusterFixture_DrivesTheBuiltServersThroughTheSuitesActions(t *testing.
 	code, gone := clusterFixture(t, bin, env, "mint-token", "--cluster", record)
 	assert.Equal(t, 1, code)
 	assert.Equal(t, "not_found", gone["error"], "a deleted record has nothing to mint for")
+}
+
+// startFixtureStack serves the built `serve api` and `serve machine` on
+// one database, creates the organization the fixture acts in, and
+// answers the fixture, its environment, a connector, the token URL and
+// the organization's slug. The machine listener runs with
+// GARAM_CLUSTER_REGISTRATION_LIMIT raised, as the suite's run will
+// raise it.
+func startFixtureStack(t *testing.T) (string, []string, *connector, string, string) {
+	t.Helper()
+	garam, bin := buildGaram(t), buildClusterFixture(t)
+	p := prepareDatabase(t, buildPrincipalFixture(t))
+	startPolicyFeed(t, garam, p.DatabaseURL)
+	apiAddr, machineAddr, machineHealthAddr := freeAddr(t), freeAddr(t), freeAddr(t)
+	tokenURL := "https://" + machineAddr + "/oauth/token"
+	serve(t, garam, "api", append([]string{
+		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + apiAddr, "GARAM_MACHINE_TOKEN_URL=" + tokenURL,
+	}, apiPolicyEnv(t)...), "http://"+apiAddr+readyPath)
+	certFile, keyFile, kekFile, rootFile := machineKeyMaterialFiles(t)
+	serve(t, garam, "machine", append([]string{
+		"GARAM_DATABASE_URL=" + p.DatabaseURL,
+		"GARAM_MACHINE_ADDR=" + machineAddr, "GARAM_MACHINE_HEALTH_ADDR=" + machineHealthAddr,
+		"GARAM_MACHINE_TLS_CERT_FILE=" + certFile, "GARAM_MACHINE_TLS_KEY_FILE=" + keyFile,
+		"GARAM_CA_KEY_FILE=" + kekFile, "GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
+		"GARAM_MACHINE_ISSUER=https://garam.test", "GARAM_MACHINE_TOKEN_URL=" + tokenURL,
+		"GARAM_CLUSTER_REGISTRATION_LIMIT=1000",
+	}, policyEnv(t, rootFile)...), "http://"+machineHealthAddr+readyPath)
+
+	slug := consumerClient{t: t, base: "http://" + apiAddr}.createOrg(p.Session.Token, "connected")
+	awaitDelivery(t, p.DatabaseURL)
+	env := []string{"GARAM_FIXTURE_API_URL=http://" + apiAddr, "GARAM_FIXTURE_SESSION_TOKEN=" + p.Session.Token,
+		"GARAM_FIXTURE_ORG=" + slug, "GARAM_FIXTURE_DATABASE_URL=" + p.DatabaseURL}
+	return bin, env, newConnector(t, "https://"+machineAddr, rootFile), tokenURL, slug
+}
+
+// poll is one watch of the declarations after cursor, held up to wait
+// seconds, answered with its status, page and how long it was held.
+func (c *connector) poll(token, cursor string, wait int) (int, map[string]any, time.Duration) {
+	c.t.Helper()
+	path := "/cluster-connection/v1alpha1/clusters/self/declarations?wait=" + fmt.Sprint(wait)
+	if cursor != "" {
+		path += "&after=" + url.QueryEscape(cursor)
+	}
+	start := time.Now()
+	status, page := c.send(http.MethodGet, path, token, nil)
+	return status, page, time.Since(start)
+}
+
+// changesOf names each change of a page as "op id generation".
+func changesOf(page map[string]any) []string {
+	var out []string
+	changes, _ := page["changes"].([]any)
+	for _, raw := range changes {
+		ch, _ := raw.(map[string]any)
+		out = append(out, fmt.Sprintf("%v %v %v", ch["op"], ch["id"], ch["generation"]))
+	}
+	return out
+}
+
+// TestClusterFixture_DeclarationsReachTheConnectorsLongPoll holds
+// declare, tombstone and expire-cursors (#2048) by what a connector's
+// long poll on `serve machine` observes of what the fixture wrote
+// through `serve api`:
+//
+//   - a poll held on the record's cursor answers the declaration
+//     declare placed, before its wait is out;
+//   - tombstone's delete follows it at the next generation;
+//   - expire-cursors leaves every cursor answered so far 410, and the
+//     full set read next answers a cursor that is live.
+func TestClusterFixture_DeclarationsReachTheConnectorsLongPoll(t *testing.T) {
+	bin, env, c, tokenURL, _ := startFixtureStack(t)
+	code, minted := clusterFixture(t, bin, env, "mint-token")
+	require.Equal(t, 0, code, "%v", minted)
+	record := minted["cluster"].(string)
+	status, registered := c.register(minted["registrationToken"].(string))
+	require.Equal(t, http.StatusCreated, status, "%v", registered)
+	token, err := c.exchange(record, tokenURL)
+	require.NoError(t, err)
+
+	status, full, _ := c.poll(token, "", 0)
+	require.Equal(t, http.StatusOK, status, "%v", full)
+	assert.Equal(t, true, full["full"])
+	assert.Empty(t, changesOf(full), "a record with nothing declared answers an empty full set")
+	cursor := full["cursor"].(string)
+
+	file := filepath.Join(t.TempDir(), "declare.json")
+	require.NoError(t, os.WriteFile(file, []byte(`{"cluster":"`+record+`","id":"e2e-bot","object":
+		{"apiVersion":"garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"reviewer"},
+		 "spec":{"tokenSecretRef":"bot-token/value"}}}`), 0o600))
+	held := make(chan struct{})
+	type answer struct {
+		status int
+		page   map[string]any
+		took   time.Duration
+	}
+	polled := make(chan answer, 1)
+	go func() {
+		close(held)
+		status, page, took := c.poll(token, cursor, 50)
+		polled <- answer{status, page, took}
+	}()
+	<-held
+	code, placed := clusterFixture(t, bin, env, "declare", file)
+	require.Equal(t, 0, code, "%v", placed)
+	assert.Equal(t, map[string]any{"id": "e2e-bot", "generation": float64(1)}, placed)
+	got := <-polled
+	require.Equal(t, http.StatusOK, got.status, "%v", got.page)
+	assert.Equal(t, []string{"apply e2e-bot 1"}, changesOf(got.page))
+	assert.Less(t, got.took, 45*time.Second, "the write ended the hold, not the wait")
+	cursor = got.page["cursor"].(string)
+
+	code, tombstoned := clusterFixture(t, bin, env, "tombstone", "e2e-bot")
+	require.Equal(t, 0, code, "%v", tombstoned)
+	assert.Equal(t, map[string]any{"id": "e2e-bot", "generation": float64(2)}, tombstoned)
+	status, after, _ := c.poll(token, cursor, 0)
+	require.Equal(t, http.StatusOK, status, "%v", after)
+	assert.Equal(t, []string{"delete e2e-bot 2"}, changesOf(after))
+	answered := after["cursor"].(string)
+
+	code, expiredCursors := clusterFixture(t, bin, env, "expire-cursors", record)
+	require.Equal(t, 0, code, "%v", expiredCursors)
+	assert.Equal(t, map[string]any{"cluster": record}, expiredCursors)
+	for _, old := range []string{cursor, answered} {
+		status, refusal, _ := c.poll(token, old, 0)
+		assert.Equal(t, http.StatusGone, status, old)
+		assert.Equal(t, "cursor_expired", refusal["error"], old)
+	}
+	status, refetched, _ := c.poll(token, "", 0)
+	require.Equal(t, http.StatusOK, status, "%v", refetched)
+	assert.Empty(t, changesOf(refetched), "the tombstoned declaration is not in the full set")
+	status, live, _ := c.poll(token, refetched["cursor"].(string), 0)
+	assert.Equal(t, http.StatusOK, status, "the control: the cursor the full set answered is live: %v", live)
+
+	bad := filepath.Join(t.TempDir(), "image.json")
+	require.NoError(t, os.WriteFile(bad, []byte(`{"cluster":"`+record+`","object":
+		{"apiVersion":"garam.sh/v1alpha1","kind":"Bot","metadata":{"namespace":"team-a","name":"x"},
+		 "spec":{"image":"evil:latest"}}}`), 0o600))
+	code, refused := clusterFixture(t, bin, env, "declare", bad)
+	assert.Equal(t, 1, code)
+	assert.Equal(t, "invalid_request", refused["error"], "DECL-9 is refused at garam, before any connector reads it")
 }

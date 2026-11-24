@@ -125,3 +125,74 @@ SELECT EXISTS (SELECT 1 FROM cluster_keys WHERE cluster_grn = sqlc.arg('cluster_
 
 -- name: DeleteClusterKeyTokens :exec
 DELETE FROM cluster_tokens WHERE key_id = $1;
+
+-- Declarations (ADR-0187). Every write runs inside HoldCluster, so a
+-- record's positions are drawn and committed in one order.
+
+-- name: GetDeclarationForWrite :one
+SELECT * FROM cluster_declarations WHERE id = $1 FOR UPDATE;
+
+-- An identifier is reserved the first time it is placed, and never
+-- released: none answers a row where the identifier was taken before.
+-- name: ReserveDeclarationID :execrows
+INSERT INTO cluster_declaration_ids (id) VALUES ($1) ON CONFLICT (id) DO NOTHING;
+
+-- name: AdvanceDeclarationHead :one
+INSERT INTO cluster_declaration_heads (cluster_grn, head) VALUES ($1, 1)
+ON CONFLICT (cluster_grn) DO UPDATE SET head = cluster_declaration_heads.head + 1
+RETURNING head;
+
+-- name: WriteDeclaration :one
+INSERT INTO cluster_declarations (id, cluster_grn, generation, kind, namespace, name,
+                                  object, last_seq, tombstoned, created_at, updated_at)
+VALUES (sqlc.arg('id'), sqlc.arg('cluster_grn'), sqlc.arg('generation'), sqlc.arg('kind'),
+        sqlc.arg('namespace'), sqlc.arg('name'), sqlc.narg('object'), sqlc.arg('last_seq'),
+        sqlc.arg('tombstoned'), sqlc.arg('written_at'), sqlc.arg('written_at'))
+ON CONFLICT (id) DO UPDATE
+SET generation = EXCLUDED.generation, kind = EXCLUDED.kind, namespace = EXCLUDED.namespace,
+    name = EXCLUDED.name, object = EXCLUDED.object, last_seq = EXCLUDED.last_seq,
+    tombstoned = EXCLUDED.tombstoned, updated_at = EXCLUDED.updated_at
+RETURNING *;
+
+-- name: AppendDeclarationChange :exec
+INSERT INTO cluster_declaration_changes (cluster_grn, seq, op, declaration_id, generation, object, written_at)
+VALUES (sqlc.arg('cluster_grn'), sqlc.arg('seq'), sqlc.arg('op'), sqlc.arg('declaration_id'),
+        sqlc.arg('generation'), sqlc.narg('object'), sqlc.arg('written_at'));
+
+-- The changes past retention go, and the record's purged position
+-- moves to the last of them (DECL-6). A record's positions are written
+-- in time order, so what goes is a prefix of its log.
+-- name: PurgeDeclarationChanges :exec
+WITH purged AS (
+    DELETE FROM cluster_declaration_changes c
+    WHERE c.cluster_grn = sqlc.arg('cluster_grn') AND c.written_at < sqlc.arg('before')
+    RETURNING c.seq
+)
+UPDATE cluster_declaration_heads h
+SET purged_through = GREATEST(h.purged_through, (SELECT max(p.seq) FROM purged p))
+WHERE h.cluster_grn = sqlc.arg('cluster_grn') AND EXISTS (SELECT 1 FROM purged);
+
+-- name: NotifyDeclarations :exec
+SELECT pg_notify('garam_cluster_declarations', sqlc.arg('cluster_grn')::text);
+
+-- A record that wrote nothing stands at position 0, purged through -1.
+-- name: GetDeclarationPosition :one
+SELECT COALESCE(h.head, 0)::bigint AS head, COALESCE(h.purged_through, -1)::bigint AS purged_through
+FROM clusters c LEFT JOIN cluster_declaration_heads h ON h.cluster_grn = c.grn
+WHERE c.grn = $1;
+
+-- name: GetLiveDeclaration :one
+SELECT * FROM cluster_declarations WHERE cluster_grn = $1 AND id = $2 AND NOT tombstoned;
+
+-- name: ListLiveDeclarations :many
+SELECT * FROM cluster_declarations WHERE cluster_grn = $1 AND NOT tombstoned ORDER BY last_seq;
+
+-- name: ListLiveDeclarationsAfter :many
+SELECT * FROM cluster_declarations
+WHERE cluster_grn = sqlc.arg('cluster_grn') AND NOT tombstoned AND last_seq > sqlc.arg('after')
+ORDER BY last_seq LIMIT sqlc.arg('max_rows');
+
+-- name: ListDeclarationChangesAfter :many
+SELECT * FROM cluster_declaration_changes
+WHERE cluster_grn = sqlc.arg('cluster_grn') AND seq > sqlc.arg('after')
+ORDER BY seq LIMIT sqlc.arg('max_rows');

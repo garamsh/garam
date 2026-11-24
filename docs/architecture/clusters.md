@@ -114,7 +114,12 @@ serves from `platform/internal/machineapi` §ClusterConnection.
   (AUTH-4): `machineapi.ConfineClusters` refuses it on every route of
   `platform/api/machine.yaml`, and the cluster-connection routes refuse
   any other caller's token with 401. The bot-token mint AUTH-4 also
-  names is #2049's.
+  names is #2049's: an RFC 8693 exchange at the machine listener's
+  token endpoint, with the connector's token as the actor, for a bot a
+  live declaration places on the record
+  ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)
+  decision 2, [machine-identity.md](./machine-identity.md) §A declared
+  bot's token).
 - **A rotation needs the current key's authorization and the
   successor's proof** (ROT-1, ROT-2), verified before the store is
   asked, so the bearer token alone rotates nothing. Each cluster's
@@ -256,7 +261,8 @@ serves from `platform/internal/machineapi` §ClusterConnection.
 
 - Not yet built, each its own issue: the server conformance suite in
   CI (#2047), which waits for garam-bot-operator#439 to build it, and
-  the bot-token mint for a cluster (#2049), which follows #2027. The
+  the bot-token mint for a cluster (#2049), whose shape ADR-0189
+  decides. The
   fixture the suite will run, `platform/tests/clusterfixture` (its
   `README.md` is the contract), carries every subcommand the suite
   names.

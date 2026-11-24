@@ -491,9 +491,10 @@ Responsibility documents:
   give each of the six images: settings, files, listeners, probes,
   stop, order of start, what each calls, the public names, what
   codehub must reach, the three databases, and what is not established
-- [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
-  gateway, the keys it holds, how it routes and what it records; not
-  yet built
+- [ai-gateway.md](./ai-gateway.md) — how a bot reaches AI models:
+  ai-gateway as an interface deployable at garam or in an
+  organization's environment, and garam's gateway, the keys it holds,
+  how it routes and what it records; not yet built
 - [workspace.md](./workspace.md) — the workspace a bot runs in,
   its WorkspaceClass and BotPool resources, the declaration paths,
   and how a workspace reaches models; not yet built
@@ -1120,7 +1121,9 @@ ADRs:
   — agents reach models only through an `ai-gateway` that speaks the
   OpenAI protocol, calls OpenRouter with the platform's or the
   organization's key, and routes by `typesafe/jev-router`; not yet
-  built; supersedes 0036 in part, on where a provider key may be held
+  built; supersedes 0036 in part, on where a provider key may be held;
+  superseded in part by 0190, on the single endpoint, the token and
+  the migration
 - [0127](./adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)
   — cowork is one Go binary serving pages co-edited through Yjs,
   messages, tasks and artifacts to a pluggable web app, a CLI and an
@@ -1608,7 +1611,7 @@ ADRs:
   the workspace; how a workspace reaches models is open: a garam
   model gateway with short-lived tokens or a key proxy in garam-bot
   that forwards model calls; two permission kinds; proposed, would
-  supersede ADR-0126 in part (#2025)
+  supersede ADR-0126 in part (#2025); its decision 3 decided by 0190
 - [0181](./adr/0181-a-release-publishes-the-chart-as-an-oci-artifact-under-the-release-version-and-a-consumer-pins-it-by-digest.md)
   — a release publishes the chart as an OCI artifact to
   `garam/charts/garam` under the release version, in a job the release
@@ -1653,3 +1656,21 @@ ADRs:
   token resolves, at most once a second; a report is bounded at 4 MiB
   and 120 a minute; a declaration of a name the report shows
   cluster-owned is refused 409; accepted, built (#2050)
+- [0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)
+  — a bot garam declares is `grn:<org>/iam/bot/<declaration id>`,
+  sharing that identifier space with the agent records ADR-0179
+  renames; its connector obtains its token by an RFC 8693 exchange
+  with itself as the actor, opaque, at most an hour and only for a
+  bot a live declaration places there; tools, model providers and
+  workspaces are `iam` resources; one Cedar policy, from
+  `spec.permissions`, decides at garam and at the place; tools are
+  MCP in three auth modes with no Connection resource; static keys
+  are sealed to the place; a bot declared at its place has no garam
+  identity; accepted, not built (#2027, #2049)
+- [0190](./adr/0190-ai-gateway-is-an-interface-deployable-at-garam-or-in-the-organizations-own-environment-and-a-session-has-one-brain.md)
+  — ai-gateway is an interface, garam-bot's interface 5, deployable
+  at `ai.garam.sh` or in an organization's environment; a model call
+  carries a JWT bound to the gateway's audience, exchanged from the
+  bot's token; a session has one brain and every other capability is
+  an MCP tool; BYOK at every deployment; accepted, not built (#2027);
+  supersedes 0126 in part and decides 0180's decision 3

@@ -1,6 +1,7 @@
 # ADR 0180: garam adds a workspace registry and how a workspace reaches models is open
 
-> Status: proposed
+> Status: proposed; decision 3 is decided by
+> [ADR-0190](./0190-ai-gateway-is-an-interface-deployable-at-garam-or-in-the-organizations-own-environment-and-a-session-has-one-brain.md)
 > Date: 2026-11-21
 
 Append-only: once merged, the body below is not rewritten. A fact

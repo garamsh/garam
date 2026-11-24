@@ -1,6 +1,9 @@
 # ADR 0126: Agents reach models through an AI gateway on OpenRouter, routed by Jev
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0190](./0190-ai-gateway-is-an-interface-deployable-at-garam-or-in-the-organizations-own-environment-and-a-session-has-one-brain.md),
+> on the single endpoint, the token and the migration (decisions 1, 2
+> and 7)
 > Date: 2026-10-27
 
 Drafted for #1658, which reserves this number. The direction is the

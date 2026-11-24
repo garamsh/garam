@@ -839,6 +839,11 @@ covered and fails when a count is zero:
   that fails fails the target: each lands in a file before its names are
   read, so a failure cannot pass as a value file that named nothing
   while the other kept the count above zero.
+- `chart-labels` — the chart packaged under a version holding `+`, as a
+  pull by digest names it, and rendered against each value file. Every
+  `helm.sh/chart` and `app.kubernetes.io/*` label value must be one the
+  apiserver accepts; the `helm.sh/chart` value must carry the packaged
+  version, so a render that ignored it fails rather than passing.
 - `chart-guards` — each value file under `ci/refused/` rendered on top
   of `minimal-values.yaml`, and refused by the guard it is named after:
   the failure must be an `execution error` from a template, opening with

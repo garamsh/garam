@@ -45,7 +45,7 @@ app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 
 {{- define "garam.labels" -}}
-helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version }}
+helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 {{ include "garam.selectorLabels" . }}
 {{- end -}}

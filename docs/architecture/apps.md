@@ -103,6 +103,10 @@ principal). Each becomes the app system's when the step of #2079
 
 ## Open questions
 
-- The order of building is #2079 §Order. Until its core step lands, no
-  route, action, table or environment variable is added under a
-  cluster's name.
+- Not yet built, each its own issue: the core with the connector
+  seeded (#2081); the bot domain under `iam:bot.place` (#2082);
+  registration by organizations, app keys, the events feed and
+  webhooks (#2083); the cluster-connection split (#2084); cowork and
+  codehub as platform apps (#2085). Until #2081 lands, no route,
+  action, table or environment variable is added under a cluster's
+  name.

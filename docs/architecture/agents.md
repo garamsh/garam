@@ -141,6 +141,28 @@ release of its peer in both upgrade orders, and unsupported semantics
 are refused by name. None of it is built, so garam still publishes no
 release of that contract and no compatibility window (ADR-0049).
 
+## A bot garam declares
+
+**Unbuilt (#2049).** A bot placed on a connected cluster by a
+declaration
+([clusters.md](./clusters.md)) is an IAM principal of its own
+([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)):
+
+- **Its GRN is `grn:<org>/iam/bot/<declaration id>`.** It shares the
+  `iam/bot` identifier space with the agent records ADR-0179 renames,
+  so a declaration whose identifier names an existing agent's id is
+  refused 409.
+- **Its connector obtains its token** by an RFC 8693 exchange at the
+  machine listener's token endpoint, with the connector's own token as
+  the actor. The token lives at most an hour, is opaque, and is held
+  as a hash. A tombstoned declaration stops the next exchange
+  ([machine-identity.md](./machine-identity.md) §A declared bot's
+  token).
+- **One Cedar policy decides what it may do**, from its
+  `spec.permissions` ([authz.md](./authz.md) §A bot's policy).
+- **A bot declared at its place** has no garam identity and no garam
+  token. Whether it gets one is open, as garam-bot left it.
+
 ## Acting on the browser-facing listener
 
 **Unbuilt.** Today an agent reaches the machine listener alone, and

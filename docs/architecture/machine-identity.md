@@ -325,6 +325,31 @@ listener.
 - **Its mint is a credential event of its own kind** (§Credential
   events), with the agent's GRN as subject.
 
+## A declared bot's token
+
+**Unbuilt (#2049).** A bot garam declares and places on a connected
+cluster is `grn:<org>/iam/bot/<declaration id>`
+([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)),
+and its place's connector obtains its token. The claims are garam-bot's
+`docs/architecture/bot-system.md` §Authentication at
+`18f95d28443ccdb47b1202ce8cf5bd16dc0db2a0`.
+
+- **An RFC 8693 exchange at the machine listener's token endpoint.**
+  `actor_token` is the connector's own access token, and
+  `subject_token` is of a garam-defined type whose value is the bot's
+  GRN, which #2049 names in `platform/api/machine.yaml`. `audience` is
+  garam's, and `scope` lists what the bot may call, with nothing
+  implied.
+- **The token answers `sub` the bot, `act.sub` the place**, `aud`
+  garam's audience, `scope` what was asked and allowed, and an expiry
+  within an hour. It is opaque and held as a hash, read on every
+  request as a connector's is, and answered to introspection.
+- **Only a bot placed on that place by a live declaration** (ADR-0184
+  decision 10, AUTH-5). A tombstone refuses the next exchange.
+- **A party that verifies offline**, ai-gateway among them, gets a
+  narrower JWT bound to its audience by a further exchange of the
+  bot's token, which lives no longer than it (ADR-0141).
+
 ## The issuer
 
 **Built for a CLI session (#1757).**

@@ -892,6 +892,25 @@ service's API, generated from `policy/proto` (ADR-0130).
 revises ADR-0130 on isolation's form and the templates' scopes, and
 makes any evaluation error a deny.
 
+### A bot's policy
+
+**Unbuilt.**
+[ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)
+puts what a bot garam declares may do under one Cedar policy:
+
+- **The principal is `grn:<org>/iam/bot/<declaration id>`**, and the
+  resources it is decided on include `iam/tool`, `iam/model-provider`
+  and `iam/workspace`, each declared in `iam.cedarschema` when built.
+- **Its `spec.permissions` become its organization's policies for
+  it.** A request that reaches garam, a brokered tool token among
+  them, is an AuthZEN evaluation of the policy service.
+- **garam sends a bot's policies to its place**, whose own Cedar
+  evaluator decides the bot's calls there against the same schema. A
+  bot run without garam has its `spec.permissions` translated into
+  the same policies and decided locally.
+- **There is no Connection resource.** A grant says which bot may use
+  which installation of an external service with which scope.
+
 ## Policy document
 
 Removed. The earlier engine read IAM-style documents of `Effect`,

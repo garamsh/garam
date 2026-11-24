@@ -25,6 +25,10 @@ connector is `garamsh/garam-bot-operator`'s interface
   `cluster.GRNOf` derives the GRN, and
   `platform/migrations/000082_clusters.up.sql` §clusters_grn_ownership
   refuses a row whose GRN names another organization or another type.
+- **Every cluster garam reaches is such a record**, the one garam's
+  own deployment runs on included, and garam issues no PEM for a
+  cluster
+  ([ADR-0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)).
 - **The record carries what ADR-0184 decision 8 lists of it and
   nothing else**: the GRN, the organization, the name, the
   description, who created it and when. A name is not unique and not
@@ -58,7 +62,8 @@ connector is `garamsh/garam-bot-operator`'s interface
 ## Rationale
 
 - Why a cluster is its own machine identity and not an operator, and
-  why its key never leaves the cluster: ADR-0184.
+  why its key never leaves the cluster: ADR-0184. Why aurora's cluster
+  takes the same path: the owner's direction recorded in ADR-0185.
 - Why every route is decided on the organization and the roles mirror
   the operator's: standing a machine identity up or taking it away is
   the administrative act registering and deleting an operator already

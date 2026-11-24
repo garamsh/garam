@@ -23,7 +23,10 @@ It registers once by spending a one-time token with a key it generated,
 which supersedes ADR-0117 in part for a cluster only, because that key
 never leaves the cluster. After that it exchanges `private_key_jwt`
 assertions under `machine-token.v2`, as an operator does, and it
-rotates its key only under its current key's signature.
+rotates its key only under its current key's signature. Every cluster
+garam reaches connects this way, the one garam's own deployment runs
+on included, and garam issues no PEM for a cluster
+([ADR-0185](./adr/0185-every-cluster-garam-reaches-aurora-included-connects-by-the-connector-and-its-one-time-token.md)).
 
 | Type | Responsibility |
 |------|----------------|

@@ -160,7 +160,7 @@ func TestClusterFixture_DrivesTheBuiltServersThroughTheSuitesActions(t *testing.
 	code, minted := clusterFixture(t, bin, env, "mint-token")
 	require.Equal(t, 0, code, "%v", minted)
 	record, _ := minted["cluster"].(string)
-	require.True(t, strings.HasPrefix(record, "grn:"+slug+"/iam/cluster/"), record)
+	require.True(t, strings.HasPrefix(record, "grn:"+slug+"/iam/instance/"), record)
 	status, registered := c.register(minted["registrationToken"].(string))
 	require.Equal(t, http.StatusCreated, status, "%v", registered)
 	assert.Equal(t, record, registered["cluster"], "the record mint-token named is the one that registered")

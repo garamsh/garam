@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
@@ -65,8 +66,8 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		s.exchangePrincipal(w, r, form)
 		return
 	}
-	if cluster.IsClusterGRN(client) {
-		s.exchangeCluster(w, r, client, form)
+	if app.IsInstanceGRN(client) {
+		s.exchangeInstance(w, r, client, form)
 		return
 	}
 	var audience *grn.GRN
@@ -91,35 +92,37 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// WithClusters gives the exchange a connected cluster's service
-// (ADR-0184 decision 5).
-func (s *Server) WithClusters(clusters cluster.Service) *Server {
+// WithInstances gives the exchange an app's instances' service
+// (ADR-0184 decision 5, ADR-0192 decision 5) and the bot-token mint of
+// garam-bot-connector's (ADR-0189 decision 2).
+func (s *Server) WithInstances(instances app.Service, clusters cluster.Service) *Server {
+	s.instances = instances
 	s.clusters = clusters
 	return s
 }
 
-// exchangeCluster answers a connected cluster's assertion with a token
-// for garam, under the operator's profile and its OAuth answer. A
-// cluster's token is accepted by garam alone, so an audience refuses.
-func (s *Server) exchangeCluster(w http.ResponseWriter, r *http.Request, client grn.GRN, form url.Values) {
-	if s.clusters == nil {
+// exchangeInstance answers an instance's assertion with a token for
+// garam, under the operator's profile and its OAuth answer. An
+// instance's token is accepted by garam alone, so an audience refuses.
+func (s *Server) exchangeInstance(w http.ResponseWriter, r *http.Request, client grn.GRN, form url.Values) {
+	if s.instances == nil {
 		writeOAuthError(w, operator.ErrAssertionProfileUnavailable)
 		return
 	}
 	if _, ok := form["audience"]; ok {
-		writeOAuthError(w, &oauthRefusal{machinegen.InvalidRequest, "a cluster's token names no audience"})
+		writeOAuthError(w, &oauthRefusal{machinegen.InvalidRequest, "an instance's token names no audience"})
 		return
 	}
-	token, err := s.clusters.ExchangeAssertion(r.Context(), sourceOf(r), client, form.Get("client_assertion"))
+	token, err := s.instances.ExchangeAssertion(r.Context(), sourceOf(r), client, form.Get("client_assertion"))
 	if err != nil {
 		writeOAuthError(w, err)
 		return
 	}
-	machine.ReportIssuance(r, machine.Issuance{Subject: token.Cluster, Until: token.ExpiresAt})
+	machine.ReportIssuance(r, machine.Issuance{Subject: token.Instance, Until: token.ExpiresAt})
 	writeJSON(w, http.StatusOK, machinegen.OAuthToken{
 		AccessToken: token.Value,
 		TokenType:   machinegen.Bearer,
-		ExpiresIn:   int(cluster.TokenTTL.Seconds()),
+		ExpiresIn:   int(app.TokenTTL.Seconds()),
 	})
 }
 

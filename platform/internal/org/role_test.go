@@ -84,11 +84,15 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionOperatorReissue, "iam:operator.reissue"},
 		{org.ActionOperatorDelegate, "iam:operator.delegate"},
 
-		{org.ActionClusterRead, "iam:cluster.read"},
-		{org.ActionClusterRegister, "iam:cluster.register"},
-		{org.ActionClusterUpdate, "iam:cluster.update"},
-		{org.ActionClusterReissue, "iam:cluster.reissue"},
-		{org.ActionClusterDelete, "iam:cluster.delete"},
+		{org.ActionAppRead, "iam:app.read"},
+		{org.ActionInstallationCreate, "iam:installation.create"},
+		{org.ActionInstallationRead, "iam:installation.read"},
+		{org.ActionInstallationDelete, "iam:installation.delete"},
+		{org.ActionInstanceRead, "iam:instance.read"},
+		{org.ActionInstanceRegister, "iam:instance.register"},
+		{org.ActionInstanceUpdate, "iam:instance.update"},
+		{org.ActionInstanceReissue, "iam:instance.reissue"},
+		{org.ActionInstanceDelete, "iam:instance.delete"},
 		{org.ActionClusterDeclare, "iam:cluster.declare"},
 
 		{org.ActionAgentRead, "iam:agent.read"},
@@ -136,11 +140,12 @@ func TestRoleActions_GrantSets(t *testing.T) {
 	assert.Equal(t,
 		[]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
-			org.ActionAuditRead, org.ActionPermitWrite,
+			org.ActionAuditRead, org.ActionPermitWrite, org.ActionInstallationCreate,
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
-			org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate,
-			org.ActionClusterReissue, org.ActionClusterDelete, org.ActionClusterDeclare, org.ActionAgentRead,
+			org.ActionAppRead, org.ActionInstallationRead, org.ActionInstallationDelete,
+			org.ActionInstanceRead, org.ActionInstanceRegister, org.ActionInstanceUpdate,
+			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionClusterDeclare, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -161,8 +166,9 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionAuditRead,
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
-			org.ActionClusterRead, org.ActionClusterRegister, org.ActionClusterUpdate,
-			org.ActionClusterReissue, org.ActionClusterDelete, org.ActionClusterDeclare, org.ActionAgentRead,
+			org.ActionAppRead, org.ActionInstallationRead, org.ActionInstallationDelete,
+			org.ActionInstanceRead, org.ActionInstanceRegister, org.ActionInstanceUpdate,
+			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionClusterDeclare, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -181,7 +187,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionOperatorRead, org.ActionClusterRead, org.ActionAgentRead,
+			org.ActionOperatorRead, org.ActionAppRead, org.ActionInstallationRead, org.ActionInstanceRead,
+			org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
@@ -245,19 +252,29 @@ func TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator(t *testing.T) {
 	}
 }
 
-// TestRoleActions_OnlyOwnerAndAdminStandAClusterUp pins ADR-0184
-// decision 9 as #2045 decided it: every role reads the clusters an org
-// connected, and only the two administrative roles create, change,
-// re-register or delete one, or place a declaration on it (ADR-0187),
-// each named and none by `iam:cluster.*`.
-// The read is the control for the member's refusals.
-func TestRoleActions_OnlyOwnerAndAdminStandAClusterUp(t *testing.T) {
+// TestRoleActions_OnlyTheOwnerInstallsAndOnlyOwnerAndAdminStandAnInstanceUp
+// pins ADR-0192 decisions 4 and 9: every role reads the apps, the
+// installations and the instances of an org; installing writes permits,
+// so the owner alone installs, as the owner alone writes a permit; the
+// two administrative roles uninstall, create, change, re-register or
+// delete an instance, or place a declaration on it (ADR-0187); each is
+// named and none is granted by a wildcard. The reads are the control
+// for the member's refusals, and the owner's install for the
+// administrator's.
+func TestRoleActions_OnlyTheOwnerInstallsAndOnlyOwnerAndAdminStandAnInstanceUp(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
-		assert.Contains(t, r.Actions(), org.ActionClusterRead, string(r))
-		assert.NotContains(t, r.Actions(), "iam:cluster.*", string(r))
+		for _, read := range []string{org.ActionAppRead, org.ActionInstallationRead, org.ActionInstanceRead} {
+			assert.Contains(t, r.Actions(), read, string(r))
+		}
+		for _, wildcard := range []string{"iam:app.*", "iam:installation.*", "iam:instance.*"} {
+			assert.NotContains(t, r.Actions(), wildcard, string(r))
+		}
 	}
-	for _, action := range []string{org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue,
-		org.ActionClusterDelete, org.ActionClusterDeclare} {
+	assert.Contains(t, org.RoleOwner.Actions(), org.ActionInstallationCreate)
+	assert.NotContains(t, org.RoleAdmin.Actions(), org.ActionInstallationCreate)
+	assert.NotContains(t, org.RoleMember.Actions(), org.ActionInstallationCreate)
+	for _, action := range []string{org.ActionInstallationDelete, org.ActionInstanceRegister, org.ActionInstanceUpdate,
+		org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionClusterDeclare} {
 		assert.Contains(t, org.RoleOwner.Actions(), action)
 		assert.Contains(t, org.RoleAdmin.Actions(), action)
 		assert.NotContains(t, org.RoleMember.Actions(), action)
@@ -347,7 +364,8 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionOperatorRead, org.ActionClusterRead, org.ActionAgentRead,
+			org.ActionOperatorRead, org.ActionAppRead, org.ActionInstallationRead, org.ActionInstanceRead,
+			org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
@@ -360,8 +378,8 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionAuditRead,
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorReissue, org.ActionOperatorDelegate,
-			org.ActionClusterRegister, org.ActionClusterUpdate, org.ActionClusterReissue,
-			org.ActionClusterDelete, org.ActionClusterDeclare, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
+			org.ActionInstallationDelete, org.ActionInstanceRegister, org.ActionInstanceUpdate,
+			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionClusterDeclare, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
 			org.ActionCodehubRepoWrite, org.ActionCodehubRepoCreate, org.ActionCodehubRunnerAdminister,

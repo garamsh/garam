@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
+	apppg "github.com/garamsh/garam/platform/internal/app/postgres"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	clusterpg "github.com/garamsh/garam/platform/internal/cluster/postgres"
 )
@@ -23,15 +25,16 @@ type actor struct {
 
 // connectedActors registers n records of acme, each under its own key,
 // and exchanges a token for each.
-func connectedActors(t *testing.T, p *pgxpool.Pool, s *clusterpg.Store, n int) []actor {
+func connectedActors(t *testing.T, p *pgxpool.Pool, n int) []actor {
 	t.Helper()
 	ctx := context.Background()
+	s := apppg.New(p)
 	keys := connectorKeys(t)
-	records := declarationRecords(t, p, s, n)
+	records := declarationRecords(t, p, n)
 	out := make([]actor, 0, n)
 	for i, g := range records {
 		require.NoError(t, s.BindKey(ctx, g, keys[i]))
-		token := &cluster.Token{Cluster: g, Value: "garam_ct_actor-" + g.Identifier}
+		token := &app.Token{Instance: g, Value: "garam_ct_actor-" + g.Identifier}
 		require.NoError(t, s.RecordAssertionToken(ctx, signed(t, g, liveKey(t, s, g, keys[i]).ID, "jti-"+g.Identifier), token))
 		out = append(out, actor{g: g, kid: keys[i].KID(), token: token.Value})
 	}
@@ -40,7 +43,7 @@ func connectedActors(t *testing.T, p *pgxpool.Pool, s *clusterpg.Store, n int) [
 
 // mint records a bot token named value for id through a's token.
 func (a actor) mint(ctx context.Context, s *clusterpg.Store, id, value string) error {
-	_, err := s.RecordBotToken(ctx, a.g, id, cluster.HashSecret(a.token), cluster.HashSecret(value), cluster.BotTokenTTL)
+	_, err := s.RecordBotToken(ctx, a.g, id, app.HashSecret(a.token), app.HashSecret(value), cluster.BotTokenTTL)
 	return err
 }
 
@@ -73,7 +76,7 @@ func TestClusterBotTokens_OnlyALiveBotDeclarationOfTheRecordPlacesABot(t *testin
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	actors := connectedActors(t, p, s, 2)
+	actors := connectedActors(t, p, 2)
 	a, other := actors[0], actors[1]
 	for _, d := range []struct {
 		on     grn.GRN
@@ -95,14 +98,14 @@ func TestClusterBotTokens_OnlyALiveBotDeclarationOfTheRecordPlacesABot(t *testin
 		key         int64
 	}
 	require.NoError(t, p.QueryRow(ctx, `SELECT declaration_id, key_id FROM cluster_bot_tokens WHERE token_hash = $1`,
-		cluster.HashSecret("garam_bt_live")).Scan(&kept.declaration, &kept.key))
+		app.HashSecret("garam_bt_live")).Scan(&kept.declaration, &kept.key))
 	assert.Equal(t, "live", kept.declaration, "the hash is kept, never the value")
-	assert.Equal(t, liveKey(t, s, a.g, connectorKeys(t)[0]).ID, kept.key, "under the key the actor's token rests on")
+	assert.Equal(t, liveKey(t, apppg.New(p), a.g, connectorKeys(t)[0]).ID, kept.key, "under the key the actor's token rests on")
 
 	for _, id := range []string{"gone", "theirs", "never", "wsclass"} {
 		assert.ErrorIs(t, a.mint(ctx, s, id, "garam_bt_"+id), cluster.ErrBotNotPlaced, id)
 	}
-	assert.Equal(t, []string{cluster.HashSecret("garam_bt_live")}, botTokenHashes(t, p), "no refused exchange kept anything")
+	assert.Equal(t, []string{app.HashSecret("garam_bt_live")}, botTokenHashes(t, p), "no refused exchange kept anything")
 }
 
 // TestClusterBotTokens_ATokenGoesWithWhatRevokesIt holds that a bot
@@ -114,7 +117,7 @@ func TestClusterBotTokens_ATokenGoesWithWhatRevokesIt(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	actors := connectedActors(t, p, s, 2)
+	actors := connectedActors(t, p, 2)
 	a, other := actors[0], actors[1]
 	for _, d := range []struct {
 		on       actor
@@ -127,7 +130,7 @@ func TestClusterBotTokens_ATokenGoesWithWhatRevokesIt(t *testing.T) {
 	hashes := func(values ...string) []string {
 		out := make([]string, 0, len(values))
 		for _, v := range values {
-			out = append(out, cluster.HashSecret("garam_bt_"+v))
+			out = append(out, app.HashSecret("garam_bt_"+v))
 		}
 		assert.ElementsMatch(t, out, botTokenHashes(t, p))
 		return out
@@ -146,12 +149,12 @@ func TestClusterBotTokens_ATokenGoesWithWhatRevokesIt(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, a.mint(ctx, s, "fifth", "garam_bt_fifth"))
 	require.NoError(t, other.mint(ctx, s, "third", "garam_bt_again"))
-	require.NoError(t, s.RevokeKey(ctx, other.g, other.kid))
+	require.NoError(t, apppg.New(p).RevokeKey(ctx, other.g, other.kid))
 	hashes("fifth")
-	assert.ErrorIs(t, other.mint(ctx, s, "fourth", "garam_bt_late"), cluster.ErrTokenInvalid,
+	assert.ErrorIs(t, other.mint(ctx, s, "fourth", "garam_bt_late"), app.ErrTokenInvalid,
 		"an actor whose key is revoked mints nothing")
 
-	require.NoError(t, s.BindKey(ctx, a.g, connectorKeys(t)[2]))
+	require.NoError(t, apppg.New(p).BindKey(ctx, a.g, connectorKeys(t)[2]))
 	hashes()
 }
 
@@ -163,16 +166,16 @@ func TestClusterBotTokens_AnActorWhoseKeyRetiredMintsNothing(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	a := connectedActors(t, p, s, 1)[0]
+	a := connectedActors(t, p, 1)[0]
 	_, _, err := s.Declare(ctx, a.g, "live", object(t, "a"))
 	require.NoError(t, err)
 	require.NoError(t, a.mint(ctx, s, "live", "garam_bt_before"), "the control: the key is live")
 
-	tag, err := p.Exec(ctx, `UPDATE cluster_keys SET retires_at = now() - interval '1 second' WHERE cluster_grn = $1`, a.g.String())
+	tag, err := p.Exec(ctx, `UPDATE instance_keys SET retires_at = now() - interval '1 second' WHERE instance_grn = $1`, a.g.String())
 	require.NoError(t, err)
 	require.Equal(t, int64(1), tag.RowsAffected())
-	assert.ErrorIs(t, a.mint(ctx, s, "live", "garam_bt_after"), cluster.ErrTokenInvalid)
-	assert.Equal(t, []string{cluster.HashSecret("garam_bt_before")}, botTokenHashes(t, p))
+	assert.ErrorIs(t, a.mint(ctx, s, "live", "garam_bt_after"), app.ErrTokenInvalid)
+	assert.Equal(t, []string{app.HashSecret("garam_bt_before")}, botTokenHashes(t, p))
 }
 
 // TestClusterBotTokens_AnExpiredTokenIsSweptAndTheRecordTakesItsTokens
@@ -182,7 +185,7 @@ func TestClusterBotTokens_AnExpiredTokenIsSweptAndTheRecordTakesItsTokens(t *tes
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	a := connectedActors(t, p, s, 1)[0]
+	a := connectedActors(t, p, 1)[0]
 	_, _, err := s.Declare(ctx, a.g, "live", object(t, "a"))
 	require.NoError(t, err)
 	require.NoError(t, a.mint(ctx, s, "live", "garam_bt_old"))
@@ -190,9 +193,9 @@ func TestClusterBotTokens_AnExpiredTokenIsSweptAndTheRecordTakesItsTokens(t *tes
 		expires_at = expires_at - interval '2 hours'`)
 	require.NoError(t, err)
 	require.NoError(t, a.mint(ctx, s, "live", "garam_bt_new"))
-	assert.Equal(t, []string{cluster.HashSecret("garam_bt_new")}, botTokenHashes(t, p), "the expired token was swept")
+	assert.Equal(t, []string{app.HashSecret("garam_bt_new")}, botTokenHashes(t, p), "the expired token was swept")
 
-	require.NoError(t, s.Delete(ctx, a.g))
+	require.NoError(t, apppg.New(p).DeleteInstance(ctx, a.g))
 	assert.Empty(t, botTokenHashes(t, p), "a deleted record takes its bots' tokens")
 }
 
@@ -204,7 +207,7 @@ func TestClusterBotTokens_ADeclarationIDNamingAnAgentRecordIsRefused(t *testing.
 	ctx := context.Background()
 	p := pool(t)
 	s := clusterpg.New(p)
-	g := declarationRecords(t, p, s, 1)[0]
+	g := declarationRecords(t, p, 1)[0]
 	_, err := p.Exec(ctx, `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
 		VALUES ($1, $2, 'pending', 'unknown', now(), now())`,
 		cluster.AgentGRN(g.Organization, "mira").String(), orgRootGRN(g.Organization).String())

@@ -1,4 +1,4 @@
-package cluster_test
+package app_test
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
@@ -25,7 +25,7 @@ const (
 	rotationURL = "https://machine.garam.test/cluster-connection/v1alpha1/clusters/self/keys"
 )
 
-var self = grn.New("acme", cluster.ServiceType, "5f60710a1b2c3d4e")
+var self = grn.New("acme", app.InstanceType, "5f60710a1b2c3d4e")
 
 // keys are generated once: 3072-bit RSA is slow to draw.
 var (
@@ -94,52 +94,52 @@ func requestClaims(aud string, extra map[string]any) map[string]any {
 // credentials is a CredentialStore that records what the service asked
 // of it and holds one live key, current's.
 type credentials struct {
-	cluster.CredentialStore
+	app.CredentialStore
 	t        *testing.T
 	spent    []string
-	bound    []cluster.PublicKey
+	bound    []app.PublicKey
 	rotated  []int64
-	recorded []*cluster.Token
+	recorded []*app.Token
 	// bindErr is what BindKey answers.
 	bindErr error
 }
 
 func (c *credentials) SpendRegistrationToken(_ context.Context, hash string) (grn.GRN, error) {
 	c.spent = append(c.spent, hash)
-	if hash != cluster.HashSecret(liveToken) {
-		return grn.GRN{}, cluster.ErrRegistrationRefused
+	if hash != app.HashSecret(liveToken) {
+		return grn.GRN{}, app.ErrRegistrationRefused
 	}
 	return self, nil
 }
 
-func (c *credentials) BindKey(_ context.Context, g grn.GRN, key cluster.PublicKey) error {
+func (c *credentials) BindKey(_ context.Context, g grn.GRN, key app.PublicKey) error {
 	c.bound = append(c.bound, key)
 	return c.bindErr
 }
 
-func (c *credentials) VerificationKey(_ context.Context, g grn.GRN, kidValue string) (cluster.Key, error) {
+func (c *credentials) VerificationKey(_ context.Context, g grn.GRN, kidValue string) (app.Key, error) {
 	if g != self || kidValue != kid(c.t, current) {
-		return cluster.Key{}, operator.ErrClientInvalid
+		return app.Key{}, operator.ErrClientInvalid
 	}
-	return cluster.Key{ID: 7, Cluster: self, KID: kidValue, Public: &current.PublicKey, State: cluster.KeyStateActive}, nil
+	return app.Key{ID: 7, Instance: self, KID: kidValue, Public: &current.PublicKey, State: app.KeyStateActive}, nil
 }
 
-func (c *credentials) Rotate(_ context.Context, _ grn.GRN, authorizedBy int64, successor cluster.PublicKey, signed []operator.VerifiedAssertion) (cluster.Rotation, error) {
+func (c *credentials) Rotate(_ context.Context, _ grn.GRN, authorizedBy int64, successor app.PublicKey, signed []operator.VerifiedAssertion) (app.Rotation, error) {
 	c.rotated = append(c.rotated, authorizedBy)
-	return cluster.Rotation{KID: successor.KID()}, nil
+	return app.Rotation{KID: successor.KID()}, nil
 }
 
-func (c *credentials) RecordAssertionToken(_ context.Context, _ operator.VerifiedAssertion, tok *cluster.Token) error {
+func (c *credentials) RecordAssertionToken(_ context.Context, _ operator.VerifiedAssertion, tok *app.Token) error {
 	c.recorded = append(c.recorded, tok)
 	return nil
 }
 
 var liveToken = "garam_crt_" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-func newService(t *testing.T) (cluster.Service, *credentials) {
+func newService(t *testing.T) (app.Service, *credentials) {
 	testKeys(t)
 	store := &credentials{t: t}
-	return cluster.NewService(store, nil, nil, cluster.Config{TokenEndpoint: tokenURL, RotationURL: rotationURL}), store
+	return app.NewService(store, app.Config{TokenEndpoint: tokenURL, RotationURL: rotationURL}), store
 }
 
 // TestRegister_SpendsTheTokenBeforeTheKeyIsRead holds REG-3: a token
@@ -151,8 +151,8 @@ func TestRegister_SpendsTheTokenBeforeTheKeyIsRead(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = svc.Register(context.Background(), "192.0.2.1", liveToken, publicJWK(t, small))
-	assert.ErrorIs(t, err, cluster.ErrInvalidKey)
-	assert.Equal(t, []string{cluster.HashSecret(liveToken)}, store.spent, "the token was spent")
+	assert.ErrorIs(t, err, app.ErrInvalidKey)
+	assert.Equal(t, []string{app.HashSecret(liveToken)}, store.spent, "the token was spent")
 	assert.Empty(t, store.bound)
 
 	g, err := svc.Register(context.Background(), "192.0.2.1", liveToken, publicJWK(t, current))
@@ -170,7 +170,7 @@ func TestRegister_RefusesWhatNoMintProducedWithoutReading(t *testing.T) {
 	for _, token := range []string{"", "garam_crt_short", "garam_ct_" + liveToken[len("garam_crt_"):],
 		"garam_crt_" + "0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef"} {
 		_, err := svc.Register(context.Background(), "192.0.2.1", token, publicJWK(t, current))
-		assert.ErrorIs(t, err, cluster.ErrRegistrationRefused, token)
+		assert.ErrorIs(t, err, app.ErrRegistrationRefused, token)
 	}
 	assert.Empty(t, store.spent)
 }
@@ -180,7 +180,7 @@ func TestRegister_RefusesWhatNoMintProducedWithoutReading(t *testing.T) {
 // is the control.
 func TestRegister_ThrottlesBeforeTheTokenIsRead(t *testing.T) {
 	svc, store := newService(t)
-	for range cluster.RegistrationsPerSource {
+	for range app.RegistrationsPerSource {
 		_, _ = svc.Register(context.Background(), "192.0.2.1", "garam_crt_bad", nil)
 	}
 	before := len(store.spent)
@@ -198,8 +198,8 @@ func TestRegister_ThrottlesBeforeTheTokenIsRead(t *testing.T) {
 // address is throttled, and the default admits it, the control.
 func TestRegister_TakesTheConfiguredBound(t *testing.T) {
 	testKeys(t)
-	throttled := func(cfg cluster.Config) bool {
-		svc := cluster.NewService(&credentials{t: t}, nil, nil, cfg)
+	throttled := func(cfg app.Config) bool {
+		svc := app.NewService(&credentials{t: t}, cfg)
 		for range 2 {
 			_, _ = svc.Register(context.Background(), "192.0.2.1", "garam_crt_bad", nil)
 		}
@@ -207,15 +207,15 @@ func TestRegister_TakesTheConfiguredBound(t *testing.T) {
 		var exceeded *operator.Exceeded
 		return errors.As(err, &exceeded)
 	}
-	assert.True(t, throttled(cluster.Config{TokenEndpoint: tokenURL, RegistrationLimit: 2}))
-	assert.False(t, throttled(cluster.Config{TokenEndpoint: tokenURL}), "the control: the default bound is ten")
+	assert.True(t, throttled(app.Config{TokenEndpoint: tokenURL, RegistrationLimit: 2}))
+	assert.False(t, throttled(app.Config{TokenEndpoint: tokenURL}), "the control: the default bound is ten")
 }
 
 // TestParsePublicJWK_TakesThePublicHalfOfAKeyOf3072BitsOrMore holds
 // REG-1 and REG-2. The public half of a 3072-bit key is the control.
 func TestParsePublicJWK_TakesThePublicHalfOfAKeyOf3072BitsOrMore(t *testing.T) {
 	testKeys(t)
-	k, err := cluster.ParsePublicJWK(publicJWK(t, current))
+	k, err := app.ParsePublicJWK(publicJWK(t, current))
 	require.NoError(t, err)
 	assert.Equal(t, kid(t, current), k.KID())
 
@@ -242,8 +242,8 @@ func TestParsePublicJWK_TakesThePublicHalfOfAKeyOf3072BitsOrMore(t *testing.T) {
 		"not a JWK":                     []byte(`"key"`),
 		"an elliptic curve key, absent": []byte(`{"kty":"EC"}`),
 	} {
-		_, err := cluster.ParsePublicJWK(raw)
-		assert.ErrorIs(t, err, cluster.ErrInvalidKey, name)
+		_, err := app.ParsePublicJWK(raw)
+		assert.ErrorIs(t, err, app.ErrInvalidKey, name)
 	}
 }
 
@@ -262,32 +262,32 @@ func TestRotate_NeedsTheCurrentKeysAuthorizationAndTheSuccessorsProof(t *testing
 	successor := kid(t, next)
 
 	rotation, err := svc.Rotate(context.Background(), self, publicJWK(t, next),
-		authorization(current, cluster.TypeKeyRotation, rotationURL, successor),
-		proof(next, cluster.TypeKeyProof, rotationURL))
+		authorization(current, app.TypeKeyRotation, rotationURL, successor),
+		proof(next, app.TypeKeyProof, rotationURL))
 	require.NoError(t, err)
 	assert.Equal(t, successor, rotation.KID)
 	assert.Equal(t, []int64{7}, store.rotated, "authorized by the current key's row")
 
 	cases := map[string]struct{ authorization, proof string }{
 		"the bearer token alone": {"", ""},
-		"authorization signed by another key": {authorization(stranger, cluster.TypeKeyRotation, rotationURL, successor),
-			proof(next, cluster.TypeKeyProof, rotationURL)},
-		"authorization naming another successor": {authorization(current, cluster.TypeKeyRotation, rotationURL, kid(t, stranger)),
-			proof(next, cluster.TypeKeyProof, rotationURL)},
-		"authorization of another type": {authorization(current, cluster.TypeKeyProof, rotationURL, successor),
-			proof(next, cluster.TypeKeyProof, rotationURL)},
-		"authorization for another audience": {authorization(current, cluster.TypeKeyRotation, tokenURL, successor),
-			proof(next, cluster.TypeKeyProof, rotationURL)},
-		"proof signed by another key": {authorization(current, cluster.TypeKeyRotation, rotationURL, successor),
-			proof(stranger, cluster.TypeKeyProof, rotationURL)},
-		"proof of another type": {authorization(current, cluster.TypeKeyRotation, rotationURL, successor),
-			proof(next, cluster.TypeKeyRotation, rotationURL)},
-		"proof for another audience": {authorization(current, cluster.TypeKeyRotation, rotationURL, successor),
-			proof(next, cluster.TypeKeyProof, tokenURL)},
+		"authorization signed by another key": {authorization(stranger, app.TypeKeyRotation, rotationURL, successor),
+			proof(next, app.TypeKeyProof, rotationURL)},
+		"authorization naming another successor": {authorization(current, app.TypeKeyRotation, rotationURL, kid(t, stranger)),
+			proof(next, app.TypeKeyProof, rotationURL)},
+		"authorization of another type": {authorization(current, app.TypeKeyProof, rotationURL, successor),
+			proof(next, app.TypeKeyProof, rotationURL)},
+		"authorization for another audience": {authorization(current, app.TypeKeyRotation, tokenURL, successor),
+			proof(next, app.TypeKeyProof, rotationURL)},
+		"proof signed by another key": {authorization(current, app.TypeKeyRotation, rotationURL, successor),
+			proof(stranger, app.TypeKeyProof, rotationURL)},
+		"proof of another type": {authorization(current, app.TypeKeyRotation, rotationURL, successor),
+			proof(next, app.TypeKeyRotation, rotationURL)},
+		"proof for another audience": {authorization(current, app.TypeKeyRotation, rotationURL, successor),
+			proof(next, app.TypeKeyProof, tokenURL)},
 	}
 	for name, c := range cases {
 		_, err := svc.Rotate(context.Background(), self, publicJWK(t, next), c.authorization, c.proof)
-		assert.ErrorIs(t, err, cluster.ErrInvalidProof, name)
+		assert.ErrorIs(t, err, app.ErrInvalidProof, name)
 	}
 	assert.Len(t, store.rotated, 1, "no refused rotation reached the store")
 }
@@ -299,29 +299,29 @@ func TestRotate_RefusesALifetimePastSixtySeconds(t *testing.T) {
 	long := requestClaims(rotationURL, map[string]any{"jkt": kid(t, next)})
 	long["exp"] = time.Now().Add(61 * time.Second).Unix()
 	_, err := svc.Rotate(context.Background(), self, publicJWK(t, next),
-		sign(t, current, kid(t, current), cluster.TypeKeyRotation, long),
-		sign(t, next, kid(t, next), cluster.TypeKeyProof, requestClaims(rotationURL, nil)))
-	assert.ErrorIs(t, err, cluster.ErrInvalidProof)
+		sign(t, current, kid(t, current), app.TypeKeyRotation, long),
+		sign(t, next, kid(t, next), app.TypeKeyProof, requestClaims(rotationURL, nil)))
+	assert.ErrorIs(t, err, app.ErrInvalidProof)
 	assert.Empty(t, store.rotated)
 
 	within := requestClaims(rotationURL, map[string]any{"jkt": kid(t, next)})
 	within["exp"] = time.Now().Add(60 * time.Second).Unix()
 	_, err = svc.Rotate(context.Background(), self, publicJWK(t, next),
-		sign(t, current, kid(t, current), cluster.TypeKeyRotation, within),
-		sign(t, next, kid(t, next), cluster.TypeKeyProof, requestClaims(rotationURL, nil)))
+		sign(t, current, kid(t, current), app.TypeKeyRotation, within),
+		sign(t, next, kid(t, next), app.TypeKeyProof, requestClaims(rotationURL, nil)))
 	require.NoError(t, err)
 	assert.Len(t, store.rotated, 1)
 }
 
-// TestExchangeAssertion_AnswersAClusterAndNoOtherIdentity holds that
-// the exchange runs the operator's profile over the cluster's keys:
-// the cluster's own assertion is the control for an operator's GRN.
-func TestExchangeAssertion_AnswersAClusterAndNoOtherIdentity(t *testing.T) {
+// TestExchangeAssertion_AnswersAnInstanceAndNoOtherIdentity holds that
+// the exchange runs the operator's profile over the instance's keys:
+// the instance's own assertion is the control for an operator's GRN.
+func TestExchangeAssertion_AnswersAnInstanceAndNoOtherIdentity(t *testing.T) {
 	svc, store := newService(t)
 	assertion := sign(t, current, kid(t, current), "JWT", requestClaims(tokenURL, nil))
 	token, err := svc.ExchangeAssertion(context.Background(), "192.0.2.1", self, assertion)
 	require.NoError(t, err)
-	assert.True(t, cluster.WellFormed(token.Value, cluster.TokenPrefix))
+	assert.True(t, app.WellFormed(token.Value, app.TokenPrefix))
 	assert.Len(t, store.recorded, 1)
 
 	_, err = svc.ExchangeAssertion(context.Background(), "192.0.2.1", grn.New("acme", "operator", "one"), assertion)
@@ -336,9 +336,9 @@ func TestExchangeAssertion_AnswersAClusterAndNoOtherIdentity(t *testing.T) {
 // recast.
 func TestRegister_RefusesARecordDeletedBeforeItsKeyIsBound(t *testing.T) {
 	svc, store := newService(t)
-	store.bindErr = cluster.ErrClusterNotFound
+	store.bindErr = app.ErrInstanceNotFound
 	_, err := svc.Register(context.Background(), "192.0.2.1", liveToken, publicJWK(t, current))
-	assert.ErrorIs(t, err, cluster.ErrRegistrationRefused)
+	assert.ErrorIs(t, err, app.ErrRegistrationRefused)
 
 	unavailable := errors.New("the database is down")
 	store.bindErr = unavailable
@@ -346,56 +346,56 @@ func TestRegister_RefusesARecordDeletedBeforeItsKeyIsBound(t *testing.T) {
 	assert.ErrorIs(t, err, unavailable)
 }
 
-// TestRotate_IsBoundedPerClusterBeforeAnySignatureIsVerified holds the
-// rotation route's bound: past RotationsPerCluster a cluster's request
-// is answered *operator.Exceeded and reaches no verification, and
-// another cluster's, the control, is not throttled by it.
-func TestRotate_IsBoundedPerClusterBeforeAnySignatureIsVerified(t *testing.T) {
+// TestRotate_IsBoundedPerInstanceBeforeAnySignatureIsVerified holds the
+// rotation route's bound: past RotationsPerInstance an instance's
+// request is answered *operator.Exceeded and reaches no verification,
+// and another instance's, the control, is not throttled by it.
+func TestRotate_IsBoundedPerInstanceBeforeAnySignatureIsVerified(t *testing.T) {
 	svc, store := newService(t)
-	for range cluster.RotationsPerCluster {
+	for range app.RotationsPerInstance {
 		_, err := svc.Rotate(context.Background(), self, nil, "", "")
-		require.ErrorIs(t, err, cluster.ErrInvalidKey)
+		require.ErrorIs(t, err, app.ErrInvalidKey)
 	}
 	_, err := svc.Rotate(context.Background(), self, publicJWK(t, next),
-		sign(t, current, kid(t, current), cluster.TypeKeyRotation, requestClaims(rotationURL, map[string]any{"jkt": kid(t, next)})),
-		sign(t, next, kid(t, next), cluster.TypeKeyProof, requestClaims(rotationURL, nil)))
+		sign(t, current, kid(t, current), app.TypeKeyRotation, requestClaims(rotationURL, map[string]any{"jkt": kid(t, next)})),
+		sign(t, next, kid(t, next), app.TypeKeyProof, requestClaims(rotationURL, nil)))
 	var exceeded *operator.Exceeded
 	require.ErrorAs(t, err, &exceeded)
 	assert.Empty(t, store.rotated, "a throttled rotation reached no store")
 
-	other := grn.New("acme", cluster.ServiceType, "0000000000000001")
+	other := grn.New("acme", app.InstanceType, "0000000000000001")
 	_, err = svc.Rotate(context.Background(), other, nil, "", "")
-	assert.ErrorIs(t, err, cluster.ErrInvalidKey, "the control: another cluster's bound is its own")
+	assert.ErrorIs(t, err, app.ErrInvalidKey, "the control: another instance's bound is its own")
 }
 
 // TestRotate_AnswersAListenerServingNoRotationAsGaramsFailure holds that
 // a listener whose token URL names no rotation route answers that it
-// is unavailable, not that the connector's proof is wrong. A listener
+// is unavailable, not that the instance's proof is wrong. A listener
 // serving the route, the control, reaches the proof.
 func TestRotate_AnswersAListenerServingNoRotationAsGaramsFailure(t *testing.T) {
 	testKeys(t)
-	unserved := cluster.NewService(&credentials{t: t}, nil, nil, cluster.Config{TokenEndpoint: tokenURL})
+	unserved := app.NewService(&credentials{t: t}, app.Config{TokenEndpoint: tokenURL})
 	_, err := unserved.Rotate(context.Background(), self, publicJWK(t, next), "", "")
-	assert.ErrorIs(t, err, cluster.ErrRotationUnavailable)
+	assert.ErrorIs(t, err, app.ErrRotationUnavailable)
 
 	svc, _ := newService(t)
 	_, err = svc.Rotate(context.Background(), self, publicJWK(t, next), "", "")
-	assert.ErrorIs(t, err, cluster.ErrInvalidProof)
+	assert.ErrorIs(t, err, app.ErrInvalidProof)
 }
 
-// TestIsClusterGRN_TakesTheFormGRNOfDerivesAndNoOther holds the GRN
-// check the exchange, the rotation and the connection routes share.
-func TestIsClusterGRN_TakesTheFormGRNOfDerivesAndNoOther(t *testing.T) {
-	derived, err := cluster.GRNOf(grn.Org("acme"), "5f60710a1b2c3d4e")
+// TestIsInstanceGRN_TakesTheFormInstanceGRNDerivesAndNoOther holds the
+// GRN check the exchange, the rotation and the connection routes share.
+func TestIsInstanceGRN_TakesTheFormInstanceGRNDerivesAndNoOther(t *testing.T) {
+	derived, err := app.InstanceGRN(grn.Org("acme"), "5f60710a1b2c3d4e")
 	require.NoError(t, err)
-	assert.True(t, cluster.IsClusterGRN(derived), "the control: GRNOf's own form")
+	assert.True(t, app.IsInstanceGRN(derived), "the control: InstanceGRN's own form")
 	for _, raw := range []string{
-		"grn:acme/iam/cluster/5f60710a1b2c3d4e#somewhere",
-		"grn:acme/iam/org/acme/cluster/5f60710a1b2c3d4e",
+		"grn:acme/iam/instance/5f60710a1b2c3d4e#somewhere",
+		"grn:acme/iam/org/acme/instance/5f60710a1b2c3d4e",
 		"grn:acme/iam/operator/one",
 	} {
 		g, err := grn.Parse(raw)
 		require.NoError(t, err, raw)
-		assert.False(t, cluster.IsClusterGRN(g), raw)
+		assert.False(t, app.IsInstanceGRN(g), raw)
 	}
 }

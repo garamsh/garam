@@ -47,7 +47,7 @@ repeated. A second copy is a second thing to keep true.
 |---|---|---|---|
 | Browser-facing HTTP | `garam serve api` | `platform/api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
 | Machine | `garam serve machine` | `platform/api/machine.yaml` | an operator, an agent or a standalone host's supervisor presenting a token garam issued (ADR-0100, ADR-0118) |
-| Cluster connection | `garam serve machine`, on the machine listener, under `/cluster-connection/v1alpha1/` | `platform/api/cluster-connection/v1alpha1/openapi.yaml`, garam-bot-operator's, vendored (ADR-0186) | a connected cluster's connector: registering with no token, then presenting a cluster's token (ADR-0184) |
+| Cluster connection | `garam serve machine`, on the machine listener, under `/cluster-connection/v1alpha1/` | `platform/api/cluster-connection/v1alpha1/openapi.yaml`, garam-bot-operator's, vendored (ADR-0186) | a connected cluster's connector, an instance of `garam-bot-connector`: registering with no token, then presenting an instance's token (ADR-0184, ADR-0192) |
 | Probes | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
 | Metrics | `garam serve api`, on the listener it already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
 
@@ -697,18 +697,18 @@ With none, none is registered and nothing else changes.
   `policy`, and answered the issuer's JWT for the policy service
   ([machine-identity.md](./machine-identity.md) §cowork's principal).
 
-**Unbuilt, decided by
+**Built in part, decided by
 [ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md):
-apps replace the callers named here.** The cluster-connection
-surface's caller becomes an instance of the `garam-bot-connector` app,
-registering with no token and then presenting an instance's token.
-Introspection and a principal's `policy` token admit an installation
-authenticated by its app key, `grn:<org>/iam/installation/<slug>`, for
-the audiences its app's record lists, in place of
-`grn:<org>/iam/service/<name>`. The browser-facing surface gains
+apps replace the callers named here.** Built (#2081): the
+cluster-connection surface's caller is an instance of the
+`garam-bot-connector` app, registering with no token and then
+presenting an instance's token, and the browser-facing surface serves
 `/orgs/{org}/apps`, `/orgs/{org}/installations` and
 `/orgs/{org}/installations/{installation}/instances` in place of the
-cluster routes ([apps.md](./apps.md)).
+cluster routes ([apps.md](./apps.md)). Unbuilt: introspection and a
+principal's `policy` token admitting an installation authenticated by
+its app key, `grn:<org>/iam/installation/<slug>`, for the audiences its
+app's record lists, in place of `grn:<org>/iam/service/<name>`.
 
 ## What a specification is authoritative for
 

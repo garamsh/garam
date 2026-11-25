@@ -8,15 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Cluster struct {
-	Grn         string
-	OrgGrn      string
-	CreatedBy   string
-	CreatedAt   pgtype.Timestamptz
-	Name        string
-	Description string
-}
-
 type ClusterDeclaration struct {
 	ID         string
 	ClusterGrn string

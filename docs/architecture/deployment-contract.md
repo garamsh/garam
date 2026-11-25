@@ -787,8 +787,8 @@ every connection of `openPool`.
   the TCP peer of the machine listener's connection
   (`platform/internal/machineapi/oauth.go` §sourceOf); garam reads no
   forwarded address and no PROXY protocol. Behind an L4 balancer that
-  rewrites the source, every caller is one address, so the cluster
-  registration bound (`GARAM_CLUSTER_REGISTRATION_LIMIT`) is shared by
+  rewrites the source, every caller is one address, so the instance
+  registration bound (`GARAM_INSTANCE_REGISTRATION_LIMIT`) is shared by
   every connector a replica serves. The cluster and the operator
   exchanges each keep their own per-address budget, so one address
   gets both.

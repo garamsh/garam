@@ -317,10 +317,11 @@ lifetime has passed, so a quarter of it is the margin its propagation
 into the agent's Pod has to fit in; a deployment whose propagation
 does not fit raises the lifetime rather than refreshing later.
 
-`machine.clusterRegistrationLimit` defaults to the binary's own `10`
-and bounds the registrations a connected cluster's connector sends from
-one address a minute, counted before the registration token is read so
-a throttled request spends nothing (ADR-0184, REG-8). The binary
+`machine.instanceRegistrationLimit` defaults to the binary's own `10`
+and bounds the registrations an app's instances, a connected
+cluster's connector among them, send from one address a minute,
+counted before the registration token is read so a throttled request
+spends nothing (ADR-0184, REG-8; ADR-0192). The binary
 refuses `0` and anything but a positive whole number, so no deployment
 runs without the bound. A deployment that runs garam-bot-operator's
 conformance suite against itself raises it for that run, since the

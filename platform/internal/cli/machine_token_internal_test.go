@@ -18,7 +18,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
@@ -65,20 +65,23 @@ func (liveAgentTokens) ResolveAccessToken(_ context.Context, hash string) (agent
 		IssuedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
-// liveClusterTokens is the cluster CredentialStore's read half: the one
-// token it answers is liveClusterToken, for liveCluster.
-type liveClusterTokens struct{ cluster.CredentialStore }
+// liveInstanceTokens is the app CredentialStore's read half: the one
+// token it answers is liveInstanceToken, for liveInstance, whose app
+// lists liveInstanceRoute.
+type liveInstanceTokens struct{ app.CredentialStore }
 
 var (
-	liveCluster      = grn.New("acme", cluster.ServiceType, "5f60710a1b2c3d4e")
-	liveClusterToken = cluster.TokenPrefix + strings.Repeat("f", 64)
+	liveInstance      = grn.New("acme", app.InstanceType, "5f60710a1b2c3d4e")
+	liveInstanceToken = app.TokenPrefix + strings.Repeat("f", 64)
+	liveInstanceRoute = "GET /cluster-connection/v1alpha1/clusters/self/declarations"
 )
 
-func (liveClusterTokens) ResolveToken(_ context.Context, hash string) (cluster.TokenHolder, error) {
-	if hash != cluster.HashSecret(liveClusterToken) {
-		return cluster.TokenHolder{}, cluster.ErrTokenInvalid
+func (liveInstanceTokens) ResolveToken(_ context.Context, hash string) (app.TokenHolder, error) {
+	if hash != app.HashSecret(liveInstanceToken) {
+		return app.TokenHolder{}, app.ErrTokenInvalid
 	}
-	return cluster.TokenHolder{Cluster: liveCluster, ExpiresAt: time.Now().Add(time.Hour)}, nil
+	return app.TokenHolder{Instance: liveInstance, ExpiresAt: time.Now().Add(time.Hour),
+		Operations: []string{liveInstanceRoute}}, nil
 }
 
 // TestIdentityTokens_AnswersAGaramTokenAndNothingElse covers the seam's
@@ -87,7 +90,7 @@ func (liveClusterTokens) ResolveToken(_ context.Context, hash string) (cluster.T
 // row stands for are each refused as unauthenticated.
 func TestIdentityTokens_AnswersAGaramTokenAndNothingElse(t *testing.T) {
 	// Internal: NewMachineServer resolves a live token in Postgres.
-	tokens := identityTokens{operators: liveTokens{}, agents: liveAgentTokens{}, clusters: liveClusterTokens{}}
+	tokens := identityTokens{operators: liveTokens{}, agents: liveAgentTokens{}, instances: liveInstanceTokens{}}
 
 	bearer, err := tokens.Resolve(context.Background(), liveToken)
 	require.NoError(t, err)
@@ -99,16 +102,20 @@ func TestIdentityTokens_AnswersAGaramTokenAndNothingElse(t *testing.T) {
 	assert.Equal(t, liveAgent, bearer.Subject)
 	assert.Equal(t, liveAgentSerial, bearer.Serial, "an agent's token carries the serial the fence reads")
 
-	bearer, err = tokens.Resolve(context.Background(), liveClusterToken)
+	assert.True(t, bearer.Reach.Allows("POST /messages"), "another kind's token is not confined")
+
+	bearer, err = tokens.Resolve(context.Background(), liveInstanceToken)
 	require.NoError(t, err)
-	assert.Equal(t, liveCluster, bearer.Subject, "a connected cluster's token is its record")
+	assert.Equal(t, liveInstance, bearer.Subject, "an instance's token is its record")
+	assert.True(t, bearer.Reach.Allows(liveInstanceRoute), "an instance reaches what its app lists")
+	assert.False(t, bearer.Reach.Allows("POST /messages"), "and nothing its app does not list")
 
 	for name, token := range map[string]string{
-		"another audience":         audiencedToken,
-		"no live row":              operator.TokenPrefix + strings.Repeat("c", 64),
-		"an agent's, no live row":  agent.AccessTokenPrefix + strings.Repeat("c", 64),
-		"a cluster's, no live row": cluster.TokenPrefix + strings.Repeat("c", 64),
-		"a cluster's registration": cluster.RegistrationTokenPrefix + strings.Repeat("f", 64),
+		"another audience":           audiencedToken,
+		"no live row":                operator.TokenPrefix + strings.Repeat("c", 64),
+		"an agent's, no live row":    agent.AccessTokenPrefix + strings.Repeat("c", 64),
+		"an instance's, no live row": app.TokenPrefix + strings.Repeat("c", 64),
+		"a cluster's registration":   app.RegistrationTokenPrefix + strings.Repeat("f", 64),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := tokens.Resolve(context.Background(), token)

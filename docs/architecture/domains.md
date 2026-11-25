@@ -47,10 +47,12 @@ the Go package implementing it is in parentheses.
 - [operators.md](./operators.md) — what an organization records about
   an operator and what it authenticates with
   (`platform/internal/operator`)
-- [clusters.md](./clusters.md) — what an organization records about a
-  cluster it connected (`platform/internal/cluster`)
+- [clusters.md](./clusters.md) — what a connected cluster has beyond
+  its instance record: its declarations, its reports and its bots'
+  tokens (`platform/internal/cluster`)
 - [apps.md](./apps.md) — apps, their installations in an organization
-  and their instances; not yet built, and no package holds it
+  and their instances, and what an instance authenticates with
+  (`platform/internal/app`); built in part
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam (`platform/internal/agent`)
 - [machine-identity.md](./machine-identity.md) — who is calling on the
@@ -84,14 +86,20 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**All nine have this shape today.** `platform/internal/user`,
-`platform/internal/watch`, `platform/internal/org`,
-`platform/internal/operator`, `platform/internal/cluster`,
-`platform/internal/agent`, `platform/internal/message` and
-`platform/internal/authn` each keep
+**All ten have this shape today, one in part.**
+`platform/internal/user`, `platform/internal/watch`,
+`platform/internal/org`, `platform/internal/operator`,
+`platform/internal/app`,
+`platform/internal/cluster`, `platform/internal/agent`,
+`platform/internal/message` and `platform/internal/authn` each keep
 their store in `platform/internal/<domain>/postgres/` (#1083), and
 `platform/internal/machine` persists through
 `platform/internal/machine/postgres` and had no driver import to move.
+`platform/internal/cluster` is the part: its record moved to
+`platform/internal/app` (#2081), so it has no `cluster.go` and no
+single `store.go`, only the stores of what remains
+(`declaration_store.go`, `report_store.go`, `bot_token_store.go`),
+until the bot domain takes those (#2082).
 `go list -deps` on a domain package names no `jackc/pgx`.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,

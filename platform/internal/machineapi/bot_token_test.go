@@ -11,12 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
-const actorValue = cluster.TokenPrefix + "actor"
+const actorValue = app.TokenPrefix + "actor"
 
 // botForm is a well-formed bot token exchange (RFC 8693, ADR-0189).
 func botForm() url.Values {
@@ -34,7 +35,7 @@ func botForm() url.Values {
 func serveBotExchange(t *testing.T, clusters *connectionClusters, operators *assertionService) string {
 	t.Helper()
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, operators, &messageService{}, unwatched(t),
-		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithClusters(clusters), connectedGRN)
+		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters), connectedGRN)
 	return base
 }
 

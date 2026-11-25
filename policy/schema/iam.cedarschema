@@ -52,10 +52,21 @@ namespace Iam {
   entity Supervisor in [OrgMembers, Org] { org: Org, agent?: Agent };
   @grn("service") @caller("none")
   entity Service in [Org] { org: Org };
-  // A connected cluster (ADR-0184). Its routes are decided on its
-  // organization, so no decision names one and nothing feeds it.
-  @grn("cluster") @caller("none")
-  entity Cluster in [Org] { org: Org };
+  // An app (ADR-0192), `grn:root/iam/app/<slug>` for the platform's
+  // own. Reading one is decided on the reader's organization, so no
+  // decision names one and nothing feeds it.
+  @grn("app") @caller("none")
+  entity App;
+  // An app installed in an organization (ADR-0192). It sits in its
+  // organization's OrgMembers, as an agent does, which is what tenant
+  // isolation reads of a principal, and an instance holds what it
+  // holds by sitting in it.
+  @grn("installation") @caller("platform")
+  entity Installation in [OrgMembers, Org] { org: Org };
+  // One running copy of an installation's app, its token decided with
+  // the instance as principal (ADR-0192 decision 6).
+  @grn("instance") @caller("platform")
+  entity Instance in [Installation] { org: Org };
   // A bot garam declares (ADR-0189), named by its declaration's
   // identifier. Its token reaches no decision yet, so nothing feeds
   // it; the agent records ADR-0179 renames join it.
@@ -132,13 +143,30 @@ namespace Iam {
     in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Operator] };
 
-  // A connected cluster's record, decided on its organization
-  // (ADR-0184). Named one at a time, as the operator's are.
-  action "cluster.read" in ["role-owner", "role-admin", "role-member"]
+  // The app system (ADR-0192 decision 9), named one at a time, as the
+  // operator's are. Reading apps and listing installations is decided
+  // on the organization, an installation and its instances on the
+  // installation. Installing writes permits, so it is the owner's
+  // alone; uninstalling only takes grants away.
+  action "app.read" in ["role-owner", "role-admin", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org] };
-  action "cluster.register", "cluster.update", "cluster.reissue",
-    "cluster.delete", "cluster.declare"
+  action "installation.create" in ["role-owner"]
+    appliesTo { principal: [User, Agent], resource: [Org] };
+  action "installation.read" in ["role-owner", "role-admin", "role-member"]
+    appliesTo { principal: [User, Agent], resource: [Org, Installation] };
+  action "installation.delete" in ["role-owner", "role-admin"]
+    appliesTo { principal: [User, Agent], resource: [Org, Installation] };
+  action "instance.read" in ["role-owner", "role-admin", "role-member"]
+    appliesTo { principal: [User, Agent], resource: [Org, Installation] };
+  action "instance.register", "instance.update", "instance.reissue",
+    "instance.delete"
     in ["role-owner", "role-admin"]
+    appliesTo { principal: [User, Agent], resource: [Org, Installation] };
+
+  // Placing, changing and tombstoning what a connector applies
+  // (ADR-0187), decided on the organization until the bot domain's
+  // iam:bot.place replaces it (#2082).
+  action "cluster.declare" in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org] };
 
   action "agent.read", "agent.rename"

@@ -5,12 +5,34 @@ installed in an organization and authenticated, and what each app's
 settings decide
 ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)).
 
-**Unbuilt.** No package, table, route or action of the app system
-exists yet. What runs today is its predecessors: a connected cluster's
-record ([clusters.md](./clusters.md)) and a first-party service's
-principal ([machine-identity.md](./machine-identity.md) §cowork's
-principal). Each becomes the app system's when the issue below that
-names it is built.
+**Built in part (#2081).** The core runs: `platform/internal/app`
+holds the three records, persisted through
+`platform/internal/app/postgres`, and an instance's registration,
+exchange, rotation and revocation, which were a connected cluster's.
+`garam-bot-connector` is the one app, seeded by
+`platform/migrations/000088_apps.up.sql`. Not yet built, and described
+below as decided: the `permit`s an install writes and the policies an
+uninstall deletes, the app-key exchange and the console pages (each
+the rest of #2081); registration by organizations, review, app keys an
+owner sets, the events feed and webhooks (#2083); the bot domain and
+`iam:bot.place` and `iam:bot.host` (#2082); cowork and codehub as
+platform apps, automatic installation and fixed policies (#2085). A
+first-party service's principal is still ADR-0129's
+([machine-identity.md](./machine-identity.md) §cowork's principal).
+
+| Type | Responsibility |
+|------|----------------|
+| `App` | an app's record: every setting a path reads, among them its visibility, its instance setting and the machine operations its tokens reach |
+| `Installation` | one app installed in one organization under the app's slug, with its scope and the incarnation that tells it from an earlier one |
+| `Instance` | one running copy of an installation's app under an identifier garam minted, with what the organization calls it, says it is for and says it runs on |
+| `Instances` | an app's instance setting, `none`, `one` or `many`, and whether an installation holding some admits one more |
+| `Scope` | what an installation's grants reach: the whole organization, the zero value, or projects of it |
+| `DetailsPatch` | a parsed name, description and kind, each absent where the caller said nothing |
+| `Store` | reads the apps an organization may see, installs and uninstalls, and creates, reads, lists, changes and deletes instances |
+| `PublicKey` | the public half of an instance's RSA key, parsed from the JWK it sent, with its RFC 7638 thumbprint as `kid` |
+| `Key` | a key the instance holds, live or withdrawn, and the row an exchange or a rotation verified with |
+| `CredentialStore` | what an instance authenticates with: the hash of its registration token, its keys, the hashes of its tokens and the jtis its signed requests spent |
+| `Service` | registers an instance, exchanges its assertion for a token and rotates its key |
 
 ## Current decisions
 
@@ -119,6 +141,58 @@ names it is built.
   `.update`, `.reissue` and `.delete`, each named and none granted by
   wildcard. Placing a bot on an instance is the bot domain's
   `iam:bot.place`.
+- **What is built of the actions** (#2081): `iam:app.read`, decided on
+  the reader's organization; `iam:installation.create`, `.read` and
+  `.delete`; and `iam:instance.register`, `.read`, `.update`,
+  `.reissue` and `.delete`, decided on the installation, so a grant on
+  one installation reaches its instances and no other's. Every role
+  holds the three `.read`s, the owner alone `iam:installation.create`,
+  and the owner and the administrator the rest.
+  `iam:installation.update` and `iam:app.create`, `.update` and
+  `.delete` arrive with what they decide (#2083).
+  `platform/internal/org/role.go` §machineActions and
+  `policy/schema/iam.cedarschema` are authoritative for the grants.
+  Placing a declaration is still `iam:cluster.declare` on the
+  organization until the bot domain replaces it (#2082).
+- **The routes as built** are `listApps`, `getApp`,
+  `createInstallation`, `listInstallations`, `getInstallation`,
+  `deleteInstallation`, and the instance routes under
+  `/orgs/{org}/installations/{installation}/instances`; a cluster's
+  declarations and report hang from its instance there.
+  `platform/api/openapi.yaml` §app, §installation and §instance are
+  authoritative for them. An instance of another installation is
+  answered 404, as one that is not there is. An app the organization
+  may not install is answered as one it cannot see.
+- **The records are held by the tables, not by the code alone.**
+  000088 holds one installation per app and organization, an
+  installation's GRN naming its app's slug, an instance's GRN naming
+  its installation's organization, and an app's GRN naming its owner
+  or `root`. `CreateInstance` holds the installation's row and then
+  counts its instances in a statement of its own, which reads after the
+  lock is granted, so two creations racing an app set to `one` admit
+  one. Deleting an installation holds the same row, deletes its
+  instances, and their keys and tokens with them, and answers the
+  instances it deleted, which the route waits on in the policy feed;
+  deleting an organization deletes its installations and its own apps.
+- **An installation and an instance are fed to the policy service**,
+  as `Iam::Installation` in its organization's `Iam::OrgMembers` beside
+  its `Iam::Org`, and `Iam::Instance` in its installation, each with
+  its organization
+  (`platform/migrations/000089_policy_outbox_apps.up.sql`).
+  Creating and deleting either waits for the service to hold the
+  change (ADR-0165).
+- **A token reaches the machine operations its app lists, read on
+  every request.** An instance's token is resolved joined to its
+  installation and its app, and `machineapi.ConfineApps` admits it on
+  the app system's own routes (the registration, the exchange and the
+  rotation) and on each `"<METHOD> <path>"` its app's
+  `machine_operations` lists, as the machine listener's router matches
+  it, and refuses it 401 everywhere else. garam-bot-connector's list
+  is the cluster-connection declarations and reports routes.
+- **Registration is throttled per source address** at
+  `GARAM_INSTANCE_REGISTRATION_LIMIT` a minute, ten unless set
+  (`deploy/charts/garam/README.md` is authoritative for the value),
+  on the terms [clusters.md](./clusters.md) states for a cluster.
 
 ## Rationale
 
@@ -139,11 +213,14 @@ names it is built.
 
 ## Open questions
 
-- Not yet built, each its own issue: the core with the connector
-  seeded and the app-key exchange (#2081); the bot domain under
-  `iam:bot.place` and `iam:bot.host` (#2082); registration by
-  organizations, review, owner-set app keys, the events feed and
-  webhooks (#2083); the cluster-connection split (#2084); cowork and
-  codehub as platform apps (#2085). Until #2081 lands, no route,
-  action, table or environment variable is added under a cluster's
-  name.
+- Not yet built, each its own issue: the `permit`s on install, the
+  policies an uninstall deletes, the app-key exchange and the console
+  pages (the rest of #2081); the bot domain under `iam:bot.place` and
+  `iam:bot.host` (#2082); registration by organizations, review,
+  owner-set app keys, the events feed and webhooks (#2083); the
+  cluster-connection split (#2084); cowork and codehub as platform
+  apps (#2085).
+- An instance's latest contact is written by the query that resolves
+  its token, in `platform/internal/app/postgres`, into
+  `instance_contacts`; ADR-0192 decision 10 puts last contact in the
+  bot domain, and #2082 moves it there with the reports.

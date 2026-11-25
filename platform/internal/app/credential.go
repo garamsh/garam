@@ -1,4 +1,4 @@
-package cluster
+package app
 
 import (
 	"crypto/rand"
@@ -16,8 +16,8 @@ import (
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
-// The prefixes a cluster's secrets carry, so a scanner recognises one:
-// the one-time registration token, and a token a key was exchanged
+// The prefixes an instance's secrets carry, so a scanner recognises
+// one: the one-time registration token, and a token a key was exchanged
 // for.
 const (
 	RegistrationTokenPrefix = "garam_crt_"
@@ -28,20 +28,20 @@ const (
 // (ADR-0184 decision 3, REG-5).
 const RegistrationTokenTTL = time.Hour
 
-// TokenTTL is how long a token a cluster's key was exchanged for is
+// TokenTTL is how long a token an instance's key was exchanged for is
 // accepted, as an operator's is (ADR-0184 decision 5).
 const TokenTTL = operator.TokenTTL
 
-// The bounds on a key a connector registers or rotates to: RSA of at
+// The bounds on a key an instance registers or rotates to: RSA of at
 // least 3072 bits (REG-1), at most what an assertion verifies with.
 const (
 	MinKeyBits = 3072
 	MaxKeyBits = operator.MaxKeyBits
 )
 
-// LiveKeysPerCluster is how many keys a cluster may hold at once: the
-// key in use and its successor during the rollover (ROT-4).
-const LiveKeysPerCluster = 2
+// LiveKeysPerInstance is how many keys an instance may hold at once:
+// the key in use and its successor during the rollover (ROT-4).
+const LiveKeysPerInstance = 2
 
 // RolloverWindow is how long a rotation keeps the predecessor live
 // beside its successor (ROT-3).
@@ -55,24 +55,24 @@ var (
 	// ErrRegistrationRefused is the one answer to a registration token
 	// that is spent, expired or unknown (REG-4).
 	ErrRegistrationRefused = errorx.New(errorx.KindUnauthenticated, "the registration token is not valid")
-	// ErrKeyNotFound refuses a key the cluster never held.
-	ErrKeyNotFound = errorx.New(errorx.KindNotFound, "cluster key not found")
+	// ErrKeyNotFound refuses a key the instance never held.
+	ErrKeyNotFound = errorx.New(errorx.KindNotFound, "instance key not found")
 	// ErrTokenInvalid refuses a token no live row stands for.
-	ErrTokenInvalid = errorx.New(errorx.KindUnauthenticated, "cluster token is not valid")
+	ErrTokenInvalid = errorx.New(errorx.KindUnauthenticated, "instance token is not valid")
 	// ErrInvalidProof refuses a rotation whose JWSs do not prove both
 	// keys (ROT-2).
 	ErrInvalidProof = errorx.New(errorx.KindInvalidArgument, "the rotation's proof does not hold")
-	// ErrKeyHeld refuses a rotation to a key the cluster has held, the
+	// ErrKeyHeld refuses a rotation to a key the instance has held, the
 	// key its registration bound included, other than a live successor
 	// a rotation made live, which is a repeat (ROT-4).
-	ErrKeyHeld = errorx.New(errorx.KindInvalidArgument, "the cluster has held this key")
+	ErrKeyHeld = errorx.New(errorx.KindInvalidArgument, "the instance has held this key")
 	// ErrRotationUnavailable answers a rotation on a listener whose
 	// token URL names no rotation route, a failure of garam's
-	// configuration rather than the connector's proof.
+	// configuration rather than the instance's proof.
 	ErrRotationUnavailable = errorx.New(errorx.KindUnavailable,
 		"key rotation is not served: GARAM_MACHINE_TOKEN_URL does not end in /oauth/token")
 	// ErrTooManyKeys refuses a rotation while two keys are live (ROT-4).
-	ErrTooManyKeys = errorx.New(errorx.KindFailedPrecondition, "the cluster holds two live keys")
+	ErrTooManyKeys = errorx.New(errorx.KindFailedPrecondition, "the instance holds two live keys")
 	// ErrInvalidKey refuses a JWK that is not the public half of an RSA
 	// key of a size this profile takes (REG-1, REG-2).
 	ErrInvalidKey = errorx.New(errorx.KindInvalidArgument,
@@ -84,14 +84,14 @@ var (
 // not the rest of it parses (REG-2).
 var privateMembers = []string{"d", "p", "q", "dp", "dq", "qi", "oth"}
 
-// PublicKey is a connector's public key as garam takes it: an RSA key
+// PublicKey is an instance's public key as garam takes it: an RSA key
 // of a supported size, and its RFC 7638 thumbprint.
 type PublicKey struct {
 	key *rsa.PublicKey
 	kid string
 }
 
-// ParsePublicJWK reads raw, the JWK a connector sent, as the public
+// ParsePublicJWK reads raw, the JWK an instance sent, as the public
 // half of an RSA key of MinKeyBits to MaxKeyBits. A member naming a
 // private parameter, an alg other than RS256 or a use other than sig
 // refuses it.
@@ -148,11 +148,11 @@ const (
 	KeyStateRevoked  KeyState = "revoked"
 )
 
-// Key is the public record of a key a cluster's connector generated.
+// Key is the public record of a key an instance generated.
 // garam never holds its private half (ADR-0184 decision 4).
 type Key struct {
 	ID        int64
-	Cluster   grn.GRN
+	Instance  grn.GRN
 	KID       string
 	Public    *rsa.PublicKey
 	CreatedAt time.Time
@@ -164,17 +164,17 @@ type Key struct {
 }
 
 // Verifier returns the key as the operator package's assertion check
-// reads one: the same RS256 profile verifies a cluster's assertion.
+// reads one: the same RS256 profile verifies an instance's assertion.
 func (k Key) Verifier() operator.Key {
-	return operator.Key{ID: k.ID, Operator: k.Cluster, KID: k.KID,
+	return operator.Key{ID: k.ID, Operator: k.Instance, KID: k.KID,
 		Algorithm: operator.KeyAlgorithm, Public: k.Public}
 }
 
-// Token is a token a cluster's key was exchanged for. It exists in this
-// value alone, and what is stored is its hash.
+// Token is a token an instance's key was exchanged for. It exists in
+// this value alone, and what is stored is its hash.
 type Token struct {
 	Value     string
-	Cluster   grn.GRN
+	Instance  grn.GRN
 	IssuedAt  time.Time
 	ExpiresAt time.Time
 }
@@ -182,8 +182,11 @@ type Token struct {
 // TokenHolder is what a live token's row names, read beside the record
 // and the key it rests on.
 type TokenHolder struct {
-	Cluster   grn.GRN
+	Instance  grn.GRN
 	ExpiresAt time.Time
+	// Operations are the machine operations the instance's app lists,
+	// the routes its token reaches beyond the app system's own.
+	Operations []string
 }
 
 // Rotation is a rotation's answer: the successor's kid, and when its
@@ -197,7 +200,7 @@ type Rotation struct {
 func NewSecret(prefix string) (string, error) {
 	var b [secretBytes]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return "", errorx.Wrap(err, "cluster secret", errorx.KindInternal)
+		return "", errorx.Wrap(err, "instance secret", errorx.KindInternal)
 	}
 	return prefix + hex.EncodeToString(b[:]), nil
 }

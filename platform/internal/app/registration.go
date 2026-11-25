@@ -1,4 +1,4 @@
-package cluster
+package app
 
 import (
 	"context"
@@ -25,7 +25,7 @@ func IssueRegistrationToken(ctx context.Context, credentials CredentialStore, g 
 }
 
 func (s *service) Register(ctx context.Context, source, token string, jwk []byte) (grn.GRN, error) {
-	// A listener with no exchange has nowhere to send the connector
+	// A listener with no exchange has nowhere to send the instance
 	// (REG-6), so it spends no token.
 	if s.cfg.TokenEndpoint == "" {
 		return grn.GRN{}, operator.ErrAssertionProfileUnavailable
@@ -51,7 +51,7 @@ func (s *service) Register(ctx context.Context, source, token string, jwk []byte
 	// A record deleted between the spend and the bind is refused as a
 	// token that names no record is (REG-4), not answered 404, which
 	// the route does not declare.
-	if err := s.credentials.BindKey(ctx, g, key); errors.Is(err, ErrClusterNotFound) {
+	if err := s.credentials.BindKey(ctx, g, key); errors.Is(err, ErrInstanceNotFound) {
 		return grn.GRN{}, ErrRegistrationRefused
 	} else if err != nil {
 		return grn.GRN{}, err

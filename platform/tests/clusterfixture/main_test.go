@@ -19,10 +19,11 @@ import (
 
 const (
 	testSession = "session-value"
-	testRecord  = "grn:acme/iam/cluster/5f60710a1b2c3d4e"
+	testRecord  = "grn:acme/iam/instance/5f60710a1b2c3d4e"
 )
 
-// browserAPI stands in for serve api's cluster routes: it answers the
+// browserAPI stands in for serve api's installation and instance
+// routes: it answers the
 // session it was given and records each request it served.
 type browserAPI struct {
 	mu       sync.Mutex
@@ -45,11 +46,14 @@ func (b *browserAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		b.bodies = append(b.bodies, string(body))
 	}
 	b.mu.Unlock()
-	record := "/orgs/acme/clusters/5f60710a1b2c3d4e"
+	record := "/orgs/acme/installations/garam-bot-connector/instances/5f60710a1b2c3d4e"
 	switch r.Method + " " + r.URL.Path {
-	case "POST /orgs/acme/clusters":
+	case "POST /orgs/acme/installations/garam-bot-connector/instances":
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"cluster":{"grn":"` + testRecord + `"},"registration":{"registrationToken":"garam_crt_new"}}`))
+		_, _ = w.Write([]byte(`{"instance":{"grn":"` + testRecord + `"},"registration":{"registrationToken":"garam_crt_new"}}`))
+	case "POST /orgs/acme/installations":
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"grn":"grn:acme/iam/installation/garam-bot-connector"}`))
 	case "POST " + record + "/registration-token":
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{"registrationToken":"garam_crt_reissued"}`))
@@ -58,8 +62,8 @@ func (b *browserAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "DELETE " + record + "/keys/live", "DELETE " + record + "/keys/retiring", "DELETE " + record,
 		"DELETE " + record + "/declarations/chosen":
 		w.WriteHeader(http.StatusNoContent)
-	case "GET /orgs/acme/clusters":
-		_, _ = w.Write([]byte(`[{"grn":"grn:acme/iam/cluster/0000000000000000"},{"grn":"` + testRecord + `"}]`))
+	case "GET /orgs/acme/installations/garam-bot-connector/instances":
+		_, _ = w.Write([]byte(`[{"grn":"grn:acme/iam/instance/0000000000000000"},{"grn":"` + testRecord + `"}]`))
 	case "GET " + record:
 		_, _ = w.Write([]byte(`{"grn":"` + testRecord + `"}`))
 	case "POST " + record + "/declarations":
@@ -70,7 +74,7 @@ func (b *browserAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "GET " + record + "/declarations/chosen":
 		_, _ = w.Write([]byte(`{"id":"chosen","generation":4}`))
 	case "GET " + record + "/report":
-		_, _ = w.Write([]byte(`{"cluster":"` + testRecord + `","lastContactAt":"2026-11-24T12:00:01Z","report":null}`))
+		_, _ = w.Write([]byte(`{"instance":"` + testRecord + `","lastContactAt":"2026-11-24T12:00:01Z","report":null}`))
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"kind":"not_found","message":"cluster not found"}`))
@@ -132,7 +136,8 @@ func TestMintToken_RefusesAnExpiredMintAgainstADatabaseOffThisMachine(t *testing
 
 	code, _, _ := runFixture(t, srv.URL, nil, "mint-token")
 	assert.Equal(t, 0, code)
-	assert.Len(t, api.requests, 1)
+	assert.Equal(t, []string{"POST /orgs/acme/installations", "POST /orgs/acme/installations/garam-bot-connector/instances"},
+		api.requests, "it installs the connector where the organization has not, then creates the record")
 }
 
 // TestRevokeKeys_WithdrawsEveryKeyNotYetWithdrawn holds that a revoked
@@ -146,7 +151,7 @@ func TestRevokeKeys_WithdrawsEveryKeyNotYetWithdrawn(t *testing.T) {
 	code, answer, _ := runFixture(t, srv.URL, nil, "revoke-keys", testRecord)
 	require.Equal(t, 0, code)
 	assert.Equal(t, map[string]any{"cluster": testRecord}, answer)
-	record := "/orgs/acme/clusters/5f60710a1b2c3d4e"
+	record := "/orgs/acme/installations/garam-bot-connector/instances/5f60710a1b2c3d4e"
 	assert.Equal(t, []string{"GET " + record + "/keys", "DELETE " + record + "/keys/live",
 		"DELETE " + record + "/keys/retiring"}, api.requests)
 }
@@ -159,7 +164,7 @@ func TestFixture_PrintsARefusalInTheInterfacesErrorBody(t *testing.T) {
 	srv := httptest.NewServer(&browserAPI{})
 	t.Cleanup(srv.Close)
 
-	code, answer, _ := runFixture(t, srv.URL, nil, "delete-cluster", "grn:acme/iam/cluster/0000000000000000")
+	code, answer, _ := runFixture(t, srv.URL, nil, "delete-cluster", "grn:acme/iam/instance/0000000000000000")
 	assert.Equal(t, 1, code)
 	assert.Equal(t, map[string]any{"error": "not_found", "message": "cluster not found"}, answer)
 
@@ -212,7 +217,7 @@ func TestDeclare_PlacesTheFilesObjectUnderItsIdentifierOrADrawnOne(t *testing.T)
 		writeDeclareFile(t, `{"cluster":"`+testRecord+`","id":"chosen","object":`+object+`}`))
 	require.Equal(t, 0, code)
 	assert.Equal(t, map[string]any{"id": "chosen", "generation": float64(4)}, answer)
-	record := "/orgs/acme/clusters/5f60710a1b2c3d4e"
+	record := "/orgs/acme/installations/garam-bot-connector/instances/5f60710a1b2c3d4e"
 	assert.Equal(t, []string{"POST " + record + "/declarations", "PUT " + record + "/declarations/chosen"}, api.requests)
 	for _, body := range api.bodies {
 		assert.JSONEq(t, `{"object":`+object+`}`, body)
@@ -238,8 +243,8 @@ func TestTombstone_FindsTheRecordHoldingTheIdentifier(t *testing.T) {
 	code, answer, _ := runFixture(t, srv.URL, nil, "tombstone", "chosen")
 	require.Equal(t, 0, code)
 	assert.Equal(t, map[string]any{"id": "chosen", "generation": float64(5)}, answer)
-	record := "/orgs/acme/clusters/5f60710a1b2c3d4e"
-	assert.Equal(t, []string{"GET /orgs/acme/clusters", "GET /orgs/acme/clusters/0000000000000000/declarations/chosen",
+	record := "/orgs/acme/installations/garam-bot-connector/instances/5f60710a1b2c3d4e"
+	assert.Equal(t, []string{"GET /orgs/acme/installations/garam-bot-connector/instances", "GET /orgs/acme/installations/garam-bot-connector/instances/0000000000000000/declarations/chosen",
 		"GET " + record + "/declarations/chosen", "DELETE " + record + "/declarations/chosen"}, api.requests)
 
 	code, answer, _ = runFixture(t, srv.URL, nil, "tombstone", "absent")
@@ -258,9 +263,9 @@ func TestLatestReport_PrintsWhatGetClusterReportAnswers(t *testing.T) {
 	code, answer, _ := runFixture(t, srv.URL, nil, "latest-report", testRecord)
 	require.Equal(t, 0, code)
 	assert.Equal(t, map[string]any{"cluster": testRecord, "lastContactAt": "2026-11-24T12:00:01Z", "report": nil}, answer)
-	assert.Equal(t, []string{"GET /orgs/acme/clusters/5f60710a1b2c3d4e/report"}, api.requests)
+	assert.Equal(t, []string{"GET /orgs/acme/installations/garam-bot-connector/instances/5f60710a1b2c3d4e/report"}, api.requests)
 
-	code, answer, _ = runFixture(t, srv.URL, nil, "latest-report", "grn:acme/iam/cluster/0000000000000000")
+	code, answer, _ = runFixture(t, srv.URL, nil, "latest-report", "grn:acme/iam/instance/0000000000000000")
 	assert.Equal(t, 1, code)
 	assert.Equal(t, "not_found", answer["error"])
 }

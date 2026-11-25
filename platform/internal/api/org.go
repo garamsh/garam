@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
@@ -374,6 +375,11 @@ func (s *Server) resourceExists(ctx context.Context, orgGRN, target grn.GRN) (bo
 		_, err = s.agents.Get(ctx, target)
 	case serviceTypePolicy:
 		return true, nil
+	case app.InstallationType:
+		if s.apps == nil {
+			return false, nil
+		}
+		_, err = s.apps.records.GetInstallation(ctx, target)
 	default:
 		return false, errorx.New(errorx.KindInternal, "no lookup for resource kind "+target.ServiceType)
 	}

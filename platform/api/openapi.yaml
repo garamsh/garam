@@ -61,11 +61,19 @@ tags:
       issued on each. A record says garam holds the operator and
       nothing more (ADR-0045); an operator authenticates by exchanging
       an assertion its key signed for a token (ADR-0102, ADR-0117).
-  - name: cluster
+  - name: app
     description: >-
-      The clusters an organization has connected (ADR-0184): a user's
-      own cluster, whose connector dials garam and authenticates as
-      the record. garam never dials the cluster.
+      The systems that connect to garam, each registered once as an
+      app (ADR-0192).
+  - name: installation
+    description: >-
+      An app installed in an organization, over the whole of it or
+      chosen projects (ADR-0192).
+  - name: instance
+    description: >-
+      A running copy of an installation's app, which registers with a
+      one-time token and a key it generated, and authenticates as the
+      record (ADR-0192). garam never dials it.
   - name: agent
     description: >-
       The agents an organization holds. Nothing on this listener
@@ -1887,18 +1895,72 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/clusters:
-    post:
-      operationId: createCluster
-      tags: [cluster]
-      summary: Create a connected cluster's record. Requires the `admin` role.
+  /orgs/{org}/apps:
+    get:
+      operationId: listApps
+      tags: [app]
+      summary: List the apps an organization may install. Requires the `member` role.
       description: >-
-        Records that this organization has a connected cluster, under
-        an identifier garam mints and answers in the GRN (ADR-0184),
-        and answers its one-time registration token. The token is
-        answered here once and stored as its hash only: it is not read
-        back. Authorized as `iam:cluster.register` on the
+        The organization's own apps and every public one, ordered by
+        GRN (ADR-0192 decision 3). Authorized as `iam:app.read` on the
         organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The apps.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/App'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/apps/{app}:
+    get:
+      operationId: getApp
+      tags: [app]
+      summary: Read an app the organization may install. Requires the `member` role.
+      description: >-
+        Another organization's private app answers 404, as one that is
+        not there does. Authorized as `iam:app.read` on the
+        organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/app'
+      responses:
+        '200':
+          description: The app.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/App'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/installations:
+    post:
+      operationId: createInstallation
+      tags: [installation]
+      summary: Install an app in an organization. Requires the `owner` role.
+      description: >-
+        Installs the app over the whole organization, or over the
+        projects named (ADR-0192 decision 4), under
+        `grn:<org>/iam/installation/<app>`. An organization holds one
+        installation of an app at most: a second answers 409.
+        Installing writes the app's requested actions as permits on the
+        installation, so it is authorized as `iam:installation.create`
+        on the organization, which the owner alone holds.
       parameters:
         - $ref: '#/components/parameters/org'
       requestBody:
@@ -1906,10 +1968,122 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ClusterCreation'
+              $ref: '#/components/schemas/InstallationCreation'
       responses:
         '201':
-          description: Cluster created, with its registration token.
+          description: The installation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Installation'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listInstallations
+      tags: [installation]
+      summary: List the apps an organization has installed. Requires the `member` role.
+      description: >-
+        Ordered by GRN. Authorized as `iam:installation.read` on the
+        organization.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization's installations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Installation'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/installations/{installation}:
+    get:
+      operationId: getInstallation
+      tags: [installation]
+      summary: Read one of an organization's installations. Requires the `member` role.
+      description: Authorized as `iam:installation.read` on the installation.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/installation'
+      responses:
+        '200':
+          description: The installation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Installation'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteInstallation
+      tags: [installation]
+      summary: Uninstall an app. Requires the `admin` role.
+      description: >-
+        Deletes the installation with its instances, their keys and
+        their tokens, each refused from the next request (ADR-0192
+        decision 4). A reinstall is a new incarnation and inherits
+        none of it. Authorized as `iam:installation.delete` on the
+        installation.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/installation'
+      responses:
+        '204':
+          description: Uninstalled.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/installations/{installation}/instances:
+    post:
+      operationId: createInstance
+      tags: [instance]
+      summary: Create an instance's record. Requires the `admin` role.
+      description: >-
+        Records that the installation has an instance, under an
+        identifier garam mints and answers in the GRN (ADR-0192
+        decision 1), and answers its one-time registration token. The
+        token is answered here once and stored as its hash only: it is
+        not read back. An app whose instance setting is `none` answers
+        404, and one whose setting is `one` answers 409 while the
+        installation holds its instance. Authorized as
+        `iam:instance.register` on the installation.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/installation'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstanceCreation'
+      responses:
+        '201':
+          description: Instance created, with its registration token.
           headers:
             Cache-Control:
               schema:
@@ -1918,7 +2092,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreatedCluster'
+                $ref: '#/components/schemas/CreatedInstance'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -1929,52 +2103,56 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           description: >-
-            The identifier garam minted is already a cluster's. It is
-            drawn from 64 random bits, so the request is sent again.
+            The app runs one instance per installation and the
+            installation holds it, or the identifier garam minted is
+            already an instance's, which is drawn from 64 random bits,
+            so the request is sent again.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
     get:
-      operationId: listClusters
-      tags: [cluster]
-      summary: List an organization's connected clusters. Requires the `member` role.
+      operationId: listInstances
+      tags: [instance]
+      summary: List an installation's instances. Requires the `member` role.
       description: >-
-        The clusters this organization has created, ordered by GRN.
-        Authorized as `iam:cluster.read` on the organization.
+        The installation's instances, ordered by GRN. Authorized as
+        `iam:instance.read` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/installation'
       responses:
         '200':
-          description: The organization's clusters.
+          description: The installation's instances.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Cluster'
+                  $ref: '#/components/schemas/Instance'
         '401':
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/clusters/{cluster}:
+  /orgs/{org}/installations/{installation}/instances/{instance}:
     get:
-      operationId: getCluster
-      tags: [cluster]
-      summary: Read one of an organization's connected clusters. Requires the `member` role.
-      description: Authorized as `iam:cluster.read` on the organization.
+      operationId: getInstance
+      tags: [instance]
+      summary: Read one of an organization's instances. Requires the `member` role.
+      description: Authorized as `iam:instance.read` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
       responses:
         '200':
-          description: The cluster.
+          description: The instance.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Cluster'
+                $ref: '#/components/schemas/Instance'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -1984,30 +2162,30 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
     patch:
-      operationId: updateCluster
-      tags: [cluster]
-      summary: Rename or describe a connected cluster. Requires the `admin` role.
+      operationId: updateInstance
+      tags: [instance]
+      summary: Rename or describe an instance. Requires the `admin` role.
       description: >-
-        Changes what the organization calls the cluster and what it
-        says the cluster is for, and nothing else. A field left out
-        keeps its value. Authorized as `iam:cluster.update` on the
-        organization.
+        Changes what the organization calls the instance and what it
+        says the instance is for, and nothing else. A field left out
+        keeps its value. Authorized as `iam:instance.update` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ClusterPatch'
+              $ref: '#/components/schemas/InstancePatch'
       responses:
         '200':
-          description: The cluster as stored after the change.
+          description: The instance as stored after the change.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Cluster'
+                $ref: '#/components/schemas/Instance'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2017,21 +2195,21 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
     delete:
-      operationId: deleteCluster
-      tags: [cluster]
-      summary: Delete a connected cluster's record. Requires the `admin` role.
+      operationId: deleteInstance
+      tags: [instance]
+      summary: Delete an instance's record. Requires the `admin` role.
       description: >-
-        Removes the organization's record of the cluster, and with it
-        what the cluster's connector authenticates as (ADR-0184
-        decision 7). Nothing in the cluster is touched: garam never
-        dials it. Authorized as `iam:cluster.delete` on the
-        organization.
+        Removes the organization's record of the instance, and with it
+        what the instance authenticates as (ADR-0184
+        decision 7). Nothing in the instance is touched: garam never
+        dials it. Authorized as `iam:instance.delete` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
       responses:
         '204':
-          description: Cluster deleted.
+          description: Instance deleted.
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2040,21 +2218,22 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/clusters/{cluster}/registration-token:
+  /orgs/{org}/installations/{installation}/instances/{instance}/registration-token:
     post:
-      operationId: reissueClusterRegistrationToken
-      tags: [cluster]
-      summary: Answer a new registration token for a cluster. Requires the `admin` role.
+      operationId: reissueInstanceRegistrationToken
+      tags: [instance]
+      summary: Answer a new registration token for an instance. Requires the `admin` role.
       description: >-
         Answers a new one-time registration token, once, and spends any
-        the cluster held before (ADR-0184 decision 3). The connector
+        the instance held before (ADR-0184 decision 3). The connector
         that registers with it binds the key it generated, and every
-        key the cluster held before is withdrawn then: this is how a
+        key the instance held before is withdrawn then: this is how a
         lost key is recovered (decision 7). Until then the keys stand.
-        Authorized as `iam:cluster.reissue` on the organization.
+        Authorized as `iam:instance.reissue` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
       responses:
         '201':
           description: The registration token.
@@ -2066,7 +2245,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterRegistrationToken'
+                $ref: '#/components/schemas/InstanceRegistrationToken'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2075,26 +2254,27 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/clusters/{cluster}/keys:
+  /orgs/{org}/installations/{installation}/instances/{instance}/keys:
     get:
-      operationId: listClusterKeys
-      tags: [cluster]
-      summary: List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
+      operationId: listInstanceKeys
+      tags: [instance]
+      summary: List the keys an instance registered, with where each stands. Requires the `member` role.
       description: >-
-        Every key the cluster held, withdrawn ones included, oldest
+        Every key the instance held, withdrawn ones included, oldest
         first. Each is its public record alone: garam never held the
         private half (ADR-0184 decision 4). Authorized as
-        `iam:cluster.read` on the organization.
+        `iam:instance.read` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
       responses:
         '200':
-          description: The cluster's keys.
+          description: The instance's keys.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterKeyList'
+                $ref: '#/components/schemas/InstanceKeyList'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2103,22 +2283,23 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/clusters/{cluster}/keys/{kid}:
+  /orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid}:
     delete:
-      operationId: revokeClusterKey
-      tags: [cluster]
-      summary: Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
+      operationId: revokeInstanceKey
+      tags: [instance]
+      summary: Withdraw an instance's key and every token exchanged under it. Requires the `admin` role.
       description: >-
         Withdraws the key (ADR-0184 decision 7): the next request
         presenting a token exchanged under it is refused, on a
         connection already open too. The key's record stays, listed as
         `revoked`, and a rotation to it is refused. Withdrawing a key
         already withdrawn answers 204 again. Authorized as
-        `iam:cluster.reissue` on the organization, as withdrawing an
+        `iam:instance.reissue` on the installation, as withdrawing an
         operator's key is `iam:operator.reissue`.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
         - $ref: '#/components/parameters/kid'
       responses:
         '204':
@@ -2131,26 +2312,26 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/clusters/{cluster}/report:
+  /orgs/{org}/installations/{installation}/instances/{instance}/report:
     get:
-      operationId: getClusterReport
-      tags: [cluster]
-      summary: Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
+      operationId: getInstanceReport
+      tags: [instance]
+      summary: Read what an instance last reported, and when it last reached garam. Requires the `member` role.
       description: >-
-        The cluster's latest report, the one its connector observed
+        The instance's latest report, the one its connector observed
         last (ADR-0188), and the time of its latest authenticated
         request, each null where there is none. The report keeps only
         the outcomes and objects naming a declaration placed on this
-        cluster, or naming none. Every `spec`, `status` and `message`
-        in it is what the cluster said: display data, to be rendered
-        as text and never acted on. Authorized as `iam:cluster.read` on
-        the organization.
+        instance, or naming none. Every `spec`, `status` and `message`
+        in it is what the instance said: display data, to be rendered
+        as text and never acted on. Authorized as `iam:instance.read` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
       responses:
         '200':
-          description: What garam holds of the cluster's reports.
+          description: What garam holds of the instance's reports.
           content:
             application/json:
               schema:
@@ -2163,21 +2344,22 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/clusters/{cluster}/declarations:
+  /orgs/{org}/installations/{installation}/instances/{instance}/declarations:
     get:
-      operationId: listClusterDeclarations
-      tags: [cluster]
-      summary: List the declarations placed on a connected cluster. Requires the `member` role.
+      operationId: listInstanceDeclarations
+      tags: [instance]
+      summary: List the declarations placed on an instance. Requires the `member` role.
       description: >-
-        The live declarations placed on the cluster, in the order each
+        The live declarations placed on the instance, in the order each
         was last written. A tombstoned declaration is not listed.
-        Authorized as `iam:cluster.read` on the organization.
+        Authorized as `iam:instance.read` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
       responses:
         '200':
-          description: The cluster's live declarations.
+          description: The instance's live declarations.
           content:
             application/json:
               schema:
@@ -2191,11 +2373,11 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
     post:
-      operationId: createClusterDeclaration
-      tags: [cluster]
-      summary: Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
+      operationId: createInstanceDeclaration
+      tags: [instance]
+      summary: Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
       description: >-
-        Places the object on the cluster for its connector to apply
+        Places the object on the instance for its connector to apply
         (ADR-0187), at generation 1. An object the parser of
         garam-bot's interface 1 refuses, or one with no namespace,
         answers 422 naming what was refused: the connector would hold
@@ -2203,7 +2385,8 @@ paths:
         has. Authorized as `iam:cluster.declare` on the organization.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
       requestBody:
         required: true
         content:
@@ -2229,17 +2412,18 @@ paths:
           $ref: '#/components/responses/Error'
         '422':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/clusters/{cluster}/declarations/{declaration}:
+  /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration}:
     get:
-      operationId: getClusterDeclaration
-      tags: [cluster]
-      summary: Read one live declaration placed on a connected cluster. Requires the `member` role.
+      operationId: getInstanceDeclaration
+      tags: [instance]
+      summary: Read one live declaration placed on an instance. Requires the `member` role.
       description: >-
         A tombstoned declaration answers 404. Authorized as
-        `iam:cluster.read` on the organization.
+        `iam:instance.read` on the installation.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
         - $ref: '#/components/parameters/declaration'
       responses:
         '200':
@@ -2257,20 +2441,21 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
     put:
-      operationId: putClusterDeclaration
-      tags: [cluster]
-      summary: Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
+      operationId: putInstanceDeclaration
+      tags: [instance]
+      summary: Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
       description: >-
         An identifier never placed is placed at generation 1 and
-        answers 201. One live on this cluster takes the object as its
-        next generation and answers 200. One placed on another cluster,
+        answers 201. One live on this instance takes the object as its
+        next generation and answers 200. One placed on another instance,
         or tombstoned, answers 409: an identifier names one
         declaration, once. The object is checked as
-        `createClusterDeclaration` checks it. Authorized as
+        `createInstanceDeclaration` checks it. Authorized as
         `iam:cluster.declare` on the organization.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
         - $ref: '#/components/parameters/declaration'
       requestBody:
         required: true
@@ -2304,9 +2489,9 @@ paths:
         '422':
           $ref: '#/components/responses/Error'
     delete:
-      operationId: deleteClusterDeclaration
-      tags: [cluster]
-      summary: Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
+      operationId: deleteInstanceDeclaration
+      tags: [instance]
+      summary: Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
       description: >-
         Sends the connector a delete at the declaration's next
         generation. The identifier is never placed again. A declaration
@@ -2314,7 +2499,8 @@ paths:
         `iam:cluster.declare` on the organization.
       parameters:
         - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/cluster'
+        - $ref: '#/components/parameters/installation'
+        - $ref: '#/components/parameters/instance'
         - $ref: '#/components/parameters/declaration'
       responses:
         '204':
@@ -3488,12 +3674,28 @@ components:
       x-go-name: KeyID
       schema:
         type: string
-    cluster:
-      name: cluster
+    app:
+      name: app
       in: path
       required: true
-      description: Cluster identifier (the last GRN segment).
-      x-go-name: ClusterSlug
+      description: An app's slug, the last segment of its GRN.
+      x-go-name: AppSlug
+      schema:
+        type: string
+    installation:
+      name: installation
+      in: path
+      required: true
+      description: An installation's identifier, its app's slug.
+      x-go-name: InstallationSlug
+      schema:
+        type: string
+    instance:
+      name: instance
+      in: path
+      required: true
+      description: Instance identifier (the last GRN segment).
+      x-go-name: InstanceSlug
       schema:
         type: string
     declaration:
@@ -4187,7 +4389,7 @@ components:
           example: eng
     PermissionResourceType:
       type: string
-      enum: [group, project, agent, policy, cowork-page, cowork-channel, cowork-task, cowork-artifact]
+      enum: [group, project, agent, policy, installation, cowork-page, cowork-channel, cowork-task, cowork-artifact]
     PermissionCheckAnswer:
       type: object
       required: [results]
@@ -5206,27 +5408,130 @@ components:
               $ref: '#/components/schemas/OperatorName'
             description:
               $ref: '#/components/schemas/OperatorDescription'
-    Cluster:
+    App:
       type: object
       description: >-
-        A connected cluster this organization has created (ADR-0184).
-        Nothing on it is a report from the cluster.
-      required: [grn, name, description, orgGrn, createdBy, createdAt]
+        An app's record (ADR-0192 decision 2). Every difference between
+        apps is one of these settings.
+      required: [grn, slug, name, description, visibility, requestedActions,
+                 requestsBotHosting, instances, delivery]
+      properties:
+        grn:
+          type: string
+          description: >-
+            `grn:root/iam/app/<slug>` for an app the platform registered,
+            `grn:<org>/iam/app/<slug>` for an organization's.
+          example: grn:root/iam/app/garam-bot-connector
+        slug:
+          type: string
+          example: garam-bot-connector
+        name:
+          type: string
+        description:
+          type: string
+        visibility:
+          type: string
+          enum: [private, public]
+          x-enum-varnames: [AppPrivate, AppPublic]
+          description: A private app is installable only in its own organization.
+        requestedActions:
+          type: array
+          description: >-
+            The single action ids an installation is granted, each
+            written as a permit on the installation.
+          items:
+            type: string
+        requestsBotHosting:
+          type: boolean
+          description: >-
+            Whether it asks to host bots, which an installation's owner
+            grants apart from the requested actions.
+        instances:
+          type: string
+          enum: [none, one, many]
+          x-enum-varnames: [AppInstancesNone, AppInstancesOne, AppInstancesMany]
+          description: How many instances one installation of it holds.
+        delivery:
+          type: string
+          enum: [pull]
+          x-enum-varnames: [AppDeliveryPull]
+          description: How events reach it.
+    Installation:
+      type: object
+      description: One app installed in one organization (ADR-0192 decision 4).
+      required: [grn, orgGrn, appGrn, incarnation, projects, createdBy, createdAt]
+      properties:
+        grn:
+          type: string
+          example: grn:acme/iam/installation/garam-bot-connector
+        orgGrn:
+          type: string
+        appGrn:
+          type: string
+        incarnation:
+          type: string
+          description: >-
+            Tells this installation from an earlier one of the same app,
+            which held the same GRN.
+        projects:
+          type: array
+          description: >-
+            The GRNs of the projects its grants reach, empty where they
+            reach the whole organization.
+          items:
+            type: string
+        createdBy:
+          type: string
+          description: The owner that installed it.
+        createdAt:
+          type: string
+          format: date-time
+    InstallationCreation:
+      type: object
+      required: [app]
+      properties:
+        app:
+          type: string
+          description: The slug of the app to install.
+          example: garam-bot-connector
+        projects:
+          type: array
+          description: >-
+            The slugs of the projects its grants reach. Left out, they
+            reach the whole organization; an empty list is refused.
+          items:
+            type: string
+    Instance:
+      type: object
+      description: >-
+        A running copy of an installation's app (ADR-0192 decision 1).
+        Nothing on it is a report from the instance.
+      required: [grn, installationGrn, name, description, kind, orgGrn, createdBy, createdAt]
       properties:
         grn:
           type: string
           description: The GRN, whose identifier garam minted.
-          example: grn:acme/iam/cluster/5f60710a1b2c3d4e
+          example: grn:acme/iam/instance/5f60710a1b2c3d4e
+        installationGrn:
+          type: string
+          description: The installation it is a copy of.
         name:
           type: string
           description: >-
-            What the organization calls the cluster. It is not unique
+            What the organization calls the instance. It is not unique
             and not an identity. A creation that named none is called
             by its identifier.
           example: EKS production
         description:
           type: string
-          description: What the organization says the cluster is for, empty where it says nothing.
+          description: What the organization says the instance is for, empty where it says nothing.
+        kind:
+          type: string
+          description: >-
+            What the instance runs on, as the organization says it,
+            empty where it says nothing. garam stores and shows it and
+            never reads it.
+          example: cluster
         orgGrn:
           type: string
         createdBy:
@@ -5235,15 +5540,15 @@ components:
         createdAt:
           type: string
           format: date-time
-    CreatedCluster:
+    CreatedInstance:
       type: object
-      required: [cluster, registration]
+      required: [instance, registration]
       properties:
-        cluster:
-          $ref: '#/components/schemas/Cluster'
+        instance:
+          $ref: '#/components/schemas/Instance'
         registration:
-          $ref: '#/components/schemas/ClusterRegistrationToken'
-    ClusterRegistrationToken:
+          $ref: '#/components/schemas/InstanceRegistrationToken'
+    InstanceRegistrationToken:
       type: object
       description: >-
         A one-time registration token, answered once. It is good for
@@ -5257,19 +5562,19 @@ components:
         expiresAt:
           type: string
           format: date-time
-    ClusterKeyList:
+    InstanceKeyList:
       type: object
       required: [keys]
       properties:
         keys:
           type: array
           items:
-            $ref: '#/components/schemas/ClusterKey'
-    ClusterKey:
+            $ref: '#/components/schemas/InstanceKey'
+    InstanceKey:
       type: object
       description: >-
-        The public record of one key a cluster's connector generated.
-        It carries no private material.
+        The public record of one key an instance generated. It carries
+        no private material.
       required: [kid, state, createdAt]
       properties:
         kid:
@@ -5278,7 +5583,7 @@ components:
         state:
           type: string
           enum: [active, retiring, revoked]
-          x-enum-varnames: [ClusterKeyActive, ClusterKeyRetiring, ClusterKeyRevoked]
+          x-enum-varnames: [InstanceKeyActive, InstanceKeyRetiring, InstanceKeyRevoked]
           description: >-
             Where the key stands at garam's database time: `retiring`
             until `retiresAt`, which a rotation set; `revoked` once
@@ -5292,35 +5597,45 @@ components:
         revokedAt:
           type: string
           format: date-time
-    ClusterCreation:
+    InstanceCreation:
       type: object
       properties:
         name:
-          $ref: '#/components/schemas/ClusterName'
+          $ref: '#/components/schemas/InstanceName'
         description:
-          $ref: '#/components/schemas/ClusterDescription'
-    ClusterPatch:
+          $ref: '#/components/schemas/InstanceDescription'
+        kind:
+          $ref: '#/components/schemas/InstanceKind'
+    InstancePatch:
       type: object
       description: >-
-        A change to what the organization says about a cluster. A field
-        left out keeps its value; the identifier is not a field.
+        A change to what the organization says about an instance. A
+        field left out keeps its value; the identifier is not a field.
       properties:
         name:
-          $ref: '#/components/schemas/ClusterName'
+          $ref: '#/components/schemas/InstanceName'
         description:
-          $ref: '#/components/schemas/ClusterDescription'
-    ClusterName:
+          $ref: '#/components/schemas/InstanceDescription'
+        kind:
+          $ref: '#/components/schemas/InstanceKind'
+    InstanceName:
       type: string
       description: >-
         At most 100 characters once surrounding space is trimmed, and
         at least one. Left out of a creation, the name is the
         identifier.
       example: EKS production
-    ClusterDescription:
+    InstanceDescription:
       type: string
       description: >-
         At most 1000 characters once surrounding space is trimmed. Empty
         is no description, and on an update clears the one there was.
+    InstanceKind:
+      type: string
+      description: >-
+        At most 64 characters once surrounding space is trimmed. Empty
+        is no kind, and on an update clears the one there was.
+      example: cluster
     ClusterDeclarationWrite:
       type: object
       required: [object]
@@ -5344,16 +5659,16 @@ components:
     ClusterDeclaration:
       type: object
       description: >-
-        One declaration placed on a connected cluster, which its
-        connector applies (ADR-0187).
-      required: [id, cluster, generation, object, createdAt, updatedAt]
+        One declaration placed on an instance of garam-bot-connector,
+        which its connector applies (ADR-0187).
+      required: [id, instance, generation, object, createdAt, updatedAt]
       properties:
         id:
           type: string
           example: decl-5f60710a1b2c3d4e
-        cluster:
+        instance:
           type: string
-          description: The GRN of the cluster it is placed on.
+          description: The GRN of the instance it is placed on.
         generation:
           type: integer
           format: int64
@@ -5376,17 +5691,17 @@ components:
             $ref: '#/components/schemas/ClusterDeclaration'
     ClusterReportView:
       type: object
-      description: What garam holds of a connected cluster's reports.
-      required: [cluster, lastContactAt, report]
+      description: What garam holds of an instance's reports.
+      required: [instance, lastContactAt, report]
       properties:
-        cluster:
+        instance:
           type: string
-          description: The cluster's GRN.
+          description: The instance's GRN.
         lastContactAt:
           type: [string, 'null']
           format: date-time
           description: >-
-            When the cluster's latest authenticated request reached
+            When the instance's latest authenticated request reached
             garam, to within a second; null where none has.
         report:
           oneOf:

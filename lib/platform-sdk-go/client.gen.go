@@ -177,6 +177,60 @@ func (e AgentSupervisorState) Valid() bool {
 	}
 }
 
+// Defines values for AppDelivery.
+const (
+	AppDeliveryPull AppDelivery = "pull"
+)
+
+// Valid indicates whether the value is a known member of the AppDelivery enum.
+func (e AppDelivery) Valid() bool {
+	switch e {
+	case AppDeliveryPull:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AppInstances.
+const (
+	AppInstancesMany AppInstances = "many"
+	AppInstancesNone AppInstances = "none"
+	AppInstancesOne  AppInstances = "one"
+)
+
+// Valid indicates whether the value is a known member of the AppInstances enum.
+func (e AppInstances) Valid() bool {
+	switch e {
+	case AppInstancesMany:
+		return true
+	case AppInstancesNone:
+		return true
+	case AppInstancesOne:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AppVisibility.
+const (
+	AppPrivate AppVisibility = "private"
+	AppPublic  AppVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the AppVisibility enum.
+func (e AppVisibility) Valid() bool {
+	switch e {
+	case AppPrivate:
+		return true
+	case AppPublic:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditRecordKind.
 const (
 	Denial         AuditRecordKind = "denial"
@@ -216,27 +270,6 @@ func (e ClusterDeclarationOutcomeOutcome) Valid() bool {
 	case Invalid:
 		return true
 	case NamespaceNotWatched:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClusterKeyState.
-const (
-	ClusterKeyActive   ClusterKeyState = "active"
-	ClusterKeyRetiring ClusterKeyState = "retiring"
-	ClusterKeyRevoked  ClusterKeyState = "revoked"
-)
-
-// Valid indicates whether the value is a known member of the ClusterKeyState enum.
-func (e ClusterKeyState) Valid() bool {
-	switch e {
-	case ClusterKeyActive:
-		return true
-	case ClusterKeyRetiring:
-		return true
-	case ClusterKeyRevoked:
 		return true
 	default:
 		return false
@@ -287,16 +320,16 @@ func (e ClusterReportedObjectKind) Valid() bool {
 
 // Defines values for ClusterReportedObjectOwner.
 const (
-	ClusterReportedObjectOwnerCluster ClusterReportedObjectOwner = "cluster"
-	ClusterReportedObjectOwnerGaram   ClusterReportedObjectOwner = "garam"
+	Cluster ClusterReportedObjectOwner = "cluster"
+	Garam   ClusterReportedObjectOwner = "garam"
 )
 
 // Valid indicates whether the value is a known member of the ClusterReportedObjectOwner enum.
 func (e ClusterReportedObjectOwner) Valid() bool {
 	switch e {
-	case ClusterReportedObjectOwnerCluster:
+	case Cluster:
 		return true
-	case ClusterReportedObjectOwnerGaram:
+	case Garam:
 		return true
 	default:
 		return false
@@ -564,6 +597,27 @@ func (e IamRoleLinkScope) Valid() bool {
 	case IamRoleLinkScopeOrganization:
 		return true
 	case IamRoleLinkScopeTeamOrProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InstanceKeyState.
+const (
+	InstanceKeyActive   InstanceKeyState = "active"
+	InstanceKeyRetiring InstanceKeyState = "retiring"
+	InstanceKeyRevoked  InstanceKeyState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the InstanceKeyState enum.
+func (e InstanceKeyState) Valid() bool {
+	switch e {
+	case InstanceKeyActive:
+		return true
+	case InstanceKeyRetiring:
+		return true
+	case InstanceKeyRevoked:
 		return true
 	default:
 		return false
@@ -902,6 +956,7 @@ const (
 	PermissionResourceTypeCoworkPage     PermissionResourceType = "cowork-page"
 	PermissionResourceTypeCoworkTask     PermissionResourceType = "cowork-task"
 	PermissionResourceTypeGroup          PermissionResourceType = "group"
+	PermissionResourceTypeInstallation   PermissionResourceType = "installation"
 	PermissionResourceTypePolicy         PermissionResourceType = "policy"
 	PermissionResourceTypeProject        PermissionResourceType = "project"
 )
@@ -920,6 +975,8 @@ func (e PermissionResourceType) Valid() bool {
 	case PermissionResourceTypeCoworkTask:
 		return true
 	case PermissionResourceTypeGroup:
+		return true
+	case PermissionResourceTypeInstallation:
 		return true
 	case PermissionResourceTypePolicy:
 		return true
@@ -1240,6 +1297,39 @@ type AgentSupervisorPlacement string
 // AgentSupervisorState defines model for AgentSupervisor.State.
 type AgentSupervisorState string
 
+// App An app's record (ADR-0192 decision 2). Every difference between apps is one of these settings.
+type App struct {
+	// Delivery How events reach it.
+	Delivery    AppDelivery `json:"delivery"`
+	Description string      `json:"description"`
+
+	// Grn `grn:root/iam/app/<slug>` for an app the platform registered, `grn:<org>/iam/app/<slug>` for an organization's.
+	Grn string `json:"grn"`
+
+	// Instances How many instances one installation of it holds.
+	Instances AppInstances `json:"instances"`
+	Name      string       `json:"name"`
+
+	// RequestedActions The single action ids an installation is granted, each written as a permit on the installation.
+	RequestedActions []string `json:"requestedActions"`
+
+	// RequestsBotHosting Whether it asks to host bots, which an installation's owner grants apart from the requested actions.
+	RequestsBotHosting bool   `json:"requestsBotHosting"`
+	Slug               string `json:"slug"`
+
+	// Visibility A private app is installable only in its own organization.
+	Visibility AppVisibility `json:"visibility"`
+}
+
+// AppDelivery How events reach it.
+type AppDelivery string
+
+// AppInstances How many instances one installation of it holds.
+type AppInstances string
+
+// AppVisibility A private app is installable only in its own organization.
+type AppVisibility string
+
 // AuditRecord One record of the policy service's audit (ADR-0148). It holds no policy text, no context, no token and no fault text.
 type AuditRecord struct {
 	// Action The action in its qualified form, such as `iam:permit.write`.
@@ -1293,42 +1383,16 @@ type AuditRecordPage struct {
 	Records       []AuditRecord `json:"records"`
 }
 
-// Cluster A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster.
-type Cluster struct {
-	CreatedAt time.Time `json:"createdAt"`
-
-	// CreatedBy The member that created the record.
-	CreatedBy string `json:"createdBy"`
-
-	// Description What the organization says the cluster is for, empty where it says nothing.
-	Description string `json:"description"`
-
-	// Grn The GRN, whose identifier garam minted.
-	Grn string `json:"grn"`
-
-	// Name What the organization calls the cluster. It is not unique and not an identity. A creation that named none is called by its identifier.
-	Name   string `json:"name"`
-	OrgGrn string `json:"orgGrn"`
-}
-
-// ClusterCreation defines model for ClusterCreation.
-type ClusterCreation struct {
-	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
-	Description *ClusterDescription `json:"description,omitempty"`
-
-	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
-	Name *ClusterName `json:"name,omitempty"`
-}
-
-// ClusterDeclaration One declaration placed on a connected cluster, which its connector applies (ADR-0187).
+// ClusterDeclaration One declaration placed on an instance of garam-bot-connector, which its connector applies (ADR-0187).
 type ClusterDeclaration struct {
-	// Cluster The GRN of the cluster it is placed on.
-	Cluster   string    `json:"cluster"`
 	CreatedAt time.Time `json:"createdAt"`
 
 	// Generation 1 when placed, and one more at every write.
 	Generation int64  `json:"generation"`
 	Id         string `json:"id"`
+
+	// Instance The GRN of the instance it is placed on.
+	Instance string `json:"instance"`
 
 	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 	Object    ClusterDeclaredObject `json:"object"`
@@ -1362,48 +1426,6 @@ type ClusterDeclarationWrite struct {
 // ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
 type ClusterDeclaredObject = json.RawMessage
 
-// ClusterDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
-type ClusterDescription = string
-
-// ClusterKey The public record of one key a cluster's connector generated. It carries no private material.
-type ClusterKey struct {
-	CreatedAt time.Time `json:"createdAt"`
-
-	// Kid The base64url SHA-256 RFC 7638 thumbprint of the public key.
-	Kid       string     `json:"kid"`
-	RetiresAt *time.Time `json:"retiresAt,omitempty"`
-	RevokedAt *time.Time `json:"revokedAt,omitempty"`
-
-	// State Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
-	State ClusterKeyState `json:"state"`
-}
-
-// ClusterKeyState Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
-type ClusterKeyState string
-
-// ClusterKeyList defines model for ClusterKeyList.
-type ClusterKeyList struct {
-	Keys []ClusterKey `json:"keys"`
-}
-
-// ClusterName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
-type ClusterName = string
-
-// ClusterPatch A change to what the organization says about a cluster. A field left out keeps its value; the identifier is not a field.
-type ClusterPatch struct {
-	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
-	Description *ClusterDescription `json:"description,omitempty"`
-
-	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
-	Name *ClusterName `json:"name,omitempty"`
-}
-
-// ClusterRegistrationToken A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
-type ClusterRegistrationToken struct {
-	ExpiresAt         time.Time `json:"expiresAt"`
-	RegistrationToken string    `json:"registrationToken"`
-}
-
 // ClusterReport A connected cluster's report (cluster-connection v1alpha1 REP-1), as garam kept it.
 type ClusterReport struct {
 	Connector    ClusterReportConnector      `json:"connector"`
@@ -1426,12 +1448,12 @@ type ClusterReportConnector struct {
 // ClusterReportConnectorMode defines model for ClusterReportConnector.Mode.
 type ClusterReportConnectorMode string
 
-// ClusterReportView What garam holds of a connected cluster's reports.
+// ClusterReportView What garam holds of an instance's reports.
 type ClusterReportView struct {
-	// Cluster The cluster's GRN.
-	Cluster string `json:"cluster"`
+	// Instance The instance's GRN.
+	Instance string `json:"instance"`
 
-	// LastContactAt When the cluster's latest authenticated request reached garam, to within a second; null where none has.
+	// LastContactAt When the instance's latest authenticated request reached garam, to within a second; null where none has.
 	LastContactAt *time.Time     `json:"lastContactAt"`
 	Report        *ClusterReport `json:"report"`
 }
@@ -1473,13 +1495,13 @@ type ControlEndpointWrite struct {
 	Url string `json:"url"`
 }
 
-// CreatedCluster defines model for CreatedCluster.
-type CreatedCluster struct {
-	// Cluster A connected cluster this organization has created (ADR-0184). Nothing on it is a report from the cluster.
-	Cluster Cluster `json:"cluster"`
+// CreatedInstance defines model for CreatedInstance.
+type CreatedInstance struct {
+	// Instance A running copy of an installation's app (ADR-0192 decision 1). Nothing on it is a report from the instance.
+	Instance Instance `json:"instance"`
 
 	// Registration A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
-	Registration ClusterRegistrationToken `json:"registration"`
+	Registration InstanceRegistrationToken `json:"registration"`
 }
 
 // CredentialEvent defines model for CredentialEvent.
@@ -1793,6 +1815,116 @@ type IamRoleLink struct {
 
 // IamRoleLinkScope defines model for IamRoleLink.Scope.
 type IamRoleLinkScope string
+
+// Installation One app installed in one organization (ADR-0192 decision 4).
+type Installation struct {
+	AppGrn    string    `json:"appGrn"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy The owner that installed it.
+	CreatedBy string `json:"createdBy"`
+	Grn       string `json:"grn"`
+
+	// Incarnation Tells this installation from an earlier one of the same app, which held the same GRN.
+	Incarnation string `json:"incarnation"`
+	OrgGrn      string `json:"orgGrn"`
+
+	// Projects The GRNs of the projects its grants reach, empty where they reach the whole organization.
+	Projects []string `json:"projects"`
+}
+
+// InstallationCreation defines model for InstallationCreation.
+type InstallationCreation struct {
+	// App The slug of the app to install.
+	App string `json:"app"`
+
+	// Projects The slugs of the projects its grants reach. Left out, they reach the whole organization; an empty list is refused.
+	Projects *[]string `json:"projects,omitempty"`
+}
+
+// Instance A running copy of an installation's app (ADR-0192 decision 1). Nothing on it is a report from the instance.
+type Instance struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy The member that created the record.
+	CreatedBy string `json:"createdBy"`
+
+	// Description What the organization says the instance is for, empty where it says nothing.
+	Description string `json:"description"`
+
+	// Grn The GRN, whose identifier garam minted.
+	Grn string `json:"grn"`
+
+	// InstallationGrn The installation it is a copy of.
+	InstallationGrn string `json:"installationGrn"`
+
+	// Kind What the instance runs on, as the organization says it, empty where it says nothing. garam stores and shows it and never reads it.
+	Kind string `json:"kind"`
+
+	// Name What the organization calls the instance. It is not unique and not an identity. A creation that named none is called by its identifier.
+	Name   string `json:"name"`
+	OrgGrn string `json:"orgGrn"`
+}
+
+// InstanceCreation defines model for InstanceCreation.
+type InstanceCreation struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *InstanceDescription `json:"description,omitempty"`
+
+	// Kind At most 64 characters once surrounding space is trimmed. Empty is no kind, and on an update clears the one there was.
+	Kind *InstanceKind `json:"kind,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+	Name *InstanceName `json:"name,omitempty"`
+}
+
+// InstanceDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+type InstanceDescription = string
+
+// InstanceKey The public record of one key an instance generated. It carries no private material.
+type InstanceKey struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Kid The base64url SHA-256 RFC 7638 thumbprint of the public key.
+	Kid       string     `json:"kid"`
+	RetiresAt *time.Time `json:"retiresAt,omitempty"`
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+
+	// State Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+	State InstanceKeyState `json:"state"`
+}
+
+// InstanceKeyState Where the key stands at garam's database time: `retiring` until `retiresAt`, which a rotation set; `revoked` once withdrawn or past it.
+type InstanceKeyState string
+
+// InstanceKeyList defines model for InstanceKeyList.
+type InstanceKeyList struct {
+	Keys []InstanceKey `json:"keys"`
+}
+
+// InstanceKind At most 64 characters once surrounding space is trimmed. Empty is no kind, and on an update clears the one there was.
+type InstanceKind = string
+
+// InstanceName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+type InstanceName = string
+
+// InstancePatch A change to what the organization says about an instance. A field left out keeps its value; the identifier is not a field.
+type InstancePatch struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *InstanceDescription `json:"description,omitempty"`
+
+	// Kind At most 64 characters once surrounding space is trimmed. Empty is no kind, and on an update clears the one there was.
+	Kind *InstanceKind `json:"kind,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a creation, the name is the identifier.
+	Name *InstanceName `json:"name,omitempty"`
+}
+
+// InstanceRegistrationToken A one-time registration token, answered once. It is good for one registration attempt within the hour: presenting it spends it whatever the outcome (ADR-0184 decision 3).
+type InstanceRegistrationToken struct {
+	ExpiresAt         time.Time `json:"expiresAt"`
+	RegistrationToken string    `json:"registrationToken"`
+}
 
 // Invitation defines model for Invitation.
 type Invitation struct {
@@ -2464,8 +2596,8 @@ type User struct {
 // AgentSlug defines model for agent.
 type AgentSlug = string
 
-// ClusterSlug defines model for cluster.
-type ClusterSlug = string
+// AppSlug defines model for app.
+type AppSlug = string
 
 // ContractVersion defines model for contractVersion.
 type ContractVersion = string
@@ -2478,6 +2610,12 @@ type GroupSlug = string
 
 // IamPolicyId defines model for iamPolicy.
 type IamPolicyId = string
+
+// InstallationSlug defines model for installation.
+type InstallationSlug = string
+
+// InstanceSlug defines model for instance.
+type InstanceSlug = string
 
 // KeyID defines model for kid.
 type KeyID = string
@@ -2719,18 +2857,6 @@ type ApproveAgentEnrollmentJSONRequestBody = AgentEnrollmentApproval
 // RenameAgentJSONRequestBody defines body for RenameAgent for application/json ContentType.
 type RenameAgentJSONRequestBody = AgentPatch
 
-// CreateClusterJSONRequestBody defines body for CreateCluster for application/json ContentType.
-type CreateClusterJSONRequestBody = ClusterCreation
-
-// UpdateClusterJSONRequestBody defines body for UpdateCluster for application/json ContentType.
-type UpdateClusterJSONRequestBody = ClusterPatch
-
-// CreateClusterDeclarationJSONRequestBody defines body for CreateClusterDeclaration for application/json ContentType.
-type CreateClusterDeclarationJSONRequestBody = ClusterDeclarationWrite
-
-// PutClusterDeclarationJSONRequestBody defines body for PutClusterDeclaration for application/json ContentType.
-type PutClusterDeclarationJSONRequestBody = ClusterDeclarationWrite
-
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
 
@@ -2748,6 +2874,21 @@ type RollbackIamPolicyJSONRequestBody = PolicyRollback
 
 // CreateIamPolicyVersionJSONRequestBody defines body for CreateIamPolicyVersion for application/json ContentType.
 type CreateIamPolicyVersionJSONRequestBody = IamPolicyVersionCreate
+
+// CreateInstallationJSONRequestBody defines body for CreateInstallation for application/json ContentType.
+type CreateInstallationJSONRequestBody = InstallationCreation
+
+// CreateInstanceJSONRequestBody defines body for CreateInstance for application/json ContentType.
+type CreateInstanceJSONRequestBody = InstanceCreation
+
+// UpdateInstanceJSONRequestBody defines body for UpdateInstance for application/json ContentType.
+type UpdateInstanceJSONRequestBody = InstancePatch
+
+// CreateInstanceDeclarationJSONRequestBody defines body for CreateInstanceDeclaration for application/json ContentType.
+type CreateInstanceDeclarationJSONRequestBody = ClusterDeclarationWrite
+
+// PutInstanceDeclarationJSONRequestBody defines body for PutInstanceDeclaration for application/json ContentType.
+type PutInstanceDeclarationJSONRequestBody = ClusterDeclarationWrite
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreate
@@ -3251,154 +3392,26 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/agents/{agent}/watch (the `WatchAgent` operationId).
 	WatchAgent(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListApps List the apps an organization may install. Requires the `member` role.
+	//
+	// The organization's own apps and every public one, ordered by GRN (ADR-0192 decision 3). Authorized as `iam:app.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/apps (the `ListApps` operationId).
+	ListApps(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApp Read an app the organization may install. Requires the `member` role.
+	//
+	// Another organization's private app answers 404, as one that is not there does. Authorized as `iam:app.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/apps/{app} (the `GetApp` operationId).
+	GetApp(ctx context.Context, org Org, appSlug AppSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAuditRecords Read an organization's audit records, newest first.
 	//
 	// Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
 	//
 	// Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
 	ListAuditRecords(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListClusters List an organization's connected clusters. Requires the `member` role.
-	//
-	// The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
-	//
-	// Corresponds with GET /orgs/{org}/clusters (the `ListClusters` operationId).
-	ListClusters(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateClusterWithBody Create a connected cluster's record. Requires the `admin` role.
-	//
-	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
-	CreateClusterWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateCluster Create a connected cluster's record. Requires the `admin` role.
-	//
-	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
-	CreateCluster(ctx context.Context, org Org, body CreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteCluster Delete a connected cluster's record. Requires the `admin` role.
-	//
-	// Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
-	//
-	// Corresponds with DELETE /orgs/{org}/clusters/{cluster} (the `DeleteCluster` operationId).
-	DeleteCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetCluster Read one of an organization's connected clusters. Requires the `member` role.
-	//
-	// Authorized as `iam:cluster.read` on the organization.
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster} (the `GetCluster` operationId).
-	GetCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UpdateClusterWithBody Rename or describe a connected cluster. Requires the `admin` role.
-	//
-	// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
-	UpdateClusterWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UpdateCluster Rename or describe a connected cluster. Requires the `admin` role.
-	//
-	// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
-	UpdateCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListClusterDeclarations List the declarations placed on a connected cluster. Requires the `member` role.
-	//
-	// The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations (the `ListClusterDeclarations` operationId).
-	ListClusterDeclarations(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateClusterDeclarationWithBody Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-	//
-	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
-	CreateClusterDeclarationWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateClusterDeclaration Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-	//
-	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
-	CreateClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteClusterDeclaration Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
-	//
-	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `DeleteClusterDeclaration` operationId).
-	DeleteClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetClusterDeclaration Read one live declaration placed on a connected cluster. Requires the `member` role.
-	//
-	// A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `GetClusterDeclaration` operationId).
-	GetClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PutClusterDeclarationWithBody Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
-	PutClusterDeclarationWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PutClusterDeclaration Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
-	PutClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListClusterKeys List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
-	//
-	// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster}/keys (the `ListClusterKeys` operationId).
-	ListClusterKeys(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// RevokeClusterKey Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
-	//
-	// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
-	//
-	// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/keys/{kid} (the `RevokeClusterKey` operationId).
-	RevokeClusterKey(ctx context.Context, org Org, clusterSlug ClusterSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ReissueClusterRegistrationToken Answer a new registration token for a cluster. Requires the `admin` role.
-	//
-	// Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
-	//
-	// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
-	ReissueClusterRegistrationToken(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetClusterReport Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
-	//
-	// The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster}/report (the `GetClusterReport` operationId).
-	GetClusterReport(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
 	//
@@ -3595,6 +3608,187 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
 	CreateIamPolicyVersion(ctx context.Context, org Org, iamPolicyId IamPolicyId, body CreateIamPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListInstallations List the apps an organization has installed. Requires the `member` role.
+	//
+	// Ordered by GRN. Authorized as `iam:installation.read` on the organization.
+	//
+	// Corresponds with GET /orgs/{org}/installations (the `ListInstallations` operationId).
+	ListInstallations(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateInstallationWithBody Install an app in an organization. Requires the `owner` role.
+	//
+	// Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/installations (the `CreateInstallation` operationId).
+	CreateInstallationWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateInstallation Install an app in an organization. Requires the `owner` role.
+	//
+	// Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/installations (the `CreateInstallation` operationId).
+	CreateInstallation(ctx context.Context, org Org, body CreateInstallationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteInstallation Uninstall an app. Requires the `admin` role.
+	//
+	// Deletes the installation with its instances, their keys and their tokens, each refused from the next request (ADR-0192 decision 4). A reinstall is a new incarnation and inherits none of it. Authorized as `iam:installation.delete` on the installation.
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation} (the `DeleteInstallation` operationId).
+	DeleteInstallation(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInstallation Read one of an organization's installations. Requires the `member` role.
+	//
+	// Authorized as `iam:installation.read` on the installation.
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation} (the `GetInstallation` operationId).
+	GetInstallation(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListInstances List an installation's instances. Requires the `member` role.
+	//
+	// The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances (the `ListInstances` operationId).
+	ListInstances(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateInstanceWithBody Create an instance's record. Requires the `admin` role.
+	//
+	// Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances (the `CreateInstance` operationId).
+	CreateInstanceWithBody(ctx context.Context, org Org, installationSlug InstallationSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateInstance Create an instance's record. Requires the `admin` role.
+	//
+	// Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances (the `CreateInstance` operationId).
+	CreateInstance(ctx context.Context, org Org, installationSlug InstallationSlug, body CreateInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteInstance Delete an instance's record. Requires the `admin` role.
+	//
+	// Removes the organization's record of the instance, and with it what the instance authenticates as (ADR-0184 decision 7). Nothing in the instance is touched: garam never dials it. Authorized as `iam:instance.delete` on the installation.
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance} (the `DeleteInstance` operationId).
+	DeleteInstance(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInstance Read one of an organization's instances. Requires the `member` role.
+	//
+	// Authorized as `iam:instance.read` on the installation.
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance} (the `GetInstance` operationId).
+	GetInstance(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateInstanceWithBody Rename or describe an instance. Requires the `admin` role.
+	//
+	// Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/installations/{installation}/instances/{instance} (the `UpdateInstance` operationId).
+	UpdateInstanceWithBody(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateInstance Rename or describe an instance. Requires the `admin` role.
+	//
+	// Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/installations/{installation}/instances/{instance} (the `UpdateInstance` operationId).
+	UpdateInstance(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body UpdateInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListInstanceDeclarations List the declarations placed on an instance. Requires the `member` role.
+	//
+	// The live declarations placed on the instance, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:instance.read` on the installation.
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `ListInstanceDeclarations` operationId).
+	ListInstanceDeclarations(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateInstanceDeclarationWithBody Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+	//
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `CreateInstanceDeclaration` operationId).
+	CreateInstanceDeclarationWithBody(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateInstanceDeclaration Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+	//
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `CreateInstanceDeclaration` operationId).
+	CreateInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body CreateInstanceDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteInstanceDeclaration Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
+	//
+	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `DeleteInstanceDeclaration` operationId).
+	DeleteInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInstanceDeclaration Read one live declaration placed on an instance. Requires the `member` role.
+	//
+	// A tombstoned declaration answers 404. Authorized as `iam:instance.read` on the installation.
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `GetInstanceDeclaration` operationId).
+	GetInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutInstanceDeclarationWithBody Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+	//
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `PutInstanceDeclaration` operationId).
+	PutInstanceDeclarationWithBody(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutInstanceDeclaration Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+	//
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `PutInstanceDeclaration` operationId).
+	PutInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, body PutInstanceDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListInstanceKeys List the keys an instance registered, with where each stands. Requires the `member` role.
+	//
+	// Every key the instance held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:instance.read` on the installation.
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/keys (the `ListInstanceKeys` operationId).
+	ListInstanceKeys(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeInstanceKey Withdraw an instance's key and every token exchanged under it. Requires the `admin` role.
+	//
+	// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:instance.reissue` on the installation, as withdrawing an operator's key is `iam:operator.reissue`.
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid} (the `RevokeInstanceKey` operationId).
+	RevokeInstanceKey(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReissueInstanceRegistrationToken Answer a new registration token for an instance. Requires the `admin` role.
+	//
+	// Answers a new one-time registration token, once, and spends any the instance held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the instance held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:instance.reissue` on the installation.
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/registration-token (the `ReissueInstanceRegistrationToken` operationId).
+	ReissueInstanceRegistrationToken(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInstanceReport Read what an instance last reported, and when it last reached garam. Requires the `member` role.
+	//
+	// The instance's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this instance, or naming none. Every `spec`, `status` and `message` in it is what the instance said: display data, to be rendered as text and never acted on. Authorized as `iam:instance.read` on the installation.
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/report (the `GetInstanceReport` operationId).
+	GetInstanceReport(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListInvitations List the invitations that can still be accepted. Requires `iam:org.invite`.
 	//
@@ -4869,6 +5063,40 @@ func (c *Client) WatchAgent(ctx context.Context, org Org, agentSlug AgentSlug, r
 	return c.Client.Do(req)
 }
 
+// ListApps List the apps an organization may install. Requires the `member` role.
+//
+// The organization's own apps and every public one, ordered by GRN (ADR-0192 decision 3). Authorized as `iam:app.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/apps (the `ListApps` operationId).
+func (c *Client) ListApps(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAppsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetApp Read an app the organization may install. Requires the `member` role.
+//
+// Another organization's private app answers 404, as one that is not there does. Authorized as `iam:app.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/apps/{app} (the `GetApp` operationId).
+func (c *Client) GetApp(ctx context.Context, org Org, appSlug AppSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAppRequest(c.Server, org, appSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListAuditRecords Read an organization's audit records, newest first.
 //
 // Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
@@ -4876,328 +5104,6 @@ func (c *Client) WatchAgent(ctx context.Context, org Org, agentSlug AgentSlug, r
 // Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
 func (c *Client) ListAuditRecords(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAuditRecordsRequest(c.Server, org, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListClusters List an organization's connected clusters. Requires the `member` role.
-//
-// The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
-//
-// Corresponds with GET /orgs/{org}/clusters (the `ListClusters` operationId).
-func (c *Client) ListClusters(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListClustersRequest(c.Server, org)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateClusterWithBody Create a connected cluster's record. Requires the `admin` role.
-//
-// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
-func (c *Client) CreateClusterWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateClusterRequestWithBody(c.Server, org, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateCluster Create a connected cluster's record. Requires the `admin` role.
-//
-// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
-func (c *Client) CreateCluster(ctx context.Context, org Org, body CreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateClusterRequest(c.Server, org, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// DeleteCluster Delete a connected cluster's record. Requires the `admin` role.
-//
-// Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
-//
-// Corresponds with DELETE /orgs/{org}/clusters/{cluster} (the `DeleteCluster` operationId).
-func (c *Client) DeleteCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteClusterRequest(c.Server, org, clusterSlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetCluster Read one of an organization's connected clusters. Requires the `member` role.
-//
-// Authorized as `iam:cluster.read` on the organization.
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster} (the `GetCluster` operationId).
-func (c *Client) GetCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterRequest(c.Server, org, clusterSlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// UpdateClusterWithBody Rename or describe a connected cluster. Requires the `admin` role.
-//
-// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
-func (c *Client) UpdateClusterWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateClusterRequestWithBody(c.Server, org, clusterSlug, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// UpdateCluster Rename or describe a connected cluster. Requires the `admin` role.
-//
-// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
-func (c *Client) UpdateCluster(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateClusterRequest(c.Server, org, clusterSlug, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListClusterDeclarations List the declarations placed on a connected cluster. Requires the `member` role.
-//
-// The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations (the `ListClusterDeclarations` operationId).
-func (c *Client) ListClusterDeclarations(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListClusterDeclarationsRequest(c.Server, org, clusterSlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateClusterDeclarationWithBody Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-//
-// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
-func (c *Client) CreateClusterDeclarationWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateClusterDeclarationRequestWithBody(c.Server, org, clusterSlug, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateClusterDeclaration Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-//
-// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
-func (c *Client) CreateClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateClusterDeclarationRequest(c.Server, org, clusterSlug, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// DeleteClusterDeclaration Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
-//
-// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
-//
-// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `DeleteClusterDeclaration` operationId).
-func (c *Client) DeleteClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteClusterDeclarationRequest(c.Server, org, clusterSlug, declarationID)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetClusterDeclaration Read one live declaration placed on a connected cluster. Requires the `member` role.
-//
-// A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `GetClusterDeclaration` operationId).
-func (c *Client) GetClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterDeclarationRequest(c.Server, org, clusterSlug, declarationID)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// PutClusterDeclarationWithBody Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-//
-// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
-func (c *Client) PutClusterDeclarationWithBody(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutClusterDeclarationRequestWithBody(c.Server, org, clusterSlug, declarationID, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// PutClusterDeclaration Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-//
-// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
-func (c *Client) PutClusterDeclaration(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutClusterDeclarationRequest(c.Server, org, clusterSlug, declarationID, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListClusterKeys List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
-//
-// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster}/keys (the `ListClusterKeys` operationId).
-func (c *Client) ListClusterKeys(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListClusterKeysRequest(c.Server, org, clusterSlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// RevokeClusterKey Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
-//
-// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
-//
-// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/keys/{kid} (the `RevokeClusterKey` operationId).
-func (c *Client) RevokeClusterKey(ctx context.Context, org Org, clusterSlug ClusterSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRevokeClusterKeyRequest(c.Server, org, clusterSlug, keyID)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ReissueClusterRegistrationToken Answer a new registration token for a cluster. Requires the `admin` role.
-//
-// Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
-//
-// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
-func (c *Client) ReissueClusterRegistrationToken(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewReissueClusterRegistrationTokenRequest(c.Server, org, clusterSlug)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetClusterReport Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
-//
-// The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster}/report (the `GetClusterReport` operationId).
-func (c *Client) GetClusterReport(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterReportRequest(c.Server, org, clusterSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -5654,6 +5560,417 @@ func (c *Client) CreateIamPolicyVersionWithBody(ctx context.Context, org Org, ia
 // Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
 func (c *Client) CreateIamPolicyVersion(ctx context.Context, org Org, iamPolicyId IamPolicyId, body CreateIamPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateIamPolicyVersionRequest(c.Server, org, iamPolicyId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListInstallations List the apps an organization has installed. Requires the `member` role.
+//
+// Ordered by GRN. Authorized as `iam:installation.read` on the organization.
+//
+// Corresponds with GET /orgs/{org}/installations (the `ListInstallations` operationId).
+func (c *Client) ListInstallations(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInstallationsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateInstallationWithBody Install an app in an organization. Requires the `owner` role.
+//
+// Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/installations (the `CreateInstallation` operationId).
+func (c *Client) CreateInstallationWithBody(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateInstallationRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateInstallation Install an app in an organization. Requires the `owner` role.
+//
+// Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/installations (the `CreateInstallation` operationId).
+func (c *Client) CreateInstallation(ctx context.Context, org Org, body CreateInstallationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateInstallationRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteInstallation Uninstall an app. Requires the `admin` role.
+//
+// Deletes the installation with its instances, their keys and their tokens, each refused from the next request (ADR-0192 decision 4). A reinstall is a new incarnation and inherits none of it. Authorized as `iam:installation.delete` on the installation.
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation} (the `DeleteInstallation` operationId).
+func (c *Client) DeleteInstallation(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteInstallationRequest(c.Server, org, installationSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetInstallation Read one of an organization's installations. Requires the `member` role.
+//
+// Authorized as `iam:installation.read` on the installation.
+//
+// Corresponds with GET /orgs/{org}/installations/{installation} (the `GetInstallation` operationId).
+func (c *Client) GetInstallation(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInstallationRequest(c.Server, org, installationSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListInstances List an installation's instances. Requires the `member` role.
+//
+// The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances (the `ListInstances` operationId).
+func (c *Client) ListInstances(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInstancesRequest(c.Server, org, installationSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateInstanceWithBody Create an instance's record. Requires the `admin` role.
+//
+// Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances (the `CreateInstance` operationId).
+func (c *Client) CreateInstanceWithBody(ctx context.Context, org Org, installationSlug InstallationSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateInstanceRequestWithBody(c.Server, org, installationSlug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateInstance Create an instance's record. Requires the `admin` role.
+//
+// Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances (the `CreateInstance` operationId).
+func (c *Client) CreateInstance(ctx context.Context, org Org, installationSlug InstallationSlug, body CreateInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateInstanceRequest(c.Server, org, installationSlug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteInstance Delete an instance's record. Requires the `admin` role.
+//
+// Removes the organization's record of the instance, and with it what the instance authenticates as (ADR-0184 decision 7). Nothing in the instance is touched: garam never dials it. Authorized as `iam:instance.delete` on the installation.
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance} (the `DeleteInstance` operationId).
+func (c *Client) DeleteInstance(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteInstanceRequest(c.Server, org, installationSlug, instanceSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetInstance Read one of an organization's instances. Requires the `member` role.
+//
+// Authorized as `iam:instance.read` on the installation.
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance} (the `GetInstance` operationId).
+func (c *Client) GetInstance(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInstanceRequest(c.Server, org, installationSlug, instanceSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateInstanceWithBody Rename or describe an instance. Requires the `admin` role.
+//
+// Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /orgs/{org}/installations/{installation}/instances/{instance} (the `UpdateInstance` operationId).
+func (c *Client) UpdateInstanceWithBody(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateInstanceRequestWithBody(c.Server, org, installationSlug, instanceSlug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateInstance Rename or describe an instance. Requires the `admin` role.
+//
+// Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /orgs/{org}/installations/{installation}/instances/{instance} (the `UpdateInstance` operationId).
+func (c *Client) UpdateInstance(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body UpdateInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateInstanceRequest(c.Server, org, installationSlug, instanceSlug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListInstanceDeclarations List the declarations placed on an instance. Requires the `member` role.
+//
+// The live declarations placed on the instance, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:instance.read` on the installation.
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `ListInstanceDeclarations` operationId).
+func (c *Client) ListInstanceDeclarations(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInstanceDeclarationsRequest(c.Server, org, installationSlug, instanceSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateInstanceDeclarationWithBody Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+//
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `CreateInstanceDeclaration` operationId).
+func (c *Client) CreateInstanceDeclarationWithBody(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateInstanceDeclarationRequestWithBody(c.Server, org, installationSlug, instanceSlug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateInstanceDeclaration Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+//
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `CreateInstanceDeclaration` operationId).
+func (c *Client) CreateInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body CreateInstanceDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateInstanceDeclarationRequest(c.Server, org, installationSlug, instanceSlug, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteInstanceDeclaration Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
+//
+// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `DeleteInstanceDeclaration` operationId).
+func (c *Client) DeleteInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteInstanceDeclarationRequest(c.Server, org, installationSlug, instanceSlug, declarationID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetInstanceDeclaration Read one live declaration placed on an instance. Requires the `member` role.
+//
+// A tombstoned declaration answers 404. Authorized as `iam:instance.read` on the installation.
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `GetInstanceDeclaration` operationId).
+func (c *Client) GetInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInstanceDeclarationRequest(c.Server, org, installationSlug, instanceSlug, declarationID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutInstanceDeclarationWithBody Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+//
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `PutInstanceDeclaration` operationId).
+func (c *Client) PutInstanceDeclarationWithBody(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutInstanceDeclarationRequestWithBody(c.Server, org, installationSlug, instanceSlug, declarationID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutInstanceDeclaration Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+//
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `PutInstanceDeclaration` operationId).
+func (c *Client) PutInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, body PutInstanceDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutInstanceDeclarationRequest(c.Server, org, installationSlug, instanceSlug, declarationID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListInstanceKeys List the keys an instance registered, with where each stands. Requires the `member` role.
+//
+// Every key the instance held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:instance.read` on the installation.
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/keys (the `ListInstanceKeys` operationId).
+func (c *Client) ListInstanceKeys(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInstanceKeysRequest(c.Server, org, installationSlug, instanceSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeInstanceKey Withdraw an instance's key and every token exchanged under it. Requires the `admin` role.
+//
+// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:instance.reissue` on the installation, as withdrawing an operator's key is `iam:operator.reissue`.
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid} (the `RevokeInstanceKey` operationId).
+func (c *Client) RevokeInstanceKey(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeInstanceKeyRequest(c.Server, org, installationSlug, instanceSlug, keyID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReissueInstanceRegistrationToken Answer a new registration token for an instance. Requires the `admin` role.
+//
+// Answers a new one-time registration token, once, and spends any the instance held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the instance held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:instance.reissue` on the installation.
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/registration-token (the `ReissueInstanceRegistrationToken` operationId).
+func (c *Client) ReissueInstanceRegistrationToken(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReissueInstanceRegistrationTokenRequest(c.Server, org, installationSlug, instanceSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetInstanceReport Read what an instance last reported, and when it last reached garam. Requires the `member` role.
+//
+// The instance's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this instance, or naming none. Every `spec`, `status` and `message` in it is what the instance said: display data, to be rendered as text and never acted on. Authorized as `iam:instance.read` on the installation.
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/report (the `GetInstanceReport` operationId).
+func (c *Client) GetInstanceReport(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInstanceReportRequest(c.Server, org, installationSlug, instanceSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -7972,6 +8289,81 @@ func NewWatchAgentRequest(server string, org Org, agentSlug AgentSlug) (*http.Re
 	return req, nil
 }
 
+// NewListAppsRequest constructs an http.Request for the ListApps method
+func NewListAppsRequest(server string, org Org) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/apps", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAppRequest constructs an http.Request for the GetApp method
+func NewGetAppRequest(server string, org Org, appSlug AppSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "app", appSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/apps/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListAuditRecordsRequest constructs an http.Request for the ListAuditRecords method
 func NewListAuditRecordsRequest(server string, org Org, params *ListAuditRecordsParams) (*http.Request, error) {
 	var err error
@@ -8035,646 +8427,6 @@ func NewListAuditRecordsRequest(server string, org Org, params *ListAuditRecords
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewListClustersRequest constructs an http.Request for the ListClusters method
-func NewListClustersRequest(server string, org Org) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCreateClusterRequest calls the generic CreateCluster builder with application/json body
-func NewCreateClusterRequest(server string, org Org, body CreateClusterJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateClusterRequestWithBody(server, org, "application/json", bodyReader)
-}
-
-// NewCreateClusterRequestWithBody constructs an http.Request for the CreateCluster method, with any body, and a specified content type
-func NewCreateClusterRequestWithBody(server string, org Org, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewDeleteClusterRequest constructs an http.Request for the DeleteCluster method
-func NewDeleteClusterRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetClusterRequest constructs an http.Request for the GetCluster method
-func NewGetClusterRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewUpdateClusterRequest calls the generic UpdateCluster builder with application/json body
-func NewUpdateClusterRequest(server string, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewUpdateClusterRequestWithBody(server, org, clusterSlug, "application/json", bodyReader)
-}
-
-// NewUpdateClusterRequestWithBody constructs an http.Request for the UpdateCluster method, with any body, and a specified content type
-func NewUpdateClusterRequestWithBody(server string, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewListClusterDeclarationsRequest constructs an http.Request for the ListClusterDeclarations method
-func NewListClusterDeclarationsRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCreateClusterDeclarationRequest calls the generic CreateClusterDeclaration builder with application/json body
-func NewCreateClusterDeclarationRequest(server string, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateClusterDeclarationRequestWithBody(server, org, clusterSlug, "application/json", bodyReader)
-}
-
-// NewCreateClusterDeclarationRequestWithBody constructs an http.Request for the CreateClusterDeclaration method, with any body, and a specified content type
-func NewCreateClusterDeclarationRequestWithBody(server string, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewDeleteClusterDeclarationRequest constructs an http.Request for the DeleteClusterDeclaration method
-func NewDeleteClusterDeclarationRequest(server string, org Org, clusterSlug ClusterSlug, declarationID DeclarationID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam2 string
-
-	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations/%s", pathParam0, pathParam1, pathParam2)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetClusterDeclarationRequest constructs an http.Request for the GetClusterDeclaration method
-func NewGetClusterDeclarationRequest(server string, org Org, clusterSlug ClusterSlug, declarationID DeclarationID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam2 string
-
-	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations/%s", pathParam0, pathParam1, pathParam2)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewPutClusterDeclarationRequest calls the generic PutClusterDeclaration builder with application/json body
-func NewPutClusterDeclarationRequest(server string, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewPutClusterDeclarationRequestWithBody(server, org, clusterSlug, declarationID, "application/json", bodyReader)
-}
-
-// NewPutClusterDeclarationRequestWithBody constructs an http.Request for the PutClusterDeclaration method, with any body, and a specified content type
-func NewPutClusterDeclarationRequestWithBody(server string, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam2 string
-
-	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/declarations/%s", pathParam0, pathParam1, pathParam2)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewListClusterKeysRequest constructs an http.Request for the ListClusterKeys method
-func NewListClusterKeysRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/keys", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewRevokeClusterKeyRequest constructs an http.Request for the RevokeClusterKey method
-func NewRevokeClusterKeyRequest(server string, org Org, clusterSlug ClusterSlug, keyID KeyID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam2 string
-
-	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "kid", keyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/keys/%s", pathParam0, pathParam1, pathParam2)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewReissueClusterRegistrationTokenRequest constructs an http.Request for the ReissueClusterRegistrationToken method
-func NewReissueClusterRegistrationTokenRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/registration-token", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetClusterReportRequest constructs an http.Request for the GetClusterReport method
-func NewGetClusterReportRequest(server string, org Org, clusterSlug ClusterSlug) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", clusterSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/clusters/%s/report", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -9635,6 +9387,907 @@ func NewCreateIamPolicyVersionRequestWithBody(server string, org Org, iamPolicyI
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListInstallationsRequest constructs an http.Request for the ListInstallations method
+func NewListInstallationsRequest(server string, org Org) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateInstallationRequest calls the generic CreateInstallation builder with application/json body
+func NewCreateInstallationRequest(server string, org Org, body CreateInstallationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateInstallationRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateInstallationRequestWithBody constructs an http.Request for the CreateInstallation method, with any body, and a specified content type
+func NewCreateInstallationRequestWithBody(server string, org Org, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteInstallationRequest constructs an http.Request for the DeleteInstallation method
+func NewDeleteInstallationRequest(server string, org Org, installationSlug InstallationSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetInstallationRequest constructs an http.Request for the GetInstallation method
+func NewGetInstallationRequest(server string, org Org, installationSlug InstallationSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListInstancesRequest constructs an http.Request for the ListInstances method
+func NewListInstancesRequest(server string, org Org, installationSlug InstallationSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateInstanceRequest calls the generic CreateInstance builder with application/json body
+func NewCreateInstanceRequest(server string, org Org, installationSlug InstallationSlug, body CreateInstanceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateInstanceRequestWithBody(server, org, installationSlug, "application/json", bodyReader)
+}
+
+// NewCreateInstanceRequestWithBody constructs an http.Request for the CreateInstance method, with any body, and a specified content type
+func NewCreateInstanceRequestWithBody(server string, org Org, installationSlug InstallationSlug, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteInstanceRequest constructs an http.Request for the DeleteInstance method
+func NewDeleteInstanceRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetInstanceRequest constructs an http.Request for the GetInstance method
+func NewGetInstanceRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateInstanceRequest calls the generic UpdateInstance builder with application/json body
+func NewUpdateInstanceRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body UpdateInstanceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateInstanceRequestWithBody(server, org, installationSlug, instanceSlug, "application/json", bodyReader)
+}
+
+// NewUpdateInstanceRequestWithBody constructs an http.Request for the UpdateInstance method, with any body, and a specified content type
+func NewUpdateInstanceRequestWithBody(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListInstanceDeclarationsRequest constructs an http.Request for the ListInstanceDeclarations method
+func NewListInstanceDeclarationsRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/declarations", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateInstanceDeclarationRequest calls the generic CreateInstanceDeclaration builder with application/json body
+func NewCreateInstanceDeclarationRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body CreateInstanceDeclarationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateInstanceDeclarationRequestWithBody(server, org, installationSlug, instanceSlug, "application/json", bodyReader)
+}
+
+// NewCreateInstanceDeclarationRequestWithBody constructs an http.Request for the CreateInstanceDeclaration method, with any body, and a specified content type
+func NewCreateInstanceDeclarationRequestWithBody(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/declarations", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteInstanceDeclarationRequest constructs an http.Request for the DeleteInstanceDeclaration method
+func NewDeleteInstanceDeclarationRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/declarations/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetInstanceDeclarationRequest constructs an http.Request for the GetInstanceDeclaration method
+func NewGetInstanceDeclarationRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/declarations/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutInstanceDeclarationRequest calls the generic PutInstanceDeclaration builder with application/json body
+func NewPutInstanceDeclarationRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, body PutInstanceDeclarationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutInstanceDeclarationRequestWithBody(server, org, installationSlug, instanceSlug, declarationID, "application/json", bodyReader)
+}
+
+// NewPutInstanceDeclarationRequestWithBody constructs an http.Request for the PutInstanceDeclaration method, with any body, and a specified content type
+func NewPutInstanceDeclarationRequestWithBody(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "declaration", declarationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/declarations/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListInstanceKeysRequest constructs an http.Request for the ListInstanceKeys method
+func NewListInstanceKeysRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/keys", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRevokeInstanceKeyRequest constructs an http.Request for the RevokeInstanceKey method
+func NewRevokeInstanceKeyRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, keyID KeyID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "kid", keyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/keys/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReissueInstanceRegistrationTokenRequest constructs an http.Request for the ReissueInstanceRegistrationToken method
+func NewReissueInstanceRegistrationTokenRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/registration-token", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetInstanceReportRequest constructs an http.Request for the GetInstanceReport method
+func NewGetInstanceReportRequest(server string, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "instance", instanceSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/instances/%s/report", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -11870,6 +12523,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/agents/{agent}/watch (the `WatchAgent` operationId).
 	WatchAgentWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*WatchAgentResponse, error)
 
+	// ListAppsWithResponse List the apps an organization may install. Requires the `member` role.
+	//
+	// The organization's own apps and every public one, ordered by GRN (ADR-0192 decision 3). Authorized as `iam:app.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/apps (the `ListApps` operationId).
+	ListAppsWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListAppsResponse, error)
+
+	// GetAppWithResponse Read an app the organization may install. Requires the `member` role.
+	//
+	// Another organization's private app answers 404, as one that is not there does. Authorized as `iam:app.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/apps/{app} (the `GetApp` operationId).
+	GetAppWithResponse(ctx context.Context, org Org, appSlug AppSlug, reqEditors ...RequestEditorFn) (*GetAppResponse, error)
+
 	// ListAuditRecordsWithResponse Read an organization's audit records, newest first.
 	//
 	// Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
@@ -11878,168 +12549,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/audit-records (the `ListAuditRecords` operationId).
 	ListAuditRecordsWithResponse(ctx context.Context, org Org, params *ListAuditRecordsParams, reqEditors ...RequestEditorFn) (*ListAuditRecordsResponse, error)
-
-	// ListClustersWithResponse List an organization's connected clusters. Requires the `member` role.
-	//
-	// The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/clusters (the `ListClusters` operationId).
-	ListClustersWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListClustersResponse, error)
-
-	// CreateClusterWithBodyWithResponse Create a connected cluster's record. Requires the `admin` role.
-	//
-	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
-	CreateClusterWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClusterResponse, error)
-
-	// CreateClusterWithResponse Create a connected cluster's record. Requires the `admin` role.
-	//
-	// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
-	CreateClusterWithResponse(ctx context.Context, org Org, body CreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClusterResponse, error)
-
-	// DeleteClusterWithResponse Delete a connected cluster's record. Requires the `admin` role.
-	//
-	// Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /orgs/{org}/clusters/{cluster} (the `DeleteCluster` operationId).
-	DeleteClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*DeleteClusterResponse, error)
-
-	// GetClusterWithResponse Read one of an organization's connected clusters. Requires the `member` role.
-	//
-	// Authorized as `iam:cluster.read` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster} (the `GetCluster` operationId).
-	GetClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*GetClusterResponse, error)
-
-	// UpdateClusterWithBodyWithResponse Rename or describe a connected cluster. Requires the `admin` role.
-	//
-	// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
-	UpdateClusterWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error)
-
-	// UpdateClusterWithResponse Rename or describe a connected cluster. Requires the `admin` role.
-	//
-	// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
-	UpdateClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error)
-
-	// ListClusterDeclarationsWithResponse List the declarations placed on a connected cluster. Requires the `member` role.
-	//
-	// The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations (the `ListClusterDeclarations` operationId).
-	ListClusterDeclarationsWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ListClusterDeclarationsResponse, error)
-
-	// CreateClusterDeclarationWithBodyWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-	//
-	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
-	CreateClusterDeclarationWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClusterDeclarationResponse, error)
-
-	// CreateClusterDeclarationWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-	//
-	// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
-	CreateClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClusterDeclarationResponse, error)
-
-	// DeleteClusterDeclarationWithResponse Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
-	//
-	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `DeleteClusterDeclaration` operationId).
-	DeleteClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*DeleteClusterDeclarationResponse, error)
-
-	// GetClusterDeclarationWithResponse Read one live declaration placed on a connected cluster. Requires the `member` role.
-	//
-	// A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `GetClusterDeclaration` operationId).
-	GetClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*GetClusterDeclarationResponse, error)
-
-	// PutClusterDeclarationWithBodyWithResponse Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
-	PutClusterDeclarationWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutClusterDeclarationResponse, error)
-
-	// PutClusterDeclarationWithResponse Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
-	PutClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*PutClusterDeclarationResponse, error)
-
-	// ListClusterKeysWithResponse List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
-	//
-	// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster}/keys (the `ListClusterKeys` operationId).
-	ListClusterKeysWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ListClusterKeysResponse, error)
-
-	// RevokeClusterKeyWithResponse Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
-	//
-	// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/keys/{kid} (the `RevokeClusterKey` operationId).
-	RevokeClusterKeyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*RevokeClusterKeyResponse, error)
-
-	// ReissueClusterRegistrationTokenWithResponse Answer a new registration token for a cluster. Requires the `admin` role.
-	//
-	// Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
-	ReissueClusterRegistrationTokenWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ReissueClusterRegistrationTokenResponse, error)
-
-	// GetClusterReportWithResponse Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
-	//
-	// The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/clusters/{cluster}/report (the `GetClusterReport` operationId).
-	GetClusterReportWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*GetClusterReportResponse, error)
 
 	// ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
 	//
@@ -12264,6 +12773,213 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/iam-policies/{iamPolicy}/versions (the `CreateIamPolicyVersion` operationId).
 	CreateIamPolicyVersionWithResponse(ctx context.Context, org Org, iamPolicyId IamPolicyId, body CreateIamPolicyVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateIamPolicyVersionResponse, error)
+
+	// ListInstallationsWithResponse List the apps an organization has installed. Requires the `member` role.
+	//
+	// Ordered by GRN. Authorized as `iam:installation.read` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/installations (the `ListInstallations` operationId).
+	ListInstallationsWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListInstallationsResponse, error)
+
+	// CreateInstallationWithBodyWithResponse Install an app in an organization. Requires the `owner` role.
+	//
+	// Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/installations (the `CreateInstallation` operationId).
+	CreateInstallationWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInstallationResponse, error)
+
+	// CreateInstallationWithResponse Install an app in an organization. Requires the `owner` role.
+	//
+	// Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/installations (the `CreateInstallation` operationId).
+	CreateInstallationWithResponse(ctx context.Context, org Org, body CreateInstallationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInstallationResponse, error)
+
+	// DeleteInstallationWithResponse Uninstall an app. Requires the `admin` role.
+	//
+	// Deletes the installation with its instances, their keys and their tokens, each refused from the next request (ADR-0192 decision 4). A reinstall is a new incarnation and inherits none of it. Authorized as `iam:installation.delete` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation} (the `DeleteInstallation` operationId).
+	DeleteInstallationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*DeleteInstallationResponse, error)
+
+	// GetInstallationWithResponse Read one of an organization's installations. Requires the `member` role.
+	//
+	// Authorized as `iam:installation.read` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation} (the `GetInstallation` operationId).
+	GetInstallationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*GetInstallationResponse, error)
+
+	// ListInstancesWithResponse List an installation's instances. Requires the `member` role.
+	//
+	// The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances (the `ListInstances` operationId).
+	ListInstancesWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*ListInstancesResponse, error)
+
+	// CreateInstanceWithBodyWithResponse Create an instance's record. Requires the `admin` role.
+	//
+	// Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances (the `CreateInstance` operationId).
+	CreateInstanceWithBodyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInstanceResponse, error)
+
+	// CreateInstanceWithResponse Create an instance's record. Requires the `admin` role.
+	//
+	// Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances (the `CreateInstance` operationId).
+	CreateInstanceWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, body CreateInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInstanceResponse, error)
+
+	// DeleteInstanceWithResponse Delete an instance's record. Requires the `admin` role.
+	//
+	// Removes the organization's record of the instance, and with it what the instance authenticates as (ADR-0184 decision 7). Nothing in the instance is touched: garam never dials it. Authorized as `iam:instance.delete` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance} (the `DeleteInstance` operationId).
+	DeleteInstanceWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*DeleteInstanceResponse, error)
+
+	// GetInstanceWithResponse Read one of an organization's instances. Requires the `member` role.
+	//
+	// Authorized as `iam:instance.read` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance} (the `GetInstance` operationId).
+	GetInstanceWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*GetInstanceResponse, error)
+
+	// UpdateInstanceWithBodyWithResponse Rename or describe an instance. Requires the `admin` role.
+	//
+	// Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/installations/{installation}/instances/{instance} (the `UpdateInstance` operationId).
+	UpdateInstanceWithBodyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateInstanceResponse, error)
+
+	// UpdateInstanceWithResponse Rename or describe an instance. Requires the `admin` role.
+	//
+	// Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/installations/{installation}/instances/{instance} (the `UpdateInstance` operationId).
+	UpdateInstanceWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body UpdateInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateInstanceResponse, error)
+
+	// ListInstanceDeclarationsWithResponse List the declarations placed on an instance. Requires the `member` role.
+	//
+	// The live declarations placed on the instance, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:instance.read` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `ListInstanceDeclarations` operationId).
+	ListInstanceDeclarationsWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*ListInstanceDeclarationsResponse, error)
+
+	// CreateInstanceDeclarationWithBodyWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+	//
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `CreateInstanceDeclaration` operationId).
+	CreateInstanceDeclarationWithBodyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInstanceDeclarationResponse, error)
+
+	// CreateInstanceDeclarationWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+	//
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `CreateInstanceDeclaration` operationId).
+	CreateInstanceDeclarationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body CreateInstanceDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInstanceDeclarationResponse, error)
+
+	// DeleteInstanceDeclarationWithResponse Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
+	//
+	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `DeleteInstanceDeclaration` operationId).
+	DeleteInstanceDeclarationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*DeleteInstanceDeclarationResponse, error)
+
+	// GetInstanceDeclarationWithResponse Read one live declaration placed on an instance. Requires the `member` role.
+	//
+	// A tombstoned declaration answers 404. Authorized as `iam:instance.read` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `GetInstanceDeclaration` operationId).
+	GetInstanceDeclarationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*GetInstanceDeclarationResponse, error)
+
+	// PutInstanceDeclarationWithBodyWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+	//
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `PutInstanceDeclaration` operationId).
+	PutInstanceDeclarationWithBodyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutInstanceDeclarationResponse, error)
+
+	// PutInstanceDeclarationWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+	//
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `PutInstanceDeclaration` operationId).
+	PutInstanceDeclarationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, body PutInstanceDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*PutInstanceDeclarationResponse, error)
+
+	// ListInstanceKeysWithResponse List the keys an instance registered, with where each stands. Requires the `member` role.
+	//
+	// Every key the instance held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:instance.read` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/keys (the `ListInstanceKeys` operationId).
+	ListInstanceKeysWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*ListInstanceKeysResponse, error)
+
+	// RevokeInstanceKeyWithResponse Withdraw an instance's key and every token exchanged under it. Requires the `admin` role.
+	//
+	// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:instance.reissue` on the installation, as withdrawing an operator's key is `iam:operator.reissue`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid} (the `RevokeInstanceKey` operationId).
+	RevokeInstanceKeyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*RevokeInstanceKeyResponse, error)
+
+	// ReissueInstanceRegistrationTokenWithResponse Answer a new registration token for an instance. Requires the `admin` role.
+	//
+	// Answers a new one-time registration token, once, and spends any the instance held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the instance held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:instance.reissue` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/registration-token (the `ReissueInstanceRegistrationToken` operationId).
+	ReissueInstanceRegistrationTokenWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*ReissueInstanceRegistrationTokenResponse, error)
+
+	// GetInstanceReportWithResponse Read what an instance last reported, and when it last reached garam. Requires the `member` role.
+	//
+	// The instance's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this instance, or naming none. Every `spec`, `status` and `message` in it is what the instance said: display data, to be rendered as text and never acted on. Authorized as `iam:instance.read` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/report (the `GetInstanceReport` operationId).
+	GetInstanceReportWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*GetInstanceReportResponse, error)
 
 	// ListInvitationsWithResponse List the invitations that can still be accepted. Requires `iam:org.invite`.
 	//
@@ -14652,6 +15368,137 @@ func (r WatchAgentResponse) ContentType() string {
 	return ""
 }
 
+type ListAppsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]App
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAppsResponse) GetJSON200() *[]App {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListAppsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListAppsResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListAppsResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAppsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAppsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAppsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAppsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAppResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *App
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAppResponse) GetJSON200() *App {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetAppResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetAppResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetAppResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetAppResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAppResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAppResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAppResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAppResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListAuditRecordsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14722,1000 +15569,6 @@ func (r ListAuditRecordsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAuditRecordsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListClustersResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]Cluster
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListClustersResponse) GetJSON200() *[]Cluster {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ListClustersResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ListClustersResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ListClustersResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r ListClustersResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListClustersResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListClustersResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListClustersResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-// CreateClusterResponse201Headers the declared response headers of an HTTP 201 response for CreateCluster
-type CreateClusterResponse201Headers struct {
-	CacheControl *string
-}
-
-type CreateClusterResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *CreatedCluster
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Error
-	// Headers201 the parsed response headers for an HTTP 201 response
-	Headers201 *CreateClusterResponse201Headers
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateClusterResponse) GetJSON201() *CreatedCluster {
-	return r.JSON201
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r CreateClusterResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r CreateClusterResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r CreateClusterResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r CreateClusterResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r CreateClusterResponse) GetJSON409() *Error {
-	return r.JSON409
-}
-
-// GetBody returns the raw response body bytes
-func (r CreateClusterResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateClusterResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateClusterResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreateClusterResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DeleteClusterResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r DeleteClusterResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r DeleteClusterResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r DeleteClusterResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r DeleteClusterResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r DeleteClusterResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteClusterResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteClusterResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DeleteClusterResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type GetClusterResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Cluster
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetClusterResponse) GetJSON200() *Cluster {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r GetClusterResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r GetClusterResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r GetClusterResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r GetClusterResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetClusterResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetClusterResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetClusterResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetClusterResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type UpdateClusterResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Cluster
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r UpdateClusterResponse) GetJSON200() *Cluster {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r UpdateClusterResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r UpdateClusterResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r UpdateClusterResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r UpdateClusterResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r UpdateClusterResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r UpdateClusterResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UpdateClusterResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r UpdateClusterResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListClusterDeclarationsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterDeclarationList
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListClusterDeclarationsResponse) GetJSON200() *ClusterDeclarationList {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r ListClusterDeclarationsResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ListClusterDeclarationsResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ListClusterDeclarationsResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ListClusterDeclarationsResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r ListClusterDeclarationsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListClusterDeclarationsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListClusterDeclarationsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListClusterDeclarationsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type CreateClusterDeclarationResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *ClusterDeclaration
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Error
-	// JSON422 the response for an HTTP 422 `application/json` response
-	JSON422 *Error
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateClusterDeclarationResponse) GetJSON201() *ClusterDeclaration {
-	return r.JSON201
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r CreateClusterDeclarationResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r CreateClusterDeclarationResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r CreateClusterDeclarationResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r CreateClusterDeclarationResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r CreateClusterDeclarationResponse) GetJSON409() *Error {
-	return r.JSON409
-}
-
-// GetJSON422 returns the response for an HTTP 422 `application/json` response
-func (r CreateClusterDeclarationResponse) GetJSON422() *Error {
-	return r.JSON422
-}
-
-// GetBody returns the raw response body bytes
-func (r CreateClusterDeclarationResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateClusterDeclarationResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateClusterDeclarationResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreateClusterDeclarationResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DeleteClusterDeclarationResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r DeleteClusterDeclarationResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r DeleteClusterDeclarationResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r DeleteClusterDeclarationResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r DeleteClusterDeclarationResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r DeleteClusterDeclarationResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteClusterDeclarationResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteClusterDeclarationResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DeleteClusterDeclarationResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type GetClusterDeclarationResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterDeclaration
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetClusterDeclarationResponse) GetJSON200() *ClusterDeclaration {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r GetClusterDeclarationResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r GetClusterDeclarationResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r GetClusterDeclarationResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r GetClusterDeclarationResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetClusterDeclarationResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetClusterDeclarationResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetClusterDeclarationResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetClusterDeclarationResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type PutClusterDeclarationResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterDeclaration
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *ClusterDeclaration
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Error
-	// JSON422 the response for an HTTP 422 `application/json` response
-	JSON422 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r PutClusterDeclarationResponse) GetJSON200() *ClusterDeclaration {
-	return r.JSON200
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r PutClusterDeclarationResponse) GetJSON201() *ClusterDeclaration {
-	return r.JSON201
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r PutClusterDeclarationResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r PutClusterDeclarationResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r PutClusterDeclarationResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r PutClusterDeclarationResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r PutClusterDeclarationResponse) GetJSON409() *Error {
-	return r.JSON409
-}
-
-// GetJSON422 returns the response for an HTTP 422 `application/json` response
-func (r PutClusterDeclarationResponse) GetJSON422() *Error {
-	return r.JSON422
-}
-
-// GetBody returns the raw response body bytes
-func (r PutClusterDeclarationResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r PutClusterDeclarationResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PutClusterDeclarationResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PutClusterDeclarationResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListClusterKeysResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterKeyList
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListClusterKeysResponse) GetJSON200() *ClusterKeyList {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r ListClusterKeysResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ListClusterKeysResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ListClusterKeysResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ListClusterKeysResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r ListClusterKeysResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListClusterKeysResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListClusterKeysResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListClusterKeysResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type RevokeClusterKeyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r RevokeClusterKeyResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r RevokeClusterKeyResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r RevokeClusterKeyResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r RevokeClusterKeyResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r RevokeClusterKeyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r RevokeClusterKeyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r RevokeClusterKeyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r RevokeClusterKeyResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-// ReissueClusterRegistrationTokenResponse201Headers the declared response headers of an HTTP 201 response for ReissueClusterRegistrationToken
-type ReissueClusterRegistrationTokenResponse201Headers struct {
-	CacheControl *string
-}
-
-type ReissueClusterRegistrationTokenResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *ClusterRegistrationToken
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-	// Headers201 the parsed response headers for an HTTP 201 response
-	Headers201 *ReissueClusterRegistrationTokenResponse201Headers
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r ReissueClusterRegistrationTokenResponse) GetJSON201() *ClusterRegistrationToken {
-	return r.JSON201
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r ReissueClusterRegistrationTokenResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ReissueClusterRegistrationTokenResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r ReissueClusterRegistrationTokenResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r ReissueClusterRegistrationTokenResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r ReissueClusterRegistrationTokenResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ReissueClusterRegistrationTokenResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ReissueClusterRegistrationTokenResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ReissueClusterRegistrationTokenResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type GetClusterReportResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterReportView
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Error
-	// JSON403 the response for an HTTP 403 `application/json` response
-	JSON403 *Error
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetClusterReportResponse) GetJSON200() *ClusterReportView {
-	return r.JSON200
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r GetClusterReportResponse) GetJSON400() *Error {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r GetClusterReportResponse) GetJSON401() *Error {
-	return r.JSON401
-}
-
-// GetJSON403 returns the response for an HTTP 403 `application/json` response
-func (r GetClusterReportResponse) GetJSON403() *Error {
-	return r.JSON403
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r GetClusterReportResponse) GetJSON404() *Error {
-	return r.JSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetClusterReportResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetClusterReportResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetClusterReportResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetClusterReportResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17110,6 +16963,1269 @@ func (r CreateIamPolicyVersionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateIamPolicyVersionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListInstallationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]Installation
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInstallationsResponse) GetJSON200() *[]Installation {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListInstallationsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListInstallationsResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListInstallationsResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInstallationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInstallationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInstallationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInstallationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateInstallationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Installation
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateInstallationResponse) GetJSON201() *Installation {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateInstallationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateInstallationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateInstallationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateInstallationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateInstallationResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateInstallationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateInstallationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateInstallationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateInstallationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteInstallationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteInstallationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteInstallationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteInstallationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteInstallationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteInstallationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteInstallationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteInstallationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteInstallationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetInstallationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Installation
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInstallationResponse) GetJSON200() *Installation {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetInstallationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetInstallationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetInstallationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetInstallationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInstallationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInstallationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInstallationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInstallationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListInstancesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]Instance
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInstancesResponse) GetJSON200() *[]Instance {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListInstancesResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListInstancesResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListInstancesResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInstancesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInstancesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInstancesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInstancesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreateInstanceResponse201Headers the declared response headers of an HTTP 201 response for CreateInstance
+type CreateInstanceResponse201Headers struct {
+	CacheControl *string
+}
+
+type CreateInstanceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *CreatedInstance
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreateInstanceResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateInstanceResponse) GetJSON201() *CreatedInstance {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateInstanceResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateInstanceResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateInstanceResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateInstanceResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateInstanceResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateInstanceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateInstanceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteInstanceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteInstanceResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteInstanceResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteInstanceResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteInstanceResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteInstanceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteInstanceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetInstanceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Instance
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInstanceResponse) GetJSON200() *Instance {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetInstanceResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetInstanceResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetInstanceResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetInstanceResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInstanceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInstanceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateInstanceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Instance
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateInstanceResponse) GetJSON200() *Instance {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r UpdateInstanceResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r UpdateInstanceResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r UpdateInstanceResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r UpdateInstanceResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateInstanceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateInstanceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListInstanceDeclarationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterDeclarationList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInstanceDeclarationsResponse) GetJSON200() *ClusterDeclarationList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListInstanceDeclarationsResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListInstanceDeclarationsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListInstanceDeclarationsResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListInstanceDeclarationsResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInstanceDeclarationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInstanceDeclarationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInstanceDeclarationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInstanceDeclarationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateInstanceDeclarationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ClusterDeclaration
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON422 the response for an HTTP 422 `application/json` response
+	JSON422 *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateInstanceDeclarationResponse) GetJSON201() *ClusterDeclaration {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateInstanceDeclarationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateInstanceDeclarationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateInstanceDeclarationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateInstanceDeclarationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateInstanceDeclarationResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON422 returns the response for an HTTP 422 `application/json` response
+func (r CreateInstanceDeclarationResponse) GetJSON422() *Error {
+	return r.JSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateInstanceDeclarationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateInstanceDeclarationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateInstanceDeclarationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateInstanceDeclarationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteInstanceDeclarationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteInstanceDeclarationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteInstanceDeclarationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteInstanceDeclarationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteInstanceDeclarationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteInstanceDeclarationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteInstanceDeclarationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteInstanceDeclarationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteInstanceDeclarationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetInstanceDeclarationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterDeclaration
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInstanceDeclarationResponse) GetJSON200() *ClusterDeclaration {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetInstanceDeclarationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetInstanceDeclarationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetInstanceDeclarationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetInstanceDeclarationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInstanceDeclarationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInstanceDeclarationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInstanceDeclarationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInstanceDeclarationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutInstanceDeclarationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterDeclaration
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ClusterDeclaration
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// JSON422 the response for an HTTP 422 `application/json` response
+	JSON422 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutInstanceDeclarationResponse) GetJSON200() *ClusterDeclaration {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PutInstanceDeclarationResponse) GetJSON201() *ClusterDeclaration {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutInstanceDeclarationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PutInstanceDeclarationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutInstanceDeclarationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PutInstanceDeclarationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PutInstanceDeclarationResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetJSON422 returns the response for an HTTP 422 `application/json` response
+func (r PutInstanceDeclarationResponse) GetJSON422() *Error {
+	return r.JSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r PutInstanceDeclarationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutInstanceDeclarationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutInstanceDeclarationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutInstanceDeclarationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListInstanceKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *InstanceKeyList
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInstanceKeysResponse) GetJSON200() *InstanceKeyList {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListInstanceKeysResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListInstanceKeysResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListInstanceKeysResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListInstanceKeysResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInstanceKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInstanceKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInstanceKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInstanceKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeInstanceKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RevokeInstanceKeyResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RevokeInstanceKeyResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RevokeInstanceKeyResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RevokeInstanceKeyResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeInstanceKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeInstanceKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeInstanceKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeInstanceKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ReissueInstanceRegistrationTokenResponse201Headers the declared response headers of an HTTP 201 response for ReissueInstanceRegistrationToken
+type ReissueInstanceRegistrationTokenResponse201Headers struct {
+	CacheControl *string
+}
+
+type ReissueInstanceRegistrationTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *InstanceRegistrationToken
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *ReissueInstanceRegistrationTokenResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r ReissueInstanceRegistrationTokenResponse) GetJSON201() *InstanceRegistrationToken {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ReissueInstanceRegistrationTokenResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ReissueInstanceRegistrationTokenResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ReissueInstanceRegistrationTokenResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ReissueInstanceRegistrationTokenResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r ReissueInstanceRegistrationTokenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReissueInstanceRegistrationTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReissueInstanceRegistrationTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReissueInstanceRegistrationTokenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetInstanceReportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClusterReportView
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInstanceReportResponse) GetJSON200() *ClusterReportView {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetInstanceReportResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetInstanceReportResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetInstanceReportResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetInstanceReportResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInstanceReportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInstanceReportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInstanceReportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInstanceReportResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20246,6 +21362,36 @@ func (c *ClientWithResponses) WatchAgentWithResponse(ctx context.Context, org Or
 	return ParseWatchAgentResponse(rsp)
 }
 
+// ListAppsWithResponse List the apps an organization may install. Requires the `member` role.
+//
+// The organization's own apps and every public one, ordered by GRN (ADR-0192 decision 3). Authorized as `iam:app.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/apps (the `ListApps` operationId).
+func (c *ClientWithResponses) ListAppsWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListAppsResponse, error) {
+	rsp, err := c.ListApps(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAppsResponse(rsp)
+}
+
+// GetAppWithResponse Read an app the organization may install. Requires the `member` role.
+//
+// Another organization's private app answers 404, as one that is not there does. Authorized as `iam:app.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/apps/{app} (the `GetApp` operationId).
+func (c *ClientWithResponses) GetAppWithResponse(ctx context.Context, org Org, appSlug AppSlug, reqEditors ...RequestEditorFn) (*GetAppResponse, error) {
+	rsp, err := c.GetApp(ctx, org, appSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAppResponse(rsp)
+}
+
 // ListAuditRecordsWithResponse Read an organization's audit records, newest first.
 //
 // Relayed to the policy service as the caller, which decides, read current, whether the caller holds `iam:audit.read` on the organization (ADR-0148, ADR-0176). A caller it refuses is answered 403. The platform keeps none of the records. A page is read with the token the previous page answered.
@@ -20259,276 +21405,6 @@ func (c *ClientWithResponses) ListAuditRecordsWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseListAuditRecordsResponse(rsp)
-}
-
-// ListClustersWithResponse List an organization's connected clusters. Requires the `member` role.
-//
-// The clusters this organization has created, ordered by GRN. Authorized as `iam:cluster.read` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/clusters (the `ListClusters` operationId).
-func (c *ClientWithResponses) ListClustersWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListClustersResponse, error) {
-	rsp, err := c.ListClusters(ctx, org, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListClustersResponse(rsp)
-}
-
-// CreateClusterWithBodyWithResponse Create a connected cluster's record. Requires the `admin` role.
-//
-// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
-func (c *ClientWithResponses) CreateClusterWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClusterResponse, error) {
-	rsp, err := c.CreateClusterWithBody(ctx, org, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateClusterResponse(rsp)
-}
-
-// CreateClusterWithResponse Create a connected cluster's record. Requires the `admin` role.
-//
-// Records that this organization has a connected cluster, under an identifier garam mints and answers in the GRN (ADR-0184), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. Authorized as `iam:cluster.register` on the organization.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/clusters (the `CreateCluster` operationId).
-func (c *ClientWithResponses) CreateClusterWithResponse(ctx context.Context, org Org, body CreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClusterResponse, error) {
-	rsp, err := c.CreateCluster(ctx, org, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateClusterResponse(rsp)
-}
-
-// DeleteClusterWithResponse Delete a connected cluster's record. Requires the `admin` role.
-//
-// Removes the organization's record of the cluster, and with it what the cluster's connector authenticates as (ADR-0184 decision 7). Nothing in the cluster is touched: garam never dials it. Authorized as `iam:cluster.delete` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /orgs/{org}/clusters/{cluster} (the `DeleteCluster` operationId).
-func (c *ClientWithResponses) DeleteClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*DeleteClusterResponse, error) {
-	rsp, err := c.DeleteCluster(ctx, org, clusterSlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteClusterResponse(rsp)
-}
-
-// GetClusterWithResponse Read one of an organization's connected clusters. Requires the `member` role.
-//
-// Authorized as `iam:cluster.read` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster} (the `GetCluster` operationId).
-func (c *ClientWithResponses) GetClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*GetClusterResponse, error) {
-	rsp, err := c.GetCluster(ctx, org, clusterSlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetClusterResponse(rsp)
-}
-
-// UpdateClusterWithBodyWithResponse Rename or describe a connected cluster. Requires the `admin` role.
-//
-// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
-func (c *ClientWithResponses) UpdateClusterWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error) {
-	rsp, err := c.UpdateClusterWithBody(ctx, org, clusterSlug, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateClusterResponse(rsp)
-}
-
-// UpdateClusterWithResponse Rename or describe a connected cluster. Requires the `admin` role.
-//
-// Changes what the organization calls the cluster and what it says the cluster is for, and nothing else. A field left out keeps its value. Authorized as `iam:cluster.update` on the organization.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PATCH /orgs/{org}/clusters/{cluster} (the `UpdateCluster` operationId).
-func (c *ClientWithResponses) UpdateClusterWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body UpdateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateClusterResponse, error) {
-	rsp, err := c.UpdateCluster(ctx, org, clusterSlug, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateClusterResponse(rsp)
-}
-
-// ListClusterDeclarationsWithResponse List the declarations placed on a connected cluster. Requires the `member` role.
-//
-// The live declarations placed on the cluster, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:cluster.read` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations (the `ListClusterDeclarations` operationId).
-func (c *ClientWithResponses) ListClusterDeclarationsWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ListClusterDeclarationsResponse, error) {
-	rsp, err := c.ListClusterDeclarations(ctx, org, clusterSlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListClusterDeclarationsResponse(rsp)
-}
-
-// CreateClusterDeclarationWithBodyWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-//
-// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
-func (c *ClientWithResponses) CreateClusterDeclarationWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateClusterDeclarationResponse, error) {
-	rsp, err := c.CreateClusterDeclarationWithBody(ctx, org, clusterSlug, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateClusterDeclarationResponse(rsp)
-}
-
-// CreateClusterDeclarationWithResponse Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.
-//
-// Places the object on the cluster for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/clusters/{cluster}/declarations (the `CreateClusterDeclaration` operationId).
-func (c *ClientWithResponses) CreateClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, body CreateClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateClusterDeclarationResponse, error) {
-	rsp, err := c.CreateClusterDeclaration(ctx, org, clusterSlug, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateClusterDeclarationResponse(rsp)
-}
-
-// DeleteClusterDeclarationWithResponse Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.
-//
-// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `DeleteClusterDeclaration` operationId).
-func (c *ClientWithResponses) DeleteClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*DeleteClusterDeclarationResponse, error) {
-	rsp, err := c.DeleteClusterDeclaration(ctx, org, clusterSlug, declarationID, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteClusterDeclarationResponse(rsp)
-}
-
-// GetClusterDeclarationWithResponse Read one live declaration placed on a connected cluster. Requires the `member` role.
-//
-// A tombstoned declaration answers 404. Authorized as `iam:cluster.read` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `GetClusterDeclaration` operationId).
-func (c *ClientWithResponses) GetClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*GetClusterDeclarationResponse, error) {
-	rsp, err := c.GetClusterDeclaration(ctx, org, clusterSlug, declarationID, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetClusterDeclarationResponse(rsp)
-}
-
-// PutClusterDeclarationWithBodyWithResponse Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-//
-// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
-func (c *ClientWithResponses) PutClusterDeclarationWithBodyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutClusterDeclarationResponse, error) {
-	rsp, err := c.PutClusterDeclarationWithBody(ctx, org, clusterSlug, declarationID, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutClusterDeclarationResponse(rsp)
-}
-
-// PutClusterDeclarationWithResponse Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.
-//
-// An identifier never placed is placed at generation 1 and answers 201. One live on this cluster takes the object as its next generation and answers 200. One placed on another cluster, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createClusterDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PUT /orgs/{org}/clusters/{cluster}/declarations/{declaration} (the `PutClusterDeclaration` operationId).
-func (c *ClientWithResponses) PutClusterDeclarationWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, declarationID DeclarationID, body PutClusterDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*PutClusterDeclarationResponse, error) {
-	rsp, err := c.PutClusterDeclaration(ctx, org, clusterSlug, declarationID, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutClusterDeclarationResponse(rsp)
-}
-
-// ListClusterKeysWithResponse List the keys a cluster's connector registered, with where each stands. Requires the `member` role.
-//
-// Every key the cluster held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:cluster.read` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster}/keys (the `ListClusterKeys` operationId).
-func (c *ClientWithResponses) ListClusterKeysWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ListClusterKeysResponse, error) {
-	rsp, err := c.ListClusterKeys(ctx, org, clusterSlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListClusterKeysResponse(rsp)
-}
-
-// RevokeClusterKeyWithResponse Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.
-//
-// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:cluster.reissue` on the organization, as withdrawing an operator's key is `iam:operator.reissue`.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /orgs/{org}/clusters/{cluster}/keys/{kid} (the `RevokeClusterKey` operationId).
-func (c *ClientWithResponses) RevokeClusterKeyWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*RevokeClusterKeyResponse, error) {
-	rsp, err := c.RevokeClusterKey(ctx, org, clusterSlug, keyID, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRevokeClusterKeyResponse(rsp)
-}
-
-// ReissueClusterRegistrationTokenWithResponse Answer a new registration token for a cluster. Requires the `admin` role.
-//
-// Answers a new one-time registration token, once, and spends any the cluster held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the cluster held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:cluster.reissue` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/clusters/{cluster}/registration-token (the `ReissueClusterRegistrationToken` operationId).
-func (c *ClientWithResponses) ReissueClusterRegistrationTokenWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*ReissueClusterRegistrationTokenResponse, error) {
-	rsp, err := c.ReissueClusterRegistrationToken(ctx, org, clusterSlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseReissueClusterRegistrationTokenResponse(rsp)
-}
-
-// GetClusterReportWithResponse Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.
-//
-// The cluster's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this cluster, or naming none. Every `spec`, `status` and `message` in it is what the cluster said: display data, to be rendered as text and never acted on. Authorized as `iam:cluster.read` on the organization.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/clusters/{cluster}/report (the `GetClusterReport` operationId).
-func (c *ClientWithResponses) GetClusterReportWithResponse(ctx context.Context, org Org, clusterSlug ClusterSlug, reqEditors ...RequestEditorFn) (*GetClusterReportResponse, error) {
-	rsp, err := c.GetClusterReport(ctx, org, clusterSlug, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetClusterReportResponse(rsp)
 }
 
 // ListOrgConsentsWithResponse List the org's cross-organization consents. Requires the `admin` role.
@@ -20909,6 +21785,351 @@ func (c *ClientWithResponses) CreateIamPolicyVersionWithResponse(ctx context.Con
 		return nil, err
 	}
 	return ParseCreateIamPolicyVersionResponse(rsp)
+}
+
+// ListInstallationsWithResponse List the apps an organization has installed. Requires the `member` role.
+//
+// Ordered by GRN. Authorized as `iam:installation.read` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/installations (the `ListInstallations` operationId).
+func (c *ClientWithResponses) ListInstallationsWithResponse(ctx context.Context, org Org, reqEditors ...RequestEditorFn) (*ListInstallationsResponse, error) {
+	rsp, err := c.ListInstallations(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInstallationsResponse(rsp)
+}
+
+// CreateInstallationWithBodyWithResponse Install an app in an organization. Requires the `owner` role.
+//
+// Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/installations (the `CreateInstallation` operationId).
+func (c *ClientWithResponses) CreateInstallationWithBodyWithResponse(ctx context.Context, org Org, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInstallationResponse, error) {
+	rsp, err := c.CreateInstallationWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateInstallationResponse(rsp)
+}
+
+// CreateInstallationWithResponse Install an app in an organization. Requires the `owner` role.
+//
+// Installs the app over the whole organization, or over the projects named (ADR-0192 decision 4), under `grn:<org>/iam/installation/<app>`. An organization holds one installation of an app at most: a second answers 409. Installing writes the app's requested actions as permits on the installation, so it is authorized as `iam:installation.create` on the organization, which the owner alone holds.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/installations (the `CreateInstallation` operationId).
+func (c *ClientWithResponses) CreateInstallationWithResponse(ctx context.Context, org Org, body CreateInstallationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInstallationResponse, error) {
+	rsp, err := c.CreateInstallation(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateInstallationResponse(rsp)
+}
+
+// DeleteInstallationWithResponse Uninstall an app. Requires the `admin` role.
+//
+// Deletes the installation with its instances, their keys and their tokens, each refused from the next request (ADR-0192 decision 4). A reinstall is a new incarnation and inherits none of it. Authorized as `iam:installation.delete` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation} (the `DeleteInstallation` operationId).
+func (c *ClientWithResponses) DeleteInstallationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*DeleteInstallationResponse, error) {
+	rsp, err := c.DeleteInstallation(ctx, org, installationSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteInstallationResponse(rsp)
+}
+
+// GetInstallationWithResponse Read one of an organization's installations. Requires the `member` role.
+//
+// Authorized as `iam:installation.read` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/installations/{installation} (the `GetInstallation` operationId).
+func (c *ClientWithResponses) GetInstallationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*GetInstallationResponse, error) {
+	rsp, err := c.GetInstallation(ctx, org, installationSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInstallationResponse(rsp)
+}
+
+// ListInstancesWithResponse List an installation's instances. Requires the `member` role.
+//
+// The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances (the `ListInstances` operationId).
+func (c *ClientWithResponses) ListInstancesWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*ListInstancesResponse, error) {
+	rsp, err := c.ListInstances(ctx, org, installationSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInstancesResponse(rsp)
+}
+
+// CreateInstanceWithBodyWithResponse Create an instance's record. Requires the `admin` role.
+//
+// Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances (the `CreateInstance` operationId).
+func (c *ClientWithResponses) CreateInstanceWithBodyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInstanceResponse, error) {
+	rsp, err := c.CreateInstanceWithBody(ctx, org, installationSlug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateInstanceResponse(rsp)
+}
+
+// CreateInstanceWithResponse Create an instance's record. Requires the `admin` role.
+//
+// Records that the installation has an instance, under an identifier garam mints and answers in the GRN (ADR-0192 decision 1), and answers its one-time registration token. The token is answered here once and stored as its hash only: it is not read back. An app whose instance setting is `none` answers 404, and one whose setting is `one` answers 409 while the installation holds its instance. Authorized as `iam:instance.register` on the installation.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances (the `CreateInstance` operationId).
+func (c *ClientWithResponses) CreateInstanceWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, body CreateInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInstanceResponse, error) {
+	rsp, err := c.CreateInstance(ctx, org, installationSlug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateInstanceResponse(rsp)
+}
+
+// DeleteInstanceWithResponse Delete an instance's record. Requires the `admin` role.
+//
+// Removes the organization's record of the instance, and with it what the instance authenticates as (ADR-0184 decision 7). Nothing in the instance is touched: garam never dials it. Authorized as `iam:instance.delete` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance} (the `DeleteInstance` operationId).
+func (c *ClientWithResponses) DeleteInstanceWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*DeleteInstanceResponse, error) {
+	rsp, err := c.DeleteInstance(ctx, org, installationSlug, instanceSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteInstanceResponse(rsp)
+}
+
+// GetInstanceWithResponse Read one of an organization's instances. Requires the `member` role.
+//
+// Authorized as `iam:instance.read` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance} (the `GetInstance` operationId).
+func (c *ClientWithResponses) GetInstanceWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*GetInstanceResponse, error) {
+	rsp, err := c.GetInstance(ctx, org, installationSlug, instanceSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInstanceResponse(rsp)
+}
+
+// UpdateInstanceWithBodyWithResponse Rename or describe an instance. Requires the `admin` role.
+//
+// Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/installations/{installation}/instances/{instance} (the `UpdateInstance` operationId).
+func (c *ClientWithResponses) UpdateInstanceWithBodyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateInstanceResponse, error) {
+	rsp, err := c.UpdateInstanceWithBody(ctx, org, installationSlug, instanceSlug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateInstanceResponse(rsp)
+}
+
+// UpdateInstanceWithResponse Rename or describe an instance. Requires the `admin` role.
+//
+// Changes what the organization calls the instance and what it says the instance is for, and nothing else. A field left out keeps its value. Authorized as `iam:instance.update` on the installation.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/installations/{installation}/instances/{instance} (the `UpdateInstance` operationId).
+func (c *ClientWithResponses) UpdateInstanceWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body UpdateInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateInstanceResponse, error) {
+	rsp, err := c.UpdateInstance(ctx, org, installationSlug, instanceSlug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateInstanceResponse(rsp)
+}
+
+// ListInstanceDeclarationsWithResponse List the declarations placed on an instance. Requires the `member` role.
+//
+// The live declarations placed on the instance, in the order each was last written. A tombstoned declaration is not listed. Authorized as `iam:instance.read` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `ListInstanceDeclarations` operationId).
+func (c *ClientWithResponses) ListInstanceDeclarationsWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*ListInstanceDeclarationsResponse, error) {
+	rsp, err := c.ListInstanceDeclarations(ctx, org, installationSlug, instanceSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInstanceDeclarationsResponse(rsp)
+}
+
+// CreateInstanceDeclarationWithBodyWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+//
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `CreateInstanceDeclaration` operationId).
+func (c *ClientWithResponses) CreateInstanceDeclarationWithBodyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInstanceDeclarationResponse, error) {
+	rsp, err := c.CreateInstanceDeclarationWithBody(ctx, org, installationSlug, instanceSlug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateInstanceDeclarationResponse(rsp)
+}
+
+// CreateInstanceDeclarationWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
+//
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/declarations (the `CreateInstanceDeclaration` operationId).
+func (c *ClientWithResponses) CreateInstanceDeclarationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, body CreateInstanceDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInstanceDeclarationResponse, error) {
+	rsp, err := c.CreateInstanceDeclaration(ctx, org, installationSlug, instanceSlug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateInstanceDeclarationResponse(rsp)
+}
+
+// DeleteInstanceDeclarationWithResponse Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
+//
+// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `DeleteInstanceDeclaration` operationId).
+func (c *ClientWithResponses) DeleteInstanceDeclarationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*DeleteInstanceDeclarationResponse, error) {
+	rsp, err := c.DeleteInstanceDeclaration(ctx, org, installationSlug, instanceSlug, declarationID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteInstanceDeclarationResponse(rsp)
+}
+
+// GetInstanceDeclarationWithResponse Read one live declaration placed on an instance. Requires the `member` role.
+//
+// A tombstoned declaration answers 404. Authorized as `iam:instance.read` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `GetInstanceDeclaration` operationId).
+func (c *ClientWithResponses) GetInstanceDeclarationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*GetInstanceDeclarationResponse, error) {
+	rsp, err := c.GetInstanceDeclaration(ctx, org, installationSlug, instanceSlug, declarationID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInstanceDeclarationResponse(rsp)
+}
+
+// PutInstanceDeclarationWithBodyWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+//
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `PutInstanceDeclaration` operationId).
+func (c *ClientWithResponses) PutInstanceDeclarationWithBodyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutInstanceDeclarationResponse, error) {
+	rsp, err := c.PutInstanceDeclarationWithBody(ctx, org, installationSlug, instanceSlug, declarationID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutInstanceDeclarationResponse(rsp)
+}
+
+// PutInstanceDeclarationWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
+//
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `PutInstanceDeclaration` operationId).
+func (c *ClientWithResponses) PutInstanceDeclarationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, body PutInstanceDeclarationJSONRequestBody, reqEditors ...RequestEditorFn) (*PutInstanceDeclarationResponse, error) {
+	rsp, err := c.PutInstanceDeclaration(ctx, org, installationSlug, instanceSlug, declarationID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutInstanceDeclarationResponse(rsp)
+}
+
+// ListInstanceKeysWithResponse List the keys an instance registered, with where each stands. Requires the `member` role.
+//
+// Every key the instance held, withdrawn ones included, oldest first. Each is its public record alone: garam never held the private half (ADR-0184 decision 4). Authorized as `iam:instance.read` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/keys (the `ListInstanceKeys` operationId).
+func (c *ClientWithResponses) ListInstanceKeysWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*ListInstanceKeysResponse, error) {
+	rsp, err := c.ListInstanceKeys(ctx, org, installationSlug, instanceSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInstanceKeysResponse(rsp)
+}
+
+// RevokeInstanceKeyWithResponse Withdraw an instance's key and every token exchanged under it. Requires the `admin` role.
+//
+// Withdraws the key (ADR-0184 decision 7): the next request presenting a token exchanged under it is refused, on a connection already open too. The key's record stays, listed as `revoked`, and a rotation to it is refused. Withdrawing a key already withdrawn answers 204 again. Authorized as `iam:instance.reissue` on the installation, as withdrawing an operator's key is `iam:operator.reissue`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid} (the `RevokeInstanceKey` operationId).
+func (c *ClientWithResponses) RevokeInstanceKeyWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*RevokeInstanceKeyResponse, error) {
+	rsp, err := c.RevokeInstanceKey(ctx, org, installationSlug, instanceSlug, keyID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeInstanceKeyResponse(rsp)
+}
+
+// ReissueInstanceRegistrationTokenWithResponse Answer a new registration token for an instance. Requires the `admin` role.
+//
+// Answers a new one-time registration token, once, and spends any the instance held before (ADR-0184 decision 3). The connector that registers with it binds the key it generated, and every key the instance held before is withdrawn then: this is how a lost key is recovered (decision 7). Until then the keys stand. Authorized as `iam:instance.reissue` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/installations/{installation}/instances/{instance}/registration-token (the `ReissueInstanceRegistrationToken` operationId).
+func (c *ClientWithResponses) ReissueInstanceRegistrationTokenWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*ReissueInstanceRegistrationTokenResponse, error) {
+	rsp, err := c.ReissueInstanceRegistrationToken(ctx, org, installationSlug, instanceSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReissueInstanceRegistrationTokenResponse(rsp)
+}
+
+// GetInstanceReportWithResponse Read what an instance last reported, and when it last reached garam. Requires the `member` role.
+//
+// The instance's latest report, the one its connector observed last (ADR-0188), and the time of its latest authenticated request, each null where there is none. The report keeps only the outcomes and objects naming a declaration placed on this instance, or naming none. Every `spec`, `status` and `message` in it is what the instance said: display data, to be rendered as text and never acted on. Authorized as `iam:instance.read` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/installations/{installation}/instances/{instance}/report (the `GetInstanceReport` operationId).
+func (c *ClientWithResponses) GetInstanceReportWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, reqEditors ...RequestEditorFn) (*GetInstanceReportResponse, error) {
+	rsp, err := c.GetInstanceReport(ctx, org, installationSlug, instanceSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInstanceReportResponse(rsp)
 }
 
 // ListInvitationsWithResponse List the invitations that can still be accepted. Requires `iam:org.invite`.
@@ -23138,6 +24359,107 @@ func ParseWatchAgentResponse(rsp *http.Response) (*WatchAgentResponse, error) {
 	return response, nil
 }
 
+// ParseListAppsResponse parses an HTTP response from a ListAppsWithResponse call
+func ParseListAppsResponse(rsp *http.Response) (*ListAppsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAppsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []App
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAppResponse parses an HTTP response from a GetAppWithResponse call
+func ParseGetAppResponse(rsp *http.Response) (*GetAppResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAppResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest App
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListAuditRecordsResponse parses an HTTP response from a ListAuditRecordsWithResponse call
 func ParseListAuditRecordsResponse(rsp *http.Response) (*ListAuditRecordsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23193,811 +24515,6 @@ func ParseListAuditRecordsResponse(rsp *http.Response) (*ListAuditRecordsRespons
 			return nil, err
 		}
 		response.JSON504 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListClustersResponse parses an HTTP response from a ListClustersWithResponse call
-func ParseListClustersResponse(rsp *http.Response) (*ListClustersResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListClustersResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []Cluster
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreateClusterResponse parses an HTTP response from a CreateClusterWithResponse call
-func ParseCreateClusterResponse(rsp *http.Response) (*CreateClusterResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateClusterResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest CreatedCluster
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 201:
-		var headers CreateClusterResponse201Headers
-		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.CacheControl = &value
-		}
-		response.Headers201 = &headers
-	}
-
-	return response, nil
-}
-
-// ParseDeleteClusterResponse parses an HTTP response from a DeleteClusterWithResponse call
-func ParseDeleteClusterResponse(rsp *http.Response) (*DeleteClusterResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteClusterResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetClusterResponse parses an HTTP response from a GetClusterWithResponse call
-func ParseGetClusterResponse(rsp *http.Response) (*GetClusterResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetClusterResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Cluster
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUpdateClusterResponse parses an HTTP response from a UpdateClusterWithResponse call
-func ParseUpdateClusterResponse(rsp *http.Response) (*UpdateClusterResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UpdateClusterResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Cluster
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListClusterDeclarationsResponse parses an HTTP response from a ListClusterDeclarationsWithResponse call
-func ParseListClusterDeclarationsResponse(rsp *http.Response) (*ListClusterDeclarationsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListClusterDeclarationsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterDeclarationList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreateClusterDeclarationResponse parses an HTTP response from a CreateClusterDeclarationWithResponse call
-func ParseCreateClusterDeclarationResponse(rsp *http.Response) (*CreateClusterDeclarationResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateClusterDeclarationResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ClusterDeclaration
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON422 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteClusterDeclarationResponse parses an HTTP response from a DeleteClusterDeclarationWithResponse call
-func ParseDeleteClusterDeclarationResponse(rsp *http.Response) (*DeleteClusterDeclarationResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteClusterDeclarationResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetClusterDeclarationResponse parses an HTTP response from a GetClusterDeclarationWithResponse call
-func ParseGetClusterDeclarationResponse(rsp *http.Response) (*GetClusterDeclarationResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetClusterDeclarationResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterDeclaration
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParsePutClusterDeclarationResponse parses an HTTP response from a PutClusterDeclarationWithResponse call
-func ParsePutClusterDeclarationResponse(rsp *http.Response) (*PutClusterDeclarationResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PutClusterDeclarationResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterDeclaration
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ClusterDeclaration
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON422 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListClusterKeysResponse parses an HTTP response from a ListClusterKeysWithResponse call
-func ParseListClusterKeysResponse(rsp *http.Response) (*ListClusterKeysResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListClusterKeysResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterKeyList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseRevokeClusterKeyResponse parses an HTTP response from a RevokeClusterKeyWithResponse call
-func ParseRevokeClusterKeyResponse(rsp *http.Response) (*RevokeClusterKeyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &RevokeClusterKeyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseReissueClusterRegistrationTokenResponse parses an HTTP response from a ReissueClusterRegistrationTokenWithResponse call
-func ParseReissueClusterRegistrationTokenResponse(rsp *http.Response) (*ReissueClusterRegistrationTokenResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ReissueClusterRegistrationTokenResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ClusterRegistrationToken
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 201:
-		var headers ReissueClusterRegistrationTokenResponse201Headers
-		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.CacheControl = &value
-		}
-		response.Headers201 = &headers
-	}
-
-	return response, nil
-}
-
-// ParseGetClusterReportResponse parses an HTTP response from a GetClusterReportWithResponse call
-func ParseGetClusterReportResponse(rsp *http.Response) (*GetClusterReportResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetClusterReportResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterReportView
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
 
 	}
 
@@ -25113,6 +25630,1023 @@ func ParseCreateIamPolicyVersionResponse(rsp *http.Response) (*CreateIamPolicyVe
 			return nil, err
 		}
 		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListInstallationsResponse parses an HTTP response from a ListInstallationsWithResponse call
+func ParseListInstallationsResponse(rsp *http.Response) (*ListInstallationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInstallationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Installation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateInstallationResponse parses an HTTP response from a CreateInstallationWithResponse call
+func ParseCreateInstallationResponse(rsp *http.Response) (*CreateInstallationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateInstallationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Installation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteInstallationResponse parses an HTTP response from a DeleteInstallationWithResponse call
+func ParseDeleteInstallationResponse(rsp *http.Response) (*DeleteInstallationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteInstallationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetInstallationResponse parses an HTTP response from a GetInstallationWithResponse call
+func ParseGetInstallationResponse(rsp *http.Response) (*GetInstallationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInstallationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Installation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListInstancesResponse parses an HTTP response from a ListInstancesWithResponse call
+func ParseListInstancesResponse(rsp *http.Response) (*ListInstancesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInstancesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Instance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateInstanceResponse parses an HTTP response from a CreateInstanceWithResponse call
+func ParseCreateInstanceResponse(rsp *http.Response) (*CreateInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CreatedInstance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers CreateInstanceResponse201Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseDeleteInstanceResponse parses an HTTP response from a DeleteInstanceWithResponse call
+func ParseDeleteInstanceResponse(rsp *http.Response) (*DeleteInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetInstanceResponse parses an HTTP response from a GetInstanceWithResponse call
+func ParseGetInstanceResponse(rsp *http.Response) (*GetInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Instance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateInstanceResponse parses an HTTP response from a UpdateInstanceWithResponse call
+func ParseUpdateInstanceResponse(rsp *http.Response) (*UpdateInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Instance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListInstanceDeclarationsResponse parses an HTTP response from a ListInstanceDeclarationsWithResponse call
+func ParseListInstanceDeclarationsResponse(rsp *http.Response) (*ListInstanceDeclarationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInstanceDeclarationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterDeclarationList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateInstanceDeclarationResponse parses an HTTP response from a CreateInstanceDeclarationWithResponse call
+func ParseCreateInstanceDeclarationResponse(rsp *http.Response) (*CreateInstanceDeclarationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateInstanceDeclarationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ClusterDeclaration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteInstanceDeclarationResponse parses an HTTP response from a DeleteInstanceDeclarationWithResponse call
+func ParseDeleteInstanceDeclarationResponse(rsp *http.Response) (*DeleteInstanceDeclarationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteInstanceDeclarationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetInstanceDeclarationResponse parses an HTTP response from a GetInstanceDeclarationWithResponse call
+func ParseGetInstanceDeclarationResponse(rsp *http.Response) (*GetInstanceDeclarationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInstanceDeclarationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterDeclaration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutInstanceDeclarationResponse parses an HTTP response from a PutInstanceDeclarationWithResponse call
+func ParsePutInstanceDeclarationResponse(rsp *http.Response) (*PutInstanceDeclarationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutInstanceDeclarationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterDeclaration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ClusterDeclaration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListInstanceKeysResponse parses an HTTP response from a ListInstanceKeysWithResponse call
+func ParseListInstanceKeysResponse(rsp *http.Response) (*ListInstanceKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInstanceKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InstanceKeyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeInstanceKeyResponse parses an HTTP response from a RevokeInstanceKeyWithResponse call
+func ParseRevokeInstanceKeyResponse(rsp *http.Response) (*RevokeInstanceKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeInstanceKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReissueInstanceRegistrationTokenResponse parses an HTTP response from a ReissueInstanceRegistrationTokenWithResponse call
+func ParseReissueInstanceRegistrationTokenResponse(rsp *http.Response) (*ReissueInstanceRegistrationTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReissueInstanceRegistrationTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest InstanceRegistrationToken
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers ReissueInstanceRegistrationTokenResponse201Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetInstanceReportResponse parses an HTTP response from a GetInstanceReportWithResponse call
+func ParseGetInstanceReportResponse(rsp *http.Response) (*GetInstanceReportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInstanceReportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterReportView
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

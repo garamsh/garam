@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
@@ -21,12 +22,12 @@ const report = `{"observedAt":"2026-11-24T12:00:00Z",
 	"declarations":[{"id":"decl-a","generation":1,"outcome":"applied"}],
 	"objects":[
 		{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","namespace":"team-a","name":"reviewer","uid":"u1",
-		 "owner":"garam","generation":1,"cluster":"grn:acme/iam/cluster/5f60710a1b2c3d4e","declarationId":"decl-a",
+		 "owner":"garam","generation":1,"cluster":"grn:acme/iam/instance/5f60710a1b2c3d4e","declarationId":"decl-a",
 		 "orphaned":false,"status":{}},
 		{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","namespace":"team-a","name":"mira","uid":"u2",
 		 "owner":"cluster","generation":3,"spec":{"persona":{"role":"Lead"}},"status":{"phase":"Ready"}}]}`
 
-var reporter = grn.New("acme", cluster.ServiceType, "5f60710a1b2c3d4e")
+var reporter = grn.New("acme", app.InstanceType, "5f60710a1b2c3d4e")
 
 func TestParseReport_RefusesWhatTheInterfaceRefuses(t *testing.T) {
 	for _, tc := range []struct{ name, from, to string }{
@@ -104,7 +105,7 @@ func TestReport_KeepsOnlyWhatNamesADeclarationPlacedOnTheRecord(t *testing.T) {
 		return r
 	}
 	store := &reports{placed: map[string]bool{"decl-a": true}}
-	svc := cluster.NewService(nil, nil, store, cluster.Config{})
+	svc := cluster.NewService(nil, nil, store, nil, cluster.Config{})
 
 	require.NoError(t, svc.Report(context.Background(), reporter, parse(report)))
 	assert.Equal(t, []string{"decl-a"}, store.asked)
@@ -115,8 +116,8 @@ func TestReport_KeepsOnlyWhatNamesADeclarationPlacedOnTheRecord(t *testing.T) {
 	require.NoError(t, svc.Report(context.Background(), reporter, parse(foreign)))
 	assert.Equal(t, []string{"cluster:mira"}, names(store.kept), "another record's identifier is dropped")
 
-	marked := strings.Replace(report, `"cluster":"grn:acme/iam/cluster/5f60710a1b2c3d4e"`,
-		`"cluster":"grn:acme/iam/cluster/0000000000000000"`, 1)
+	marked := strings.Replace(report, `"cluster":"grn:acme/iam/instance/5f60710a1b2c3d4e"`,
+		`"cluster":"grn:acme/iam/instance/0000000000000000"`, 1)
 	require.NoError(t, svc.Report(context.Background(), reporter, parse(marked)))
 	assert.Equal(t, []string{"outcome:decl-a", "cluster:mira"}, names(store.kept), "an object marked for another record is dropped")
 
@@ -134,19 +135,19 @@ func TestReport_KeepsOnlyWhatNamesADeclarationPlacedOnTheRecord(t *testing.T) {
 func TestReport_ARecordDeletedMeanwhileIsNoClient(t *testing.T) {
 	r, err := cluster.ParseReport([]byte(report))
 	require.NoError(t, err)
-	svc := cluster.NewService(nil, nil, &reports{err: cluster.ErrClusterNotFound}, cluster.Config{})
+	svc := cluster.NewService(nil, nil, &reports{err: app.ErrInstanceNotFound}, nil, cluster.Config{})
 	assert.ErrorIs(t, svc.Report(context.Background(), reporter, r), operator.ErrClientInvalid)
 }
 
 func TestReport_IsBoundedPerCluster(t *testing.T) {
 	r, err := cluster.ParseReport([]byte(report))
 	require.NoError(t, err)
-	svc := cluster.NewService(nil, nil, &reports{}, cluster.Config{})
+	svc := cluster.NewService(nil, nil, &reports{}, nil, cluster.Config{})
 	for range cluster.ReportsPerCluster {
 		require.NoError(t, svc.Report(context.Background(), reporter, r))
 	}
 	var exceeded *operator.Exceeded
 	assert.ErrorAs(t, svc.Report(context.Background(), reporter, r), &exceeded)
-	other := grn.New("acme", cluster.ServiceType, "0000000000000001")
+	other := grn.New("acme", app.InstanceType, "0000000000000001")
 	assert.NoError(t, svc.Report(context.Background(), other, r), "the control: another record has its own bound")
 }

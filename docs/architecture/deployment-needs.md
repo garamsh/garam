@@ -240,7 +240,7 @@ owner's states the rule on what may stand in front of it.
 | `GARAM_MACHINE_SERVER_ROOT_FILE` | yes | refused at start (`machine.go:404-414`) |
 | `GARAM_CA_KEY_FILE` | yes | refused at start (`platform/internal/ca/sealer.go:80-95`) |
 | `GARAM_AGENT_TOKEN_LIFETIME` | no | 1h; bounded 20m to 24h by `platform/internal/agent` |
-| `GARAM_CLUSTER_REGISTRATION_LIMIT` | no | 10 registrations per client address a minute; `0` or anything but a positive whole number is refused at start (`cli.go`, `clusterRegistrationLimit`) |
+| `GARAM_INSTANCE_REGISTRATION_LIMIT` | no | 10 registrations per client address a minute; `0` or anything but a positive whole number is refused at start (`cli.go`, `instanceRegistrationLimit`) |
 | `GARAM_MACHINE_ISSUER` | yes | refused at start; `message.ParseIssuer` (`platform/internal/message/signing.go:53-62`) |
 | `GARAM_TRANSIT_ADDR` | no | no Transit; then none of the other `GARAM_TRANSIT_*` may be set (`machine.go:422-462`) |
 | `GARAM_TRANSIT_CA_FILE`, `GARAM_TRANSIT_SIGNING_KEY` | with the address | refused (`machine.go:441`) |

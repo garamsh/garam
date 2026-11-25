@@ -13,23 +13,23 @@ import (
 	"github.com/garamsh/garam/platform/internal/cluster"
 )
 
-// TestClusterReport_AnswersTheKeptReportAndTheLatestContact holds the
-// browser's read of what a cluster reported (ADR-0188): null for each
+// TestInstanceReport_AnswersTheKeptReportAndTheLatestContact holds the
+// browser's read of what an instance reported (ADR-0188): null for each
 // where there is none, then what was kept, a cluster-owned object's
-// spec and every status answered as the cluster sent them.
-func TestClusterReport_AnswersTheKeptReportAndTheLatestContact(t *testing.T) {
+// spec and every status answered as the instance sent them.
+func TestInstanceReport_AnswersTheKeptReportAndTheLatestContact(t *testing.T) {
 	f := newFixture(t)
-	owner, slug, clusterGRN, declarations := declaringOrg(t, f)
+	owner, slug, instanceGRN, declarations := declaringOrg(t, f)
 	path := declarations[:len(declarations)-len("/declarations")] + "/report"
 
 	rec := f.do(t, "GET", path, "", owner)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.JSONEq(t, `{"cluster":"`+clusterGRN+`","lastContactAt":null,"report":null}`, rec.Body.String())
+	assert.JSONEq(t, `{"instance":"`+instanceGRN+`","lastContactAt":null,"report":null}`, rec.Body.String())
 
-	g, err := grn.Parse(clusterGRN)
+	g, err := grn.Parse(instanceGRN)
 	require.NoError(t, err)
 	contact := time.Date(2026, 11, 24, 12, 0, 1, 0, time.UTC)
-	f.reports.kept[clusterGRN] = cluster.KeptReport{Cluster: g, LastContactAt: &contact, Report: &cluster.Report{
+	f.reports.kept[instanceGRN] = cluster.KeptReport{Cluster: g, LastContactAt: &contact, Report: &cluster.Report{
 		ObservedAt: time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC),
 		Connector:  cluster.ReportConnector{Version: "0.1.0", Mode: "apply", Namespaces: []string{"team-a"}},
 		Declarations: []cluster.DeclarationOutcome{
@@ -41,7 +41,7 @@ func TestClusterReport_AnswersTheKeptReportAndTheLatestContact(t *testing.T) {
 	}}
 	rec = f.do(t, "GET", path, "", owner)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.JSONEq(t, `{"cluster":"`+clusterGRN+`","lastContactAt":"2026-11-24T12:00:01Z","report":{
+	assert.JSONEq(t, `{"instance":"`+instanceGRN+`","lastContactAt":"2026-11-24T12:00:01Z","report":{
 		"observedAt":"2026-11-24T12:00:00Z",
 		"connector":{"version":"0.1.0","mode":"apply","namespaces":["team-a"]},
 		"declarations":[{"id":"decl-a","generation":2,"outcome":"conflict","message":"<b>held</b>"}],
@@ -49,6 +49,6 @@ func TestClusterReport_AnswersTheKeptReportAndTheLatestContact(t *testing.T) {
 			"owner":"cluster","generation":3,"spec":{"persona":{"role":"Lead"}},"status":{"phase":"Ready"}}]}}`,
 		rec.Body.String())
 
-	rec = f.do(t, "GET", "/orgs/"+slug+"/clusters/0000000000000000/report", "", owner)
+	rec = f.do(t, "GET", connectorPath(slug)+"/instances/0000000000000000/report", "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "a record the organization does not hold")
 }

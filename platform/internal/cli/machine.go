@@ -17,6 +17,8 @@ import (
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
+	"github.com/garamsh/garam/platform/internal/app"
+	apppg "github.com/garamsh/garam/platform/internal/app/postgres"
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 	"github.com/garamsh/garam/platform/internal/ca"
@@ -83,7 +85,7 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
-	registrationLimit, err := clusterRegistrationLimit()
+	registrationLimit, err := instanceRegistrationLimit()
 	if err != nil {
 		return err
 	}
@@ -139,17 +141,17 @@ func serveMachine(cmd *cobra.Command) error {
 		// The delivery parameters default narrow (ADR-0018), and the
 		// defaults are what this process runs on until something asks
 		// for another value.
-		Delivery:                 message.Config{},
-		AgentTokenLifetime:       tokenLifetime,
-		ClusterRegistrationLimit: registrationLimit,
-		DeclarationWakes:         wakes,
-		TokenURL:                 tokenURL,
-		Identity:                 idIssuer,
-		ServiceKeys:              idKeys,
-		Decisions:                decisions,
-		Feed:                     policyfeed.NewObservingGate(policyfeedpg.NewStore(pool), policyfeed.Bound),
-		Logger:                   obs.logger,
-		Metrics:                  obs.registry,
+		Delivery:                  message.Config{},
+		AgentTokenLifetime:        tokenLifetime,
+		InstanceRegistrationLimit: registrationLimit,
+		DeclarationWakes:          wakes,
+		TokenURL:                  tokenURL,
+		Identity:                  idIssuer,
+		ServiceKeys:               idKeys,
+		Decisions:                 decisions,
+		Feed:                      policyfeed.NewObservingGate(policyfeedpg.NewStore(pool), policyfeed.Bound),
+		Logger:                    obs.logger,
+		Metrics:                   obs.registry,
 	})
 	if err != nil {
 		return err
@@ -208,10 +210,10 @@ type MachineConfig struct {
 	// AgentTokenLifetime is how long an agent token is accepted
 	// (ADR-0100); zero is the default, and agent.NewService bounds it.
 	AgentTokenLifetime time.Duration
-	// ClusterRegistrationLimit bounds a connected cluster's
-	// registrations per client address per minute; zero takes the
-	// cluster package's default (REG-8).
-	ClusterRegistrationLimit int
+	// InstanceRegistrationLimit bounds an app's instances'
+	// registrations per client address per minute; zero takes the app
+	// package's default (REG-8).
+	InstanceRegistrationLimit int
 	// DeclarationWakes is where a held declarations poll waits for a
 	// write to its record. Nil holds each poll until its recheck.
 	DeclarationWakes *cluster.Wakes
@@ -299,9 +301,10 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 
 	// A lifecycle decision reads the caller's token dates and record
 	// again, on the same clock.
+	appStore := apppg.New(pool)
 	clusterStore := clusterpg.New(pool)
 	recheck := machine.NewRecheck(identityRegistrations{operators: operatorStore, supervisors: agentpg.New(pool),
-		clusters: clusterStore}, cfg.Now)
+		instances: appStore}, cfg.Now)
 	// The listener notes how each request authenticated, and the issuing
 	// routes what they issued (ADR-0109).
 	evidence := machine.NewEvidence(machinepg.New(pool), evidenceWindow, cfg.Now)
@@ -337,9 +340,10 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
 	authority := NewAuthorityService(pool, cfg.Decisions)
-	clusters := cluster.NewService(clusterStore, clusterStore, clusterStore, cluster.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
-		RotationURL: clusterRotationURL(cfg.TokenURL), RegistrationLimit: cfg.ClusterRegistrationLimit,
-		Wakes: cfg.DeclarationWakes})
+	instances := app.NewService(appStore, app.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
+		RotationURL: clusterRotationURL(cfg.TokenURL), RegistrationLimit: cfg.InstanceRegistrationLimit})
+	clusters := cluster.NewService(appStore, clusterStore, clusterStore, clusterStore, cluster.Config{Now: cfg.Now,
+		TokenEndpoint: cfg.TokenURL, Wakes: cfg.DeclarationWakes})
 	// One mux carries both specifications' routes: the machine
 	// specification's, and cluster-connection's under its own prefix
 	// with its own error body (ADR-0186).
@@ -354,17 +358,17 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			WithSendPolicy(cfg.Decisions, agentStore).
 			WithFeed(cfg.Feed).
 			WithIdentity(cfg.Identity, principals).
-			WithClusters(clusters),
+			WithInstances(instances, clusters),
 		machinegen.StdHTTPServerOptions{
 			BaseRouter: mux,
-			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.ConfineClusters, machineapi.RecoverPanics,
+			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.ConfineApps, machineapi.RecoverPanics,
 				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges), recordIssuances(evidence)},
 			// A parameter the router cannot bind is refused before any
 			// handler runs, so this is the only place the surface's own
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	connectiongen.HandlerWithOptions(machineapi.NewClusterConnection(clusters, cfg.TokenURL),
+	connectiongen.HandlerWithOptions(machineapi.NewClusterConnection(instances, clusters, cfg.TokenURL),
 		connectiongen.StdHTTPServerOptions{
 			BaseRouter: mux,
 			Middlewares: []connectiongen.MiddlewareFunc{machineapi.RecoverPanics,
@@ -373,7 +377,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 		})
 	handler := http.Handler(mux)
 	return obs.machineServer(identityTokens{operators: operatorStore, agents: agentStore, supervisors: agentpg.New(pool),
-		clusters: clusterStore}, evidence, cfg.Certificate, handler), nil
+		instances: appStore}, evidence, cfg.Certificate, handler), nil
 }
 
 // machineServer is the listener `serve machine` serves: server TLS
@@ -397,7 +401,7 @@ func (o *observability) machineServer(tokens machine.Tokens, evidence *machine.E
 }
 
 // boundedBodies bounds each request's body before a decoder allocates
-// for it: a cluster's report at REP-6's bound, which its route
+// for it: an instance's report at REP-6's bound, which its route
 // answers 413 past, and every other at maxRequestBody.
 func boundedBodies(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

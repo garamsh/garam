@@ -26,7 +26,7 @@ import (
 
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/tests/loopback"
 )
 
@@ -192,17 +192,20 @@ func (f *fixture) mintToken(ctx context.Context, named string, expired bool, dat
 	}
 	var out minted
 	if named == "" {
-		var created apigen.CreatedCluster
-		if err := f.call(ctx, http.MethodPost, "/orgs/"+f.org+"/clusters", `{}`, &created, http.StatusCreated); err != nil {
+		if err := f.install(ctx); err != nil {
 			return minted{}, err
 		}
-		out = minted{RegistrationToken: created.Registration.RegistrationToken, Cluster: created.Cluster.Grn}
+		var created apigen.CreatedInstance
+		if err := f.call(ctx, http.MethodPost, installationPath(f.org)+"/instances", `{}`, &created, http.StatusCreated); err != nil {
+			return minted{}, err
+		}
+		out = minted{RegistrationToken: created.Registration.RegistrationToken, Cluster: created.Instance.Grn}
 	} else {
 		g, err := clusterGRN(named)
 		if err != nil {
 			return minted{}, err
 		}
-		var reissued apigen.ClusterRegistrationToken
+		var reissued apigen.InstanceRegistrationToken
 		if err := f.call(ctx, http.MethodPost, recordPath(g)+"/registration-token", "", &reissued, http.StatusCreated); err != nil {
 			return minted{}, err
 		}
@@ -214,6 +217,17 @@ func (f *fixture) mintToken(ctx context.Context, named string, expired bool, dat
 		}
 	}
 	return out, nil
+}
+
+// connectorSlug is the app the suite's records are instances of.
+const connectorSlug = "garam-bot-connector"
+
+// install installs garam-bot-connector in the organization, which
+// creating its first record needs. One installed already answers 409,
+// and stands.
+func (f *fixture) install(ctx context.Context) error {
+	return f.call(ctx, http.MethodPost, "/orgs/"+f.org+"/installations", `{"app":"`+connectorSlug+`"}`, nil,
+		http.StatusCreated, http.StatusConflict)
 }
 
 // localDatabase parses the database --expired and expire-cursors
@@ -237,7 +251,7 @@ func expire(ctx context.Context, cfg *pgxpool.Config, clusterGRN string) error {
 	}
 	defer pool.Close()
 	tag, err := pool.Exec(ctx,
-		`UPDATE cluster_registration_tokens SET expires_at = now() - interval '1 second' WHERE cluster_grn = $1`, clusterGRN)
+		`UPDATE instance_registration_tokens SET expires_at = now() - interval '1 second' WHERE instance_grn = $1`, clusterGRN)
 	if err != nil {
 		return errors.New("the registration token could not be expired")
 	}
@@ -254,12 +268,12 @@ type named struct {
 
 // revokeKeys withdraws every key of g the record has not withdrawn.
 func (f *fixture) revokeKeys(ctx context.Context, g grn.GRN) (named, error) {
-	var keys apigen.ClusterKeyList
+	var keys apigen.InstanceKeyList
 	if err := f.call(ctx, http.MethodGet, recordPath(g)+"/keys", "", &keys, http.StatusOK); err != nil {
 		return named{}, err
 	}
 	for _, k := range keys.Keys {
-		if k.State == apigen.ClusterKeyRevoked {
+		if k.State == apigen.InstanceKeyRevoked {
 			continue
 		}
 		if err := f.call(ctx, http.MethodDelete, recordPath(g)+"/keys/"+k.Kid, "", nil, http.StatusNoContent); err != nil {
@@ -276,19 +290,26 @@ func (f *fixture) deleteCluster(ctx context.Context, g grn.GRN) (named, error) {
 	return named{Cluster: g.String()}, nil
 }
 
-// clusterGRN parses a connected cluster's GRN, the one form a record is
-// named by on the suite's command line.
+// clusterGRN parses an instance's GRN, the one form a record is named
+// by on the suite's command line.
 func clusterGRN(raw string) (grn.GRN, error) {
 	g, err := grn.Parse(raw)
-	if err != nil || g.ServiceType != cluster.ServiceType {
-		return grn.GRN{}, &refusal{Code: "invalid_request", Message: "not a connected cluster's GRN"}
+	if err != nil || !app.IsInstanceGRN(g) {
+		return grn.GRN{}, &refusal{Code: "invalid_request", Message: "not an instance's GRN"}
 	}
 	return g, nil
 }
 
-// recordPath is the browser API's path of g's record.
+// installationPath is the browser API's path of org's installation of
+// garam-bot-connector.
+func installationPath(org string) string {
+	return "/orgs/" + org + "/installations/" + connectorSlug
+}
+
+// recordPath is the browser API's path of g's record, an instance of
+// that installation.
 func recordPath(g grn.GRN) string {
-	return "/orgs/" + g.Organization + "/clusters/" + g.Identifier
+	return installationPath(g.Organization) + "/instances/" + g.Identifier
 }
 
 // call sends one request as the principal and decodes an answer of one
@@ -389,8 +410,13 @@ func (f *fixture) declare(ctx context.Context, file []byte) (declared, error) {
 // the organization holds it, and answers the generation the delete
 // carries.
 func (f *fixture) tombstone(ctx context.Context, id string) (declared, error) {
-	var records []apigen.Cluster
-	if err := f.call(ctx, http.MethodGet, "/orgs/"+f.org+"/clusters", "", &records, http.StatusOK); err != nil {
+	var records []apigen.Instance
+	err := f.call(ctx, http.MethodGet, installationPath(f.org)+"/instances", "", &records, http.StatusOK)
+	var r *refusal
+	if errors.As(err, &r) && r.Code == "not_found" {
+		return declared{}, &refusal{Code: "not_found", Message: "no live declaration " + id + " in the organization"}
+	}
+	if err != nil {
 		return declared{}, err
 	}
 	for _, c := range records {
@@ -417,13 +443,16 @@ func (f *fixture) tombstone(ctx context.Context, id string) (declared, error) {
 }
 
 // latestReport reads g's kept report and its lastContactAt, each null
-// where there is none, as getClusterReport answers them: cluster,
-// lastContactAt and report are the members the suite reads.
-func (f *fixture) latestReport(ctx context.Context, g grn.GRN) (json.RawMessage, error) {
-	var view json.RawMessage
+// where there is none, as getInstanceReport answers them: cluster,
+// lastContactAt and report are the members the suite reads, the record
+// under the name the suite's contract gives it.
+func (f *fixture) latestReport(ctx context.Context, g grn.GRN) (map[string]json.RawMessage, error) {
+	var view map[string]json.RawMessage
 	if err := f.call(ctx, http.MethodGet, recordPath(g)+"/report", "", &view, http.StatusOK); err != nil {
 		return nil, err
 	}
+	view["cluster"] = view["instance"]
+	delete(view, "instance")
 	return view, nil
 }
 

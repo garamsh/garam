@@ -9,11 +9,11 @@ import (
 	"github.com/garamsh/garam/platform/internal/org"
 )
 
-// GetClusterReport answers the cluster's latest report and its latest
-// contact (ADR-0188). What the cluster said is answered as data and
+// GetInstanceReport answers the instance's latest report and its latest
+// contact (ADR-0188). What the instance said is answered as data and
 // never read here (REP-9).
-func (s *Server) GetClusterReport(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, clusterSlug apigen.ClusterSlug) {
-	_, stores, err := s.clusterCall(r, orgSlug, org.ActionClusterRead)
+func (s *Server) GetInstanceReport(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, installationSlug apigen.InstallationSlug, instanceSlug apigen.InstanceSlug) {
+	stores, i, err := s.instanceCall(r, orgSlug, installationSlug, instanceSlug, org.ActionInstanceRead)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -22,12 +22,7 @@ func (s *Server) GetClusterReport(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, errorx.New(errorx.KindUnavailable, "reports are not configured"))
 		return
 	}
-	g, err := cluster.GRNOf(orgGRN(orgSlug), clusterSlug)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	kept, err := stores.reports.LatestReport(r.Context(), g)
+	kept, err := stores.reports.LatestReport(r.Context(), i.GRN)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -36,7 +31,7 @@ func (s *Server) GetClusterReport(w http.ResponseWriter, r *http.Request, orgSlu
 }
 
 func reportToAPI(kept cluster.KeptReport) apigen.ClusterReportView {
-	view := apigen.ClusterReportView{Cluster: kept.Cluster.String(), LastContactAt: kept.LastContactAt}
+	view := apigen.ClusterReportView{Instance: kept.Cluster.String(), LastContactAt: kept.LastContactAt}
 	if kept.Report == nil {
 		return view
 	}

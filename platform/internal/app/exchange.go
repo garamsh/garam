@@ -1,4 +1,4 @@
-package cluster
+package app
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
-// ExchangeAssertion runs the operator's private_key_jwt profile over a
-// cluster's keys (ADR-0184 decision 5): the same parse, the same
+// ExchangeAssertion runs the operator's private_key_jwt profile over an
+// instance's keys (ADR-0184 decision 5): the same parse, the same
 // verification and the same bounds, against the record's own store.
 func (s *service) ExchangeAssertion(ctx context.Context, source string, client grn.GRN, assertion string) (*Token, error) {
 	if s.cfg.TokenEndpoint == "" {
@@ -17,7 +17,7 @@ func (s *service) ExchangeAssertion(ctx context.Context, source string, client g
 	if err := s.perSource.Check(source); err != nil {
 		return nil, err
 	}
-	if !IsClusterGRN(client) {
+	if !IsInstanceGRN(client) {
 		return nil, operator.ErrClientInvalid
 	}
 	parsed, err := operator.ParseClientAssertion(assertion)
@@ -33,7 +33,7 @@ func (s *service) ExchangeAssertion(ctx context.Context, source string, client g
 		return nil, err
 	}
 	// Counted once the key verified, so a stranger knowing the GRN
-	// cannot spend the cluster's budget.
+	// cannot spend the instance's budget.
 	if err := s.perClient.Check(client.String()); err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (s *service) ExchangeAssertion(ctx context.Context, source string, client g
 	if err != nil {
 		return nil, err
 	}
-	token := &Token{Value: value, Cluster: client}
+	token := &Token{Value: value, Instance: client}
 	if err := s.credentials.RecordAssertionToken(ctx, verified, token); err != nil {
 		return nil, err
 	}

@@ -73,9 +73,9 @@ type Server struct {
 	// policy service (ADR-0169). Nil answers those endpoints as
 	// unavailable.
 	policyRelay policyrelay.Service
-	// clusters keeps connected clusters (ADR-0184); nil answers the
-	// cluster routes unavailable.
-	clusters *clusterStores
+	// apps keeps the app system's records (ADR-0192); nil answers its
+	// routes unavailable.
+	apps *appStores
 }
 
 // Compile-time check that Server satisfies the generated interface.

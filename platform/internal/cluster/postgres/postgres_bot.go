@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/cluster/postgres/db"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
@@ -31,7 +32,7 @@ func (s *Store) RecordBotToken(ctx context.Context, g grn.GRN, id, actorHash, ha
 			Ttl: pgtype.Interval{Microseconds: ttl.Microseconds(), Valid: true},
 		})
 		if err != nil {
-			return pgxerr.Classify(err, "insert bot token", cluster.ErrTokenInvalid, nil)
+			return pgxerr.Classify(err, "insert bot token", app.ErrTokenInvalid, nil)
 		}
 		expiresAt = at.Time.UTC()
 		return nil

@@ -17,24 +17,22 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/grn"
-	"github.com/garamsh/garam/platform/internal/cluster"
-	clusterpg "github.com/garamsh/garam/platform/internal/cluster/postgres"
+	"github.com/garamsh/garam/platform/internal/app"
+	apppg "github.com/garamsh/garam/platform/internal/app/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
-	"github.com/garamsh/garam/platform/internal/org"
-	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 )
 
 // clusterKeys are drawn once: a 3072-bit key is slow to draw.
 var (
 	clusterKeysOnce sync.Once
-	clusterKeys     [4]cluster.PublicKey
+	clusterKeys     [4]app.PublicKey
 )
 
-func connectorKeys(t *testing.T) [4]cluster.PublicKey {
+func connectorKeys(t *testing.T) [4]app.PublicKey {
 	t.Helper()
 	clusterKeysOnce.Do(func() {
 		for i := range clusterKeys {
-			k, err := rsa.GenerateKey(rand.Reader, cluster.MinKeyBits)
+			k, err := rsa.GenerateKey(rand.Reader, app.MinKeyBits)
 			if err != nil {
 				panic(err)
 			}
@@ -42,7 +40,7 @@ func connectorKeys(t *testing.T) [4]cluster.PublicKey {
 			if err != nil {
 				panic(err)
 			}
-			if clusterKeys[i], err = cluster.ParsePublicJWK(raw); err != nil {
+			if clusterKeys[i], err = app.ParsePublicJWK(raw); err != nil {
 				panic(err)
 			}
 		}
@@ -50,18 +48,13 @@ func connectorKeys(t *testing.T) [4]cluster.PublicKey {
 	return clusterKeys
 }
 
-// registeredCluster records a cluster of a new organization and binds
-// key to it, as a registration does.
-func registeredCluster(t *testing.T, p *pgxpool.Pool, s *clusterpg.Store, key cluster.PublicKey) grn.GRN {
+// registeredCluster records an instance of garam-bot-connector in a
+// new organization and binds key to it, as a registration does.
+func registeredCluster(t *testing.T, p *pgxpool.Pool, s *apppg.Store, key app.PublicKey) grn.GRN {
 	t.Helper()
-	ctx := context.Background()
-	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	c, err := cluster.New(orgRootGRN("acme"), scopedGRN("acme", "user", "ada"), cluster.DetailsPatch{})
-	require.NoError(t, err)
-	_, err = s.Create(ctx, c)
-	require.NoError(t, err)
-	require.NoError(t, s.BindKey(ctx, c.GRN, key))
-	return c.GRN
+	g := declarationRecords(t, p, 1)[0]
+	require.NoError(t, s.BindKey(context.Background(), g, key))
+	return g
 }
 
 // signed is a verified JWS's claims as the store spends them.
@@ -71,7 +64,7 @@ func signed(t *testing.T, g grn.GRN, keyID int64, jti string) operator.VerifiedA
 	return operator.VerifiedAssertion{KeyID: keyID, Operator: g, JTI: jti, IssuedAt: now, ExpiresAt: now.Add(time.Minute)}
 }
 
-func liveKey(t *testing.T, s *clusterpg.Store, g grn.GRN, k cluster.PublicKey) cluster.Key {
+func liveKey(t *testing.T, s *apppg.Store, g grn.GRN, k app.PublicKey) app.Key {
 	t.Helper()
 	key, err := s.VerificationKey(context.Background(), g, k.KID())
 	require.NoError(t, err)
@@ -84,7 +77,7 @@ func liveKey(t *testing.T, s *clusterpg.Store, g grn.GRN, k cluster.PublicKey) c
 func TestClusterCredentials_ARegistrationTokenIsSpentOnceAndOnlyBeforeItExpires(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := clusterpg.New(p)
+	s := apppg.New(p)
 	g := registeredCluster(t, p, s, connectorKeys(t)[0])
 
 	_, err := s.IssueRegistrationToken(ctx, g, "live-hash", time.Hour)
@@ -93,14 +86,14 @@ func TestClusterCredentials_ARegistrationTokenIsSpentOnceAndOnlyBeforeItExpires(
 	require.NoError(t, err)
 	assert.Equal(t, g, spent)
 	_, err = s.SpendRegistrationToken(ctx, "live-hash")
-	assert.ErrorIs(t, err, cluster.ErrRegistrationRefused, "a second presentation")
+	assert.ErrorIs(t, err, app.ErrRegistrationRefused, "a second presentation")
 
 	_, err = s.IssueRegistrationToken(ctx, g, "expired-hash", -time.Second)
 	require.NoError(t, err)
 	_, err = s.SpendRegistrationToken(ctx, "expired-hash")
-	assert.ErrorIs(t, err, cluster.ErrRegistrationRefused, "an expired token")
+	assert.ErrorIs(t, err, app.ErrRegistrationRefused, "an expired token")
 	_, err = s.SpendRegistrationToken(ctx, "unknown-hash")
-	assert.ErrorIs(t, err, cluster.ErrRegistrationRefused, "an unknown token")
+	assert.ErrorIs(t, err, app.ErrRegistrationRefused, "an unknown token")
 }
 
 // TestClusterCredentials_RegistrationLeavesTheBoundKeyTheOnlyLiveOne
@@ -108,20 +101,20 @@ func TestClusterCredentials_ARegistrationTokenIsSpentOnceAndOnlyBeforeItExpires(
 func TestClusterCredentials_RegistrationLeavesTheBoundKeyTheOnlyLiveOne(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := clusterpg.New(p)
+	s := apppg.New(p)
 	keys := connectorKeys(t)
 	g := registeredCluster(t, p, s, keys[0])
 	first := liveKey(t, s, g, keys[0])
-	token := &cluster.Token{Cluster: g, Value: "garam_ct_first"}
+	token := &app.Token{Instance: g, Value: "garam_ct_first"}
 	require.NoError(t, s.RecordAssertionToken(ctx, signed(t, g, first.ID, "jti-first"), token))
-	_, err := s.ResolveToken(ctx, cluster.HashSecret(token.Value))
+	_, err := s.ResolveToken(ctx, app.HashSecret(token.Value))
 	require.NoError(t, err, "the control: the token resolves while its key is live")
 
 	require.NoError(t, s.BindKey(ctx, g, keys[1]))
 	_, err = s.VerificationKey(ctx, g, keys[0].KID())
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "the key held before")
-	_, err = s.ResolveToken(ctx, cluster.HashSecret(token.Value))
-	assert.ErrorIs(t, err, cluster.ErrTokenInvalid, "its token")
+	_, err = s.ResolveToken(ctx, app.HashSecret(token.Value))
+	assert.ErrorIs(t, err, app.ErrTokenInvalid, "its token")
 	liveKey(t, s, g, keys[1])
 }
 
@@ -133,20 +126,20 @@ func TestClusterCredentials_RegistrationLeavesTheBoundKeyTheOnlyLiveOne(t *testi
 func TestClusterCredentials_ARotationIsAnsweredOnceAndRepeatedAsItWas(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := clusterpg.New(p)
+	s := apppg.New(p)
 	keys := connectorKeys(t)
 	g := registeredCluster(t, p, s, keys[0])
 	registered := liveKey(t, s, g, keys[0])
 
 	_, err := s.Rotate(ctx, g, registered.ID, keys[0], []operator.VerifiedAssertion{signed(t, g, registered.ID, "self")})
-	assert.ErrorIs(t, err, cluster.ErrKeyHeld, "the key registration bound")
+	assert.ErrorIs(t, err, app.ErrKeyHeld, "the key registration bound")
 
 	first, err := s.Rotate(ctx, g, registered.ID, keys[1],
 		[]operator.VerifiedAssertion{signed(t, g, registered.ID, "a1"), signed(t, g, registered.ID, "p1")})
 	require.NoError(t, err)
 	assert.Equal(t, keys[1].KID(), first.KID)
-	assert.WithinDuration(t, time.Now().Add(cluster.RolloverWindow), first.PredecessorRetiresAt, time.Minute)
-	assert.GreaterOrEqual(t, cluster.RolloverWindow, 24*time.Hour)
+	assert.WithinDuration(t, time.Now().Add(app.RolloverWindow), first.PredecessorRetiresAt, time.Minute)
+	assert.GreaterOrEqual(t, app.RolloverWindow, 24*time.Hour)
 	liveKey(t, s, g, keys[0])
 	successor := liveKey(t, s, g, keys[1])
 
@@ -157,17 +150,17 @@ func TestClusterCredentials_ARotationIsAnsweredOnceAndRepeatedAsItWas(t *testing
 	assert.True(t, first.PredecessorRetiresAt.Equal(repeat.PredecessorRetiresAt), "the same deadline")
 
 	_, err = s.Rotate(ctx, g, successor.ID, keys[2], []operator.VerifiedAssertion{signed(t, g, successor.ID, "a3")})
-	assert.ErrorIs(t, err, cluster.ErrTooManyKeys, "a third key beside two live")
+	assert.ErrorIs(t, err, app.ErrTooManyKeys, "a third key beside two live")
 
 	_, err = s.Rotate(ctx, g, successor.ID, keys[1], []operator.VerifiedAssertion{signed(t, g, successor.ID, "a2")})
-	assert.ErrorIs(t, err, cluster.ErrInvalidProof, "a jti spent before")
+	assert.ErrorIs(t, err, app.ErrInvalidProof, "a jti spent before")
 
 	require.NoError(t, s.RevokeKey(ctx, g, keys[1].KID()))
 	_, err = s.Rotate(ctx, g, registered.ID, keys[1], []operator.VerifiedAssertion{signed(t, g, registered.ID, "a4")})
-	assert.ErrorIs(t, err, cluster.ErrKeyHeld, "a rotated key since withdrawn")
+	assert.ErrorIs(t, err, app.ErrKeyHeld, "a rotated key since withdrawn")
 
 	_, err = s.Rotate(ctx, g, successor.ID, keys[3], []operator.VerifiedAssertion{signed(t, g, successor.ID, "a5")})
-	assert.ErrorIs(t, err, cluster.ErrInvalidProof, "authorized by a key no longer live")
+	assert.ErrorIs(t, err, app.ErrInvalidProof, "authorized by a key no longer live")
 }
 
 // TestClusterCredentials_RevokingAKeyWithdrawsItsTokens holds ADR-0184
@@ -176,29 +169,29 @@ func TestClusterCredentials_ARotationIsAnsweredOnceAndRepeatedAsItWas(t *testing
 func TestClusterCredentials_RevokingAKeyWithdrawsItsTokens(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := clusterpg.New(p)
+	s := apppg.New(p)
 	keys := connectorKeys(t)
 	g := registeredCluster(t, p, s, keys[0])
 	registered := liveKey(t, s, g, keys[0])
 	_, err := s.Rotate(ctx, g, registered.ID, keys[1], []operator.VerifiedAssertion{signed(t, g, registered.ID, "a")})
 	require.NoError(t, err)
 	successor := liveKey(t, s, g, keys[1])
-	revoked := &cluster.Token{Cluster: g, Value: "garam_ct_revoked"}
-	kept := &cluster.Token{Cluster: g, Value: "garam_ct_kept"}
+	revoked := &app.Token{Instance: g, Value: "garam_ct_revoked"}
+	kept := &app.Token{Instance: g, Value: "garam_ct_kept"}
 	require.NoError(t, s.RecordAssertionToken(ctx, signed(t, g, registered.ID, "x1"), revoked))
 	require.NoError(t, s.RecordAssertionToken(ctx, signed(t, g, successor.ID, "x2"), kept))
 
 	require.NoError(t, s.RevokeKey(ctx, g, keys[0].KID()))
-	_, err = s.ResolveToken(ctx, cluster.HashSecret(revoked.Value))
-	assert.ErrorIs(t, err, cluster.ErrTokenInvalid)
-	_, err = s.ResolveToken(ctx, cluster.HashSecret(kept.Value))
+	_, err = s.ResolveToken(ctx, app.HashSecret(revoked.Value))
+	assert.ErrorIs(t, err, app.ErrTokenInvalid)
+	_, err = s.ResolveToken(ctx, app.HashSecret(kept.Value))
 	assert.NoError(t, err)
 	assert.NoError(t, s.RevokeKey(ctx, g, keys[0].KID()), "a key already revoked stays so")
-	assert.ErrorIs(t, s.RevokeKey(ctx, g, keys[2].KID()), cluster.ErrKeyNotFound, "a key never held")
+	assert.ErrorIs(t, s.RevokeKey(ctx, g, keys[2].KID()), app.ErrKeyNotFound, "a key never held")
 
-	require.NoError(t, s.Delete(ctx, g))
-	_, err = s.ResolveToken(ctx, cluster.HashSecret(kept.Value))
-	assert.ErrorIs(t, err, cluster.ErrTokenInvalid, "a deleted record's token")
+	require.NoError(t, s.DeleteInstance(ctx, g))
+	_, err = s.ResolveToken(ctx, app.HashSecret(kept.Value))
+	assert.ErrorIs(t, err, app.ErrTokenInvalid, "a deleted record's token")
 }
 
 // TestClusterCredentials_RacingPresentationsSpendATokenOnce holds REG-3
@@ -207,7 +200,7 @@ func TestClusterCredentials_RevokingAKeyWithdrawsItsTokens(t *testing.T) {
 func TestClusterCredentials_RacingPresentationsSpendATokenOnce(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := clusterpg.New(p)
+	s := apppg.New(p)
 	g := registeredCluster(t, p, s, connectorKeys(t)[0])
 	const racers = 16
 	for round := range 5 {
@@ -234,7 +227,7 @@ func TestClusterCredentials_RacingPresentationsSpendATokenOnce(t *testing.T) {
 			switch {
 			case err == nil:
 				spent++
-			case errors.Is(err, cluster.ErrRegistrationRefused):
+			case errors.Is(err, app.ErrRegistrationRefused):
 				refused++
 			default:
 				t.Fatalf("round %d: %v", round, err)
@@ -252,27 +245,27 @@ func TestClusterCredentials_RacingPresentationsSpendATokenOnce(t *testing.T) {
 func TestClusterCredentials_AnExchangeSpendsItsAssertionOnceAndOnlyInTime(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := clusterpg.New(p)
+	s := apppg.New(p)
 	keys := connectorKeys(t)
 	g := registeredCluster(t, p, s, keys[0])
 	key := liveKey(t, s, g, keys[0])
 
 	first := signed(t, g, key.ID, "exchange-jti")
-	require.NoError(t, s.RecordAssertionToken(ctx, first, &cluster.Token{Cluster: g, Value: "garam_ct_first"}))
-	err := s.RecordAssertionToken(ctx, first, &cluster.Token{Cluster: g, Value: "garam_ct_replayed"})
+	require.NoError(t, s.RecordAssertionToken(ctx, first, &app.Token{Instance: g, Value: "garam_ct_first"}))
+	err := s.RecordAssertionToken(ctx, first, &app.Token{Instance: g, Value: "garam_ct_replayed"})
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "a replayed jti")
 
 	stale := signed(t, g, key.ID, "stale-jti")
 	stale.IssuedAt, stale.ExpiresAt = time.Now().Add(-time.Hour), time.Now().Add(-50*time.Minute)
-	err = s.RecordAssertionToken(ctx, stale, &cluster.Token{Cluster: g, Value: "garam_ct_stale"})
+	err = s.RecordAssertionToken(ctx, stale, &app.Token{Instance: g, Value: "garam_ct_stale"})
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "an expired assertion")
 	for _, value := range []string{"garam_ct_replayed", "garam_ct_stale"} {
-		_, err := s.ResolveToken(ctx, cluster.HashSecret(value))
-		assert.ErrorIs(t, err, cluster.ErrTokenInvalid, value+" was not stored")
+		_, err := s.ResolveToken(ctx, app.HashSecret(value))
+		assert.ErrorIs(t, err, app.ErrTokenInvalid, value+" was not stored")
 	}
 
 	require.NoError(t, s.RecordAssertionToken(ctx, signed(t, g, key.ID, "fresh-jti"),
-		&cluster.Token{Cluster: g, Value: "garam_ct_fresh"}), "the control: a fresh assertion")
+		&app.Token{Instance: g, Value: "garam_ct_fresh"}), "the control: a fresh assertion")
 }
 
 // TestClusterCredentials_AWithdrawnKeysTokenIsRefusedByTheReadAlone pins
@@ -283,7 +276,7 @@ func TestClusterCredentials_AnExchangeSpendsItsAssertionOnceAndOnlyInTime(t *tes
 func TestClusterCredentials_AWithdrawnKeysTokenIsRefusedByTheReadAlone(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := clusterpg.New(p)
+	s := apppg.New(p)
 	keys := connectorKeys(t)
 	g := registeredCluster(t, p, s, keys[0])
 	registered := liveKey(t, s, g, keys[0])
@@ -293,14 +286,14 @@ func TestClusterCredentials_AWithdrawnKeysTokenIsRefusedByTheReadAlone(t *testin
 	require.NoError(t, s.RevokeKey(ctx, g, keys[0].KID()))
 
 	insert := func(value string, keyID int64) {
-		_, err := p.Exec(ctx, `INSERT INTO cluster_tokens (token_hash, cluster_grn, key_id, issued_at, expires_at)
-			VALUES ($1, $2, $3, now(), now() + interval '1 hour')`, cluster.HashSecret(value), g.String(), keyID)
+		_, err := p.Exec(ctx, `INSERT INTO instance_tokens (token_hash, instance_grn, key_id, issued_at, expires_at)
+			VALUES ($1, $2, $3, now(), now() + interval '1 hour')`, app.HashSecret(value), g.String(), keyID)
 		require.NoError(t, err)
 	}
 	insert("garam_ct_withdrawn", registered.ID)
 	insert("garam_ct_live", successor.ID)
-	_, err = s.ResolveToken(ctx, cluster.HashSecret("garam_ct_withdrawn"))
-	assert.ErrorIs(t, err, cluster.ErrTokenInvalid)
-	_, err = s.ResolveToken(ctx, cluster.HashSecret("garam_ct_live"))
+	_, err = s.ResolveToken(ctx, app.HashSecret("garam_ct_withdrawn"))
+	assert.ErrorIs(t, err, app.ErrTokenInvalid)
+	_, err = s.ResolveToken(ctx, app.HashSecret("garam_ct_live"))
 	assert.NoError(t, err, "the control: the same row on a live key resolves")
 }

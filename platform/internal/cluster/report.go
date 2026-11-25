@@ -10,6 +10,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
@@ -157,7 +158,7 @@ type KeptReport struct {
 // kept, with only what names a declaration placed on caller (REP-5,
 // REP-8). A record deleted meanwhile is operator.ErrClientInvalid.
 func (s *service) Report(ctx context.Context, caller grn.GRN, r Report) error {
-	if !IsClusterGRN(caller) {
+	if !app.IsInstanceGRN(caller) {
 		return operator.ErrClientInvalid
 	}
 	if err := s.reportsLimit.Check(caller.String()); err != nil {
@@ -168,7 +169,7 @@ func (s *service) Report(ctx context.Context, caller grn.GRN, r Report) error {
 		return err
 	}
 	err = s.reports.KeepReport(ctx, caller, r.placedOn(caller, placed))
-	if errors.Is(err, ErrClusterNotFound) {
+	if errors.Is(err, app.ErrInstanceNotFound) {
 		return operator.ErrClientInvalid
 	}
 	return err

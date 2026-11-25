@@ -2,6 +2,7 @@ package machine
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/garamsh/garam/lib/grn"
@@ -44,4 +45,27 @@ type Bearer struct {
 	Serial    string
 	IssuedAt  time.Time
 	ExpiresAt time.Time
+	// Reach is the routes an app's instance's token reaches beyond the
+	// app system's own, read off the app's record; the zero value
+	// confines nothing, as for every other kind of token.
+	Reach Reach
+}
+
+// Reach is the machine operations a token reaches. The zero value
+// reaches every route the token's kind is otherwise served; one made by
+// ReachOf reaches the routes it names and no other.
+type Reach struct {
+	confined bool
+	routes   []string
+}
+
+// ReachOf confines a token to routes, each as the listener's router
+// matches it: `<METHOD> <path>`. None reaches nothing.
+func ReachOf(routes []string) Reach {
+	return Reach{confined: true, routes: slices.Clone(routes)}
+}
+
+// Allows reports whether the token reaches route.
+func (r Reach) Allows(route string) bool {
+	return !r.confined || slices.Contains(r.routes, route)
 }

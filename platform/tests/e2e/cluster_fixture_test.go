@@ -152,7 +152,7 @@ func (c *connector) send(method, path, token string, body []byte) (int, map[stri
 //     request, which answered before it;
 //   - delete-cluster leaves nothing to mint for.
 //
-// The machine listener runs with GARAM_CLUSTER_REGISTRATION_LIMIT
+// The machine listener runs with GARAM_INSTANCE_REGISTRATION_LIMIT
 // raised, as the suite's run will raise it.
 func TestClusterFixture_DrivesTheBuiltServersThroughTheSuitesActions(t *testing.T) {
 	bin, env, c, tokenURL, slug := startFixtureStack(t)
@@ -160,7 +160,7 @@ func TestClusterFixture_DrivesTheBuiltServersThroughTheSuitesActions(t *testing.
 	code, minted := clusterFixture(t, bin, env, "mint-token")
 	require.Equal(t, 0, code, "%v", minted)
 	record, _ := minted["cluster"].(string)
-	require.True(t, strings.HasPrefix(record, "grn:"+slug+"/iam/cluster/"), record)
+	require.True(t, strings.HasPrefix(record, "grn:"+slug+"/iam/instance/"), record)
 	status, registered := c.register(minted["registrationToken"].(string))
 	require.Equal(t, http.StatusCreated, status, "%v", registered)
 	assert.Equal(t, record, registered["cluster"], "the record mint-token named is the one that registered")
@@ -200,7 +200,7 @@ func TestClusterFixture_DrivesTheBuiltServersThroughTheSuitesActions(t *testing.
 // one database, creates the organization the fixture acts in, and
 // answers the fixture, its environment, a connector, the token URL and
 // the organization's slug. The machine listener runs with
-// GARAM_CLUSTER_REGISTRATION_LIMIT raised, as the suite's run will
+// GARAM_INSTANCE_REGISTRATION_LIMIT raised, as the suite's run will
 // raise it.
 func startFixtureStack(t *testing.T) (string, []string, *connector, string, string) {
 	t.Helper()
@@ -219,7 +219,7 @@ func startFixtureStack(t *testing.T) (string, []string, *connector, string, stri
 		"GARAM_MACHINE_TLS_CERT_FILE=" + certFile, "GARAM_MACHINE_TLS_KEY_FILE=" + keyFile,
 		"GARAM_CA_KEY_FILE=" + kekFile, "GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
 		"GARAM_MACHINE_ISSUER=https://garam.test", "GARAM_MACHINE_TOKEN_URL=" + tokenURL,
-		"GARAM_CLUSTER_REGISTRATION_LIMIT=1000",
+		"GARAM_INSTANCE_REGISTRATION_LIMIT=1000",
 	}, policyEnv(t, rootFile)...), "http://"+machineHealthAddr+readyPath)
 
 	slug := consumerClient{t: t, base: "http://" + apiAddr}.createOrg(p.Session.Token, "connected")

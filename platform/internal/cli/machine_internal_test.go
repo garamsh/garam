@@ -368,25 +368,25 @@ func TestTransitCustodian_HoldsTheTokenOneWayOrTheOther(t *testing.T) {
 	})
 }
 
-// TestClusterRegistrationLimit_TakesAPositiveBoundAndNoOther holds that
-// GARAM_CLUSTER_REGISTRATION_LIMIT sets the bound REG-8 names and
+// TestInstanceRegistrationLimit_TakesAPositiveBoundAndNoOther holds
+// that GARAM_INSTANCE_REGISTRATION_LIMIT sets the bound REG-8 names and
 // cannot turn it off: unset takes the service's default, a positive
 // number is the bound, and zero, a negative number and a word refuse
 // the start.
-func TestClusterRegistrationLimit_TakesAPositiveBoundAndNoOther(t *testing.T) {
-	t.Setenv(string(envClusterRegistrationLimit), "")
-	limit, err := clusterRegistrationLimit()
+func TestInstanceRegistrationLimit_TakesAPositiveBoundAndNoOther(t *testing.T) {
+	t.Setenv(string(envInstanceRegistrationLimit), "")
+	limit, err := instanceRegistrationLimit()
 	require.NoError(t, err)
-	assert.Zero(t, limit, "unset takes the cluster service's default")
+	assert.Zero(t, limit, "unset takes the app service's default")
 
-	t.Setenv(string(envClusterRegistrationLimit), "1000")
-	limit, err = clusterRegistrationLimit()
+	t.Setenv(string(envInstanceRegistrationLimit), "1000")
+	limit, err = instanceRegistrationLimit()
 	require.NoError(t, err)
 	assert.Equal(t, 1000, limit)
 
 	for _, raw := range []string{"0", "-1", "ten", "1.5"} {
-		t.Setenv(string(envClusterRegistrationLimit), raw)
-		_, err := clusterRegistrationLimit()
+		t.Setenv(string(envInstanceRegistrationLimit), raw)
+		_, err := instanceRegistrationLimit()
 		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), raw)
 	}
 }

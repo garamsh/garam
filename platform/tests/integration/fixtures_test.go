@@ -133,15 +133,21 @@ func connect(t *testing.T, url string, tune func(*pgxpool.Config)) *pgxpool.Pool
 func truncate(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
 	// cluster_declaration_ids outlives every organization by design
-	// (ADR-0187), so no cascade from orgs empties it.
-	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
+	// (ADR-0187), so no cascade from orgs empties it. The cascade from
+	// orgs empties apps whole, its platform rows with it, so those are
+	// put back as migration 000088 seeded them.
+	_, err := p.Exec(context.Background(), `CREATE TEMP TABLE platform_apps AS
+		SELECT * FROM apps WHERE org_grn IS NULL;
+		TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
 		oauth_states, password_credentials, password_attempts,
 		agents, agent_assignments, operators, certificate_authorities,
 		operator_assertions,
 		messages, message_consents, message_signing_keys, agent_watches,
 		audit_send_events, policy_outbox,
-		cluster_declaration_ids CASCADE`)
+		cluster_declaration_ids CASCADE;
+		INSERT INTO apps SELECT * FROM platform_apps;
+		DROP TABLE platform_apps`)
 	require.NoError(t, err)
 	// A suite that turned the feed on and died before it turned it off
 	// would otherwise leave every later test writing marks.

@@ -33,14 +33,15 @@ func New(pool *pgxpool.Pool) *Switch {
 const lockSources = `LOCK TABLE agents, group_members, groups, operators,
 	message_consents, operator_delegations, org_members, orgs,
 	project_members, projects, users, agent_supervisors,
-	agent_assignments IN SHARE MODE`
+	agent_assignments, installations, instances IN SHARE MODE`
 
 // backfill marks what policy_outbox_track marks for each insert into
 // the six tables that own an entity. A member's row marks its user or
 // agent, which those tables already name, each organization
 // membership marks its role link, each group and project marks its
-// scoped link, and each registration, ended or not, marks its
-// supervisor (an ended one is delivered as a delete).
+// scoped link, each registration, ended or not, marks its supervisor
+// (an ended one is delivered as a delete), and each installation and
+// instance marks itself.
 const backfill = `
 INSERT INTO policy_outbox (entity_type, entity_id)
 SELECT t, id FROM (
@@ -52,6 +53,8 @@ SELECT t, id FROM (
 	UNION ALL SELECT 'Iam::Agent', grn FROM agents
 	UNION ALL SELECT 'Iam::Operator', grn FROM operators
 	UNION ALL SELECT 'Iam::Supervisor', grn FROM agent_supervisors
+	UNION ALL SELECT 'Iam::Installation', grn FROM installations
+	UNION ALL SELECT 'Iam::Instance', grn FROM instances
 	UNION ALL SELECT 'Iam::RoleLink', org_grn || ' ' || user_grn FROM org_members
 	UNION ALL SELECT 'Iam::ScopedRoleLink', grn FROM groups
 	UNION ALL SELECT 'Iam::ScopedRoleLink', grn FROM projects

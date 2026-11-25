@@ -458,12 +458,13 @@ Responsibility documents:
   session that carries the proof afterwards
 - [operators.md](./operators.md) — what an organization records about an
   operator and what it authenticates with
-- [clusters.md](./clusters.md) — what an organization records about a
-  cluster it connected, whose connector authenticates as that record,
-  the declarations it places on it and what the cluster reports back
+- [clusters.md](./clusters.md) — a connected cluster, an instance of
+  the connector app whose connector authenticates as it, the
+  declarations its organization places on it and what the cluster
+  reports back
 - [apps.md](./apps.md) — how every system that connects to garam is
   registered, reviewed, installed in an organization and
-  authenticated, and what each app's settings decide; not yet built
+  authenticated, and what each app's settings decide; built in part
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the
@@ -1698,7 +1699,8 @@ ADRs:
   `garam-event+jwt` to a public address) and bot hosting are app
   settings, and no path branches on the app; `iam:cluster.*`
   becomes `iam:app.*`, `iam:installation.*` and `iam:instance.*`, and
-  placing a bot `iam:bot.place`; accepted, not built (#2079);
+  placing a bot `iam:bot.place`; accepted, built in part (#2081: the
+  core, the connector seeded, the record of a cluster an instance);
   supersedes in part 0184 (decisions 1, 2 and 9), 0187 (decision 1),
   0129 (decision 1's principal and decision 5's three operations) and
   0189 (decision 2's actor), and reads 0185's "every cluster" as every

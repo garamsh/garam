@@ -18,6 +18,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	connectiongen "github.com/garamsh/garam/platform/api/cluster-connection/v1alpha1"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/machineapi"
@@ -26,12 +27,26 @@ import (
 
 const connectionTokenURL = "https://machine.garam.test/oauth/token"
 
-var connectedGRN = grn.New("acme", cluster.ServiceType, "5f60710a1b2c3d4e")
+// connectedGRN is an instance of an app whose machine operations are
+// the connector's, and otherAppGRN one of an app that lists none.
+var (
+	connectedGRN = grn.New("acme", app.InstanceType, "5f60710a1b2c3d4e")
+	otherAppGRN  = grn.New("acme", app.InstanceType, "0000000000000001")
+)
 
-// connectionClusters is cluster.Service answering err, or what it was
-// asked, and recording the arguments.
+// instanceReach is what each test instance's token reaches, as
+// app.CredentialStore.ResolveToken reads it off the app's record. An
+// instance it does not name reaches nothing.
+var instanceReach = map[grn.GRN]machine.Reach{
+	connectedGRN: machine.ReachOf([]string{
+		http.MethodGet + " /cluster-connection/v1alpha1/clusters/self/declarations",
+		http.MethodPost + " /cluster-connection/v1alpha1/clusters/self/reports",
+	}),
+}
+
+// connectionClusters is app.Service and cluster.Service answering err,
+// or what it was asked, and recording the arguments.
 type connectionClusters struct {
-	cluster.Service
 	err    error
 	caller grn.GRN
 	jwk    []byte
@@ -62,12 +77,12 @@ func (c *connectionClusters) Register(_ context.Context, _, token string, jwk []
 	return connectedGRN, c.err
 }
 
-func (c *connectionClusters) ExchangeAssertion(_ context.Context, _ string, client grn.GRN, _ string) (*cluster.Token, error) {
+func (c *connectionClusters) ExchangeAssertion(_ context.Context, _ string, client grn.GRN, _ string) (*app.Token, error) {
 	c.caller = client
 	if c.err != nil {
 		return nil, c.err
 	}
-	return &cluster.Token{Value: cluster.TokenPrefix + "answered", Cluster: client, ExpiresAt: time.Now().Add(time.Hour)}, nil
+	return &app.Token{Value: app.TokenPrefix + "answered", Instance: client, ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
 func (c *connectionClusters) MintBotToken(_ context.Context, exchange cluster.BotExchange) (*cluster.BotToken, error) {
@@ -79,20 +94,22 @@ func (c *connectionClusters) MintBotToken(_ context.Context, exchange cluster.Bo
 		Place: connectedGRN, Scope: []string{}, ExpiresAt: time.Now().Add(cluster.BotTokenTTL)}, nil
 }
 
-func (c *connectionClusters) Rotate(_ context.Context, caller grn.GRN, jwk []byte, _, _ string) (cluster.Rotation, error) {
+func (c *connectionClusters) Rotate(_ context.Context, caller grn.GRN, jwk []byte, _, _ string) (app.Rotation, error) {
 	c.caller, c.jwk = caller, jwk
-	return cluster.Rotation{KID: "successor", PredecessorRetiresAt: time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)}, c.err
+	return app.Rotation{KID: "successor", PredecessorRetiresAt: time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)}, c.err
 }
 
 // serveConnection serves cluster-connection behind the machine
-// listener, which resolves "cluster" to the connected cluster and
+// listener, which resolves "cluster" to the connector's instance,
+// "other-app" to an instance of an app listing none of its routes and
 // "operator" to an operator.
-func serveConnection(t *testing.T, clusters cluster.Service) (string, *http.Client) {
+func serveConnection(t *testing.T, clusters *connectionClusters) (string, *http.Client) {
 	t.Helper()
 	served := machine.NewServer(presentedTokens{
-		"cluster":  connectedGRN,
-		"operator": grn.New("acme", operator.ServiceType, "one"),
-	}, nil, loopback(t), connectiongen.HandlerWithOptions(machineapi.NewClusterConnection(clusters, connectionTokenURL),
+		"cluster":   connectedGRN,
+		"other-app": otherAppGRN,
+		"operator":  grn.New("acme", operator.ServiceType, "one"),
+	}, nil, loopback(t), connectiongen.HandlerWithOptions(machineapi.NewClusterConnection(clusters, clusters, connectionTokenURL),
 		connectiongen.StdHTTPServerOptions{ErrorHandlerFunc: machineapi.ConnectionBindingError}))
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -153,14 +170,14 @@ func TestClusterConnection_RefusalsCarryTheInterfacesCodes(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"a refused token", cluster.ErrRegistrationRefused, http.StatusUnauthorized, "registration_refused"},
-		{"a refused key", cluster.ErrInvalidKey, http.StatusBadRequest, "invalid_request"},
-		{"a refused proof", cluster.ErrInvalidProof, http.StatusBadRequest, "invalid_proof"},
-		{"a key held before", cluster.ErrKeyHeld, http.StatusBadRequest, "invalid_request"},
-		{"a third key", cluster.ErrTooManyKeys, http.StatusConflict, "too_many_keys"},
+		{"a refused token", app.ErrRegistrationRefused, http.StatusUnauthorized, "registration_refused"},
+		{"a refused key", app.ErrInvalidKey, http.StatusBadRequest, "invalid_request"},
+		{"a refused proof", app.ErrInvalidProof, http.StatusBadRequest, "invalid_proof"},
+		{"a key held before", app.ErrKeyHeld, http.StatusBadRequest, "invalid_request"},
+		{"a third key", app.ErrTooManyKeys, http.StatusConflict, "too_many_keys"},
 		{"a throttle", &operator.Exceeded{RetryAfter: 30 * time.Second}, http.StatusTooManyRequests, "throttled"},
 		{"a missing record", errorx.New(errorx.KindNotFound, "cluster not found"), http.StatusNotFound, "not_found"},
-		{"a rotation garam does not serve", cluster.ErrRotationUnavailable, http.StatusServiceUnavailable, "internal"},
+		{"a rotation garam does not serve", app.ErrRotationUnavailable, http.StatusServiceUnavailable, "internal"},
 		{"garam's own failure", errorx.Wrap(errors.New(`relation "cluster_keys" SQLSTATE 42P01`), "rotate",
 			errorx.KindInternal), http.StatusInternalServerError, "internal"},
 	}
@@ -179,11 +196,13 @@ func TestClusterConnection_RefusalsCarryTheInterfacesCodes(t *testing.T) {
 	}
 }
 
-// TestClusterConnection_RoutesButRegistrationAnswerAClustersTokenAlone
+// TestClusterConnection_RoutesButRegistrationAnswerAnInstancesTokenAlone
 // holds AUTH-1 and AUTH-2 at the transport: no token, a token that
-// proves nothing and another caller's token are each answered 401, and
-// the cluster's own is the control.
-func TestClusterConnection_RoutesButRegistrationAnswerAClustersTokenAlone(t *testing.T) {
+// proves nothing and another caller's token are each answered 401, as
+// is an instance of an app whose machine operations leave out
+// declarations and reports (ADR-0192 decision 7), and the connector's
+// instance is the control.
+func TestClusterConnection_RoutesButRegistrationAnswerAnInstancesTokenAlone(t *testing.T) {
 	clusters := &connectionClusters{}
 	base, client := serveConnection(t, clusters)
 	rotation := `{"jwk":{"kty":"RSA"},"authorization":"a","proof":"p"}`
@@ -200,6 +219,22 @@ func TestClusterConnection_RoutesButRegistrationAnswerAClustersTokenAlone(t *tes
 		}
 	}
 	assert.Nil(t, clusters.jwk, "no refused request reached the service")
+
+	// An instance whose app does not list declarations and reports among
+	// its machine operations is refused them, and rotates its key, the
+	// app system's own route.
+	for _, route := range []struct{ method, path, body string }{
+		{http.MethodGet, "/clusters/self/declarations", ""},
+		{http.MethodPost, "/clusters/self/reports", "{}"},
+	} {
+		status, body, _ := connect(t, client, route.method, base+route.path, "other-app", route.body)
+		assert.Equal(t, http.StatusUnauthorized, status, route.path)
+		assert.Equal(t, "unauthorized", body["error"], route.path)
+	}
+	assert.Nil(t, clusters.report, "no refused report reached the service")
+	status, _, _ := connect(t, client, http.MethodPost, base+"/clusters/self/keys", "other-app", rotation)
+	assert.Equal(t, http.StatusCreated, status, "another app's instance rotates its key")
+	assert.Equal(t, otherAppGRN, clusters.caller)
 
 	status, body, _ := connect(t, client, http.MethodPost, base+"/clusters/self/keys", "cluster", rotation)
 	assert.Equal(t, http.StatusCreated, status)
@@ -294,21 +329,21 @@ func TestClusterConnection_AReportIsRefusedAsREP6AndREP7Refuse(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, status, "the control: a declared kind is handed on: %s", body)
 }
 
-// TestExchangeClientAssertion_SendsAClustersAssertionToItsRecord holds
-// that /oauth/token picks the cluster's profile by client_id's GRN type
-// (ADR-0186 decision 4): a cluster's assertion reaches the cluster
-// service and no operator's, and an audience refuses it. An operator's
-// assertion, the control, reaches the operator service.
-func TestExchangeClientAssertion_SendsAClustersAssertionToItsRecord(t *testing.T) {
+// TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord
+// holds that /oauth/token picks the instance's profile by client_id's
+// GRN type (ADR-0186 decision 4): an instance's assertion reaches the
+// app service and no operator's, and an audience refuses it. An
+// operator's assertion, the control, reaches the operator service.
+func TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord(t *testing.T) {
 	operators, clusters := &assertionService{}, &connectionClusters{}
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, operators, &messageService{}, unwatched(t),
-		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithClusters(clusters), connectedGRN)
+		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters), connectedGRN)
 	form := validForm()
 	form.Set("client_id", connectedGRN.String())
 
 	resp, body := exchangeForm(t, anonymous(t), base, form.Encode(), nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode, body)
-	assert.Contains(t, body, cluster.TokenPrefix+"answered")
+	assert.Contains(t, body, app.TokenPrefix+"answered")
 	assert.Equal(t, connectedGRN, clusters.caller)
 	assert.Empty(t, operators.calls, "no operator's exchange ran")
 

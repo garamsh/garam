@@ -288,146 +288,206 @@ var apiOperations = []apiOperation{
 		},
 	},
 	{
-		ID: "listClusters", Method: "GET", Path: "/orgs/{org}/clusters",
-		Words: []string{"clusters"}, Verb: "list", Short: "List an organization's connected clusters. Requires the `member` role.",
+		ID: "listApps", Method: "GET", Path: "/orgs/{org}/apps",
+		Words: []string{"apps"}, Verb: "list", Short: "List the apps an organization may install. Requires the `member` role.",
 		Args: []string(nil), FromOrg: true,
-		Columns: []string{"grn", "name", "description", "orgGrn", "createdBy", "createdAt"},
+		Columns: []string{"grn", "slug", "name", "description", "visibility", "requestsBotHosting", "instances", "delivery"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewListClustersRequest(server, path[0])
+			return sdk.NewListAppsRequest(server, path[0])
 		},
 	},
 	{
-		ID: "createCluster", Method: "POST", Path: "/orgs/{org}/clusters",
-		Words: []string{"clusters"}, Verb: "create", Short: "Create a connected cluster's record. Requires the `admin` role.",
+		ID: "getApp", Method: "GET", Path: "/orgs/{org}/apps/{app}",
+		Words: []string{"apps"}, Verb: "get", Short: "Read an app the organization may install. Requires the `member` role.",
+		Args: []string{"app"}, FromOrg: true,
+		Columns: []string{"grn", "slug", "name", "description", "visibility", "requestsBotHosting", "instances", "delivery"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewGetAppRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "listInstallations", Method: "GET", Path: "/orgs/{org}/installations",
+		Words: []string{"installations"}, Verb: "list", Short: "List the apps an organization has installed. Requires the `member` role.",
 		Args: []string(nil), FromOrg: true,
+		Columns: []string{"grn", "orgGrn", "appGrn", "incarnation", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewListInstallationsRequest(server, path[0])
+		},
+	},
+	{
+		ID: "createInstallation", Method: "POST", Path: "/orgs/{org}/installations",
+		Words: []string{"installations"}, Verb: "create", Short: "Install an app in an organization. Requires the `owner` role.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "app", In: "body", Kind: "string", Required: true, Help: "The slug of the app to install."},
+			{Name: "projects", In: "body", Kind: "strings", Required: false, Help: "The slugs of the projects its grants reach."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "orgGrn", "appGrn", "incarnation", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewCreateInstallationRequestWithBody(server, path[0], contentType, body)
+		},
+	},
+	{
+		ID: "getInstallation", Method: "GET", Path: "/orgs/{org}/installations/{installation}",
+		Words: []string{"installations"}, Verb: "get", Short: "Read one of an organization's installations. Requires the `member` role.",
+		Args: []string{"installation"}, FromOrg: true,
+		Columns: []string{"grn", "orgGrn", "appGrn", "incarnation", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewGetInstallationRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "deleteInstallation", Method: "DELETE", Path: "/orgs/{org}/installations/{installation}",
+		Words: []string{"installations"}, Verb: "delete", Short: "Uninstall an app. Requires the `admin` role.",
+		Args: []string{"installation"}, FromOrg: true,
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewDeleteInstallationRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "listInstances", Method: "GET", Path: "/orgs/{org}/installations/{installation}/instances",
+		Words: []string{"installations", "instances"}, Verb: "list", Short: "List an installation's instances. Requires the `member` role.",
+		Args: []string{"installation"}, FromOrg: true,
+		Columns: []string{"grn", "installationGrn", "name", "description", "kind", "orgGrn", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewListInstancesRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "createInstance", Method: "POST", Path: "/orgs/{org}/installations/{installation}/instances",
+		Words: []string{"installations", "instances"}, Verb: "create", Short: "Create an instance's record. Requires the `admin` role.",
+		Args: []string{"installation"}, FromOrg: true,
 		Fields: []apiField{
 			{Name: "name", In: "body", Kind: "string", Required: false, Help: "At most 100 characters once surrounding space is trimmed, and at least one."},
 			{Name: "description", In: "body", Kind: "string", Required: false, Help: "At most 1000 characters once surrounding space is trimmed."},
+			{Name: "kind", In: "body", Kind: "string", Required: false, Help: "At most 64 characters once surrounding space is trimmed."},
 		},
 		BodyType: "application/json",
-		Columns:  []string{"cluster.grn", "cluster.name", "cluster.description", "cluster.orgGrn", "cluster.createdBy", "cluster.createdAt", "registration.registrationToken", "registration.expiresAt"},
+		Columns:  []string{"instance.grn", "instance.installationGrn", "instance.name", "instance.description", "instance.kind", "instance.orgGrn", "instance.createdBy", "instance.createdAt", "registration.registrationToken", "registration.expiresAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewCreateClusterRequestWithBody(server, path[0], contentType, body)
+			return sdk.NewCreateInstanceRequestWithBody(server, path[0], path[1], contentType, body)
 		},
 	},
 	{
-		ID: "getCluster", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}",
-		Words: []string{"clusters"}, Verb: "get", Short: "Read one of an organization's connected clusters. Requires the `member` role.",
-		Args: []string{"cluster"}, FromOrg: true,
-		Columns: []string{"grn", "name", "description", "orgGrn", "createdBy", "createdAt"},
+		ID: "getInstance", Method: "GET", Path: "/orgs/{org}/installations/{installation}/instances/{instance}",
+		Words: []string{"installations", "instances"}, Verb: "get", Short: "Read one of an organization's instances. Requires the `member` role.",
+		Args: []string{"installation", "instance"}, FromOrg: true,
+		Columns: []string{"grn", "installationGrn", "name", "description", "kind", "orgGrn", "createdBy", "createdAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewGetClusterRequest(server, path[0], path[1])
+			return sdk.NewGetInstanceRequest(server, path[0], path[1], path[2])
 		},
 	},
 	{
-		ID: "updateCluster", Method: "PATCH", Path: "/orgs/{org}/clusters/{cluster}",
-		Words: []string{"clusters"}, Verb: "update", Short: "Rename or describe a connected cluster. Requires the `admin` role.",
-		Args: []string{"cluster"}, FromOrg: true,
+		ID: "updateInstance", Method: "PATCH", Path: "/orgs/{org}/installations/{installation}/instances/{instance}",
+		Words: []string{"installations", "instances"}, Verb: "update", Short: "Rename or describe an instance. Requires the `admin` role.",
+		Args: []string{"installation", "instance"}, FromOrg: true,
 		Fields: []apiField{
 			{Name: "name", In: "body", Kind: "string", Required: false, Help: "At most 100 characters once surrounding space is trimmed, and at least one."},
 			{Name: "description", In: "body", Kind: "string", Required: false, Help: "At most 1000 characters once surrounding space is trimmed."},
+			{Name: "kind", In: "body", Kind: "string", Required: false, Help: "At most 64 characters once surrounding space is trimmed."},
 		},
 		BodyType: "application/json",
-		Columns:  []string{"grn", "name", "description", "orgGrn", "createdBy", "createdAt"},
+		Columns:  []string{"grn", "installationGrn", "name", "description", "kind", "orgGrn", "createdBy", "createdAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewUpdateClusterRequestWithBody(server, path[0], path[1], contentType, body)
+			return sdk.NewUpdateInstanceRequestWithBody(server, path[0], path[1], path[2], contentType, body)
 		},
 	},
 	{
-		ID: "deleteCluster", Method: "DELETE", Path: "/orgs/{org}/clusters/{cluster}",
-		Words: []string{"clusters"}, Verb: "delete", Short: "Delete a connected cluster's record. Requires the `admin` role.",
-		Args: []string{"cluster"}, FromOrg: true,
+		ID: "deleteInstance", Method: "DELETE", Path: "/orgs/{org}/installations/{installation}/instances/{instance}",
+		Words: []string{"installations", "instances"}, Verb: "delete", Short: "Delete an instance's record. Requires the `admin` role.",
+		Args: []string{"installation", "instance"}, FromOrg: true,
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewDeleteClusterRequest(server, path[0], path[1])
+			return sdk.NewDeleteInstanceRequest(server, path[0], path[1], path[2])
 		},
 	},
 	{
-		ID: "reissueClusterRegistrationToken", Method: "POST", Path: "/orgs/{org}/clusters/{cluster}/registration-token",
-		Words: []string{"clusters", "registration-token"}, Verb: "reissue", Short: "Answer a new registration token for a cluster. Requires the `admin` role.",
-		Args: []string{"cluster"}, FromOrg: true,
+		ID: "reissueInstanceRegistrationToken", Method: "POST", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/registration-token",
+		Words: []string{"installations", "instances", "registration-token"}, Verb: "reissue", Short: "Answer a new registration token for an instance. Requires the `admin` role.",
+		Args: []string{"installation", "instance"}, FromOrg: true,
 		Columns: []string{"registrationToken", "expiresAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewReissueClusterRegistrationTokenRequest(server, path[0], path[1])
+			return sdk.NewReissueInstanceRegistrationTokenRequest(server, path[0], path[1], path[2])
 		},
 	},
 	{
-		ID: "listClusterKeys", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/keys",
-		Words: []string{"clusters", "keys"}, Verb: "list", Short: "List the keys a cluster's connector registered, with where each stands. Requires the `member` role.",
-		Args: []string{"cluster"}, FromOrg: true,
+		ID: "listInstanceKeys", Method: "GET", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/keys",
+		Words: []string{"installations", "instances", "keys"}, Verb: "list", Short: "List the keys an instance registered, with where each stands. Requires the `member` role.",
+		Args: []string{"installation", "instance"}, FromOrg: true,
 		Columns: []string{"kid", "state", "createdAt", "retiresAt", "revokedAt"},
 		Rows:    "keys",
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewListClusterKeysRequest(server, path[0], path[1])
+			return sdk.NewListInstanceKeysRequest(server, path[0], path[1], path[2])
 		},
 	},
 	{
-		ID: "revokeClusterKey", Method: "DELETE", Path: "/orgs/{org}/clusters/{cluster}/keys/{kid}",
-		Words: []string{"clusters", "keys"}, Verb: "revoke", Short: "Withdraw a cluster's key and every token exchanged under it. Requires the `admin` role.",
-		Args: []string{"cluster", "kid"}, FromOrg: true,
+		ID: "revokeInstanceKey", Method: "DELETE", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/keys/{kid}",
+		Words: []string{"installations", "instances", "keys"}, Verb: "revoke", Short: "Withdraw an instance's key and every token exchanged under it. Requires the `admin` role.",
+		Args: []string{"installation", "instance", "kid"}, FromOrg: true,
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewRevokeClusterKeyRequest(server, path[0], path[1], path[2])
+			return sdk.NewRevokeInstanceKeyRequest(server, path[0], path[1], path[2], path[3])
 		},
 	},
 	{
-		ID: "getClusterReport", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/report",
-		Words: []string{"clusters", "report"}, Verb: "get", Short: "Read what a connected cluster last reported, and when it last reached garam. Requires the `member` role.",
-		Args: []string{"cluster"}, FromOrg: true,
-		Columns: []string{"cluster", "lastContactAt"},
+		ID: "getInstanceReport", Method: "GET", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/report",
+		Words: []string{"installations", "instances", "report"}, Verb: "get", Short: "Read what an instance last reported, and when it last reached garam. Requires the `member` role.",
+		Args: []string{"installation", "instance"}, FromOrg: true,
+		Columns: []string{"instance", "lastContactAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewGetClusterReportRequest(server, path[0], path[1])
+			return sdk.NewGetInstanceReportRequest(server, path[0], path[1], path[2])
 		},
 	},
 	{
-		ID: "listClusterDeclarations", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/declarations",
-		Words: []string{"clusters", "declarations"}, Verb: "list", Short: "List the declarations placed on a connected cluster. Requires the `member` role.",
-		Args: []string{"cluster"}, FromOrg: true,
-		Columns: []string{"id", "cluster", "generation", "createdAt", "updatedAt"},
+		ID: "listInstanceDeclarations", Method: "GET", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/declarations",
+		Words: []string{"installations", "instances", "declarations"}, Verb: "list", Short: "List the declarations placed on an instance. Requires the `member` role.",
+		Args: []string{"installation", "instance"}, FromOrg: true,
+		Columns: []string{"id", "instance", "generation", "createdAt", "updatedAt"},
 		Rows:    "declarations",
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewListClusterDeclarationsRequest(server, path[0], path[1])
+			return sdk.NewListInstanceDeclarationsRequest(server, path[0], path[1], path[2])
 		},
 	},
 	{
-		ID: "createClusterDeclaration", Method: "POST", Path: "/orgs/{org}/clusters/{cluster}/declarations",
-		Words: []string{"clusters", "declarations"}, Verb: "create", Short: "Place a new declaration on a connected cluster, under an identifier garam draws. Requires the `admin` role.",
-		Args: []string{"cluster"}, FromOrg: true,
+		ID: "createInstanceDeclaration", Method: "POST", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/declarations",
+		Words: []string{"installations", "instances", "declarations"}, Verb: "create", Short: "Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.",
+		Args: []string{"installation", "instance"}, FromOrg: true,
 		Fields: []apiField{
 			{Name: "object", In: "body", Kind: "json", Required: true, Help: "An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`."},
 		},
 		BodyType: "application/json",
-		Columns:  []string{"id", "cluster", "generation", "createdAt", "updatedAt"},
+		Columns:  []string{"id", "instance", "generation", "createdAt", "updatedAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewCreateClusterDeclarationRequestWithBody(server, path[0], path[1], contentType, body)
+			return sdk.NewCreateInstanceDeclarationRequestWithBody(server, path[0], path[1], path[2], contentType, body)
 		},
 	},
 	{
-		ID: "getClusterDeclaration", Method: "GET", Path: "/orgs/{org}/clusters/{cluster}/declarations/{declaration}",
-		Words: []string{"clusters", "declarations"}, Verb: "get", Short: "Read one live declaration placed on a connected cluster. Requires the `member` role.",
-		Args: []string{"cluster", "declaration"}, FromOrg: true,
-		Columns: []string{"id", "cluster", "generation", "createdAt", "updatedAt"},
+		ID: "getInstanceDeclaration", Method: "GET", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration}",
+		Words: []string{"installations", "instances", "declarations"}, Verb: "get", Short: "Read one live declaration placed on an instance. Requires the `member` role.",
+		Args: []string{"installation", "instance", "declaration"}, FromOrg: true,
+		Columns: []string{"id", "instance", "generation", "createdAt", "updatedAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewGetClusterDeclarationRequest(server, path[0], path[1], path[2])
+			return sdk.NewGetInstanceDeclarationRequest(server, path[0], path[1], path[2], path[3])
 		},
 	},
 	{
-		ID: "putClusterDeclaration", Method: "PUT", Path: "/orgs/{org}/clusters/{cluster}/declarations/{declaration}",
-		Words: []string{"clusters", "declarations"}, Verb: "put", Short: "Place a declaration on a connected cluster under the identifier named, or its next generation. Requires the `admin` role.",
-		Args: []string{"cluster", "declaration"}, FromOrg: true,
+		ID: "putInstanceDeclaration", Method: "PUT", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration}",
+		Words: []string{"installations", "instances", "declarations"}, Verb: "put", Short: "Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.",
+		Args: []string{"installation", "instance", "declaration"}, FromOrg: true,
 		Fields: []apiField{
 			{Name: "object", In: "body", Kind: "json", Required: true, Help: "An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`."},
 		},
 		BodyType: "application/json",
-		Columns:  []string{"id", "cluster", "generation", "createdAt", "updatedAt"},
+		Columns:  []string{"id", "instance", "generation", "createdAt", "updatedAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewPutClusterDeclarationRequestWithBody(server, path[0], path[1], path[2], contentType, body)
+			return sdk.NewPutInstanceDeclarationRequestWithBody(server, path[0], path[1], path[2], path[3], contentType, body)
 		},
 	},
 	{
-		ID: "deleteClusterDeclaration", Method: "DELETE", Path: "/orgs/{org}/clusters/{cluster}/declarations/{declaration}",
-		Words: []string{"clusters", "declarations"}, Verb: "delete", Short: "Tombstone a declaration, which has the cluster's connector delete its object. Requires the `admin` role.",
-		Args: []string{"cluster", "declaration"}, FromOrg: true,
+		ID: "deleteInstanceDeclaration", Method: "DELETE", Path: "/orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration}",
+		Words: []string{"installations", "instances", "declarations"}, Verb: "delete", Short: "Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.",
+		Args: []string{"installation", "instance", "declaration"}, FromOrg: true,
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
-			return sdk.NewDeleteClusterDeclarationRequest(server, path[0], path[1], path[2])
+			return sdk.NewDeleteInstanceDeclarationRequest(server, path[0], path[1], path[2], path[3])
 		},
 	},
 	{

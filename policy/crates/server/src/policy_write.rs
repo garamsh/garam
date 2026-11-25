@@ -429,6 +429,45 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
         Ok(proto::DeletePolicyResponse {})
     }
 
+    /// Retires every policy of the organization naming one of the
+    /// entities (ADR-0192 decision 4). It is the platform's alone, which
+    /// has decided the actor may take them away, so it evaluates
+    /// nothing; each entity must be the organization's own, and each
+    /// removal is recorded as the actor's.
+    pub(crate) async fn purge_policies(
+        &self,
+        principal: &Principal,
+        request: &proto::PurgePoliciesRequest,
+    ) -> Result<proto::PurgePoliciesResponse, ServiceError> {
+        platform_only(principal, "a policy purge")?;
+        let actor = request
+            .actor
+            .as_ref()
+            .ok_or(ServiceError::Missing("actor"))?;
+        let store = self.store()?.acting(origin_of(principal, Some(actor)));
+        let org = org_of(&request.org)?;
+        if request.entities.is_empty() {
+            return Err(ServiceError::Missing("entities"));
+        }
+        let entities = request
+            .entities
+            .iter()
+            .map(|entity| {
+                let uid = uid_of(Some(entity), "entity")?;
+                if org.names(&uid) {
+                    Ok(uid)
+                } else {
+                    Err(ServiceError::Malformed(format!(
+                        "{uid} is not an entity of {}",
+                        org.as_str()
+                    )))
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let policies = store.purge(&org, &entities).await?;
+        Ok(proto::PurgePoliciesResponse { policies })
+    }
+
     pub(crate) async fn get_policy(
         &self,
         principal: &Principal,

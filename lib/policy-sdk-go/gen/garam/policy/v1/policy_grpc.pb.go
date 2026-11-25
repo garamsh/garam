@@ -28,6 +28,7 @@ const (
 	PolicyService_ActivatePolicy_FullMethodName      = "/garam.policy.v1.PolicyService/ActivatePolicy"
 	PolicyService_RollBackPolicy_FullMethodName      = "/garam.policy.v1.PolicyService/RollBackPolicy"
 	PolicyService_DeletePolicy_FullMethodName        = "/garam.policy.v1.PolicyService/DeletePolicy"
+	PolicyService_PurgePolicies_FullMethodName       = "/garam.policy.v1.PolicyService/PurgePolicies"
 	PolicyService_GetPolicy_FullMethodName           = "/garam.policy.v1.PolicyService/GetPolicy"
 	PolicyService_ListPolicies_FullMethodName        = "/garam.policy.v1.PolicyService/ListPolicies"
 	PolicyService_ListAuditRecords_FullMethodName    = "/garam.policy.v1.PolicyService/ListAuditRecords"
@@ -73,6 +74,15 @@ type PolicyServiceClient interface {
 	RollBackPolicy(ctx context.Context, in *RollBackPolicyRequest, opts ...grpc.CallOption) (*RollBackPolicyResponse, error)
 	// DeletePolicy removes the policy with its versions.
 	DeletePolicy(ctx context.Context, in *DeletePolicyRequest, opts ...grpc.CallOption) (*DeletePolicyResponse, error)
+	// PurgePolicies removes, with their versions, every policy of the
+	// organization any version of which names one of the entities: a
+	// role link as its principal or resource, a guardrail or a permit as
+	// an entity its text names (ADR-0192 decision 4). It is what an
+	// uninstall takes away, whoever wrote each policy. The platform alone
+	// calls it, once it has decided the actor may take the entities
+	// away, so the service evaluates nothing and records each removal as
+	// the actor's.
+	PurgePolicies(ctx context.Context, in *PurgePoliciesRequest, opts ...grpc.CallOption) (*PurgePoliciesResponse, error)
 	// GetPolicy reads one policy with its versions.
 	GetPolicy(ctx context.Context, in *GetPolicyRequest, opts ...grpc.CallOption) (*GetPolicyResponse, error)
 	// ListPolicies reads the organization's policies, unpaged.
@@ -172,6 +182,16 @@ func (c *policyServiceClient) DeletePolicy(ctx context.Context, in *DeletePolicy
 	return out, nil
 }
 
+func (c *policyServiceClient) PurgePolicies(ctx context.Context, in *PurgePoliciesRequest, opts ...grpc.CallOption) (*PurgePoliciesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgePoliciesResponse)
+	err := c.cc.Invoke(ctx, PolicyService_PurgePolicies_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *policyServiceClient) GetPolicy(ctx context.Context, in *GetPolicyRequest, opts ...grpc.CallOption) (*GetPolicyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPolicyResponse)
@@ -242,6 +262,15 @@ type PolicyServiceServer interface {
 	RollBackPolicy(context.Context, *RollBackPolicyRequest) (*RollBackPolicyResponse, error)
 	// DeletePolicy removes the policy with its versions.
 	DeletePolicy(context.Context, *DeletePolicyRequest) (*DeletePolicyResponse, error)
+	// PurgePolicies removes, with their versions, every policy of the
+	// organization any version of which names one of the entities: a
+	// role link as its principal or resource, a guardrail or a permit as
+	// an entity its text names (ADR-0192 decision 4). It is what an
+	// uninstall takes away, whoever wrote each policy. The platform alone
+	// calls it, once it has decided the actor may take the entities
+	// away, so the service evaluates nothing and records each removal as
+	// the actor's.
+	PurgePolicies(context.Context, *PurgePoliciesRequest) (*PurgePoliciesResponse, error)
 	// GetPolicy reads one policy with its versions.
 	GetPolicy(context.Context, *GetPolicyRequest) (*GetPolicyResponse, error)
 	// ListPolicies reads the organization's policies, unpaged.
@@ -284,6 +313,9 @@ func (UnimplementedPolicyServiceServer) RollBackPolicy(context.Context, *RollBac
 }
 func (UnimplementedPolicyServiceServer) DeletePolicy(context.Context, *DeletePolicyRequest) (*DeletePolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeletePolicy not implemented")
+}
+func (UnimplementedPolicyServiceServer) PurgePolicies(context.Context, *PurgePoliciesRequest) (*PurgePoliciesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgePolicies not implemented")
 }
 func (UnimplementedPolicyServiceServer) GetPolicy(context.Context, *GetPolicyRequest) (*GetPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPolicy not implemented")
@@ -459,6 +491,24 @@ func _PolicyService_DeletePolicy_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PolicyService_PurgePolicies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgePoliciesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyServiceServer).PurgePolicies(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyService_PurgePolicies_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyServiceServer).PurgePolicies(ctx, req.(*PurgePoliciesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PolicyService_GetPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPolicyRequest)
 	if err := dec(in); err != nil {
@@ -551,6 +601,10 @@ var PolicyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeletePolicy",
 			Handler:    _PolicyService_DeletePolicy_Handler,
+		},
+		{
+			MethodName: "PurgePolicies",
+			Handler:    _PolicyService_PurgePolicies_Handler,
 		},
 		{
 			MethodName: "GetPolicy",

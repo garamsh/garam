@@ -139,7 +139,7 @@ the sidebar, the breadcrumb, the command palette and the active marking
 all read. The sidebar is
 [ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md):
 Home, Projects, and Organization (People, Agents, Teams, Permissions,
-Audit, Operators, Hosts and Settings). The same file's `CONSOLE_NAV` is
+Audit, Apps, Operators, Hosts and Settings). The same file's `CONSOLE_NAV` is
 where each one is placed, with a link only for a route that exists, and
 `CONSOLE_SECTIONS` names the action each section's list is read under;
 adding one is an entry there, a place in a group and a route folder.
@@ -159,8 +159,8 @@ every section, in one permission check
 sidebar says once, in one line, which sections it left out. Until the
 answer arrives, or where it never does, every section is listed. A
 section whose entries each have a page of their own declares it there
-too, and People, Agents, Teams, Projects, Operators and Permissions
-do: `…/people/{person}` is a person's page, `…/projects/{project}` a
+too, and People, Agents, Teams, Projects, Apps, Operators and
+Permissions do: `…/people/{person}` is a person's page, `…/projects/{project}` a
 project's,
 `/console/orgs/{org}/teams/{team}` is a team's page and `…/teams/new`
 creates one, `…/agents/{agent}` is an agent's and `…/agents/new`
@@ -172,6 +172,10 @@ identifier
 and `…/operators/{operator}/connect` is that operator's setup; below
 an operator, `connect` and `keys` are reserved for its own pages, which
 sit under the identifier and so take none,
+`…/apps/{app}` is an installed app's page and `…/apps/{app}/{instance}`
+one of its instances
+([apps.md](./apps.md), ADR-0192), the one section whose entries have
+entries of their own,
 and `…/permissions/{policy}` is a policy's.
 On such a page the sidebar marks the section as the location, and the
 breadcrumb links the section and names the entry with the name the

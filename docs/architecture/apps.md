@@ -12,10 +12,14 @@ exchange, rotation and revocation, which were a connected cluster's.
 An install writes its `permit`s, an uninstall purges the policies
 naming what it removed, and an installation exchanges an app key's
 assertion for the issuer's token. `garam-bot-connector` is the one
-app, seeded by `platform/migrations/000088_apps.up.sql`. Not yet
-built, and described below as decided: the console pages (the rest of
-#2081); registration by organizations, review, app keys an
-owner sets, the events feed and webhooks (#2083); the bot domain and
+app, seeded by `platform/migrations/000088_apps.up.sql`. The console
+pages are built (`platform-web/src/app/console/orgs/[org]/apps`, under
+Organization in the sidebar): the apps an organization may install,
+installing with the requested actions and the scope shown first,
+an installation's instances with their last contact, a registration
+token shown once, key revocation and uninstalling. Not yet built, and
+described below as decided: registration by organizations, review, app
+keys an owner sets, the events feed and webhooks (#2083); the bot domain and
 `iam:bot.place` and `iam:bot.host` (#2082); cowork and codehub as
 platform apps, automatic installation and fixed policies (#2085). A
 first-party service's principal is still ADR-0129's
@@ -267,12 +271,20 @@ first-party service's principal is still ADR-0129's
 
 ## Open questions
 
-- Not yet built, each its own issue: the console pages (the rest of
-  #2081); the bot domain under `iam:bot.place` and
+- Not yet built, each its own issue: the bot domain under `iam:bot.place` and
   `iam:bot.host` (#2082); registration by organizations, review,
   owner-set app keys, the events feed and webhooks (#2083); the
   cluster-connection split (#2084); cowork and codehub as platform
   apps (#2085).
+- The install screen lists each requested action by its id, not with
+  the registry's description of it: `GET /registry` serves none per
+  action, so the sentence above describes what the screen is for and
+  the screen shows what the API can give. Closing it takes a
+  description in the registry's answer, which is a backend change.
+- An instance has no rename or declarations page: the console reads an
+  instance's kind, last contact and keys, and creates, reissues,
+  revokes and deletes. Renaming (`PATCH`) and the reports an instance
+  made are the bot domain's to show (#2082).
 - An instance's latest contact is written by the query that resolves
   its token, in `platform/internal/app/postgres`, into
   `instance_contacts`; ADR-0192 decision 10 puts last contact in the

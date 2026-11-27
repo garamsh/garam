@@ -17,6 +17,20 @@ export {
   type Reported,
 } from "./agent-directory";
 export {
+  getApp,
+  getInstallation,
+  getInstance,
+  listInstanceKeys,
+  lookupApps,
+  lookupInstallations,
+  lookupInstanceContact,
+  lookupInstances,
+  type App,
+  type Installation,
+  type Instance,
+  type InstanceKey,
+} from "./api/apps";
+export {
   getInvitationPreview,
   joinedOrgPath,
   type InvitationPreview,

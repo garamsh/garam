@@ -101,6 +101,7 @@ describe("console navigation", () => {
       "Teams",
       "Permissions",
       "Audit",
+      "Apps",
       "Operators",
       "Hosts",
       "Settings",
@@ -115,6 +116,7 @@ describe("console navigation", () => {
       "Teams",
       "Permissions",
       "Audit",
+      "Apps",
       "Operators",
       "Hosts",
       "Settings",
@@ -130,6 +132,7 @@ describe("console navigation", () => {
         "hosts",
         "permissions",
         "audit",
+        "apps",
         "settings",
       ]);
     });
@@ -144,7 +147,7 @@ describe("console navigation", () => {
     ).toEqual(["Home", "Projects", "People"]);
     expect(
       screen.getByText(
-        "Agents, Teams, Permissions, Audit, Operators, Hosts and Settings hidden: no policy lets you read them.",
+        "Agents, Teams, Permissions, Audit, Apps, Operators, Hosts and Settings hidden: no policy lets you read them.",
       ),
     ).toBeInTheDocument();
   });

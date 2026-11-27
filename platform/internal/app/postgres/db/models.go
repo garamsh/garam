@@ -21,6 +21,7 @@ type App struct {
 	Delivery           string
 	MachineOperations  []string
 	CreatedAt          pgtype.Timestamptz
+	IssuerAudiences    []string
 }
 
 type Installation struct {

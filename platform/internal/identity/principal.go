@@ -10,6 +10,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 
@@ -55,11 +56,13 @@ func PrincipalGRN(orgID, service string) grn.GRN {
 	return grn.NewIn(orgID, principalService, principalType, service)
 }
 
-// Principal is a service principal an assertion proved.
+// Principal is a service principal or an installation an assertion
+// proved.
 type Principal struct {
 	GRN grn.GRN
-	// Service is the first-party service's name, the last segment of
-	// GRN.
+	// Service is the name its keys are held under, the last segment of
+	// GRN: a first-party service's name, or an installation's app's
+	// slug.
 	Service string
 }
 
@@ -74,6 +77,29 @@ func parsePrincipal(clientID string, services func(string) bool) (Principal, boo
 	return Principal{GRN: g, Service: g.Identifier}, true
 }
 
+// parseInstallation reads a client_id as the GRN of an installation in
+// an organization, `grn:<org>/iam/installation/<slug>`, of an app whose
+// slug holds keys, and reports false for any other (ADR-0192 decision
+// 5). The installation's identifier is its app's slug, so the keys are
+// found with no lookup.
+func parseInstallation(clientID string, slugs func(string) bool) (Principal, bool) {
+	g, err := grn.Parse(clientID)
+	if err != nil || g.Organization == "" || g.Organization == grn.RootOwner ||
+		g != grn.NewIn(g.Organization, principalService, app.InstallationType, g.Identifier) || !slugs(g.Identifier) {
+		return Principal{}, false
+	}
+	return Principal{GRN: g, Service: g.Identifier}, true
+}
+
+// IsInstallationClient reports whether clientID names an installation:
+// a GRN of service iam and type installation. As [IsPrincipalClient]
+// does, it decides which authentication a request takes and says
+// nothing of whether the installation exists.
+func IsInstallationClient(clientID string) bool {
+	g, err := grn.Parse(clientID)
+	return err == nil && g.Service == principalService && g.ServiceType == app.InstallationType
+}
+
 // IsPrincipalClient reports whether clientID names a service
 // principal: a GRN of service iam and type service, whichever
 // organization and name. It decides which authentication a request
@@ -83,15 +109,18 @@ func IsPrincipalClient(clientID string) bool {
 	return err == nil && g.Service == principalService && g.ServiceType == principalType
 }
 
-// ServiceKeys are the public keys each first-party service signs its
-// assertions with, by service name.
+// ServiceKeys are the public keys each first-party service and each
+// platform app signs its assertions with, by the service's name or the
+// app's slug (ADR-0192 decision 5).
 type ServiceKeys map[string][]operator.Key
 
 // ParseServiceKeys reads the service keys file: a JSON object from the
-// name of each first-party service to the JSON Web Key Set of its
-// public keys, at most [MaxServiceKeys] of them. A set naming a
-// service off the closed list, holding more keys than that, or holding
-// a key that is not a public RSA key is refused. A key's identity is
+// name of each first-party service or the slug of each platform app to
+// the JSON Web Key Set of its public keys, at most [MaxServiceKeys] of
+// them. A first-party name is a slug, so cowork's and codehub's sets
+// are each read both ways until #2085 makes them apps. A set named by
+// what is not a slug, holding more keys than that, or holding a key
+// that is not a public RSA key is refused. A key's identity is
 // its RFC 7638 thumbprint, which is what an assertion's `kid` names.
 func ParseServiceKeys(raw []byte) (ServiceKeys, error) {
 	var sets map[string]jose.JSONWebKeySet
@@ -100,8 +129,8 @@ func ParseServiceKeys(raw []byte) (ServiceKeys, error) {
 	}
 	keys := make(ServiceKeys, len(sets))
 	for service, set := range sets {
-		if !IsFirstParty(service) {
-			return nil, errorx.New(errorx.KindInvalidArgument, "identity: service keys name a service that is not first-party")
+		if _, err := app.AppGRN(grn.RootOwner, service); err != nil {
+			return nil, errorx.New(errorx.KindInvalidArgument, "identity: service keys name a set that is not a slug")
 		}
 		if len(set.Keys) > MaxServiceKeys {
 			return nil, errorx.New(errorx.KindInvalidArgument, "identity: a service holds at most two keys")
@@ -121,7 +150,8 @@ func ParseServiceKeys(raw []byte) (ServiceKeys, error) {
 	return keys, nil
 }
 
-// KeySource answers each first-party service's public keys. It is
+// KeySource answers each first-party service's and platform app's
+// public keys. It is
 // asked on every authentication (ADR-0129 item 2), so removing a
 // compromised key is an edit to the source and not a restart. An error
 // is the source's own failure, of the kind unavailable.

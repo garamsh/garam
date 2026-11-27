@@ -66,6 +66,10 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		s.exchangePrincipal(w, r, form)
 		return
 	}
+	if identity.IsInstallationClient(form.Get("client_id")) {
+		s.exchangeInstallation(w, r, form)
+		return
+	}
 	if app.IsInstanceGRN(client) {
 		s.exchangeInstance(w, r, client, form)
 		return
@@ -150,6 +154,41 @@ func (s *Server) exchangePrincipal(w http.ResponseWriter, r *http.Request, form 
 		return
 	}
 	issued, err := s.issuer.IssueCaller(principal.GRN)
+	if err != nil {
+		writeOAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, machinegen.OAuthToken{
+		AccessToken: issued.Token,
+		TokenType:   machinegen.Bearer,
+		ExpiresIn:   issued.ExpiresIn,
+	})
+}
+
+// exchangeInstallation answers an installation's assertion, signed by
+// a key its app's slug holds in the service keys file, with the
+// issuer's token of the audience it names, `sub` the installation
+// (ADR-0192 decisions 5 and 7). The audience is required and one the
+// issuer serves before the assertion is read, so a request refused for
+// it spends no jti, and the installation's app must list it.
+func (s *Server) exchangeInstallation(w http.ResponseWriter, r *http.Request, form url.Values) {
+	if s.issuer == nil || s.principals == nil {
+		writeOAuthError(w, identity.ErrPrincipalsOff)
+		return
+	}
+	audience, ok := form["audience"]
+	if !ok || !identity.IsAudience(audience[0]) {
+		writeOAuthError(w, &oauthRefusal{machinegen.InvalidRequest,
+			"audience is one the issuer serves, for an installation"})
+		return
+	}
+	installation, err := s.principals.AuthenticateInstallation(r.Context(), sourceOf(r),
+		form.Get("client_id"), audience[0], form.Get("client_assertion"))
+	if err != nil {
+		writeOAuthError(w, err)
+		return
+	}
+	issued, err := s.issuer.IssueFor(installation.GRN, audience[0])
 	if err != nil {
 		writeOAuthError(w, err)
 		return

@@ -92,27 +92,71 @@ func (p *Principals) Authenticate(ctx context.Context, route Route, source, clie
 	if err != nil {
 		return Principal{}, err
 	}
+	// The file names apps' sets beside the services'. What makes a
+	// name a service principal is its record, which Admit holds, and
+	// the organization store writes one for a first-party service
+	// alone.
 	principal, ok := parsePrincipal(clientID, func(service string) bool { return len(keys[service]) > 0 })
 	if !ok {
 		return Principal{}, operator.ErrClientInvalid
 	}
+	verified, err := verify(keys, principal, assertion, p.issuer)
+	if err != nil {
+		return Principal{}, err
+	}
+	if err := p.admitter.Admit(ctx, principal.GRN, verified); err != nil {
+		return Principal{}, err
+	}
+	return principal, nil
+}
+
+// AuthenticateInstallation returns the installation clientID proved
+// itself as with an assertion signed by a key its app's slug holds in
+// the keys file, for a token of audience (ADR-0192 decision 5). It is
+// [Principals.Authenticate] on the exchange's route with an
+// installation for the principal, and the installation's app must list
+// audience, which is [ErrAudienceNotListed] once the signature
+// verified and spends nothing.
+func (p *Principals) AuthenticateInstallation(ctx context.Context, source, clientID, audience, assertion string) (Principal, error) {
+	if err := p.perSource[RouteExchange].Check(source); err != nil {
+		return Principal{}, err
+	}
+	keys, err := p.keys.ServiceKeys()
+	if err != nil {
+		return Principal{}, err
+	}
+	installation, ok := parseInstallation(clientID, func(slug string) bool { return len(keys[slug]) > 0 })
+	if !ok {
+		return Principal{}, operator.ErrClientInvalid
+	}
+	verified, err := verify(keys, installation, assertion, p.issuer)
+	if err != nil {
+		return Principal{}, err
+	}
+	if err := p.admitter.AdmitInstallation(ctx, installation.GRN, audience, verified); err != nil {
+		return Principal{}, err
+	}
+	return installation, nil
+}
+
+// verify answers the assertion verified under the key of principal's
+// set its `kid` names, `iss` and `sub` the principal and `aud` the
+// issuer. Every way of failing is the one refusal.
+func verify(keys ServiceKeys, principal Principal, assertion, issuer string) (operator.VerifiedAssertion, error) {
 	parsed, err := operator.ParseServiceAssertion(assertion)
 	if err != nil {
-		return Principal{}, operator.ErrClientInvalid
+		return operator.VerifiedAssertion{}, operator.ErrClientInvalid
 	}
 	for _, key := range keys[principal.Service] {
 		if key.KID != parsed.KID() {
 			continue
 		}
 		key.Operator = principal.GRN
-		verified, err := parsed.VerifyService(key, principal.GRN, p.issuer)
+		verified, err := parsed.VerifyService(key, principal.GRN, issuer)
 		if err != nil {
-			return Principal{}, operator.ErrClientInvalid
+			return operator.VerifiedAssertion{}, operator.ErrClientInvalid
 		}
-		if err := p.admitter.Admit(ctx, principal.GRN, verified); err != nil {
-			return Principal{}, err
-		}
-		return principal, nil
+		return verified, nil
 	}
-	return Principal{}, operator.ErrClientInvalid
+	return operator.VerifiedAssertion{}, operator.ErrClientInvalid
 }

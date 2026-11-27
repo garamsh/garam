@@ -28,4 +28,15 @@ type Admitter interface {
 	// [operator.ErrClientInvalid]; an error of another kind is a store
 	// that could not be read.
 	Admit(ctx context.Context, principal grn.GRN, a operator.VerifiedAssertion) error
+	// AdmitInstallation admits a, an assertion of an installation that
+	// verified, as Admit admits a principal's, the installation's
+	// record held in its place. An installation whose app does not list
+	// audience is [ErrAudienceNotListed], and spends nothing.
+	AdmitInstallation(ctx context.Context, installation grn.GRN, audience string, a operator.VerifiedAssertion) error
 }
+
+// ErrAudienceNotListed refuses an installation's exchange for an
+// audience its app's record does not list (ADR-0192 decision 7). It is
+// given only after the signature verified, as [ErrOrganizationUnknown]
+// is.
+var ErrAudienceNotListed = errorx.New(errorx.KindInvalidArgument, "identity: the installation's app lists no such audience")

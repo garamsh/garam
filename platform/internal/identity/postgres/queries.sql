@@ -9,6 +9,20 @@ FROM service_principals
 WHERE grn = $1
 FOR KEY SHARE;
 
+-- Holds an installation's record for the transaction, as
+-- HoldServicePrincipal holds a principal's, and answers the database's
+-- clock and whether the installation's app lists the audience its
+-- exchange asks for (ADR-0192 decision 7). An installation that is
+-- gone answers no row. FOR KEY SHARE OF n blocks the uninstall from
+-- removing it before this commits, and locks no app.
+-- name: HoldInstallation :one
+SELECT now()::timestamptz AS decided_at,
+       sqlc.arg('audience')::text = ANY (a.issuer_audiences) AS listed
+FROM installations n
+JOIN apps a ON a.grn = n.app_grn
+WHERE n.grn = sqlc.arg('grn')
+FOR KEY SHARE OF n;
+
 -- Answers whether an organization of this id exists, with the
 -- database's clock, for an assertion whose principal has no record. It
 -- reads, locks and writes nothing.

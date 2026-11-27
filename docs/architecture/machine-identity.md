@@ -36,7 +36,10 @@ on included, and garam issues no PEM for a cluster
 [apps.md](./apps.md)). Built (#2081): a connected cluster is an
 instance of the `garam-bot-connector` app's installation in its
 organization, and its registration, exchange, rotation and revocation
-are every instance's. Unbuilt: a first-party service's principal
+are every instance's. An installation exchanges an assertion signed by
+a key the service keys file holds under its app's slug for the
+issuer's JWT of an audience its app lists (apps.md §Current
+decisions). Unbuilt: a first-party service's principal
 becomes its app's
 automatic installation, `grn:<org>/iam/installation/<slug>`, and its
 deployment key that app's key. An app an organization registers
@@ -496,11 +499,13 @@ revocation and the machine-listener-only audience stand.
 - **One deployment key for every organization.** cowork holds the
   private half in an owner-only file. The listener is configured with
   the public JWKs of each first-party service, read per exchange, at
-  most two per service for a rotation; nothing on either listener
-  issues or withdraws them. Built: the file is re-read and re-parsed
-  on every authentication, so removing a compromised key takes no
-  restart, and a file that is gone or no longer parses refuses every
-  principal as unavailable (503), not as a bad client.
+  most two per service for a rotation, beside those of each platform
+  app under its slug (#2081): a set's name is a slug, and a service
+  principal is still one only where its record is; nothing on either
+  listener issues or withdraws them. Built: the file is re-read and
+  re-parsed on every authentication, so removing a compromised key
+  takes no restart, and a file that is gone or no longer parses
+  refuses every principal as unavailable (503), not as a bad client.
 - **The signing algorithm is RS256, and only it.** A service key is an
   RSA public key, and an assertion's protected header names `alg`
   `RS256`, a `kid` that is the key's RFC 7638 thumbprint, and the

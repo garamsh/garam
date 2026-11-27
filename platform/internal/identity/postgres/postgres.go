@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -38,6 +39,41 @@ func New(pool *pgxpool.Pool) *Store {
 // replica: a concurrent spend of the same pair waits on the first and
 // conflicts once it commits.
 func (s *Store) Admit(ctx context.Context, principal grn.GRN, a operator.VerifiedAssertion) error {
+	return s.admit(ctx, principal, a, func(q *db.Queries) (time.Time, error) {
+		decided, err := q.HoldServicePrincipal(ctx, principal.String())
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, storageError(err, "hold service principal")
+		}
+		return decided.Time.UTC(), err
+	})
+}
+
+// AdmitInstallation holds the installation's record in the principal's
+// place and reads whether its app lists audience under that hold, then
+// spends the jti as Admit does, in the same table: an installation's
+// GRN is never a principal's or an operator's, so their spends never
+// meet. An audience not listed spends nothing.
+func (s *Store) AdmitInstallation(ctx context.Context, installation grn.GRN, audience string, a operator.VerifiedAssertion) error {
+	return s.admit(ctx, installation, a, func(q *db.Queries) (time.Time, error) {
+		held, err := q.HoldInstallation(ctx, db.HoldInstallationParams{Audience: audience, Grn: installation.String()})
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return time.Time{}, err
+		case err != nil:
+			return time.Time{}, storageError(err, "hold installation")
+		case !held.Listed:
+			return time.Time{}, identity.ErrAudienceNotListed
+		}
+		return held.DecidedAt.Time.UTC(), nil
+	})
+}
+
+// admit holds the record hold reads, which answers the database's
+// clock or pgx.ErrNoRows for a record that is gone, and spends a's jti
+// under principal, in one transaction.
+func (s *Store) admit(ctx context.Context, principal grn.GRN, a operator.VerifiedAssertion,
+	hold func(*db.Queries) (time.Time, error),
+) error {
 	key := principal.String()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -46,14 +82,13 @@ func (s *Store) Admit(ctx context.Context, principal grn.GRN, a operator.Verifie
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
-	decided, err := q.HoldServicePrincipal(ctx, key)
+	now, err := hold(q)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s.refuseGone(ctx, q, principal, a)
 	}
 	if err != nil {
-		return storageError(err, "hold service principal")
+		return err
 	}
-	now := decided.Time.UTC()
 	if !a.Timely(now) {
 		return operator.ErrClientInvalid
 	}

@@ -100,8 +100,8 @@ decisions it does not make.
 
 ## What it serves
 
-Three parts of the interface and two probes, over two origins. The
-site holds two of the three, the Next.js route groups `(marketing)` and
+Three parts of the interface, two public contact paths and two probes,
+over two origins. The site holds two of the three, the Next.js route groups `(marketing)` and
 `(auth)`: a route group contributes no URL segment, so neither is in
 any path. The console holds the third, `console`, an ordinary segment,
 which is why every console path starts with it. Each app answers a
@@ -115,6 +115,8 @@ probes and the `/api/*` proxy rewrite.
 | `/` | the public landing page | site | anyone |
 | `/login` | sign in — a password form, and a provider button only where the backend answers with that provider; signing in lands on the console path the visitor was sent here from, and a visitor already holding a session is sent on to it | site | anyone |
 | `/register` | turn an invitation into a password account ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)), landing in the organization it joined; reached from an invitation link the token is filled in, and one no longer usable is said instead of the form | site | anyone holding an invitation token |
+| `/abuse` | where to report phishing, malware or other abuse on `garam.run`, the domain serving what users and bots make; it names `security@garam.sh` and the answer time | site | anyone |
+| `/.well-known/security.txt` | the RFC 9116 contact file, a static file under `site-web/public/` naming the same address, with an `Expires` a person renews | site | anyone |
 | `/console/*` | the signed-in application | console | a visitor carrying a session cookie |
 | `/device` | the page `garam login` names ([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)); it forwards to `/console/device` with the code it was given, as `code` or RFC 8628's `user_code` | console | anyone |
 | `/healthz`, `/readyz` | the two probes, spelled as every other process spells them ([ADR-0023](./adr/0023-web-probes.md)) | both | anything that can open the port |

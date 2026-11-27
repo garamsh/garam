@@ -7,6 +7,7 @@ import { SECTIONS } from "./sections";
 const PRODUCT_LINKS = [
   { href: "/console", label: "Open the console" },
   { href: "/login", label: "Sign in" },
+  { href: "/abuse", label: "Report abuse" },
 ];
 
 const FOOTER_LINK =

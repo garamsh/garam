@@ -8,6 +8,7 @@ import {
   API_URL,
   answerPermissionChecks,
   botConnector,
+  botConnectorInstallation,
   fieldBot,
 } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
@@ -188,5 +189,59 @@ describe("installation page", () => {
 
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.getByText(/this app's instances/)).toBeInTheDocument();
+  });
+
+  describe("bot hosting", () => {
+    function serveHostingApp(botHosting: boolean) {
+      server.use(
+        http.get(`${API_URL}/orgs/acme/apps/garam-bot-connector`, () =>
+          HttpResponse.json({ ...botConnector, requestsBotHosting: true }),
+        ),
+        http.get(`${API_URL}/orgs/acme/installations/garam-bot-connector`, () =>
+          HttpResponse.json({ ...botConnectorInstallation, botHosting }),
+        ),
+      );
+    }
+
+    it("leaves bot hosting out for an app that does not ask for it", async () => {
+      await renderPage();
+
+      expect(screen.queryByText("Bot hosting")).not.toBeInTheDocument();
+    });
+
+    it("says hosting is not granted and offers the grant", async () => {
+      serveHostingApp(false);
+      await renderPage();
+
+      expect(fact("Bot hosting")).toHaveTextContent("Not granted");
+      expect(
+        screen.getByRole("button", { name: "Grant bot hosting" }),
+      ).toBeInTheDocument();
+    });
+
+    it("says hosting is granted and offers the withdrawal", async () => {
+      serveHostingApp(true);
+      await renderPage();
+
+      expect(fact("Bot hosting")).toHaveTextContent("Granted");
+      expect(
+        screen.getByRole("button", { name: "Withdraw bot hosting" }),
+      ).toBeInTheDocument();
+    });
+
+    it("shows the state but no control to a caller the server denies iam:installation.update", async () => {
+      serveHostingApp(true);
+      server.use(
+        answerPermissionChecks((action) =>
+          action === "iam:installation.update" ? "deny" : "allow",
+        ),
+      );
+      await renderPage();
+
+      expect(fact("Bot hosting")).toHaveTextContent("Granted");
+      expect(
+        screen.queryByRole("button", { name: /bot hosting$/ }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

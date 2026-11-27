@@ -17,11 +17,11 @@ pages are built (`platform-web/src/app/console/orgs/[org]/apps`, under
 Organization in the sidebar): the apps an organization may install,
 installing with the requested actions and the scope shown first,
 an installation's instances with their last contact, a registration
-token shown once, key revocation and uninstalling. Not yet built, and
-described below as decided: registration by organizations, review, app
-keys an owner sets, the events feed and webhooks (#2083); the console's
-bot hosting toggle (#2082); cowork and codehub as
-platform apps, automatic installation and fixed policies (#2085). A
+token shown once, key revocation, uninstalling, and the owner's grant
+or withdrawal of bot hosting for an app that asks for it (#2082). Not
+yet built, and described below as decided: registration by
+organizations, review, app keys an owner sets, the events feed and
+webhooks (#2083); cowork and codehub as platform apps, automatic installation and fixed policies (#2085). A
 first-party service's principal is still ADR-0129's
 ([machine-identity.md](./machine-identity.md) §cowork's principal).
 
@@ -263,7 +263,13 @@ first-party service's principal is still ADR-0129's
   as the policy service, so a broader permit an owner writes does not
   host bots for an app that does not ask to. An installation's
   `botHosting` is the policy service's answer to that question. What
-  the grant opens is [bots.md](./bots.md)'s.
+  the grant opens is [bots.md](./bots.md)'s. The console shows it on
+  the installed app's Overview where the app asks to host bots (or the
+  installation holds the grant): its state, and for a caller the
+  server allows `iam:installation.update` on the installation, a
+  control to grant or withdraw it. Installing lands on that page and
+  grants nothing; the withdrawal's dialog says first that the live bot
+  tokens are revoked and the declarations stay.
 - **Registration is throttled per source address** at
   `GARAM_INSTANCE_REGISTRATION_LIMIT` a minute, ten unless set
   (`deploy/charts/garam/README.md` is authoritative for the value),
@@ -292,8 +298,8 @@ first-party service's principal is still ADR-0129's
 
 ## Open questions
 
-- Not yet built, each its own issue: the console's bot hosting toggle
-  and an instance's declarations and report pages (#2082);
+- Not yet built, each its own issue: an instance's declarations and
+  report pages (#2082);
   registration by organizations, review,
   owner-set app keys, the events feed and webhooks (#2083); the
   cluster-connection split (#2084); cowork and codehub as platform

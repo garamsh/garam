@@ -17,6 +17,11 @@ export {
 } from "./api/delete-instance";
 export { installApp, type InstallAppState } from "./api/install-app";
 export {
+  grantInstallationBotHosting,
+  withdrawInstallationBotHosting,
+  type InstallationBotHostingState,
+} from "./api/installation-bot-hosting";
+export {
   reissueInstanceToken,
   type ReissueInstanceTokenState,
 } from "./api/reissue-instance-token";

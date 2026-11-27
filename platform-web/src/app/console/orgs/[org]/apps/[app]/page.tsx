@@ -29,6 +29,7 @@ import {
   readAccess,
 } from "../../../../_components/your-access";
 import { INSTANCES_LABEL, VISIBILITY_LABEL } from "../_components/app-labels";
+import { BotHostingControl } from "./_components/bot-hosting-control";
 import { CreateInstanceDialog } from "./_components/create-instance-dialog";
 import { InstanceTable, type InstanceRow } from "./_components/instance-table";
 import { UninstallForm } from "./_components/uninstall-form";
@@ -61,7 +62,9 @@ function Unavailable({ children }: { children: React.ReactNode }) {
  * The page asks the server once which actions the caller may take on
  * this installation and leaves out only what it is told is denied
  * (ADR-0103); creating an instance is left out as well where the app
- * runs none, or runs one and it exists.
+ * runs none, or runs one and it exists. An app that asks to host bots
+ * shows whether the installation holds that grant, with the owner's
+ * control to grant or withdraw it.
  */
 export default async function InstallationPage({
   params,
@@ -83,6 +86,14 @@ export default async function InstallationPage({
       label: "Uninstall it",
       check: {
         action: "iam:installation.delete",
+        resource: { type: "installation", id: app },
+      },
+    },
+    {
+      key: "botHosting",
+      label: "Grant or withdraw bot hosting",
+      check: {
+        action: "iam:installation.update",
         resource: { type: "installation", id: app },
       },
     },
@@ -201,6 +212,27 @@ export default async function InstallationPage({
               </ul>
             ),
         },
+        ...(a.requestsBotHosting || i.botHosting
+          ? [
+              {
+                term: "Bot hosting",
+                description: (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span>{i.botHosting ? "Granted" : "Not granted"}</span>
+                    {allowed("botHosting") &&
+                      (i.botHosting || a.requestsBotHosting) && (
+                        <BotHostingControl
+                          org={org}
+                          installation={app}
+                          name={a.name}
+                          granted={i.botHosting}
+                        />
+                      )}
+                  </div>
+                ),
+              },
+            ]
+          : []),
         {
           term: "Installed",
           description: (

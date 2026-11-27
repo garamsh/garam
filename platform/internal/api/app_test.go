@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 )
 
 // privateAppOf registers a private app of orgSlug under slug in the
@@ -199,4 +200,137 @@ func TestDeleteInstallation_TakesItsInstancesAndAReinstallIsAnotherIncarnation(t
 	rec = f.do(t, "GET", connectorPath(slug)+"/instances", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, decodeBody[[]apigen.Instance](t, rec), "holding none of the earlier one's instances")
+}
+
+// requestable stands for manifests declaring two actions an
+// installation may be granted, which no manifest does today (ADR-0192
+// decision 6).
+var requestable = []grn.ActionInfo{
+	{Name: "iam:org.read", Principals: []string{"Iam::Installation", "Iam::Instance"}, Resources: []string{"Iam::Org"}},
+	{Name: "iam:project.read", Principals: []string{"Iam::Installation", "Iam::Instance"},
+		Resources: []string{"Iam::Org", "Iam::Project"}},
+}
+
+// requestingApp registers acme's private app deployer, requesting both
+// of requestable's actions.
+func requestingApp(t *testing.T, f *fixture) (string, *http.Cookie) {
+	t.Helper()
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	privateAppOf(f, slug, "deployer")
+	a, err := f.apps.GetApp(testCtx(t), grn.New(slug, app.AppType, "deployer"))
+	require.NoError(t, err)
+	a.RequestedActions = []string{"iam:org.read", "iam:project.read"}
+	f.apps.addApp(a)
+	f.server.DeclareActions(requestable)
+	return slug, owner
+}
+
+// TestCreateInstallation_WritesAPermitOfEachRequestedActionAsTheOwner
+// holds ADR-0192 decision 4's grants on the route: the install writes
+// and activates one `permit` per requested action, as the owner who
+// installed, its principal the installation. It purges what names the
+// installation before it grants, so a reinstall inherits nothing.
+func TestCreateInstallation_WritesAPermitOfEachRequestedActionAsTheOwner(t *testing.T) {
+	f := newFixture(t)
+	slug, owner := requestingApp(t, f)
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionInstallationCreate})
+	installation := grn.New(slug, app.InstallationType, "deployer")
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/installations", `{"app":"deployer"}`, owner)
+
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	incarnation := decodeBody[apigen.Installation](t, rec).Incarnation
+	ids := []string{"install-" + incarnation + "-0", "install-" + incarnation + "-1"}
+	assert.Equal(t, ids, f.policies.held())
+	assert.Equal(t, ids, f.policies.active, "each is activated")
+	for _, id := range ids {
+		assert.Equal(t, policyrelay.KindPermit, f.policies.created[id].Kind)
+		assert.Contains(t, f.policies.created[id].Text, `principal == Iam::Installation::"`+installation.String()+`"`)
+		assert.Equal(t, userGRNOf("owner-sub"), f.policies.writers[id], "written as the owner")
+	}
+	require.Len(t, f.policies.purges, 1)
+	assert.Equal(t, purge{userGRNOf("owner-sub"), orgGRNOf(slug), []grn.GRN{installation}}, f.policies.purges[0],
+		"what names the installation is purged before it is granted")
+}
+
+// TestCreateInstallation_AFailedPermitUndoesTheInstall holds the
+// install as one act: a `permit` the policy service refuses, here the
+// second, answers the refusal and leaves neither the installation nor
+// the `permit` written before it.
+func TestCreateInstallation_AFailedPermitUndoesTheInstall(t *testing.T) {
+	f := newFixture(t)
+	slug, owner := requestingApp(t, f)
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionInstallationCreate})
+	f.policies.failAt = 2
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/installations", `{"app":"deployer"}`, owner)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, rec.Body.String())
+	_, err := f.apps.GetInstallation(testCtx(t), grn.New(slug, app.InstallationType, "deployer"))
+	assert.ErrorIs(t, err, app.ErrInstallationNotFound, "the installation is undone")
+	assert.Empty(t, f.policies.held(), "the first permit is undone")
+
+	f.policies.failAt = 0
+	rec = f.do(t, "POST", "/orgs/"+slug+"/installations", `{"app":"deployer"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code, "the control: the same install, unrefused")
+	assert.Len(t, f.policies.held(), 2)
+}
+
+// TestCreateInstallation_AnAppRequestingWhatNoInstallationMayHoldIsNotInstalled
+// holds ADR-0192 decision 6 where an install reads it: against what the
+// manifests declare, no action is requestable today, so an app whose
+// record requests one is garam's fault and installs nothing.
+func TestCreateInstallation_AnAppRequestingWhatNoInstallationMayHoldIsNotInstalled(t *testing.T) {
+	f := newFixture(t)
+	slug, owner := requestingApp(t, f)
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionInstallationCreate})
+	f.server.DeclareActions(grn.Actions())
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/installations", `{"app":"deployer"}`, owner)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+	_, err := f.apps.GetInstallation(testCtx(t), grn.New(slug, app.InstallationType, "deployer"))
+	assert.ErrorIs(t, err, app.ErrInstallationNotFound)
+	assert.Empty(t, f.policies.held())
+	assert.Empty(t, f.policies.purges)
+}
+
+// TestDeleteInstallation_PurgesWhatNamesTheInstallationOrItsInstances
+// holds the uninstall's purge (ADR-0192 decision 4, and F4 of #2113's
+// review): the policies naming the installation or an instance it took
+// go, whoever wrote them, for the administrator who uninstalled, and a
+// policy naming neither stays.
+func TestDeleteInstallation_PurgesWhatNamesTheInstallationOrItsInstances(t *testing.T) {
+	f := newFixture(t)
+	slug, owner := requestingApp(t, f)
+	f.permit(
+		permission{userGRNOf("owner-sub"), org.ActionInstallationCreate},
+		permission{userGRNOf("owner-sub"), org.ActionInstanceRegister},
+		permission{userGRNOf("admin-sub"), org.ActionInstallationDelete},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	path := "/orgs/" + slug + "/installations/deployer"
+	rec := f.do(t, "POST", "/orgs/"+slug+"/installations", `{"app":"deployer"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	rec = f.do(t, "POST", path+"/instances", `{}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	instance, err := grn.Parse(decodeBody[apigen.CreatedInstance](t, rec).Instance.Grn)
+	require.NoError(t, err)
+	person := func(id, resource string) {
+		w := policyrelay.Write{Writer: userGRNOf("owner-sub"), Org: orgGRNOf(slug), ID: id}
+		require.NoError(t, f.policies.Create(testCtx(t), w, id, policyrelay.Body{Kind: policyrelay.KindGuardrail,
+			Text: `forbid (principal, action, resource == ` + resource + `);`}))
+	}
+	person("p-instance", `Iam::Instance::"`+instance.String()+`"`)
+	person("p-org", `Iam::Org::"`+orgGRNOf(slug).String()+`"`)
+
+	rec = f.do(t, "DELETE", path, "", admin)
+
+	require.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+	assert.Equal(t, []string{"p-org"}, f.policies.held(), "the install's permits and the instance's guardrail go")
+	last := f.policies.purges[len(f.policies.purges)-1]
+	assert.Equal(t, purge{userGRNOf("admin-sub"), orgGRNOf(slug),
+		[]grn.GRN{grn.New(slug, app.InstallationType, "deployer"), instance}}, last)
 }

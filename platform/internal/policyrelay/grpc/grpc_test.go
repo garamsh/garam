@@ -27,6 +27,16 @@ type stubClient struct {
 
 	audit   *policyv1.ListAuditRecordsResponse
 	auditIn *[]*policyv1.ListAuditRecordsRequest
+
+	purged   *policyv1.PurgePoliciesResponse
+	purgedIn *[]*policyv1.PurgePoliciesRequest
+}
+
+func (s stubClient) PurgePolicies(
+	_ context.Context, in *policyv1.PurgePoliciesRequest, _ ...grpc.CallOption,
+) (*policyv1.PurgePoliciesResponse, error) {
+	*s.purgedIn = append(*s.purgedIn, in)
+	return s.purged, nil
 }
 
 func (s stubClient) ListAuditRecords(
@@ -207,4 +217,29 @@ func TestListAudit_AnUnspecifiedKindIsTheServicesFault(t *testing.T) {
 
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInternal), "got %v", err)
+}
+
+// TestPurge_NamesEachEntityByItsTypeAndAnswersTheIdentifiers holds the
+// purge an uninstall sends: the actor, the organization and each
+// entity under the type its GRN's service declares, and the GRNs the
+// service removed read back as identifiers.
+func TestPurge_NamesEachEntityByItsTypeAndAnswersTheIdentifiers(t *testing.T) {
+	var asked []*policyv1.PurgePoliciesRequest
+	client := relaygrpc.New(stubClient{purgedIn: &asked, purged: &policyv1.PurgePoliciesResponse{
+		Policies: []string{"grn:acme/iam/policy/p-1", "grn:acme/iam/policy/install-2"},
+	}})
+	installation := grn.New("acme", "installation", "deployer")
+	instance := grn.New("acme", "instance", "5f60710a1b2c3d4e")
+
+	got, err := client.Purge(context.Background(), reader, grn.Org("acme"), []grn.GRN{installation, instance})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p-1", "install-2"}, got)
+	require.Len(t, asked, 1)
+	assert.Equal(t, reader.String(), asked[0].GetActor().GetId())
+	assert.Equal(t, "grn:root/iam/org/acme", asked[0].GetOrg())
+	require.Len(t, asked[0].GetEntities(), 2)
+	assert.Equal(t, "Iam::Installation", asked[0].GetEntities()[0].GetType())
+	assert.Equal(t, installation.String(), asked[0].GetEntities()[0].GetId())
+	assert.Equal(t, "Iam::Instance", asked[0].GetEntities()[1].GetType())
 }

@@ -287,3 +287,35 @@ fn a_grn_names_the_entity_type_its_service_and_last_type_segment_declare() {
         assert!(of(grn).is_err(), "{grn:?} resolved to {:?}", of(grn));
     }
 }
+
+/// ADR-0192 decision 6's floor, held from the manifest that would
+/// cross it: an action no app may request, `iam:org.delete` here,
+/// listing an installation or an instance among its principals is
+/// named. An action outside the floor listing both is the control.
+#[test]
+fn an_action_no_app_may_request_lists_no_installation_or_instance() {
+    let delete = "action \"org.delete\" in [\"org.*\"]\n    appliesTo { principal: [User, Agent],";
+    for (principals, named) in [
+        ("[User, Agent, Installation]", "Iam::Installation"),
+        ("[User, Agent, Instance]", "Iam::Instance"),
+        (
+            "[User, Agent, Installation, Instance]",
+            "Iam::Installation and Iam::Instance",
+        ),
+    ] {
+        let manifests = iam_with(delete, &delete.replace("[User, Agent]", principals));
+        assert_eq!(
+            manifests.problems(),
+            [format!(
+                "iam:org.delete: no app may request it, and it lists {named} among its principals"
+            )]
+        );
+    }
+
+    let read = "action \"audit.read\" in [\"role-owner\", \"role-admin\"]\n    appliesTo { principal: [User, Agent],";
+    let manifests = iam_with(
+        read,
+        &read.replace("[User, Agent]", "[User, Agent, Installation, Instance]"),
+    );
+    assert_eq!(manifests.problems(), Vec::<String>::new(), "the control");
+}

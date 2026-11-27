@@ -152,9 +152,11 @@ impl Manifests {
     /// one namespace and one `@service` each, no service named twice,
     /// a `@grn` unique within its service and a slug, a `@caller` on
     /// every type, an action identifier of the form `<type>.<verb>`,
-    /// `<type>.*` or `role-<name>`, and a `<type>.*` group holding
-    /// exactly that type's actions (ADR-0145 items 1 to 3). Each entry
-    /// names what disagrees.
+    /// `<type>.*` or `role-<name>`, a `<type>.*` group holding exactly
+    /// that type's actions (ADR-0145 items 1 to 3), and no action of
+    /// `FLOOR` listing an installation or an instance among its
+    /// principals (ADR-0192 decision 6). Each entry names what
+    /// disagrees.
     pub fn problems(&self) -> Vec<String> {
         let mut problems = Vec::new();
         let mut names = BTreeSet::new();
@@ -195,6 +197,7 @@ impl Manifests {
                         service.name, action.id
                     ));
                 }
+                problems.extend(floor_problem(action));
             }
             problems.extend(self.group_problems(service));
         }
@@ -379,6 +382,79 @@ fn qualify(namespace: &str, name: &str) -> String {
 
 /// One to 64 characters of lowercase letters, digits and `-`
 /// (ADR-0142 item 4).
+/// The actions no app may request (ADR-0192 decision 6): those that
+/// grant, delegate or change membership, roles, invitations, policies,
+/// consent, a principal's credentials or the organization itself. A
+/// name no manifest declares yet stands for the action that will.
+const FLOOR: &[&str] = &[
+    "iam:org.update",
+    "iam:org.delete",
+    "iam:org.invite",
+    "iam:group.create",
+    "iam:group.update",
+    "iam:group.delete",
+    "iam:group.member-add",
+    "iam:group.member-remove",
+    "iam:project.create",
+    "iam:project.update",
+    "iam:project.delete",
+    "iam:project.member-add",
+    "iam:project.member-remove",
+    "iam:policy.create",
+    "iam:policy.update",
+    "iam:policy.attach",
+    "iam:policy.detach",
+    "iam:policy.delete",
+    "iam:permit.write",
+    "iam:consent.grant",
+    "iam:consent.withdraw",
+    "iam:operator.register",
+    "iam:operator.update",
+    "iam:operator.delete",
+    "iam:operator.reissue",
+    "iam:operator.delegate",
+    "iam:agent.enroll",
+    "iam:app.create",
+    "iam:app.update",
+    "iam:app.delete",
+    "iam:installation.create",
+    "iam:installation.update",
+    "iam:installation.delete",
+    "iam:instance.register",
+    "iam:instance.update",
+    "iam:instance.reissue",
+    "iam:instance.delete",
+    "iam:bot.host",
+    "iam:bot.place",
+];
+
+/// The principal types an installation is granted an action as: itself,
+/// and each of its instances.
+const APP_PRINCIPALS: [&str; 2] = ["Iam::Installation", "Iam::Instance"];
+
+/// What makes an action of `FLOOR` requestable by an app: an
+/// installation or an instance among its principals.
+fn floor_problem(action: &Action) -> Option<String> {
+    if !FLOOR.contains(&action.name.as_str()) {
+        return None;
+    }
+    let listed: Vec<&str> = action
+        .applies_to
+        .as_ref()?
+        .principals
+        .iter()
+        .map(String::as_str)
+        .filter(|kind| APP_PRINCIPALS.contains(kind))
+        .collect();
+    (!listed.is_empty()).then(|| {
+        format!(
+            "{}: no app may request it, and it lists {} among its principals",
+            action.name,
+            listed.join(" and ")
+        )
+    })
+}
+
 pub fn is_slug(text: &str) -> bool {
     !text.is_empty()
         && text.len() <= SEGMENT_MAX

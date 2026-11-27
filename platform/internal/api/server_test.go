@@ -56,6 +56,9 @@ type fixture struct {
 	clusterKeys *fakeClusterCredentials
 	declared    *fakeDeclarations
 	reports     *fakeReports
+	// policies is the policy relay as an install and an uninstall
+	// write through it.
+	policies *fakePolicies
 }
 
 // fixtureTokenURL is the token endpoint every fixture is configured
@@ -89,6 +92,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		standalone:  agentmocks.NewMockStandaloneService(t),
 		devices:     &fakeDeviceStore{},
 		apps:        newFakeAppStore(),
+		policies:    &fakePolicies{},
 	}
 	f.clusterKeys = newFakeClusterCredentials(f.apps)
 	f.declared = newFakeDeclarations(f.apps)
@@ -104,7 +108,8 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	go func() { _ = watches.Receive(ctx) }()
 	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.authorities, f.authority, f.standalone, cfg).
 		WithDeviceGrant(f.devices).
-		WithApps(f.apps, f.clusterKeys, f.declared, f.reports)
+		WithApps(f.apps, f.clusterKeys, f.declared, f.reports).
+		WithPolicyRelay(f.policies)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.
 	f.server = srv

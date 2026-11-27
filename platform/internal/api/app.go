@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
 
 	"github.com/garamsh/garam/lib/errorx"
@@ -10,6 +12,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/cluster"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
+	"github.com/garamsh/garam/platform/internal/policyrelay"
 	"github.com/garamsh/garam/platform/internal/user"
 )
 
@@ -21,6 +24,9 @@ type appStores struct {
 	credentials  app.CredentialStore
 	declarations cluster.DeclarationStore
 	reports      cluster.ReportStore
+	// declared is what the manifests declare, which an app's requested
+	// actions are checked against (ADR-0192 decision 6).
+	declared []grn.ActionInfo
 }
 
 // WithApps gives the server the stores the app system keeps (ADR-0192),
@@ -29,7 +35,8 @@ type appStores struct {
 // unavailable, one with nil declarations the declaration routes, and
 // one with nil reports the report route.
 func (s *Server) WithApps(records app.Store, credentials app.CredentialStore, declarations cluster.DeclarationStore, reports cluster.ReportStore) *Server {
-	s.apps = &appStores{records: records, credentials: credentials, declarations: declarations, reports: reports}
+	s.apps = &appStores{records: records, credentials: credentials, declarations: declarations, reports: reports,
+		declared: grn.Actions()}
 	return s
 }
 
@@ -129,11 +136,16 @@ func visibleApp(r *http.Request, stores *appStores, orgGRN grn.GRN, slug string)
 }
 
 // CreateInstallation installs an app in the organization over the scope
-// the body names (ADR-0192 decision 4).
+// the body names, writing a `permit` of each action the app requests
+// (ADR-0192 decision 4).
 func (s *Server) CreateInstallation(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, stores, err := s.appCall(r, orgSlug, org.ActionInstallationCreate)
 	if err != nil {
 		writeError(w, err)
+		return
+	}
+	if s.policyRelay == nil {
+		writeError(w, errorx.New(errorx.KindUnavailable, "policy service is not configured"))
 		return
 	}
 	var body apigen.InstallationCreation
@@ -148,6 +160,10 @@ func (s *Server) CreateInstallation(w http.ResponseWriter, r *http.Request, orgS
 	}
 	scope, err := s.installationScope(r, orgSlug, body.Projects)
 	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := a.Requestable(stores.declared); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -166,7 +182,57 @@ func (s *Server) CreateInstallation(w http.ResponseWriter, r *http.Request, orgS
 		writeError(w, err)
 		return
 	}
+	if err := s.grantInstallation(r.Context(), stores, a, created); err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusCreated, installationToAPI(created))
+}
+
+// grantInstallation writes and activates each `permit` an install
+// grants, as the owner who installed, since writing one is
+// `iam:permit.write`. It first purges what names the installation, so
+// a reinstall inherits nothing even where an earlier uninstall's purge
+// failed. A failure uninstalls what was written, the installation and
+// its `permit`s, and answers the failure.
+func (s *Server) grantInstallation(ctx context.Context, stores *appStores, a *app.App, installation *app.Installation) error {
+	owner := installation.CreatedBy
+	grants, err := installation.Grants(a, stores.declared)
+	if err == nil {
+		_, err = s.policyRelay.Purge(ctx, owner, installation.Organization, []grn.GRN{installation.GRN})
+	}
+	for i := 0; err == nil && i < len(grants); i++ {
+		write := policyrelay.Write{Writer: owner, Org: installation.Organization, ID: grants[i].ID}
+		err = s.policyRelay.Create(ctx, write, grants[i].Name, policyrelay.Body{Kind: policyrelay.KindPermit, Text: grants[i].Text})
+		if err == nil {
+			err = s.policyRelay.Activate(ctx, write)
+		}
+	}
+	if err == nil {
+		return nil
+	}
+	if _, undo := s.uninstall(ctx, stores, owner, installation); undo != nil {
+		return errors.Join(err, errorx.Wrap(undo, "undo the installation", errorx.KindInternal))
+	}
+	return err
+}
+
+// uninstall deletes the installation with its instances, then every
+// policy naming the installation or one of them, whoever wrote it, for
+// actor (ADR-0192 decision 4), and answers the instances it removed.
+// A purge that fails after the deletion leaves policies naming a GRN
+// no record holds: an instance's is never minted again, and the next
+// install of the app purges the installation's before it grants.
+func (s *Server) uninstall(ctx context.Context, stores *appStores, actor grn.GRN, installation *app.Installation) ([]grn.GRN, error) {
+	removed, err := stores.records.DeleteInstallation(ctx, installation.GRN)
+	if err != nil {
+		return nil, err
+	}
+	entities := append([]grn.GRN{installation.GRN}, removed...)
+	if _, err := s.policyRelay.Purge(ctx, actor, installation.Organization, entities); err != nil {
+		return nil, err
+	}
+	return removed, nil
 }
 
 // installationScope parses the projects an install names: none is the
@@ -220,16 +286,21 @@ func (s *Server) GetInstallation(w http.ResponseWriter, r *http.Request, orgSlug
 }
 
 // DeleteInstallation uninstalls the app: the installation goes with its
-// instances, their keys and their tokens (ADR-0192 decision 4).
+// instances, their keys and their tokens, and so does every policy
+// naming any of them (ADR-0192 decision 4).
 func (s *Server) DeleteInstallation(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, installationSlug apigen.InstallationSlug) {
-	_, stores, installation, err := s.installationCall(r, orgSlug, installationSlug, org.ActionInstallationDelete)
+	u, stores, installation, err := s.installationCall(r, orgSlug, installationSlug, org.ActionInstallationDelete)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+	if s.policyRelay == nil {
+		writeError(w, errorx.New(errorx.KindUnavailable, "policy service is not configured"))
+		return
+	}
 	// The deletion takes the installation's instances, and each of
 	// those marks its instance, so the answer waits for those it took.
-	removed, err := stores.records.DeleteInstallation(r.Context(), installation.GRN)
+	removed, err := s.uninstall(r.Context(), stores, u.GRN, installation)
 	if err != nil {
 		writeError(w, err)
 		return

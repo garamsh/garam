@@ -108,3 +108,12 @@ sql:
         out: internal/agent/postgres/db
         sql_package: pgx/v5
         omit_unused_structs: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/dpop/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/dpop/postgres/db
+        sql_package: pgx/v5
+        omit_unused_structs: true

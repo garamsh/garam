@@ -19,6 +19,10 @@ import (
 // actorToken is the connector's token botTokens resolves to self.
 var actorToken = app.TokenPrefix + strings.Repeat("ab", 32)
 
+// jkt is the thumbprint of the key the bot's process signed the
+// exchange's proof with, which the transport verified.
+const jkt = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+
 // botTokens is a CredentialStore resolving actorToken to self, holding
 // placed as the declarations live on it, and recording each bot token
 // it was asked to keep.
@@ -34,9 +38,9 @@ type botTokens struct {
 }
 
 type recordedBot struct {
-	place           grn.GRN
-	id, actor, hash string
-	ttl             time.Duration
+	place                grn.GRN
+	id, actor, hash, jkt string
+	ttl                  time.Duration
 }
 
 func (s *botTokens) ResolveToken(_ context.Context, hash string) (app.TokenHolder, error) {
@@ -47,8 +51,8 @@ func (s *botTokens) ResolveToken(_ context.Context, hash string) (app.TokenHolde
 	return app.TokenHolder{Instance: self, Installation: selfInstallation, RequestsBotHosting: !s.asksNot}, nil
 }
 
-func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, actor, hash string, ttl time.Duration) (time.Time, error) {
-	s.recorded = append(s.recorded, recordedBot{place: g, id: id, actor: actor, hash: hash, ttl: ttl})
+func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, actor, hash, jkt string, ttl time.Duration) (time.Time, error) {
+	s.recorded = append(s.recorded, recordedBot{place: g, id: id, actor: actor, hash: hash, jkt: jkt, ttl: ttl})
 	if s.actorGone {
 		return time.Time{}, app.ErrTokenInvalid
 	}
@@ -59,6 +63,10 @@ func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, actor, hash
 }
 
 func (s *botTokens) RevokeInstallationBotTokens(context.Context, grn.GRN) error { return nil }
+
+func (s *botTokens) ResolveBotToken(context.Context, string) (bot.HeldBotToken, error) {
+	return bot.HeldBotToken{}, bot.ErrBotTokenInvalid
+}
 
 func newBotService() (bot.Service, *botTokens) {
 	svc, store, _ := newHostedBotService()
@@ -82,17 +90,29 @@ var placedBot = bot.BotGRN(self.Organization, "decl-a").String()
 // act.sub.
 func TestMintBotToken_AnswersATokenForABotPlacedOnTheActorsRecord(t *testing.T) {
 	svc, store := newBotService()
-	token, err := svc.MintBotToken(context.Background(), bot.BotExchange{ActorToken: actorToken, Subject: placedBot})
+	token, err := svc.MintBotToken(context.Background(), bot.BotExchange{KeyThumbprint: jkt, ActorToken: actorToken, Subject: placedBot})
 	require.NoError(t, err)
 	assert.True(t, app.WellFormed(token.Value, bot.BotTokenPrefix), token.Value)
 	assert.Equal(t, placedBot, token.Bot.String())
 	assert.Equal(t, self, token.Place)
 	assert.Equal(t, []string{}, token.Scope)
+	assert.Equal(t, jkt, token.KeyThumbprint, "the token is bound to the proof's key")
 	require.Len(t, store.recorded, 1)
 	assert.Equal(t, recordedBot{place: self, id: "decl-a", actor: app.HashSecret(actorToken),
-		hash: app.HashSecret(token.Value), ttl: time.Hour},
-		store.recorded[0], "the hash is kept, never the value, under the actor that asked")
+		hash: app.HashSecret(token.Value), jkt: jkt, ttl: time.Hour},
+		store.recorded[0], "the hash is kept, never the value, under the actor that asked, bound to the key")
 	assert.WithinDuration(t, time.Now().Add(time.Hour), token.ExpiresAt, time.Minute)
+}
+
+// TestMintBotToken_RefusesAnExchangeBoundToNoKey holds ADR-0191
+// decision 1 in the domain: an exchange naming no key a proof showed
+// is refused before the actor is read, so no unbound token is kept.
+func TestMintBotToken_RefusesAnExchangeBoundToNoKey(t *testing.T) {
+	svc, store := newBotService()
+	_, err := svc.MintBotToken(context.Background(), bot.BotExchange{ActorToken: actorToken, Subject: placedBot})
+	require.Error(t, err)
+	assert.Empty(t, store.resolved, "the actor is not read")
+	assert.Empty(t, store.recorded, "no token is kept")
 }
 
 // TestMintBotToken_RefusesWhatAUTH5Refuses holds each refusal to the
@@ -112,7 +132,7 @@ func TestMintBotToken_RefusesWhatAUTH5Refuses(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, store := newBotService()
-			_, err := svc.MintBotToken(context.Background(), bot.BotExchange{ActorToken: actorToken, Subject: tc.subject})
+			_, err := svc.MintBotToken(context.Background(), bot.BotExchange{KeyThumbprint: jkt, ActorToken: actorToken, Subject: tc.subject})
 			assert.ErrorIs(t, err, bot.ErrBotNotPlaced)
 			assert.Equal(t, tc.reachesStore, len(store.recorded) == 1)
 		})
@@ -126,22 +146,22 @@ func TestMintBotToken_RefusesWhatAUTH5Refuses(t *testing.T) {
 // is read. Each actor refusal is ErrActorTokenRefused.
 func TestMintBotToken_AuthenticatesTheActorBeforeAnythingElse(t *testing.T) {
 	svc, store := newBotService()
-	_, err := svc.MintBotToken(context.Background(), bot.BotExchange{ActorToken: "garam_ot_x", Subject: placedBot})
+	_, err := svc.MintBotToken(context.Background(), bot.BotExchange{KeyThumbprint: jkt, ActorToken: "garam_ot_x", Subject: placedBot})
 	assert.ErrorIs(t, err, bot.ErrActorTokenRefused)
 	assert.Empty(t, store.resolved, "a malformed actor token is not looked up")
 
-	_, err = svc.MintBotToken(context.Background(), bot.BotExchange{
+	_, err = svc.MintBotToken(context.Background(), bot.BotExchange{KeyThumbprint: jkt,
 		ActorToken: app.TokenPrefix + strings.Repeat("cd", 32), Subject: placedBot})
 	assert.ErrorIs(t, err, bot.ErrActorTokenRefused)
 	assert.Empty(t, store.recorded)
 
 	store.actorGone = true
-	_, err = svc.MintBotToken(context.Background(), bot.BotExchange{ActorToken: actorToken, Subject: placedBot})
+	_, err = svc.MintBotToken(context.Background(), bot.BotExchange{KeyThumbprint: jkt, ActorToken: actorToken, Subject: placedBot})
 	assert.ErrorIs(t, err, bot.ErrActorTokenRefused, "a key withdrawn between resolving and writing")
 	store.actorGone = false
 
 	store.resolved = nil
-	_, err = svc.MintBotToken(context.Background(), bot.BotExchange{ActorToken: actorToken, Subject: placedBot, Scope: "tools:read"})
+	_, err = svc.MintBotToken(context.Background(), bot.BotExchange{KeyThumbprint: jkt, ActorToken: actorToken, Subject: placedBot, Scope: "tools:read"})
 	assert.ErrorIs(t, err, bot.ErrScopeUndefined)
 	assert.Empty(t, store.resolved, "a scope is refused before the actor is read")
 }
@@ -155,7 +175,7 @@ func TestMintBotToken_AuthenticatesTheActorBeforeAnythingElse(t *testing.T) {
 // the control.
 func TestMintBotToken_RefusesAnActorWhoseInstallationHostsNoBots(t *testing.T) {
 	svc, store, hosts := newHostedBotService()
-	exchange := bot.BotExchange{ActorToken: actorToken, Subject: placedBot}
+	exchange := bot.BotExchange{KeyThumbprint: jkt, ActorToken: actorToken, Subject: placedBot}
 	_, err := svc.MintBotToken(context.Background(), exchange)
 	require.NoError(t, err, "the control")
 	require.Len(t, hosts.asked, 1)
@@ -191,7 +211,7 @@ func TestMintBotToken_TakesGaramsAudienceOrNone(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, store := newBotService()
 			_, err := svc.MintBotToken(context.Background(),
-				bot.BotExchange{ActorToken: actorToken, Subject: placedBot, Audience: tc.audience})
+				bot.BotExchange{KeyThumbprint: jkt, ActorToken: actorToken, Subject: placedBot, Audience: tc.audience})
 			if tc.refused {
 				assert.ErrorIs(t, err, bot.ErrAudienceRefused)
 				assert.Empty(t, store.resolved, "refused before the actor is read")
@@ -205,7 +225,7 @@ func TestMintBotToken_TakesGaramsAudienceOrNone(t *testing.T) {
 // TestMintBotToken_IsBoundedPerInstance holds BotTokensPerInstance.
 func TestMintBotToken_IsBoundedPerInstance(t *testing.T) {
 	svc, store := newBotService()
-	exchange := bot.BotExchange{ActorToken: actorToken, Subject: placedBot}
+	exchange := bot.BotExchange{KeyThumbprint: jkt, ActorToken: actorToken, Subject: placedBot}
 	for range bot.BotTokensPerInstance {
 		_, err := svc.MintBotToken(context.Background(), exchange)
 		require.NoError(t, err)

@@ -3,6 +3,7 @@ package integration_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -41,9 +42,13 @@ func connectedActors(t *testing.T, p *pgxpool.Pool, n int) []actor {
 	return out
 }
 
-// mint records a bot token named value for id through a's token.
+// boundKey is the thumbprint of the key a bot token mint binds to.
+const boundKey = "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+
+// mint records a bot token named value for id through a's token,
+// bound to boundKey.
 func (a actor) mint(ctx context.Context, s *botpg.Store, id, value string) error {
-	_, err := s.RecordBotToken(ctx, a.g, id, app.HashSecret(a.token), app.HashSecret(value), bot.BotTokenTTL)
+	_, err := s.RecordBotToken(ctx, a.g, id, app.HashSecret(a.token), app.HashSecret(value), boundKey, bot.BotTokenTTL)
 	return err
 }
 
@@ -248,4 +253,46 @@ func TestBotTokens_AWithdrawalOfBotHostingRevokesTheInstallationsTokens(t *testi
 	installation := grn.New("acme", app.InstallationType, "garam-bot-connector")
 	require.NoError(t, s.RevokeInstallationBotTokens(ctx, installation))
 	assert.Empty(t, botTokenHashes(t, p), "every token of the installation's instances goes")
+}
+
+// TestBotTokens_AResolvedTokenNamesTheKeyItIsBoundTo holds the read a
+// resource server makes for a bot token it is presented (ADR-0191
+// decision 6): a live token answers its bot, its place and the key a
+// proof has to be signed by, and one never issued, expired, revoked
+// with its declaration, or minted under a connector key past its
+// rollover answers ErrBotTokenInvalid.
+func TestBotTokens_AResolvedTokenNamesTheKeyItIsBoundTo(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := botpg.New(p)
+	a := connectedActors(t, p, 1)[0]
+	for _, id := range []string{"live", "late", "gone"} {
+		_, _, err := s.Declare(ctx, a.g, id, object(t, id))
+		require.NoError(t, err)
+		require.NoError(t, a.mint(ctx, s, id, "garam_bt_"+id))
+	}
+	held, err := s.ResolveBotToken(ctx, app.HashSecret("garam_bt_live"))
+	require.NoError(t, err, "the control: a live token")
+	assert.Equal(t, bot.BotGRN(a.g.Organization, "live"), held.Bot)
+	assert.Equal(t, a.g, held.Place)
+	assert.Equal(t, boundKey, held.KeyThumbprint)
+	assert.WithinDuration(t, time.Now().Add(bot.BotTokenTTL), held.ExpiresAt, time.Minute)
+
+	_, err = p.Exec(ctx, `UPDATE bot_tokens SET issued_at = issued_at - interval '2 hours',
+		expires_at = expires_at - interval '2 hours' WHERE token_hash = $1`, app.HashSecret("garam_bt_late"))
+	require.NoError(t, err)
+	_, err = s.Tombstone(ctx, a.g, "gone")
+	require.NoError(t, err)
+	for _, value := range []string{"garam_bt_never", "garam_bt_late", "garam_bt_gone"} {
+		_, err := s.ResolveBotToken(ctx, app.HashSecret(value))
+		assert.ErrorIs(t, err, bot.ErrBotTokenInvalid, value)
+	}
+
+	_, err = s.ResolveBotToken(ctx, app.HashSecret("garam_bt_live"))
+	require.NoError(t, err, "the control, before the key retires")
+	tag, err := p.Exec(ctx, `UPDATE instance_keys SET retires_at = now() - interval '1 second' WHERE instance_grn = $1`, a.g.String())
+	require.NoError(t, err)
+	require.Equal(t, int64(1), tag.RowsAffected())
+	_, err = s.ResolveBotToken(ctx, app.HashSecret("garam_bt_live"))
+	assert.ErrorIs(t, err, bot.ErrBotTokenInvalid, "a key past its rollover, which deleted no row")
 }

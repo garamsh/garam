@@ -157,8 +157,10 @@ on an instance by a declaration
   checked; ADR-0179's migration checks it.
 - **Its connector obtains its token** by an RFC 8693 exchange at the
   machine listener's token endpoint, with the connector's own token as
-  the actor. The token lives at most an hour, is opaque, and is held
-  as a hash. A tombstoned declaration stops the next exchange
+  the actor. The token lives at most an hour, is opaque, is held as a
+  hash, and is bound by DPoP to the key of the bot's process, which
+  signs a proof the connector carries (ADR-0191, #2078). A tombstoned
+  declaration stops the next exchange
   ([machine-identity.md](./machine-identity.md) §A declared bot's
   token).
 - **One Cedar policy decides what it may do**, from its

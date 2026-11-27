@@ -14,6 +14,7 @@ import (
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/bot"
+	"github.com/garamsh/garam/platform/internal/dpop"
 	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -97,11 +98,16 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 }
 
 // WithInstances gives the exchange an app's instances' service
-// (ADR-0184 decision 5, ADR-0192 decision 5) and the bot-token mint of
-// garam-bot-connector's (ADR-0189 decision 2).
-func (s *Server) WithInstances(instances app.Service, bots bot.Service) *Server {
+// (ADR-0184 decision 5, ADR-0192 decision 5), the bot-token mint of
+// garam-bot-connector's (ADR-0189 decision 2), and the verifier of the
+// DPoP proofs that bind a bot's token to its process's key, read for
+// the token endpoint at tokenURL (ADR-0191). Without the verifier or
+// the URL the bot exchange answers 503.
+func (s *Server) WithInstances(instances app.Service, bots bot.Service, proofs *dpop.Verifier, tokenURL string) *Server {
 	s.instances = instances
 	s.bots = bots
+	s.dpopProofs = proofs
+	s.tokenURL = tokenURL
 	return s
 }
 
@@ -293,6 +299,14 @@ func writeOAuthError(w http.ResponseWriter, err error) {
 		// RFC 8693 §2.2.2: a subject or actor token that is invalid or
 		// unacceptable by policy is invalid_request.
 		status, body.Error = http.StatusBadRequest, machinegen.InvalidRequest
+	case errors.Is(err, dpop.ErrNonceRequired):
+		// RFC 9449 §8: the client retries with the DPoP-Nonce answered
+		// beside this.
+		description := err.Error()
+		status, body.Error, body.ErrorDescription = http.StatusBadRequest, machinegen.UseDpopNonce, &description
+	case errors.Is(err, dpop.ErrProofInvalid):
+		description := err.Error()
+		status, body.Error, body.ErrorDescription = http.StatusBadRequest, machinegen.InvalidDpopProof, &description
 	case errors.Is(err, bot.ErrAudienceRefused):
 		status, body.Error = http.StatusBadRequest, machinegen.InvalidTarget
 	case errors.Is(err, bot.ErrScopeUndefined):

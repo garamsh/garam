@@ -345,7 +345,8 @@ listener.
 
 ## A declared bot's token
 
-**The exchange is built (#2049); nothing accepts the token yet.** A bot
+**The exchange is built (#2049) and binds the token to the bot's
+process's key (#2078); nothing accepts the token yet.** A bot
 garam declares and places on a connected cluster is
 `grn:<org>/iam/bot/<declaration id>`
 ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)),
@@ -387,21 +388,44 @@ and its place's connector obtains its token. The claims are garam-bot's
 - **The token is `garam_bt_` and opaque, accepted for an hour.**
   `bot_tokens` (migration 000087, renamed by 000091) keeps its hash
   beside its `sub`, the bot, by the declaration that places it; its
-  `act.sub`, the record; the connector key whose token acted; and the
-  scope allowed, empty. Its `aud` is garam's. A record exchanges at
-  most 600 a minute.
+  `act.sub`, the record; the connector key whose token acted; the
+  scope allowed, empty; and its `cnf.jkt` (000092). Its `aud` is
+  garam's. A record exchanges at most 600 a minute.
+- **The token is bound to the bot's process's key by DPoP**
+  ([ADR-0191](./adr/0191-every-token-garam-issues-to-a-bots-process-is-bound-to-that-processs-key-by-dpop.md)).
+  The exchange carries, in its `DPoP` header, a proof the bot's
+  process signed with its own ES256 key, and is answered `token_type`
+  `DPoP`; the key's RFC 7638 thumbprint is the token's `cnf.jkt`.
+  `platform/internal/dpop` verifies the proof: its `typ`, `alg` and
+  public `jwk`, its signature, `htm` and `htu` against the endpoint's
+  method and `GARAM_MACHINE_TOKEN_URL`, `iat` within 60 seconds, and
+  a `nonce` garam issued in the last five minutes. A proof without
+  one is answered 400 `use_dpop_nonce` with a fresh nonce in
+  `DPoP-Nonce`, as every answer of the exchange is. Its `jti` is
+  spent for its key last, so a proof refused for anything else is not
+  spent. Spent `jti`s live two minutes in `dpop_jtis` and nonces
+  five in `dpop_nonces`, each swept by the next write, so every
+  replica refuses a replay and accepts any replica's nonce. A token
+  minted before the binding was deleted by 000092.
 - **A token goes with what it rests on, in the transaction that
   withdraws it.** Tombstoning its declaration or declaring another kind
   under its identifier, revoking the connector key it was minted
   under, registering the record again, and deleting the record each
   delete it. A record's expired tokens are swept at its next exchange.
+- **The resource side is built and reached by no route.** The bot
+  domain's `ResolveBotToken` reads a live token with the key it is
+  bound to, refusing one past its expiry or whose connector key is
+  revoked or past its rollover. `dpop.Presented` and `Verifier.Bound`
+  hold ADR-0191 decision 6: the token arrives as `Authorization:
+  DPoP`, `Bearer` is refused, and the proof is by the token's key,
+  for the request's method and URL, with `ath` the token's hash, spent
+  once. The first route that accepts a bot's token calls both.
 - **What is not built.** No route resolves a bot's token, so it reaches
-  no operation, and nothing introspects it. A read that resolves one
-  will also check its expiry and that its key has not retired, which no
-  delete covers. A party that verifies offline, ai-gateway among them,
-  is to get a narrower JWT bound to its audience by a further exchange
-  of the bot's token, which lives no longer than it (ADR-0141). Each
-  waits for the first consumer.
+  no operation, and nothing introspects it. A party that verifies
+  offline, ai-gateway among them, is to get a narrower
+  JWT bound to its audience by a further exchange of the bot's token,
+  which lives no longer than it (ADR-0141), and bound to the same key
+  (ADR-0191 decision 1, #2027). Each waits for the first consumer.
 
 ## The issuer
 

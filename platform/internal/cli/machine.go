@@ -24,6 +24,8 @@ import (
 	"github.com/garamsh/garam/platform/internal/bot"
 	botpg "github.com/garamsh/garam/platform/internal/bot/postgres"
 	"github.com/garamsh/garam/platform/internal/ca"
+	"github.com/garamsh/garam/platform/internal/dpop"
+	dpoppg "github.com/garamsh/garam/platform/internal/dpop/postgres"
 	"github.com/garamsh/garam/platform/internal/health"
 	"github.com/garamsh/garam/platform/internal/identity"
 	identitypg "github.com/garamsh/garam/platform/internal/identity/postgres"
@@ -358,7 +360,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			WithSendPolicy(cfg.Decisions, agentStore).
 			WithFeed(cfg.Feed).
 			WithIdentity(cfg.Identity, principals).
-			WithInstances(instances, bots),
+			WithInstances(instances, bots, dpop.NewVerifier(dpoppg.New(pool), cfg.Now), cfg.TokenURL),
 		machinegen.StdHTTPServerOptions{
 			BaseRouter: mux,
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.ConfineApps, machineapi.RecoverPanics,

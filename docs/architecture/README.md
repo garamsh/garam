@@ -1686,6 +1686,16 @@ ADRs:
   bot's token; a session has one brain and every other capability is
   an MCP tool; BYOK at every deployment; accepted, not built (#2027);
   supersedes 0126 in part and decides 0180's decision 3
+- [0191](./adr/0191-every-token-garam-issues-to-a-bots-process-is-bound-to-that-processs-key-by-dpop.md)
+  — every token garam issues to a bot's process is a DPoP token
+  (RFC 9449) bound to an ES256 key the process made and never lets
+  out, kept as `cnf.jkt`; a proof is used once, its `jti` spent in
+  Postgres, and the token endpoint always requires a nonce garam
+  issued, kept in Postgres; a resource server refuses a bound token
+  presented as `Bearer` and one whose proof is not by its key;
+  accepted, built in part (#2078: the exchange, the store and the
+  resource-side verification, which no route reaches yet; model and
+  tool tokens with #2027)
 - [0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
   — every system that connects to garam is an app, registered by the
   platform or by an organization, private or, after the platform's

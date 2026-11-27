@@ -16,7 +16,7 @@ connector is `garamsh/garam-bot-operator`'s interface
 | Type | Responsibility |
 |------|----------------|
 | `Service` | holds an instance's declarations poll until a change, a wake or the wait, keeps its report, and mints a declared bot's token for its connector |
-| `BotTokenStore` | records a bot token for a live `Bot` declaration of the instance, under the key its connector's token rests on |
+| `BotTokenStore` | records a bot token for a live `Bot` declaration of the instance, under the key its connector's token rests on and bound to the key of the bot's process, and resolves a live one with that key |
 | `DeclaredObject` | an object DECL-7 to DECL-9 admit, kept to DECL-7's members, with the kind, namespace and name two live declarations never share |
 | `Declaration` | one declaration placed on an instance: its identifier, generation and object, or none once tombstoned |
 | `DeclarationStore` | places, tombstones, reads and lists an instance's declarations, and answers a page of its log after a cursor; `Declare` checks a write before it reaches the store |
@@ -165,6 +165,12 @@ connector is `garamsh/garam-bot-operator`'s interface
   ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)
   decision 2, [machine-identity.md](./machine-identity.md) §A declared
   bot's token, [agents.md](./agents.md) §A bot garam declares).
+- **A bot's token is bound to its process's key.** The exchange's
+  transport verifies the DPoP proof the bot's process signed and hands
+  the domain its key's thumbprint, which `MintBotToken` refuses to be
+  without and keeps as the token's `cnf.jkt`
+  ([ADR-0191](./adr/0191-every-token-garam-issues-to-a-bots-process-is-bound-to-that-processs-key-by-dpop.md),
+  [domains.md](./domains.md) §A token bound to its holder's key).
 
 ## Rationale
 

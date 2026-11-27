@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -67,6 +69,11 @@ type connector struct {
 	kid    string
 	base   string
 	client *http.Client
+	// botKey is the bot's process's ES256 key its exchanges' DPoP
+	// proofs are signed with (ADR-0191), and nonce the last nonce
+	// garam answered for the next proof.
+	botKey *ecdsa.PrivateKey
+	nonce  string
 }
 
 func newConnector(t *testing.T, base, rootFile string) *connector {
@@ -81,7 +88,10 @@ func newConnector(t *testing.T, base, rootFile string) *connector {
 	require.True(t, roots.AppendCertsFromPEM(root))
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS13}}}
 	t.Cleanup(client.CloseIdleConnections)
-	return &connector{t: t, key: key, kid: base64.RawURLEncoding.EncodeToString(thumbprint), base: base, client: client}
+	botKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	return &connector{t: t, key: key, kid: base64.RawURLEncoding.EncodeToString(thumbprint), base: base, client: client,
+		botKey: botKey}
 }
 
 // register spends token with the connector's public key, answering the
@@ -436,10 +446,32 @@ func TestClusterFixture_ReportsReachLatestReport(t *testing.T) {
 	assert.Contains(t, held["message"], "cluster-owned", "the latest report shows mira held by the cluster")
 }
 
+// botProof is a DPoP proof (RFC 9449) by the bot's process's key for
+// a POST to tokenURL, carrying the last nonce garam answered.
+func (c *connector) botProof(tokenURL string) string {
+	c.t.Helper()
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.ES256, Key: c.botKey},
+		(&jose.SignerOptions{EmbedJWK: true}).WithType("dpop+jwt"))
+	require.NoError(c.t, err)
+	claims := map[string]any{"htm": http.MethodPost, "htu": tokenURL, "iat": time.Now().Unix(), "jti": rand.Text()}
+	if c.nonce != "" {
+		claims["nonce"] = c.nonce
+	}
+	payload, err := json.Marshal(claims)
+	require.NoError(c.t, err)
+	signed, err := signer.Sign(payload)
+	require.NoError(c.t, err)
+	proof, err := signed.CompactSerialize()
+	require.NoError(c.t, err)
+	return proof
+}
+
 // exchangeBot makes the RFC 8693 exchange for bot with actor, the
 // connector's own token, as ADR-0189 decision 2 has a connector make it,
 // naming audience where it is not empty, and answers the status and the
-// decoded body.
+// decoded body. It carries the bot's process's DPoP proof, and retries
+// once with the nonce a use_dpop_nonce answer carries, as RFC 9449 §8
+// has a client do (ADR-0191).
 func (c *connector) exchangeBot(tokenURL, actor, bot, audience string) (int, map[string]any) {
 	c.t.Helper()
 	form := url.Values{
@@ -452,12 +484,24 @@ func (c *connector) exchangeBot(tokenURL, actor, bot, audience string) (int, map
 	if audience != "" {
 		form.Set("audience", audience)
 	}
-	resp, err := c.client.Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
-	require.NoError(c.t, err)
-	defer func() { _ = resp.Body.Close() }()
-	var decoded map[string]any
-	require.NoError(c.t, json.NewDecoder(resp.Body).Decode(&decoded))
-	return resp.StatusCode, decoded
+	for retried := false; ; retried = true {
+		req, err := http.NewRequest(http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
+		require.NoError(c.t, err)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("DPoP", c.botProof(tokenURL))
+		resp, err := c.client.Do(req)
+		require.NoError(c.t, err)
+		var decoded map[string]any
+		err = json.NewDecoder(resp.Body).Decode(&decoded)
+		_ = resp.Body.Close()
+		require.NoError(c.t, err)
+		c.nonce = resp.Header.Get("DPoP-Nonce")
+		require.NotEmpty(c.t, c.nonce, "every answer of the bot exchange carries a nonce")
+		if decoded["error"] == "use_dpop_nonce" && !retried {
+			continue
+		}
+		return resp.StatusCode, decoded
+	}
 }
 
 // TestClusterFixture_AConnectorExchangesForABotItsRecordPlaces holds the
@@ -467,6 +511,9 @@ func (c *connector) exchangeBot(tokenURL, actor, bot, audience string) (int, map
 //     answered a token prefixed garam_bt_ for an hour, with no audience
 //     and with garam's, the token endpoint's URL, and no
 //     cluster-connection route accepts it;
+//   - the exchange carries the bot's process's DPoP proof, learns
+//     garam's nonce from its first answer, use_dpop_nonce, and is
+//     answered token_type DPoP (ADR-0191);
 //   - another audience is invalid_target;
 //   - a bot never declared, an identifier a WorkspaceClass holds, and
 //     the bot of a declaration the organization tombstoned are
@@ -498,7 +545,7 @@ func TestClusterFixture_AConnectorExchangesForABotItsRecordPlaces(t *testing.T) 
 	for _, audience := range []string{"", tokenURL} {
 		status, token := c.exchangeBot(tokenURL, actor, bot, audience)
 		require.Equal(t, http.StatusOK, status, "audience %q: %v", audience, token)
-		assert.Equal(t, "Bearer", token["token_type"])
+		assert.Equal(t, "DPoP", token["token_type"], "bound to the bot's process's key")
 		assert.Equal(t, float64(3600), token["expires_in"])
 		assert.Equal(t, "urn:ietf:params:oauth:token-type:access_token", token["issued_token_type"])
 		value, _ := token["access_token"].(string)

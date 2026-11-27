@@ -337,7 +337,7 @@ func TestClusterConnection_AReportIsRefusedAsREP6AndREP7Refuse(t *testing.T) {
 func TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord(t *testing.T) {
 	operators, clusters := &assertionService{}, &connectionClusters{}
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, operators, &messageService{}, unwatched(t),
-		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters), connectedGRN)
+		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters, nil, ""), connectedGRN)
 	form := validForm()
 	form.Set("client_id", connectedGRN.String())
 

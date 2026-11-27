@@ -26,6 +26,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/bot"
+	"github.com/garamsh/garam/platform/internal/dpop"
 	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/message"
@@ -81,6 +82,11 @@ type Server struct {
 	// either as unavailable.
 	instances app.Service
 	bots      bot.Service
+	// dpopProofs verifies the DPoP proof a bot exchange carries, for the
+	// token endpoint at tokenURL (ADR-0191); nil, or no URL, refuses
+	// the bot exchange as unavailable.
+	dpopProofs *dpop.Verifier
+	tokenURL   string
 }
 
 // Rechecker reads again, for one decision, what admitted the caller's

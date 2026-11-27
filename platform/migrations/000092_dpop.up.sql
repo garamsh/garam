@@ -7,7 +7,8 @@
 -- nothing accepts any longer, so it goes rather than being left
 -- unbound. A connector exchanges again, with a proof.
 DELETE FROM bot_tokens;
-ALTER TABLE bot_tokens ADD COLUMN jkt text NOT NULL;
+ALTER TABLE bot_tokens ADD COLUMN jkt text NOT NULL
+    CONSTRAINT bot_tokens_jkt_bound CHECK (jkt <> '');
 
 -- Each (key, jti) a proof spent, kept for twice the iat window. The
 -- primary key is the replay refusal, whichever replica runs the two.
@@ -21,11 +22,11 @@ CREATE TABLE dpop_jtis (
 
 CREATE INDEX dpop_jtis_expires_at_idx ON dpop_jtis (expires_at);
 
--- Each nonce the token endpoint issued, accepted until it expires by
--- every replica.
+-- One nonce per period of the token endpoint's, numbered from the
+-- epoch: the first replica answering in a period writes it, every
+-- replica answers and accepts it until the next period ends, and the
+-- rest are swept, so a flood of unauthenticated requests adds no row.
 CREATE TABLE dpop_nonces (
-    nonce      text PRIMARY KEY,
-    expires_at timestamptz NOT NULL
+    period bigint PRIMARY KEY,
+    nonce  text NOT NULL UNIQUE
 );
-
-CREATE INDEX dpop_nonces_expires_at_idx ON dpop_nonces (expires_at);

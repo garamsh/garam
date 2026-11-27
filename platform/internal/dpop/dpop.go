@@ -26,7 +26,7 @@ import (
 const (
 	// Header is the request header a proof is sent in.
 	Header = "DPoP"
-	// NonceHeader is the response header a fresh nonce is sent in.
+	// NonceHeader is the response header the current nonce is sent in.
 	NonceHeader = "DPoP-Nonce"
 	// TokenType is the token_type a bound token is answered with, and
 	// the Authorization scheme it is presented under.
@@ -40,9 +40,10 @@ const (
 	// twice the window, so no proof the window admits is admitted
 	// again (ADR-0191 decision 4).
 	SpentFor = 2 * Window
-	// NonceTTL is how long a nonce garam issued is accepted (ADR-0191
-	// decision 5).
-	NonceTTL = 5 * time.Minute
+	// NoncePeriod is how long one nonce is garam's current one: each
+	// period has one, and a nonce is accepted in its period and the
+	// next (ADR-0191 decision 5).
+	NoncePeriod = 5 * time.Minute
 	// MaxProofLength bounds the proof a header may carry.
 	MaxProofLength = 4 << 10
 )
@@ -65,11 +66,15 @@ type Store interface {
 	// from the store's time; false answers one already spent. It
 	// sweeps every expired jti.
 	SpendJTI(ctx context.Context, jkt, jti string, ttl time.Duration) (bool, error)
-	// IssueNonce records nonce as garam's for ttl from the store's
-	// time, and sweeps every expired nonce.
-	IssueNonce(ctx context.Context, nonce string, ttl time.Duration) error
-	// NonceLive answers whether nonce was issued and has not expired.
-	NonceLive(ctx context.Context, nonce string) (bool, error)
+	// CurrentNonce answers the nonce of the store's current period of
+	// length period, keeping candidate as it where the period has
+	// none yet, and sweeps the periods before the previous one. Two
+	// callers in one period answer the same nonce, so the store holds
+	// at most two.
+	CurrentNonce(ctx context.Context, candidate string, period time.Duration) (string, error)
+	// NonceLive answers whether nonce is the current period's or the
+	// previous one's.
+	NonceLive(ctx context.Context, nonce string, period time.Duration) (bool, error)
 }
 
 // Request is what a proof has to name: the request's method and its
@@ -106,66 +111,94 @@ func NewVerifier(store Store, now func() time.Time) *Verifier {
 
 // claims are a proof's claims ADR-0191 decision 3 names.
 type claims struct {
-	HTM   string `json:"htm"`
-	HTU   string `json:"htu"`
-	IAT   *int64 `json:"iat"`
-	JTI   string `json:"jti"`
-	Nonce string `json:"nonce"`
-	ATH   string `json:"ath"`
+	HTM string `json:"htm"`
+	HTU string `json:"htu"`
+	// IAT is a NumericDate, which RFC 7519 lets carry a fraction.
+	IAT   *float64 `json:"iat"`
+	JTI   string   `json:"jti"`
+	Nonce string   `json:"nonce"`
+	ATH   string   `json:"ath"`
 }
 
-// Verify checks proof against req and answers the RFC 7638 thumbprint
-// of the key that signed it. It spends the proof's jti last, so a
-// proof refused for anything else can be corrected and sent again.
-func (v *Verifier) Verify(ctx context.Context, proof string, req Request) (string, error) {
+// Checked is a proof that verified and is not yet spent.
+type Checked struct {
+	// KeyThumbprint is the RFC 7638 thumbprint of the key that signed
+	// the proof.
+	KeyThumbprint string
+	jti           string
+	store         Store
+}
+
+// Spend spends the proof's jti for its key, or refuses one already
+// spent with ErrProofInvalid (ADR-0191 decision 4).
+func (c Checked) Spend(ctx context.Context) error {
+	fresh, err := c.store.SpendJTI(ctx, c.KeyThumbprint, c.jti, SpentFor)
+	if err != nil {
+		return err
+	}
+	if !fresh {
+		return errorx.Wrap(ErrProofInvalid, "the proof's jti was spent")
+	}
+	return nil
+}
+
+// Check verifies proof against req, reading the store for its nonce
+// alone, and answers it unspent: the caller spends it once the rest
+// of the request authenticated, so a caller that did not writes no
+// jti (ADR-0191 decision 4).
+func (v *Verifier) Check(ctx context.Context, proof string, req Request) (Checked, error) {
 	key, c, err := parse(proof)
 	if err != nil {
-		return "", err
+		return Checked{}, err
 	}
 	if err := v.names(c, req); err != nil {
-		return "", err
+		return Checked{}, err
 	}
 	jkt, err := Thumbprint(key)
 	if err != nil {
-		return "", err
+		return Checked{}, err
 	}
 	if req.Key != "" && jkt != req.Key {
-		return "", errorx.Wrap(ErrProofInvalid, "the proof is not by the key the token is bound to")
+		return Checked{}, errorx.Wrap(ErrProofInvalid, "the proof is not by the key the token is bound to")
 	}
 	if req.Nonce {
 		if c.Nonce == "" {
-			return "", ErrNonceRequired
+			return Checked{}, ErrNonceRequired
 		}
-		live, err := v.store.NonceLive(ctx, c.Nonce)
+		live, err := v.store.NonceLive(ctx, c.Nonce, NoncePeriod)
 		if err != nil {
-			return "", err
+			return Checked{}, err
 		}
 		if !live {
-			return "", ErrNonceRequired
+			return Checked{}, ErrNonceRequired
 		}
 	}
-	fresh, err := v.store.SpendJTI(ctx, jkt, c.JTI, SpentFor)
+	return Checked{KeyThumbprint: jkt, jti: c.JTI, store: v.store}, nil
+}
+
+// Verify checks proof against req and spends it, and answers the
+// thumbprint of the key that signed it. The jti is spent last, so a
+// proof refused for anything else can be corrected and sent again.
+func (v *Verifier) Verify(ctx context.Context, proof string, req Request) (string, error) {
+	checked, err := v.Check(ctx, proof, req)
 	if err != nil {
 		return "", err
 	}
-	if !fresh {
-		return "", errorx.Wrap(ErrProofInvalid, "the proof's jti was spent")
+	if err := checked.Spend(ctx); err != nil {
+		return "", err
 	}
-	return jkt, nil
+	return checked.KeyThumbprint, nil
 }
 
-// Nonce issues a fresh nonce, which every replica accepts for
-// NonceTTL.
+// Nonce answers garam's nonce for the current period, which every
+// replica answers and accepts until the next period ends. The first
+// replica asked in a period makes it, at random.
 func (v *Verifier) Nonce(ctx context.Context) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", errorx.Wrap(err, "dpop nonce", errorx.KindInternal)
 	}
-	nonce := base64.RawURLEncoding.EncodeToString(raw)
-	if err := v.store.IssueNonce(ctx, nonce, NonceTTL); err != nil {
-		return "", err
-	}
-	return nonce, nil
+	return v.store.CurrentNonce(ctx, base64.RawURLEncoding.EncodeToString(raw), NoncePeriod)
 }
 
 // parse verifies proof's signature by the key its header carries and
@@ -220,7 +253,7 @@ func (v *Verifier) names(c claims, req Request) error {
 	case c.IAT == nil:
 		return errorx.Wrap(ErrProofInvalid, "the proof carries no iat")
 	}
-	at := time.Unix(*c.IAT, 0)
+	at := time.Unix(int64(*c.IAT), 0)
 	if now := v.now(); at.Before(now.Add(-Window)) || at.After(now.Add(Window)) {
 		return errorx.Wrap(ErrProofInvalid, "the proof's iat is outside the window")
 	}
@@ -234,8 +267,9 @@ func (v *Verifier) names(c claims, req Request) error {
 }
 
 // sameTarget answers whether htu names served, ignoring both URLs'
-// query and fragment and the case of their scheme and host (RFC 9449
-// §4.3, RFC 3986 §6.2.2.1).
+// query and fragment, the case of their scheme and host, a port that
+// is the scheme's default and the difference between an empty path
+// and "/" (RFC 9449 §4.3, RFC 3986 §6.2.2.1 and §6.2.3).
 func sameTarget(htu, served string) bool {
 	a, err := url.Parse(htu)
 	if err != nil || !a.IsAbs() {
@@ -245,8 +279,25 @@ func sameTarget(htu, served string) bool {
 	if err != nil {
 		return false
 	}
-	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host) &&
-		a.EscapedPath() == b.EscapedPath()
+	return normal(a) == normal(b)
+}
+
+// defaultPorts are the ports RFC 3986 §6.2.3 drops for the schemes
+// garam serves.
+var defaultPorts = map[string]string{"https": "443", "http": "80"}
+
+// normal is u's scheme, host and path in the form sameTarget compares.
+func normal(u *url.URL) string {
+	scheme := strings.ToLower(u.Scheme)
+	host, port := strings.ToLower(u.Hostname()), u.Port()
+	if port != "" && port != defaultPorts[scheme] {
+		host += ":" + port
+	}
+	path := u.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+	return scheme + "://" + host + path
 }
 
 // TokenHash is a proof's ath for token: the base64url SHA-256 of its

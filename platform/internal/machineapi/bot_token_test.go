@@ -1,6 +1,7 @@
 package machineapi_test
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -105,6 +106,9 @@ func TestExchangeBotToken_AnswersRFC8693sTokenForm(t *testing.T) {
 		"issued_token_type": bot.TokenTypeAccessToken,
 	}, token)
 	require.NotNil(t, bots.exchange)
+	assert.Equal(t, key.Thumbprint(t), bots.exchange.KeyThumbprint)
+	assert.NotNil(t, bots.exchange.SpendProof, "the domain spends the proof")
+	bots.exchange.SpendProof = nil
 	assert.Equal(t, bot.BotExchange{ActorToken: actorValue, Subject: "grn:acme/iam/bot/decl-a",
 		KeyThumbprint: key.Thumbprint(t)}, *bots.exchange)
 	assert.Empty(t, operators.calls, "no operator's exchange ran")
@@ -215,7 +219,8 @@ func TestExchangeBotToken_IsUnavailableWithoutTheBotService(t *testing.T) {
 // token endpoint (ADR-0191 decision 5): a proof without a nonce, or
 // with one garam did not issue, is answered 400 use_dpop_nonce with a
 // nonce, the retry carrying it is accepted, and every answer carries a
-// fresh nonce. Nothing refused reaches the bot service.
+// nonce, the same one within a period. Nothing refused reaches the
+// bot service.
 func TestExchangeBotToken_TheNonceRoundTrip(t *testing.T) {
 	bots := &connectionClusters{}
 	base := serveBotExchange(t, bots, &assertionService{})
@@ -231,19 +236,18 @@ func TestExchangeBotToken_TheNonceRoundTrip(t *testing.T) {
 	resp, body = exchangeProved(t, client, base, botForm().Encode(),
 		key.Proof(t, http.MethodPost, connectionTokenURL, first, ""))
 	require.Equal(t, http.StatusOK, resp.StatusCode, body)
-	next := resp.Header.Get(dpop.NonceHeader)
-	assert.NotEmpty(t, next, "the answer carries the next proof's nonce")
-	assert.NotEqual(t, first, next, "a fresh one")
+	assert.Equal(t, first, resp.Header.Get(dpop.NonceHeader), "the answer carries the period's nonce")
 	require.NotNil(t, bots.exchange)
 	assert.Equal(t, key.Thumbprint(t), bots.exchange.KeyThumbprint)
 }
 
 // TestExchangeBotToken_RefusesAProofThatDoesNotNameTheExchange holds
 // ADR-0191 decisions 3 and 4 at the token endpoint, each with
-// garam's nonce: no proof, two, a replayed one, one for another method
-// or another URL, and one whose header is not a proof's are 400
-// invalid_dpop_proof, with a nonce beside, and reach no bot service.
-// A fresh proof is the control.
+// garam's nonce: no proof, two, one for another method or another
+// URL, and one whose header is not a proof's are 400
+// invalid_dpop_proof, with a nonce beside, and reach no bot service;
+// a replay is 400 invalid_dpop_proof once the domain spends it. A
+// fresh proof is the control.
 func TestExchangeBotToken_RefusesAProofThatDoesNotNameTheExchange(t *testing.T) {
 	bots := &connectionClusters{}
 	base := serveBotExchange(t, bots, &assertionService{})
@@ -261,7 +265,6 @@ func TestExchangeBotToken_RefusesAProofThatDoesNotNameTheExchange(t *testing.T) 
 	for name, proofs := range map[string][]string{
 		"no proof":  nil,
 		"two":       {key.Proof(t, http.MethodPost, connectionTokenURL, nonce, ""), key.Proof(t, http.MethodPost, connectionTokenURL, nonce, "")},
-		"a replay":  {spent},
 		"wrong htm": {key.Proof(t, http.MethodPut, connectionTokenURL, nonce, "")},
 		"wrong htu": {key.Proof(t, http.MethodPost, base+"/oauth/token", nonce, "")},
 		"not a JWS": {"a.b"},
@@ -271,8 +274,46 @@ func TestExchangeBotToken_RefusesAProofThatDoesNotNameTheExchange(t *testing.T) 
 			resp, body := exchangeProved(t, client, base, botForm().Encode(), proofs...)
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode, body)
 			assert.Equal(t, "invalid_dpop_proof", oauthError(t, body))
+			assert.Contains(t, body, `"error_description":"the DPoP proof is invalid"`,
+				"the description is fixed, naming no check")
 			assert.NotEmpty(t, resp.Header.Get(dpop.NonceHeader), "a refusal carries a nonce too")
 		})
 	}
 	assert.Nil(t, bots.exchange, "no refused proof reached the bot service")
+
+	resp, body = exchangeProved(t, client, base, botForm().Encode(), spent)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, body)
+	assert.Equal(t, "invalid_dpop_proof", oauthError(t, body), "a replay, refused when the domain spends it")
+}
+
+// refusingActors is a credential store that authenticates no actor.
+type refusingActors struct{ app.CredentialStore }
+
+func (refusingActors) ResolveToken(context.Context, string) (app.TokenHolder, error) {
+	return app.TokenHolder{}, app.ErrTokenInvalid
+}
+
+// TestExchangeBotToken_AnUnauthenticatedFloodWritesNoJTI holds
+// ADR-0191 decisions 4 and 5 against a caller garam does not know:
+// each of many requests, each with its own key, garam's nonce and a
+// proof that verifies but an actor token that authenticates nothing,
+// is refused, and garam holds no jti for any of them and the one
+// nonce of the period. The real bot service decides the actor.
+func TestExchangeBotToken_AnUnauthenticatedFloodWritesNoJTI(t *testing.T) {
+	store := dpoptest.NewStore(nil)
+	bots := bot.NewService(refusingActors{}, nil, nil, nil, bot.Config{TokenEndpoint: connectionTokenURL})
+	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, &assertionService{}, &messageService{}, unwatched(t),
+		nil, nil, nil, nil, nil, nil, stubKeyring{}).
+		WithInstances(nil, bots, dpop.NewVerifier(store, nil), connectionTokenURL), connectedGRN)
+	client := anonymous(t)
+	form := botForm()
+	form.Set("actor_token", app.TokenPrefix+strings.Repeat("ab", 32))
+	for range 50 {
+		resp, body := exchangeBound(t, client, base, form.Encode(), dpoptest.NewKey(t))
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode, body)
+		require.Equal(t, "invalid_request", oauthError(t, body))
+	}
+	jtis, nonces := store.Held()
+	assert.Zero(t, jtis, "no unauthenticated proof was spent")
+	assert.LessOrEqual(t, nonces, 2, "the period's nonce, and at most the previous one")
 }

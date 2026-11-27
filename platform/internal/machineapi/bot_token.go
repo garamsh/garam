@@ -18,8 +18,10 @@ import (
 // which a live Bot declaration must place on the actor's record
 // (AUTH-5). The audience, where one is named, is garam's. The proof,
 // the bot's process's, names the key the token is bound to and
-// carries a nonce garam issued, and every answer carries a fresh one
-// for the next proof (RFC 9449 §8).
+// carries a nonce garam issued, and every answer carries the current
+// one for the next proof (RFC 9449 §8). The proof is checked here and
+// spent by the domain once the actor authenticated, so a request that
+// authenticates nothing writes no jti.
 func (s *Server) exchangeBotToken(w http.ResponseWriter, r *http.Request, form url.Values) {
 	if s.bots == nil || s.dpopProofs == nil || s.tokenURL == "" {
 		writeOAuthError(w, operator.ErrAssertionProfileUnavailable)
@@ -40,14 +42,14 @@ func (s *Server) exchangeBotToken(w http.ResponseWriter, r *http.Request, form u
 		writeOAuthError(w, err)
 		return
 	}
-	jkt, err := s.dpopProofs.Verify(r.Context(), proof, dpop.Request{Method: r.Method, URL: s.tokenURL, Nonce: true})
+	checked, err := s.dpopProofs.Check(r.Context(), proof, dpop.Request{Method: r.Method, URL: s.tokenURL, Nonce: true})
 	if err != nil {
 		writeOAuthError(w, err)
 		return
 	}
 	exchange := bot.BotExchange{
 		ActorToken: form.Get("actor_token"), Subject: form.Get("subject_token"), Scope: form.Get("scope"),
-		KeyThumbprint: jkt,
+		KeyThumbprint: checked.KeyThumbprint, SpendProof: checked.Spend,
 	}
 	if raw, ok := form["audience"]; ok {
 		exchange.Audience = &raw[0]

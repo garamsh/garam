@@ -11,27 +11,52 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const issueNonce = `-- name: IssueNonce :exec
-INSERT INTO dpop_nonces (nonce, expires_at)
-VALUES ($1, now() + $2::interval)
+const currentNonce = `-- name: CurrentNonce :one
+
+SELECT nonce FROM dpop_nonces
+WHERE period = floor(extract(epoch FROM now()) / $1::bigint)::bigint
 `
 
-type IssueNonceParams struct {
-	Nonce string
-	Ttl   pgtype.Interval
+// A period is the number of whole periods of sqlc.arg('seconds')
+// since the epoch, on the database's clock.
+func (q *Queries) CurrentNonce(ctx context.Context, seconds int64) (string, error) {
+	row := q.db.QueryRow(ctx, currentNonce, seconds)
+	var nonce string
+	err := row.Scan(&nonce)
+	return nonce, err
 }
 
-func (q *Queries) IssueNonce(ctx context.Context, arg IssueNonceParams) error {
-	_, err := q.db.Exec(ctx, issueNonce, arg.Nonce, arg.Ttl)
+const keepNonce = `-- name: KeepNonce :exec
+INSERT INTO dpop_nonces (period, nonce)
+VALUES (floor(extract(epoch FROM now()) / $1::bigint)::bigint, $2)
+ON CONFLICT (period) DO NOTHING
+`
+
+type KeepNonceParams struct {
+	Seconds int64
+	Nonce   string
+}
+
+func (q *Queries) KeepNonce(ctx context.Context, arg KeepNonceParams) error {
+	_, err := q.db.Exec(ctx, keepNonce, arg.Seconds, arg.Nonce)
 	return err
 }
 
 const nonceLive = `-- name: NonceLive :one
-SELECT EXISTS (SELECT 1 FROM dpop_nonces WHERE nonce = $1 AND expires_at > now())
+SELECT EXISTS (
+    SELECT 1 FROM dpop_nonces
+    WHERE nonce = $1
+      AND period >= floor(extract(epoch FROM now()) / $2::bigint)::bigint - 1
+)
 `
 
-func (q *Queries) NonceLive(ctx context.Context, nonce string) (bool, error) {
-	row := q.db.QueryRow(ctx, nonceLive, nonce)
+type NonceLiveParams struct {
+	Nonce   string
+	Seconds int64
+}
+
+func (q *Queries) NonceLive(ctx context.Context, arg NonceLiveParams) (bool, error) {
+	row := q.db.QueryRow(ctx, nonceLive, arg.Nonce, arg.Seconds)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -67,10 +92,11 @@ func (q *Queries) SweepJTIs(ctx context.Context) error {
 }
 
 const sweepNonces = `-- name: SweepNonces :exec
-DELETE FROM dpop_nonces WHERE expires_at <= now()
+DELETE FROM dpop_nonces
+WHERE period < floor(extract(epoch FROM now()) / $1::bigint)::bigint - 1
 `
 
-func (q *Queries) SweepNonces(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, sweepNonces)
+func (q *Queries) SweepNonces(ctx context.Context, seconds int64) error {
+	_, err := q.db.Exec(ctx, sweepNonces, seconds)
 	return err
 }

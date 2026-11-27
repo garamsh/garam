@@ -296,3 +296,19 @@ func TestBotTokens_AResolvedTokenNamesTheKeyItIsBoundTo(t *testing.T) {
 	_, err = s.ResolveBotToken(ctx, app.HashSecret("garam_bt_live"))
 	assert.ErrorIs(t, err, bot.ErrBotTokenInvalid, "a key past its rollover, which deleted no row")
 }
+
+// TestBotTokens_TheSchemaRefusesAnUnboundToken holds ADR-0191
+// decision 1 at the table: a token with an empty key thumbprint is
+// refused by bot_tokens itself, whatever the domain checked.
+func TestBotTokens_TheSchemaRefusesAnUnboundToken(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := botpg.New(p)
+	a := connectedActors(t, p, 1)[0]
+	_, _, err := s.Declare(ctx, a.g, "live", object(t, "live"))
+	require.NoError(t, err)
+	_, err = s.RecordBotToken(ctx, a.g, "live", app.HashSecret(a.token), app.HashSecret("garam_bt_unbound"), "", bot.BotTokenTTL)
+	require.Error(t, err)
+	assert.Empty(t, botTokenHashes(t, p), "nothing was kept")
+	require.NoError(t, a.mint(ctx, s, "live", "garam_bt_bound"), "the control: a bound token")
+}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -52,30 +51,46 @@ func TestDPoPStore_AJTIIsSpentOncePerKey(t *testing.T) {
 	assert.Equal(t, 2, count(t, p, "dpop_jtis", "jkt = $1", other), "and left the live ones")
 }
 
-// TestDPoPStore_ANonceIsLiveUntilItExpires holds ADR-0191 decision 5:
-// a nonce one store issued is live for any store over the database,
-// one never issued is not, nor one past its expiry, and the next issue
-// sweeps the expired one.
-func TestDPoPStore_ANonceIsLiveUntilItExpires(t *testing.T) {
+// TestDPoPStore_OnePeriodHasOneNonce holds ADR-0191 decision 5: any
+// number of asks in a period, from any store over the database, answer
+// one nonce and hold one row, whichever candidate each brought; the
+// nonce is live in its period and the next, and not after, and the
+// next period's first ask sweeps it.
+func TestDPoPStore_OnePeriodHasOneNonce(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
+	_, err := p.Exec(ctx, `DELETE FROM dpop_nonces`)
+	require.NoError(t, err)
 	issuer, reader := dpoppg.New(p), dpoppg.New(p)
-	run := rand.Text()
-	nonce := "nonce-" + run
 
-	require.NoError(t, issuer.IssueNonce(ctx, nonce, dpop.NonceTTL))
-	live, err := reader.NonceLive(ctx, nonce)
+	nonce, err := issuer.CurrentNonce(ctx, "first-"+rand.Text(), dpop.NoncePeriod)
+	require.NoError(t, err)
+	for range 20 {
+		again, err := reader.CurrentNonce(ctx, "later-"+rand.Text(), dpop.NoncePeriod)
+		require.NoError(t, err)
+		require.Equal(t, nonce, again, "the period's nonce, not the later candidate")
+	}
+	assert.Equal(t, 1, count(t, p, "dpop_nonces", "true"), "a flood of asks holds one row")
+	live, err := reader.NonceLive(ctx, nonce, dpop.NoncePeriod)
 	require.NoError(t, err)
 	assert.True(t, live, "another replica accepts it")
-	live, err = reader.NonceLive(ctx, "never-"+run)
+	live, err = reader.NonceLive(ctx, "never-"+rand.Text(), dpop.NoncePeriod)
 	require.NoError(t, err)
 	assert.False(t, live, "one never issued")
 
-	_, err = p.Exec(ctx, `UPDATE dpop_nonces SET expires_at = now() - interval '1 second' WHERE nonce = $1`, nonce)
+	_, err = p.Exec(ctx, `UPDATE dpop_nonces SET period = period - 1`)
 	require.NoError(t, err)
-	live, err = reader.NonceLive(ctx, nonce)
+	live, err = reader.NonceLive(ctx, nonce, dpop.NoncePeriod)
 	require.NoError(t, err)
-	assert.False(t, live, "one past its expiry")
-	require.NoError(t, issuer.IssueNonce(ctx, "next-"+run, time.Minute))
-	assert.Zero(t, count(t, p, "dpop_nonces", "nonce = $1", nonce), "the next issue swept it")
+	assert.True(t, live, "the previous period's")
+	_, err = p.Exec(ctx, `UPDATE dpop_nonces SET period = period - 1`)
+	require.NoError(t, err)
+	live, err = reader.NonceLive(ctx, nonce, dpop.NoncePeriod)
+	require.NoError(t, err)
+	assert.False(t, live, "two periods old")
+
+	next, err := issuer.CurrentNonce(ctx, "next-"+rand.Text(), dpop.NoncePeriod)
+	require.NoError(t, err)
+	assert.NotEqual(t, nonce, next)
+	assert.Equal(t, 1, count(t, p, "dpop_nonces", "true"), "the old period was swept")
 }

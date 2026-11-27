@@ -122,6 +122,11 @@ type BotExchange struct {
 	// is bound to (ADR-0191 decision 1). The transport verified the
 	// proof; an exchange without one is refused.
 	KeyThumbprint string
+	// SpendProof spends that proof's jti, called once the actor
+	// authenticated and the bot is found placed and before the token
+	// is kept, so an exchange that authenticates nothing spends none
+	// (ADR-0191 decision 4). Its error refuses the exchange as it is.
+	SpendProof func(context.Context) error
 }
 
 // MintBotToken answers a token for the bot exchange's subject names,
@@ -133,9 +138,10 @@ type BotExchange struct {
 // record ErrBotNotPlaced. The audience is garam's, the token
 // endpoint's URL, or none; another is ErrAudienceRefused. A scope is
 // refused, none being defined yet. The token is bound to the key
-// KeyThumbprint names, and an exchange naming none is refused.
+// KeyThumbprint names, and an exchange naming none, or carrying no
+// proof to spend, is refused.
 func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error) {
-	if exchange.KeyThumbprint == "" {
+	if exchange.KeyThumbprint == "" || exchange.SpendProof == nil {
 		return nil, errorx.New(errorx.KindInvalidArgument, "a bot's token is bound to the key of a DPoP proof")
 	}
 	if !app.WellFormed(exchange.ActorToken, app.TokenPrefix) {
@@ -165,6 +171,9 @@ func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotT
 	bot, err := grn.Parse(exchange.Subject)
 	if err != nil || bot != BotGRN(place.Organization, bot.Identifier) {
 		return nil, ErrBotNotPlaced
+	}
+	if err := exchange.SpendProof(ctx); err != nil {
+		return nil, err
 	}
 	value, err := app.NewSecret(BotTokenPrefix)
 	if err != nil {

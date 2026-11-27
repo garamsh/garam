@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -60,7 +61,8 @@ func nonce(t *testing.T, v *dpop.Verifier) string {
 // The token endpoint's round trip (RFC 9449 §8): a proof without a
 // nonce, or with one garam did not issue or that expired, is answered
 // use_dpop_nonce, and the same key's proof with the nonce garam
-// answered is accepted and names the key's thumbprint.
+// answered is accepted and names the key's thumbprint. One period has
+// one nonce, accepted through the next period and not after.
 func TestVerify_TheNonceRoundTrip(t *testing.T) {
 	v, c := fixture(t)
 	key := newKey(t)
@@ -87,11 +89,53 @@ func TestVerify_TheNonceRoundTrip(t *testing.T) {
 		t.Fatalf("jkt %q, want the key's thumbprint %q", jkt, thumbprint(t, key))
 	}
 
-	c.at = c.at.Add(dpop.NonceTTL)
+	c.at = c.at.Add(dpop.NoncePeriod - time.Second)
+	if again := nonce(t, v); again != issued {
+		t.Fatalf("a second ask in the period answered %q, want the period's %q", again, issued)
+	}
+	c.at = c.at.Add(dpop.NoncePeriod)
+	if next := nonce(t, v); next == issued {
+		t.Fatal("the next period answered the same nonce")
+	}
+	previous := proofClaims(c, http.MethodPost, tokenURL)
+	previous["nonce"] = issued
+	if _, err := v.Verify(context.Background(), sign(t, key, proofHeader(t, key), previous), endpoint); err != nil {
+		t.Fatalf("the previous period's nonce: %v, want accepted", err)
+	}
+
+	c.at = c.at.Add(dpop.NoncePeriod)
 	late := proofClaims(c, http.MethodPost, tokenURL)
 	late["nonce"] = issued
 	if _, err := v.Verify(context.Background(), sign(t, key, proofHeader(t, key), late), endpoint); !errors.Is(err, dpop.ErrNonceRequired) {
-		t.Fatalf("an expired nonce: %v, want ErrNonceRequired", err)
+		t.Fatalf("a nonce two periods old: %v, want ErrNonceRequired", err)
+	}
+}
+
+// Check verifies without spending, and Spend spends once: a proof
+// checked twice is still unspent, and once spent it is refused.
+func TestCheck_SpendsNothingUntilSpent(t *testing.T) {
+	v, c := fixture(t)
+	key := newKey(t)
+	proof := sign(t, key, proofHeader(t, key), proofClaims(c, http.MethodPost, tokenURL))
+	req := dpop.Request{Method: http.MethodPost, URL: tokenURL}
+	for range 2 {
+		checked, err := v.Check(context.Background(), proof, req)
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		if checked.KeyThumbprint != thumbprint(t, key) {
+			t.Fatalf("thumbprint %q", checked.KeyThumbprint)
+		}
+	}
+	checked, err := v.Check(context.Background(), proof, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checked.Spend(context.Background()); err != nil {
+		t.Fatalf("the first spend: %v", err)
+	}
+	if err := checked.Spend(context.Background()); !errors.Is(err, dpop.ErrProofInvalid) {
+		t.Fatalf("the second spend: %v, want ErrProofInvalid", err)
 	}
 }
 
@@ -135,10 +179,50 @@ func TestVerify_RefusesAWrongHTMOrHTU(t *testing.T) {
 	for name, htu := range map[string]string{
 		"query and fragment": tokenURL + "?a=b#c",
 		"scheme and host":    "HTTPS://Machine.Garam.Test/oauth/token",
+		"https default port": "https://machine.garam.test:443/oauth/token",
 	} {
 		if _, err := v.Verify(context.Background(), sign(t, key, proofHeader(t, key), proofClaims(c, http.MethodPost, htu)), req); err != nil {
 			t.Errorf("%s: %v, want accepted", name, err)
 		}
+	}
+}
+
+// RFC 3986 §6.2.3 holds both ways: a default port on the URL garam
+// serves at matches a proof without it, an empty path is "/", and a
+// port that is not the scheme's default is not dropped.
+func TestVerify_ComparesHTUWithTheSchemesDefaults(t *testing.T) {
+	v, c := fixture(t)
+	key := newKey(t)
+	for _, tc := range []struct {
+		served, htu string
+		accepted    bool
+	}{
+		{"https://machine.garam.test:443/oauth/token", "https://machine.garam.test/oauth/token", true},
+		{"http://machine.garam.test/oauth/token", "http://machine.garam.test:80/oauth/token", true},
+		{"https://machine.garam.test", "https://machine.garam.test/", true},
+		{"https://machine.garam.test/", "https://machine.garam.test", true},
+		{"https://machine.garam.test/oauth/token", "https://machine.garam.test:8443/oauth/token", false},
+		{"https://machine.garam.test/oauth/token", "https://machine.garam.test:80/oauth/token", false},
+	} {
+		proof := sign(t, key, proofHeader(t, key), proofClaims(c, http.MethodPost, tc.htu))
+		_, err := v.Verify(context.Background(), proof, dpop.Request{Method: http.MethodPost, URL: tc.served})
+		if tc.accepted && err != nil {
+			t.Errorf("%s against %s: %v, want accepted", tc.htu, tc.served, err)
+		}
+		if !tc.accepted && !errors.Is(err, dpop.ErrProofInvalid) {
+			t.Errorf("%s against %s: %v, want ErrProofInvalid", tc.htu, tc.served, err)
+		}
+	}
+}
+
+// An iat is a NumericDate, which may carry a fraction (RFC 7519 §2).
+func TestVerify_AcceptsAFractionalIAT(t *testing.T) {
+	v, c := fixture(t)
+	key := newKey(t)
+	claims := proofClaims(c, http.MethodPost, tokenURL)
+	claims["iat"] = float64(c.at.Unix()) + 0.5
+	if _, err := v.Verify(context.Background(), sign(t, key, proofHeader(t, key), claims), dpop.Request{Method: http.MethodPost, URL: tokenURL}); err != nil {
+		t.Fatalf("a fractional iat: %v, want accepted", err)
 	}
 }
 
@@ -157,6 +241,8 @@ func TestVerify_RefusesAMalformedProof(t *testing.T) {
 	delete(noJTI, "jti")
 	noIAT := proofClaims(c, http.MethodPost, tokenURL)
 	delete(noIAT, "iat")
+	quotedIAT := proofClaims(c, http.MethodPost, tokenURL)
+	quotedIAT["iat"] = strconv.FormatInt(c.at.Unix(), 10)
 	typ := proofHeader(t, key)
 	typ["typ"] = "JWT"
 	alg := proofHeader(t, key)
@@ -173,6 +259,7 @@ func TestVerify_RefusesAMalformedProof(t *testing.T) {
 		"early iat":       sign(t, key, proofHeader(t, key), early),
 		"no jti":          sign(t, key, proofHeader(t, key), noJTI),
 		"no iat":          sign(t, key, proofHeader(t, key), noIAT),
+		"a quoted iat":    sign(t, key, proofHeader(t, key), quotedIAT),
 		"typ":             sign(t, key, typ, proofClaims(c, http.MethodPost, tokenURL)),
 		"alg":             sign(t, key, alg, proofClaims(c, http.MethodPost, tokenURL)),
 		"no jwk":          sign(t, key, noKey, proofClaims(c, http.MethodPost, tokenURL)),

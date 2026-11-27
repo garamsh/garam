@@ -302,10 +302,10 @@ func writeOAuthError(w http.ResponseWriter, err error) {
 	case errors.Is(err, dpop.ErrNonceRequired):
 		// RFC 9449 §8: the client retries with the DPoP-Nonce answered
 		// beside this.
-		description := err.Error()
+		description := "retry with the nonce in DPoP-Nonce"
 		status, body.Error, body.ErrorDescription = http.StatusBadRequest, machinegen.UseDpopNonce, &description
 	case errors.Is(err, dpop.ErrProofInvalid):
-		description := err.Error()
+		description := "the DPoP proof is invalid"
 		status, body.Error, body.ErrorDescription = http.StatusBadRequest, machinegen.InvalidDpopProof, &description
 	case errors.Is(err, bot.ErrAudienceRefused):
 		status, body.Error = http.StatusBadRequest, machinegen.InvalidTarget

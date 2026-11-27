@@ -1690,8 +1690,9 @@ ADRs:
   — every token garam issues to a bot's process is a DPoP token
   (RFC 9449) bound to an ES256 key the process made and never lets
   out, kept as `cnf.jkt`; a proof is used once, its `jti` spent in
-  Postgres, and the token endpoint always requires a nonce garam
-  issued, kept in Postgres; a resource server refuses a bound token
+  Postgres once the request authenticated, and the token endpoint
+  always requires garam's nonce, one per five-minute period kept in
+  Postgres; a resource server refuses a bound token
   presented as `Bearer` and one whose proof is not by its key;
   accepted, built in part (#2078: the exchange, the store and the
   resource-side verification, which no route reaches yet; model and

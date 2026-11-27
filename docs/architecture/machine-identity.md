@@ -398,15 +398,21 @@ and its place's connector obtains its token. The claims are garam-bot's
   `DPoP`; the key's RFC 7638 thumbprint is the token's `cnf.jkt`.
   `platform/internal/dpop` verifies the proof: its `typ`, `alg` and
   public `jwk`, its signature, `htm` and `htu` against the endpoint's
-  method and `GARAM_MACHINE_TOKEN_URL`, `iat` within 60 seconds, and
-  a `nonce` garam issued in the last five minutes. A proof without
-  one is answered 400 `use_dpop_nonce` with a fresh nonce in
-  `DPoP-Nonce`, as every answer of the exchange is. Its `jti` is
-  spent for its key last, so a proof refused for anything else is not
-  spent. Spent `jti`s live two minutes in `dpop_jtis` and nonces
-  five in `dpop_nonces`, each swept by the next write, so every
-  replica refuses a replay and accepts any replica's nonce. A token
-  minted before the binding was deleted by 000092.
+  method and `GARAM_MACHINE_TOKEN_URL` (scheme and host case and a
+  default port aside), `iat` within 60 seconds, and a `nonce` that is
+  the current or the previous five-minute period's. A proof without
+  one is answered 400 `use_dpop_nonce` with the current nonce in
+  `DPoP-Nonce`, as every answer of the exchange is. `dpop_nonces`
+  holds one row per period, made by the first replica to answer in it,
+  and at most two. The bot domain spends the `jti` once the actor
+  resolved and the bot is placed, before the token is kept, so a proof
+  refused for anything else is not spent and a request that
+  authenticates nothing writes no `jti`. Spent `jti`s live two
+  minutes in `dpop_jtis`, swept by the next spend, so every replica
+  refuses a replay. Refusals carry a fixed description per code and
+  the cause goes to the request log. A token minted before the
+  binding was deleted by 000092, and `bot_tokens` refuses an empty
+  `jkt` itself.
 - **A token goes with what it rests on, in the transaction that
   withdraws it.** Tombstoning its declaration or declaring another kind
   under its identifier, revoking the connector key it was minted

@@ -299,15 +299,17 @@ paths:
         `ES256` and `jwk` the public key, and whose claims are `htm`
         `POST`, `htu` this endpoint's URL without query or fragment,
         `iat` within 60 seconds of garam's clock, a `jti` no proof by
-        that key spent in the last two minutes, and `nonce` one garam
-        answered in `DPoP-Nonce` in the last five. A proof without a
-        nonce, or with one garam did not issue or that expired, is 400
-        `use_dpop_nonce`, and the client retries with the nonce
-        answered beside it; no proof, two, one longer than 4096 bytes,
+        that key spent in the last two minutes, and `nonce` the one
+        garam answers in `DPoP-Nonce`, which stays the same for a
+        five-minute period and is accepted through the next. A proof
+        without a nonce, or with one that is not garam's current or
+        previous, is 400 `use_dpop_nonce`, and the client retries with
+        the nonce answered beside it; no proof, two, one longer than 4096 bytes,
         or one that does not verify by its `jwk`, names another method
         or URL, is outside its minute or was spent, is 400
-        `invalid_dpop_proof`. Every answer
-        of the bot exchange carries a fresh `DPoP-Nonce`. The token is
+        `invalid_dpop_proof`. A proof is spent only once the actor
+        token authenticated. Every answer of the bot exchange carries
+        the current `DPoP-Nonce`. The token is
         answered with `token_type` `DPoP`; garam keeps the RFC 7638
         thumbprint of the proof's key as its `cnf.jkt` and accepts it
         only as `Authorization: DPoP`, beside a proof by that key whose
@@ -2973,9 +2975,9 @@ components:
         type: integer
     DPoPNonce:
       description: >-
-        A fresh nonce for the next DPoP proof's `nonce` (RFC 9449 §8),
-        accepted by every replica for five minutes; answered by the bot
-        token exchange alone.
+        The nonce for the next DPoP proof's `nonce` (RFC 9449 §8): one
+        per five-minute period, accepted by every replica through the
+        next period; answered by the bot token exchange alone.
       schema:
         type: string
     NoStore:

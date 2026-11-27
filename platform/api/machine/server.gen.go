@@ -236,6 +236,7 @@ func (e MessageState) Valid() bool {
 // Defines values for OAuthErrorError.
 const (
 	InvalidClient          OAuthErrorError = "invalid_client"
+	InvalidDpopProof       OAuthErrorError = "invalid_dpop_proof"
 	InvalidRequest         OAuthErrorError = "invalid_request"
 	InvalidScope           OAuthErrorError = "invalid_scope"
 	InvalidTarget          OAuthErrorError = "invalid_target"
@@ -243,12 +244,15 @@ const (
 	TemporarilyUnavailable OAuthErrorError = "temporarily_unavailable"
 	UnauthorizedClient     OAuthErrorError = "unauthorized_client"
 	UnsupportedGrantType   OAuthErrorError = "unsupported_grant_type"
+	UseDpopNonce           OAuthErrorError = "use_dpop_nonce"
 )
 
 // Valid indicates whether the value is a known member of the OAuthErrorError enum.
 func (e OAuthErrorError) Valid() bool {
 	switch e {
 	case InvalidClient:
+		return true
+	case InvalidDpopProof:
 		return true
 	case InvalidRequest:
 		return true
@@ -263,6 +267,8 @@ func (e OAuthErrorError) Valid() bool {
 	case UnauthorizedClient:
 		return true
 	case UnsupportedGrantType:
+		return true
+	case UseDpopNonce:
 		return true
 	default:
 		return false
@@ -287,12 +293,15 @@ func (e OAuthTokenIssuedTokenType) Valid() bool {
 // Defines values for OAuthTokenTokenType.
 const (
 	Bearer OAuthTokenTokenType = "Bearer"
+	DPoP   OAuthTokenTokenType = "DPoP"
 )
 
 // Valid indicates whether the value is a known member of the OAuthTokenTokenType enum.
 func (e OAuthTokenTokenType) Valid() bool {
 	switch e {
 	case Bearer:
+		return true
+	case DPoP:
 		return true
 	default:
 		return false
@@ -872,17 +881,17 @@ type MessageSubmission struct {
 
 // OAuthError RFC 6749's error response (ADR-0102).
 type OAuthError struct {
-	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_target` for an `audience` other than garam's, or a `resource`, on a bot token exchange; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_target` for an `audience` other than garam's, or a `resource`, on a bot token exchange; `invalid_dpop_proof` for a bot token exchange's DPoP proof that is missing or refused, and `use_dpop_nonce` for one without garam's nonce (RFC 9449); `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_target` for an `audience` other than garam's, or a `resource`, on a bot token exchange; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials` or token exchange; `invalid_scope` for any `scope`; `invalid_target` for an `audience` other than garam's, or a `resource`, on a bot token exchange; `invalid_dpop_proof` for a bot token exchange's DPoP proof that is missing or refused, and `use_dpop_nonce` for one without garam's nonce (RFC 9449); `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 type OAuthErrorError string
 
 // OAuthToken RFC 6749's successful token response (ADR-0102), and RFC 8693's for a bot token exchange (ADR-0189).
 type OAuthToken struct {
-	// AccessToken The token, prefixed `garam_ot_` for an operator, `garam_ct_` for a connected cluster and `garam_bt_` for a bot, and opaque, presented as `Authorization: Bearer` or `Garam-Token`. garam stores only its hash.
+	// AccessToken The token, prefixed `garam_ot_` for an operator, `garam_ct_` for a connected cluster and `garam_bt_` for a bot, and opaque. A `Bearer` token is presented as `Authorization: Bearer` or `Garam-Token`, and a `DPoP` one as `Authorization: DPoP` beside a proof by the key it is bound to (ADR-0191). garam stores only its hash.
 	AccessToken string `json:"access_token"`
 
 	// ExpiresIn Seconds the token is accepted for, 3600.
@@ -890,13 +899,15 @@ type OAuthToken struct {
 
 	// IssuedTokenType Answered to a bot token exchange alone (RFC 8693).
 	IssuedTokenType *OAuthTokenIssuedTokenType `json:"issued_token_type,omitempty"`
-	TokenType       OAuthTokenTokenType        `json:"token_type"`
+
+	// TokenType `DPoP` for a bot token exchange, `Bearer` for every other grant.
+	TokenType OAuthTokenTokenType `json:"token_type"`
 }
 
 // OAuthTokenIssuedTokenType Answered to a bot token exchange alone (RFC 8693).
 type OAuthTokenIssuedTokenType string
 
-// OAuthTokenTokenType defines model for OAuthToken.TokenType.
+// OAuthTokenTokenType `DPoP` for a bot token exchange, `Bearer` for every other grant.
 type OAuthTokenTokenType string
 
 // OperationBinding defines model for OperationBinding.

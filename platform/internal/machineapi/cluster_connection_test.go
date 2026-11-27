@@ -85,10 +85,16 @@ func (c *connectionClusters) ExchangeAssertion(_ context.Context, _ string, clie
 	return &app.Token{Value: app.TokenPrefix + "answered", Instance: client, ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
-func (c *connectionClusters) MintBotToken(_ context.Context, exchange bot.BotExchange) (*bot.BotToken, error) {
+func (c *connectionClusters) MintBotToken(ctx context.Context, exchange bot.BotExchange) (*bot.BotToken, error) {
 	c.exchange = &exchange
 	if c.err != nil {
 		return nil, c.err
+	}
+	// The domain spends the proof once the actor authenticated.
+	if exchange.SpendProof != nil {
+		if err := exchange.SpendProof(ctx); err != nil {
+			return nil, err
+		}
 	}
 	return &bot.BotToken{Value: bot.BotTokenPrefix + "answered", Bot: grn.New("acme", bot.BotServiceType, "decl-a"),
 		Place: connectedGRN, Scope: []string{}, ExpiresAt: time.Now().Add(bot.BotTokenTTL)}, nil
@@ -337,7 +343,7 @@ func TestClusterConnection_AReportIsRefusedAsREP6AndREP7Refuse(t *testing.T) {
 func TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord(t *testing.T) {
 	operators, clusters := &assertionService{}, &connectionClusters{}
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, operators, &messageService{}, unwatched(t),
-		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters), connectedGRN)
+		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters, nil, ""), connectedGRN)
 	form := validForm()
 	form.Set("client_id", connectedGRN.String())
 

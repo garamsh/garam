@@ -292,6 +292,30 @@ paths:
         token. It reaches no operation yet. A record exchanges at most
         600 a minute, and 429 with `Retry-After` past it.
 
+        **A bot token is bound to the bot's process's key by DPoP**
+        (RFC 9449, ADR-0191). The exchange carries, in the `DPoP`
+        header, one proof the bot's process signed with its own ES256
+        key: a compact JWS whose header is `typ` `dpop+jwt`, `alg`
+        `ES256` and `jwk` the public key, and whose claims are `htm`
+        `POST`, `htu` this endpoint's URL without query or fragment,
+        `iat` within 60 seconds of garam's clock, a `jti` no proof by
+        that key spent in the last two minutes, and `nonce` the one
+        garam answers in `DPoP-Nonce`, which stays the same for a
+        five-minute period and is accepted through the next. A proof
+        without a nonce, or with one that is not garam's current or
+        previous, is 400 `use_dpop_nonce`, and the client retries with
+        the nonce answered beside it; no proof, two, one longer than 4096 bytes,
+        or one that does not verify by its `jwk`, names another method
+        or URL, is outside its minute or was spent, is 400
+        `invalid_dpop_proof`. A proof is spent only once the actor
+        token authenticated. Every answer of the bot exchange carries
+        the current `DPoP-Nonce`. The token is
+        answered with `token_type` `DPoP`; garam keeps the RFC 7638
+        thumbprint of the proof's key as its `cnf.jkt` and accepts it
+        only as `Authorization: DPoP`, beside a proof by that key whose
+        `ath` is the token's hash. A bearer token is never issued to a
+        bot.
+
         A `client_id` that is a service principal's GRN,
         `grn:<org>/iam/service/<name>`, takes the principal route
         (ADR-0129): the assertion is signed by a key of that service,
@@ -349,6 +373,8 @@ paths:
               $ref: '#/components/headers/NoStore'
             Pragma:
               $ref: '#/components/headers/NoCache'
+            DPoP-Nonce:
+              $ref: '#/components/headers/DPoPNonce'
           content:
             application/json:
               schema:
@@ -362,6 +388,8 @@ paths:
               $ref: '#/components/headers/RetryAfter'
             Garam-Contract-Version:
               $ref: '#/components/headers/AssertionContractVersion'
+            DPoP-Nonce:
+              $ref: '#/components/headers/DPoPNonce'
           content:
             application/json:
               schema:
@@ -2115,15 +2143,18 @@ components:
           description: >-
             The token, prefixed `garam_ot_` for an operator, `garam_ct_`
             for a connected cluster and `garam_bt_` for a bot, and
-            opaque, presented as `Authorization: Bearer` or
-            `Garam-Token`. garam stores only its hash.
+            opaque. A `Bearer` token is presented as `Authorization:
+            Bearer` or `Garam-Token`, and a `DPoP` one as
+            `Authorization: DPoP` beside a proof by the key it is bound
+            to (ADR-0191). garam stores only its hash.
         issued_token_type:
           type: string
           enum: ['urn:ietf:params:oauth:token-type:access_token']
           description: Answered to a bot token exchange alone (RFC 8693).
         token_type:
           type: string
-          enum: [Bearer]
+          enum: [Bearer, DPoP]
+          description: '`DPoP` for a bot token exchange, `Bearer` for every other grant.'
         expires_in:
           type: integer
           description: Seconds the token is accepted for, 3600.
@@ -2181,7 +2212,7 @@ components:
       properties:
         error:
           type: string
-          enum: [invalid_request, invalid_client, invalid_target, unauthorized_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
+          enum: [invalid_request, invalid_client, invalid_target, unauthorized_client, unsupported_grant_type, invalid_scope, invalid_dpop_proof, use_dpop_nonce, temporarily_unavailable, server_error]
           description: >-
             `invalid_request` for a malformed or repeated parameter, a
             `Authorization` header, or an audience
@@ -2195,8 +2226,10 @@ components:
             `client_credentials` or token exchange; `invalid_scope` for
             any `scope`; `invalid_target` for an `audience` other than
             garam's, or a `resource`, on a bot token exchange;
-            `temporarily_unavailable` with 429 or 503; `server_error`
-            with 500.
+            `invalid_dpop_proof` for a bot token exchange's DPoP proof
+            that is missing or refused, and `use_dpop_nonce` for one
+            without garam's nonce (RFC 9449); `temporarily_unavailable`
+            with 429 or 503; `server_error` with 500.
         error_description:
           type: string
     MachineToken:
@@ -2940,6 +2973,13 @@ components:
       description: Seconds until the window that refused the request closes.
       schema:
         type: integer
+    DPoPNonce:
+      description: >-
+        The nonce for the next DPoP proof's `nonce` (RFC 9449 §8): one
+        per five-minute period, accepted by every replica through the
+        next period; answered by the bot token exchange alone.
+      schema:
+        type: string
     NoStore:
       description: '`no-store`: the answer carries a bearer token no cache keeps.'
       schema:
@@ -2995,6 +3035,8 @@ components:
       headers:
         Garam-Contract-Version:
           $ref: '#/components/headers/AssertionContractVersion'
+        DPoP-Nonce:
+          $ref: '#/components/headers/DPoPNonce'
       content:
         application/json:
           schema:

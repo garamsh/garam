@@ -129,15 +129,24 @@ DELETE FROM bot_tokens WHERE instance_grn = $1 AND expires_at <= now();
 -- under, read again here, so a key revoked since the actor resolved
 -- writes nothing and answers zero rows.
 -- name: InsertBotToken :one
-INSERT INTO bot_tokens (token_hash, instance_grn, key_id, declaration_id, scope, issued_at, expires_at)
+INSERT INTO bot_tokens (token_hash, instance_grn, key_id, declaration_id, scope, jkt, issued_at, expires_at)
 SELECT sqlc.arg('token_hash'), t.instance_grn, t.key_id, sqlc.arg('declaration_id'), sqlc.arg('scope'),
-       now(), now() + sqlc.arg('ttl')::interval
+       sqlc.arg('jkt'), now(), now() + sqlc.arg('ttl')::interval
 FROM instance_tokens t
 JOIN instance_keys k ON k.id = t.key_id
 WHERE t.token_hash = sqlc.arg('actor_hash') AND t.instance_grn = sqlc.arg('instance_grn')
   AND t.expires_at > now()
   AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
 RETURNING expires_at;
+
+-- A token is live while it has not expired and the connector key it
+-- was minted under is neither revoked nor past its rollover, which no
+-- delete covers.
+-- name: ResolveBotToken :one
+SELECT b.instance_grn, b.declaration_id, b.jkt, b.expires_at FROM bot_tokens b
+JOIN instance_keys k ON k.id = b.key_id
+WHERE b.token_hash = $1 AND b.expires_at > now()
+  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now());
 
 -- name: DeleteDeclarationBotTokens :exec
 DELETE FROM bot_tokens WHERE declaration_id = $1;

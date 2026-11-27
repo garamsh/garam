@@ -61,6 +61,10 @@ var (
 	// names an agent record of the organization: declared bots and the
 	// agent records ADR-0179 renames share one identifier space.
 	ErrDeclarationIDHeldByAgent = errorx.New(errorx.KindAlreadyExists, "the identifier names a bot the organization already holds")
+	// ErrBotTokenInvalid answers a bot token garam holds no live row
+	// for: malformed, never issued, expired, or revoked with its
+	// declaration, its key, its record or its installation's hosting.
+	ErrBotTokenInvalid = errorx.New(errorx.KindUnauthenticated, "the bot token is not live")
 )
 
 // BotGRN is the GRN of the bot declaration id places in organization.
@@ -83,8 +87,22 @@ type BotToken struct {
 	Bot   grn.GRN
 	Place grn.GRN
 	// Scope is what was asked and allowed.
-	Scope     []string
-	ExpiresAt time.Time
+	Scope []string
+	// KeyThumbprint is the token's cnf.jkt, the RFC 7638 thumbprint of
+	// the bot's process's key it is bound to (ADR-0191).
+	KeyThumbprint string
+	ExpiresAt     time.Time
+}
+
+// HeldBotToken is what a resource server reads for a bot token it is
+// presented: the bot and the place it was issued for, and the key a
+// proof has to be signed by for the token to be accepted (ADR-0191
+// decision 6).
+type HeldBotToken struct {
+	Bot           grn.GRN
+	Place         grn.GRN
+	KeyThumbprint string
+	ExpiresAt     time.Time
 }
 
 // BotExchange is what a connector's exchange carries, off its form.
@@ -99,6 +117,16 @@ type BotExchange struct {
 	// Scope is what the bot is to call, space-separated; empty asks
 	// for nothing.
 	Scope string
+	// KeyThumbprint is the RFC 7638 thumbprint of the key the bot's
+	// process signed the exchange's DPoP proof with, which the token
+	// is bound to (ADR-0191 decision 1). The transport verified the
+	// proof; an exchange without one is refused.
+	KeyThumbprint string
+	// SpendProof spends that proof's jti, called once the actor
+	// authenticated and the bot is found placed and before the token
+	// is kept, so an exchange that authenticates nothing spends none
+	// (ADR-0191 decision 4). Its error refuses the exchange as it is.
+	SpendProof func(context.Context) error
 }
 
 // MintBotToken answers a token for the bot exchange's subject names,
@@ -109,8 +137,13 @@ type BotExchange struct {
 // ErrNotHosting, and a bot no live Bot declaration places on that
 // record ErrBotNotPlaced. The audience is garam's, the token
 // endpoint's URL, or none; another is ErrAudienceRefused. A scope is
-// refused, none being defined yet.
+// refused, none being defined yet. The token is bound to the key
+// KeyThumbprint names, and an exchange naming none, or carrying no
+// proof to spend, is refused.
 func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error) {
+	if exchange.KeyThumbprint == "" || exchange.SpendProof == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument, "a bot's token is bound to the key of a DPoP proof")
+	}
 	if !app.WellFormed(exchange.ActorToken, app.TokenPrefix) {
 		return nil, ErrActorTokenRefused
 	}
@@ -139,18 +172,23 @@ func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotT
 	if err != nil || bot != BotGRN(place.Organization, bot.Identifier) {
 		return nil, ErrBotNotPlaced
 	}
+	if err := exchange.SpendProof(ctx); err != nil {
+		return nil, err
+	}
 	value, err := app.NewSecret(BotTokenPrefix)
 	if err != nil {
 		return nil, err
 	}
-	expiresAt, err := s.botTokens.RecordBotToken(ctx, place, bot.Identifier, actor, app.HashSecret(value), BotTokenTTL)
+	expiresAt, err := s.botTokens.RecordBotToken(ctx, place, bot.Identifier, actor, app.HashSecret(value),
+		exchange.KeyThumbprint, BotTokenTTL)
 	if errors.Is(err, app.ErrTokenInvalid) {
 		return nil, ErrActorTokenRefused
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &BotToken{Value: value, Bot: bot, Place: place, Scope: []string{}, ExpiresAt: expiresAt}, nil
+	return &BotToken{Value: value, Bot: bot, Place: place, Scope: []string{},
+		KeyThumbprint: exchange.KeyThumbprint, ExpiresAt: expiresAt}, nil
 }
 
 // ErrScopeUndefined answers a scope: none is defined for a bot yet, and

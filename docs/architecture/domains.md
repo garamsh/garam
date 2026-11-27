@@ -145,7 +145,7 @@ A change announcement reads no row, so it is not in `queries.sql`, and
 
 ## Sub-responsibilities in a boundary of their own
 
-Three folders under `platform/internal/` hold a responsibility that
+Four folders under `platform/internal/` hold a responsibility that
 belongs to a domain's subject rather than to one of its own. None is a
 domain, and each is a boundary for a reason recorded below —
 `structure.md` §Boundaries and dependency direction makes a boundary a
@@ -247,6 +247,25 @@ imports no domain and no delivery surface.
 
 What it does is [agents.md](./agents.md) §Standalone hosts, which is
 the responsibility document for it; nothing about it is restated here.
+
+### A token bound to its holder's key
+
+Verifying the DPoP proof (RFC 9449) that binds a token garam issues to
+a bot's process to that process's key, and keeping what makes a proof
+single-use and a nonce garam's
+([ADR-0191](./adr/0191-every-token-garam-issues-to-a-bots-process-is-bound-to-that-processs-key-by-dpop.md)).
+Implemented by `platform/internal/dpop`, which persists through
+`platform/internal/dpop/postgres`. The subject is who is calling, the
+machine identity domain's; the boundary is its own because a proof
+and a nonce have a lifecycle no token row contains, minutes long and
+over every replica, and because every resource server garam runs
+verifies the same proof, while the bot domain only keeps the key's
+thumbprint beside its token. It imports no domain and no delivery
+surface.
+
+What it does is [machine-identity.md](./machine-identity.md) §A
+declared bot's token, which is the responsibility document for it;
+nothing about it is restated here.
 
 ## Delivery surfaces
 

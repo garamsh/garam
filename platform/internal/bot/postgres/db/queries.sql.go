@@ -192,12 +192,12 @@ func (q *Queries) HoldInstance(ctx context.Context, grn string) (pgtype.Timestam
 }
 
 const insertBotToken = `-- name: InsertBotToken :one
-INSERT INTO bot_tokens (token_hash, instance_grn, key_id, declaration_id, scope, issued_at, expires_at)
+INSERT INTO bot_tokens (token_hash, instance_grn, key_id, declaration_id, scope, jkt, issued_at, expires_at)
 SELECT $1, t.instance_grn, t.key_id, $2, $3,
-       now(), now() + $4::interval
+       $4, now(), now() + $5::interval
 FROM instance_tokens t
 JOIN instance_keys k ON k.id = t.key_id
-WHERE t.token_hash = $5 AND t.instance_grn = $6
+WHERE t.token_hash = $6 AND t.instance_grn = $7
   AND t.expires_at > now()
   AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
 RETURNING expires_at
@@ -207,6 +207,7 @@ type InsertBotTokenParams struct {
 	TokenHash     string
 	DeclarationID string
 	Scope         []string
+	Jkt           string
 	Ttl           pgtype.Interval
 	ActorHash     string
 	InstanceGrn   string
@@ -220,6 +221,7 @@ func (q *Queries) InsertBotToken(ctx context.Context, arg InsertBotTokenParams) 
 		arg.TokenHash,
 		arg.DeclarationID,
 		arg.Scope,
+		arg.Jkt,
 		arg.Ttl,
 		arg.ActorHash,
 		arg.InstanceGrn,
@@ -518,6 +520,35 @@ func (q *Queries) ReserveDeclarationID(ctx context.Context, id string) (int64, e
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const resolveBotToken = `-- name: ResolveBotToken :one
+SELECT b.instance_grn, b.declaration_id, b.jkt, b.expires_at FROM bot_tokens b
+JOIN instance_keys k ON k.id = b.key_id
+WHERE b.token_hash = $1 AND b.expires_at > now()
+  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+`
+
+type ResolveBotTokenRow struct {
+	InstanceGrn   string
+	DeclarationID string
+	Jkt           string
+	ExpiresAt     pgtype.Timestamptz
+}
+
+// A token is live while it has not expired and the connector key it
+// was minted under is neither revoked nor past its rollover, which no
+// delete covers.
+func (q *Queries) ResolveBotToken(ctx context.Context, tokenHash string) (ResolveBotTokenRow, error) {
+	row := q.db.QueryRow(ctx, resolveBotToken, tokenHash)
+	var i ResolveBotTokenRow
+	err := row.Scan(
+		&i.InstanceGrn,
+		&i.DeclarationID,
+		&i.Jkt,
+		&i.ExpiresAt,
+	)
+	return i, err
 }
 
 const sweepBotTokens = `-- name: SweepBotTokens :exec

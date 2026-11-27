@@ -100,8 +100,8 @@ decisions it does not make.
 
 ## What it serves
 
-Three parts of the interface, two public contact paths and two probes, over two origins. The
-site holds two of the three, the Next.js route groups `(marketing)` and
+Three parts of the interface, two public contact paths and two probes,
+over two origins. The site holds two of the three, the Next.js route groups `(marketing)` and
 `(auth)`: a route group contributes no URL segment, so neither is in
 any path. The console holds the third, `console`, an ordinary segment,
 which is why every console path starts with it. Each app answers a

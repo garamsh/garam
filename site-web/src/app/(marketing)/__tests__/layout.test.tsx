@@ -39,6 +39,9 @@ describe("marketing layout", () => {
       within(footer).getByRole("link", { name: "Sign in" }),
     ).toHaveAttribute("href", "/login");
     expect(
+      within(footer).getByRole("link", { name: "Report abuse" }),
+    ).toHaveAttribute("href", "/abuse");
+    expect(
       within(footer).getByRole("link", { name: "Identifiers" }),
     ).toHaveAttribute("href", "#identifiers");
   });

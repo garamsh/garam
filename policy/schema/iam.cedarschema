@@ -163,11 +163,11 @@ namespace Iam {
     in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Installation] };
 
-  // Placing, changing and tombstoning what a connector applies
-  // (ADR-0187), decided on the organization until the bot domain's
-  // iam:bot.place replaces it (#2082).
-  action "cluster.declare" in ["role-owner", "role-admin"]
-    appliesTo { principal: [User, Agent], resource: [Org] };
+  // Placing, changing and tombstoning a declaration on an instance,
+  // what its connector applies (ADR-0187), decided on the target
+  // instance (ADR-0192 decision 10).
+  action "bot.place" in ["role-owner", "role-admin"]
+    appliesTo { principal: [User, Agent], resource: [Org, Instance] };
 
   action "agent.read", "agent.rename"
     in ["role-owner", "role-admin", "role-member"]

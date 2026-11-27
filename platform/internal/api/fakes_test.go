@@ -15,7 +15,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/authn"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -1227,6 +1227,8 @@ type fakeAppStore struct {
 	// installed counts every installation written, so each is answered
 	// an incarnation no earlier one held, as gen_random_uuid() does.
 	installed int
+	// contacts are the instances' last contacts, by GRN.
+	contacts map[string]time.Time
 }
 
 func newFakeAppStore() *fakeAppStore {
@@ -1362,6 +1364,27 @@ func (s *fakeAppStore) GetInstance(_ context.Context, g grn.GRN) (*app.Instance,
 	return &answered, nil
 }
 
+// LastContact answers the contact contact recorded for g.
+func (s *fakeAppStore) LastContact(_ context.Context, g grn.GRN) (*time.Time, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	at, ok := s.contacts[g.String()]
+	if !ok {
+		return nil, nil
+	}
+	return &at, nil
+}
+
+// contact records at as g's last contact, as a resolved token does.
+func (s *fakeAppStore) contact(g grn.GRN, at time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.contacts == nil {
+		s.contacts = map[string]time.Time{}
+	}
+	s.contacts[g.String()] = at
+}
+
 func (s *fakeAppStore) ListInstances(_ context.Context, installation grn.GRN) ([]*app.Instance, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1406,11 +1429,11 @@ func (s *fakeAppStore) DeleteInstance(_ context.Context, g grn.GRN) error {
 	return nil
 }
 
-// fakeClusterCredentials holds the browser half of an instance's
+// fakeInstanceCredentials holds the browser half of an instance's
 // credentials in memory: the registration token's hash, and keys a
 // test places. The machine half is left to the embedded interface,
 // which no browser route calls.
-type fakeClusterCredentials struct {
+type fakeInstanceCredentials struct {
 	app.CredentialStore
 	records *fakeAppStore
 	mu      sync.Mutex
@@ -1418,11 +1441,11 @@ type fakeClusterCredentials struct {
 	keys    map[string][]app.Key
 }
 
-func newFakeClusterCredentials(records *fakeAppStore) *fakeClusterCredentials {
-	return &fakeClusterCredentials{records: records, tokens: map[string]string{}, keys: map[string][]app.Key{}}
+func newFakeInstanceCredentials(records *fakeAppStore) *fakeInstanceCredentials {
+	return &fakeInstanceCredentials{records: records, tokens: map[string]string{}, keys: map[string][]app.Key{}}
 }
 
-func (s *fakeClusterCredentials) IssueRegistrationToken(ctx context.Context, g grn.GRN, hash string, ttl time.Duration) (time.Time, error) {
+func (s *fakeInstanceCredentials) IssueRegistrationToken(ctx context.Context, g grn.GRN, hash string, ttl time.Duration) (time.Time, error) {
 	if _, err := s.records.GetInstance(ctx, g); err != nil {
 		return time.Time{}, err
 	}
@@ -1432,22 +1455,22 @@ func (s *fakeClusterCredentials) IssueRegistrationToken(ctx context.Context, g g
 	return time.Now().Add(ttl).UTC(), nil
 }
 
-// place holds key on the cluster g names.
-func (s *fakeClusterCredentials) place(g string, key app.Key) {
+// place holds key on the instance g names.
+func (s *fakeInstanceCredentials) place(g string, key app.Key) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.keys[g] = append(s.keys[g], key)
 }
 
-// tokenHash is the registration token hash held for the cluster g
+// tokenHash is the registration token hash held for the instance g
 // names.
-func (s *fakeClusterCredentials) tokenHash(g string) string {
+func (s *fakeInstanceCredentials) tokenHash(g string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.tokens[g]
 }
 
-func (s *fakeClusterCredentials) ListKeys(ctx context.Context, g grn.GRN) ([]app.Key, error) {
+func (s *fakeInstanceCredentials) ListKeys(ctx context.Context, g grn.GRN) ([]app.Key, error) {
 	if _, err := s.records.GetInstance(ctx, g); err != nil {
 		return nil, err
 	}
@@ -1456,7 +1479,7 @@ func (s *fakeClusterCredentials) ListKeys(ctx context.Context, g grn.GRN) ([]app
 	return slices.Clone(s.keys[g.String()]), nil
 }
 
-func (s *fakeClusterCredentials) RevokeKey(_ context.Context, g grn.GRN, kid string) error {
+func (s *fakeInstanceCredentials) RevokeKey(_ context.Context, g grn.GRN, kid string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, k := range s.keys[g.String()] {
@@ -1797,10 +1820,10 @@ func (s *fakeAuthorityReader) HasAuthority(_ context.Context, orgGRN grn.GRN) (b
 // live declarations of a record never name one object. The long poll
 // is left to the embedded interface, which no browser route calls.
 type fakeDeclarations struct {
-	cluster.DeclarationStore
+	bot.DeclarationStore
 	records      *fakeAppStore
 	mu           sync.Mutex
-	declarations map[string]*cluster.Declaration
+	declarations map[string]*bot.Declaration
 	// seq orders the declarations as last written.
 	seq     int64
 	written map[string]int64
@@ -1810,33 +1833,33 @@ type fakeDeclarations struct {
 }
 
 func newFakeDeclarations(records *fakeAppStore) *fakeDeclarations {
-	return &fakeDeclarations{records: records, declarations: map[string]*cluster.Declaration{}, written: map[string]int64{}}
+	return &fakeDeclarations{records: records, declarations: map[string]*bot.Declaration{}, written: map[string]int64{}}
 }
 
-func (s *fakeDeclarations) Declare(ctx context.Context, g grn.GRN, id string, object cluster.DeclaredObject) (cluster.Declaration, bool, error) {
+func (s *fakeDeclarations) Declare(ctx context.Context, g grn.GRN, id string, object bot.DeclaredObject) (bot.Declaration, bool, error) {
 	if _, err := s.records.GetInstance(ctx, g); err != nil {
-		return cluster.Declaration{}, false, err
+		return bot.Declaration{}, false, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d, exists := s.declarations[id]
 	switch {
-	case exists && d.Cluster != g:
-		return cluster.Declaration{}, false, cluster.ErrDeclarationTaken
+	case exists && d.Instance != g:
+		return bot.Declaration{}, false, bot.ErrDeclarationTaken
 	case exists && d.Tombstoned:
-		return cluster.Declaration{}, false, cluster.ErrDeclarationTombstoned
+		return bot.Declaration{}, false, bot.ErrDeclarationTombstoned
 	case !exists && s.agentIDs[id]:
-		return cluster.Declaration{}, false, cluster.ErrDeclarationIDHeldByAgent
+		return bot.Declaration{}, false, bot.ErrDeclarationIDHeldByAgent
 	}
 	for otherID, other := range s.declarations {
-		if otherID != id && other.Cluster == g && !other.Tombstoned && other.Object.Kind() == object.Kind() &&
+		if otherID != id && other.Instance == g && !other.Tombstoned && other.Object.Kind() == object.Kind() &&
 			other.Object.Namespace() == object.Namespace() && other.Object.Name() == object.Name() {
-			return cluster.Declaration{}, false, cluster.ErrDeclaredObjectTaken
+			return bot.Declaration{}, false, bot.ErrDeclaredObjectTaken
 		}
 	}
 	now := time.Now().UTC()
 	if !exists {
-		d = &cluster.Declaration{ID: id, Cluster: g, CreatedAt: now}
+		d = &bot.Declaration{ID: id, Instance: g, CreatedAt: now}
 		s.declarations[id] = d
 	}
 	d.Generation++
@@ -1847,68 +1870,68 @@ func (s *fakeDeclarations) Declare(ctx context.Context, g grn.GRN, id string, ob
 	return *d, !exists, nil
 }
 
-func (s *fakeDeclarations) Tombstone(_ context.Context, g grn.GRN, id string) (cluster.Declaration, error) {
+func (s *fakeDeclarations) Tombstone(_ context.Context, g grn.GRN, id string) (bot.Declaration, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d, ok := s.declarations[id]
-	if !ok || d.Cluster != g || d.Tombstoned {
-		return cluster.Declaration{}, cluster.ErrDeclarationNotFound
+	if !ok || d.Instance != g || d.Tombstoned {
+		return bot.Declaration{}, bot.ErrDeclarationNotFound
 	}
 	d.Tombstoned = true
 	d.Generation++
-	d.Object = cluster.DeclaredObject{}
+	d.Object = bot.DeclaredObject{}
 	s.seq++
 	s.written[id] = s.seq
 	return *d, nil
 }
 
-func (s *fakeDeclarations) GetDeclaration(_ context.Context, g grn.GRN, id string) (cluster.Declaration, error) {
+func (s *fakeDeclarations) GetDeclaration(_ context.Context, g grn.GRN, id string) (bot.Declaration, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d, ok := s.declarations[id]
-	if !ok || d.Cluster != g || d.Tombstoned {
-		return cluster.Declaration{}, cluster.ErrDeclarationNotFound
+	if !ok || d.Instance != g || d.Tombstoned {
+		return bot.Declaration{}, bot.ErrDeclarationNotFound
 	}
 	return *d, nil
 }
 
-func (s *fakeDeclarations) ListDeclarations(ctx context.Context, g grn.GRN) ([]cluster.Declaration, error) {
+func (s *fakeDeclarations) ListDeclarations(ctx context.Context, g grn.GRN) ([]bot.Declaration, error) {
 	if _, err := s.records.GetInstance(ctx, g); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var out []cluster.Declaration
+	var out []bot.Declaration
 	for _, d := range s.declarations {
-		if d.Cluster == g && !d.Tombstoned {
+		if d.Instance == g && !d.Tombstoned {
 			out = append(out, *d)
 		}
 	}
-	slices.SortFunc(out, func(a, b cluster.Declaration) int { return int(s.written[a.ID] - s.written[b.ID]) })
+	slices.SortFunc(out, func(a, b bot.Declaration) int { return int(s.written[a.ID] - s.written[b.ID]) })
 	return out, nil
 }
 
-// fakeReports is cluster.ReportStore holding what each record's tests
+// fakeReports is bot.ReportStore holding what each record's tests
 // put there.
 type fakeReports struct {
-	cluster.ReportStore
+	bot.ReportStore
 	records *fakeAppStore
-	kept    map[string]cluster.KeptReport
+	kept    map[string]bot.KeptReport
 }
 
-func (s *fakeReports) LatestReport(ctx context.Context, g grn.GRN) (cluster.KeptReport, error) {
+func (s *fakeReports) LatestReport(ctx context.Context, g grn.GRN) (bot.KeptReport, error) {
 	if _, err := s.records.GetInstance(ctx, g); err != nil {
-		return cluster.KeptReport{}, err
+		return bot.KeptReport{}, err
 	}
 	kept, ok := s.kept[g.String()]
 	if !ok {
-		return cluster.KeptReport{Cluster: g}, nil
+		return bot.KeptReport{Instance: g}, nil
 	}
 	return kept, nil
 }
 
 func newFakeReports(records *fakeAppStore) *fakeReports {
-	return &fakeReports{records: records, kept: map[string]cluster.KeptReport{}}
+	return &fakeReports{records: records, kept: map[string]bot.KeptReport{}}
 }
 
 // fakePolicies is the policy relay as far as an install and an

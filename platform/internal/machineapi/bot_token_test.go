@@ -12,7 +12,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/platform/internal/app"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
@@ -22,30 +22,30 @@ const actorValue = app.TokenPrefix + "actor"
 // botForm is a well-formed bot token exchange (RFC 8693, ADR-0189).
 func botForm() url.Values {
 	return url.Values{
-		"grant_type":         {cluster.GrantTypeTokenExchange},
+		"grant_type":         {bot.GrantTypeTokenExchange},
 		"subject_token":      {"grn:acme/iam/bot/decl-a"},
-		"subject_token_type": {cluster.TokenTypeBot},
+		"subject_token_type": {bot.TokenTypeBot},
 		"actor_token":        {actorValue},
-		"actor_token_type":   {cluster.TokenTypeAccessToken},
+		"actor_token_type":   {bot.TokenTypeAccessToken},
 	}
 }
 
-// serveBotExchange serves /oauth/token with clusters as the connected
-// cluster's service, and operators as the operator service.
-func serveBotExchange(t *testing.T, clusters *connectionClusters, operators *assertionService) string {
+// serveBotExchange serves /oauth/token with bots as the bot
+// domain's service, and operators as the operator service.
+func serveBotExchange(t *testing.T, bots *connectionClusters, operators *assertionService) string {
 	t.Helper()
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, operators, &messageService{}, unwatched(t),
-		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters), connectedGRN)
+		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(bots, bots), connectedGRN)
 	return base
 }
 
 // TestExchangeBotToken_AnswersRFC8693sTokenForm is the success path
-// from the wire: the actor, the subject and the scope reach the cluster
+// from the wire: the actor, the subject and the scope reach the bot
 // service as sent, and the answer is RFC 8693's, with issued_token_type
 // and the hour the token is accepted for, uncached.
 func TestExchangeBotToken_AnswersRFC8693sTokenForm(t *testing.T) {
-	clusters, operators := &connectionClusters{}, &assertionService{}
-	base := serveBotExchange(t, clusters, operators)
+	bots, operators := &connectionClusters{}, &assertionService{}
+	base := serveBotExchange(t, bots, operators)
 
 	resp, body := exchangeForm(t, anonymous(t), base, botForm().Encode(), nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode, body)
@@ -53,32 +53,32 @@ func TestExchangeBotToken_AnswersRFC8693sTokenForm(t *testing.T) {
 	var token map[string]any
 	require.NoError(t, json.Unmarshal([]byte(body), &token))
 	assert.Equal(t, map[string]any{
-		"access_token": cluster.BotTokenPrefix + "answered", "token_type": "Bearer", "expires_in": float64(3600),
-		"issued_token_type": cluster.TokenTypeAccessToken,
+		"access_token": bot.BotTokenPrefix + "answered", "token_type": "Bearer", "expires_in": float64(3600),
+		"issued_token_type": bot.TokenTypeAccessToken,
 	}, token)
-	require.NotNil(t, clusters.exchange)
-	assert.Equal(t, cluster.BotExchange{ActorToken: actorValue, Subject: "grn:acme/iam/bot/decl-a"}, *clusters.exchange)
+	require.NotNil(t, bots.exchange)
+	assert.Equal(t, bot.BotExchange{ActorToken: actorValue, Subject: "grn:acme/iam/bot/decl-a"}, *bots.exchange)
 	assert.Empty(t, operators.calls, "no operator's exchange ran")
 
 	form := botForm()
 	form.Set("audience", connectionTokenURL)
-	form.Set("requested_token_type", cluster.TokenTypeAccessToken)
+	form.Set("requested_token_type", bot.TokenTypeAccessToken)
 	resp, body = exchangeForm(t, anonymous(t), base, form.Encode(), nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "an audience and the access token type asked for: %s", body)
-	require.NotNil(t, clusters.exchange.Audience, "the audience reaches the domain, which judges it")
-	assert.Equal(t, connectionTokenURL, *clusters.exchange.Audience)
+	require.NotNil(t, bots.exchange.Audience, "the audience reaches the domain, which judges it")
+	assert.Equal(t, connectionTokenURL, *bots.exchange.Audience)
 }
 
 // TestExchangeBotToken_RefusesAFormOutsideTheExchange holds each form
 // refusal to botForm as its control: nothing refused reaches the
-// cluster service, and no refusal quotes the actor token.
+// bot service, and no refusal quotes the actor token.
 func TestExchangeBotToken_RefusesAFormOutsideTheExchange(t *testing.T) {
-	clusters := &connectionClusters{}
-	base := serveBotExchange(t, clusters, &assertionService{})
+	bots := &connectionClusters{}
+	base := serveBotExchange(t, bots, &assertionService{})
 	client := anonymous(t)
 	resp, body := exchangeForm(t, client, base, botForm().Encode(), nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "the control: %s", body)
-	clusters.exchange = nil
+	bots.exchange = nil
 
 	changed := func(change func(url.Values)) string {
 		f := botForm()
@@ -100,7 +100,7 @@ func TestExchangeBotToken_RefusesAFormOutsideTheExchange(t *testing.T) {
 		{"a client assertion type", changed(func(f url.Values) { f.Set("client_assertion_type", operator.ClientAssertionTypeJWT) }), nil, "invalid_request"},
 		{"a client secret", changed(func(f url.Values) { f.Set("client_secret", "s") }), nil, "invalid_request"},
 		{"another subject token type", changed(func(f url.Values) {
-			f.Set("subject_token_type", cluster.TokenTypeAccessToken)
+			f.Set("subject_token_type", bot.TokenTypeAccessToken)
 		}), nil, "invalid_request"},
 		{"no subject token", changed(func(f url.Values) { f.Del("subject_token") }), nil, "invalid_request"},
 		{"another actor token type", changed(func(f url.Values) {
@@ -118,7 +118,7 @@ func TestExchangeBotToken_RefusesAFormOutsideTheExchange(t *testing.T) {
 			assert.NotContains(t, body, actorValue)
 		})
 	}
-	assert.Nil(t, clusters.exchange, "no refused form reached the cluster service")
+	assert.Nil(t, bots.exchange, "no refused form reached the bot service")
 }
 
 // TestExchangeBotToken_TranslatesTheDomainsRefusals maps each domain
@@ -133,10 +133,10 @@ func TestExchangeBotToken_TranslatesTheDomainsRefusals(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"an actor that authenticates nothing", cluster.ErrActorTokenRefused, http.StatusBadRequest, "invalid_request"},
-		{"a bot not placed on the record", cluster.ErrBotNotPlaced, http.StatusBadRequest, "invalid_request"},
-		{"another audience", cluster.ErrAudienceRefused, http.StatusBadRequest, "invalid_target"},
-		{"a scope", cluster.ErrScopeUndefined, http.StatusBadRequest, "invalid_scope"},
+		{"an actor that authenticates nothing", bot.ErrActorTokenRefused, http.StatusBadRequest, "invalid_request"},
+		{"a bot not placed on the record", bot.ErrBotNotPlaced, http.StatusBadRequest, "invalid_request"},
+		{"another audience", bot.ErrAudienceRefused, http.StatusBadRequest, "invalid_target"},
+		{"a scope", bot.ErrScopeUndefined, http.StatusBadRequest, "invalid_scope"},
 		{"the bound exceeded", &operator.Exceeded{RetryAfter: time.Second}, http.StatusTooManyRequests, "temporarily_unavailable"},
 		{"a store that cannot be read", errorx.New(errorx.KindUnavailable, "postgres down"), http.StatusServiceUnavailable, "temporarily_unavailable"},
 	}
@@ -151,9 +151,9 @@ func TestExchangeBotToken_TranslatesTheDomainsRefusals(t *testing.T) {
 	}
 }
 
-// TestExchangeBotToken_IsUnavailableWithoutTheClusterService holds that
-// a listener serving no connected cluster answers the exchange 503.
-func TestExchangeBotToken_IsUnavailableWithoutTheClusterService(t *testing.T) {
+// TestExchangeBotToken_IsUnavailableWithoutTheBotService holds that
+// a listener serving no bot domain answers the exchange 503.
+func TestExchangeBotToken_IsUnavailableWithoutTheBotService(t *testing.T) {
 	base, _ := listener(t, &agentService{}, &assertionService{}, &messageService{}, unwatched(t), &decider{}, &roster{}, assertingClient)
 	resp, body := exchangeForm(t, anonymous(t), base, botForm().Encode(), nil)
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode, body)

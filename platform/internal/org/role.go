@@ -129,10 +129,11 @@ const (
 	ActionInstanceUpdate     = "iam:instance.update"
 	ActionInstanceReissue    = "iam:instance.reissue"
 	ActionInstanceDelete     = "iam:instance.delete"
-	// Placing, changing and tombstoning what an instance's connector
-	// applies (ADR-0187), until iam:bot.place replaces it (#2082).
-	// Reading what is placed is ActionInstanceRead.
-	ActionClusterDeclare = "iam:cluster.declare"
+	// Placing, changing and tombstoning a declaration on an instance,
+	// what its connector applies (ADR-0187), decided on the instance
+	// (ADR-0192 decision 10). Reading what is placed is
+	// ActionInstanceRead.
+	ActionBotPlace = "iam:bot.place"
 
 	// Reading the agents an org holds and watching one work. The org
 	// owns the constants for the reason it owns the policy ones: the
@@ -252,7 +253,7 @@ var actions = []string{
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
 	ActionAppRead, ActionInstallationCreate, ActionInstallationRead, ActionInstallationDelete,
 	ActionInstanceRead, ActionInstanceRegister, ActionInstanceUpdate,
-	ActionInstanceReissue, ActionInstanceDelete, ActionClusterDeclare,
+	ActionInstanceReissue, ActionInstanceDelete, ActionBotPlace,
 	ActionAgentRead, ActionAgentWatch, ActionAgentRename, ActionAgentCreate,
 	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentReplace,
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
@@ -313,7 +314,7 @@ var machineActions = []struct {
 	{ActionInstanceUpdate, false},
 	{ActionInstanceReissue, false},
 	{ActionInstanceDelete, false},
-	{ActionClusterDeclare, false},
+	{ActionBotPlace, false},
 	{ActionAgentRead, true},
 	{ActionAgentRename, true},
 	{ActionAgentCreate, true},

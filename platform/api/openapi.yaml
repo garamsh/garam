@@ -2335,7 +2335,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterReportView'
+                $ref: '#/components/schemas/InstanceReportView'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2363,7 +2363,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterDeclarationList'
+                $ref: '#/components/schemas/DeclarationList'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2382,7 +2382,7 @@ paths:
         garam-bot's interface 1 refuses, or one with no namespace,
         answers 422 naming what was refused: the connector would hold
         it as invalid. garam keeps only the members a declared object
-        has. Authorized as `iam:cluster.declare` on the organization.
+        has. Authorized as `iam:bot.place` on the instance.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/installation'
@@ -2392,14 +2392,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ClusterDeclarationWrite'
+              $ref: '#/components/schemas/DeclarationWrite'
       responses:
         '201':
           description: The declaration as stored.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterDeclaration'
+                $ref: '#/components/schemas/Declaration'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2431,7 +2431,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterDeclaration'
+                $ref: '#/components/schemas/Declaration'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2451,7 +2451,7 @@ paths:
         or tombstoned, answers 409: an identifier names one
         declaration, once. The object is checked as
         `createInstanceDeclaration` checks it. Authorized as
-        `iam:cluster.declare` on the organization.
+        `iam:bot.place` on the instance.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/installation'
@@ -2462,20 +2462,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ClusterDeclarationWrite'
+              $ref: '#/components/schemas/DeclarationWrite'
       responses:
         '200':
           description: The declaration's next generation, as stored.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterDeclaration'
+                $ref: '#/components/schemas/Declaration'
         '201':
           description: The declaration, placed.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClusterDeclaration'
+                $ref: '#/components/schemas/Declaration'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -2496,7 +2496,7 @@ paths:
         Sends the connector a delete at the declaration's next
         generation. The identifier is never placed again. A declaration
         already tombstoned answers 404. Authorized as
-        `iam:cluster.declare` on the organization.
+        `iam:bot.place` on the instance.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/installation'
@@ -4389,7 +4389,7 @@ components:
           example: eng
     PermissionResourceType:
       type: string
-      enum: [group, project, agent, policy, installation, cowork-page, cowork-channel, cowork-task, cowork-artifact]
+      enum: [group, project, agent, policy, installation, instance, cowork-page, cowork-channel, cowork-task, cowork-artifact]
     PermissionCheckAnswer:
       type: object
       required: [results]
@@ -5636,13 +5636,13 @@ components:
         At most 64 characters once surrounding space is trimmed. Empty
         is no kind, and on an update clears the one there was.
       example: cluster
-    ClusterDeclarationWrite:
+    DeclarationWrite:
       type: object
       required: [object]
       properties:
         object:
-          $ref: '#/components/schemas/ClusterDeclaredObject'
-    ClusterDeclaredObject:
+          $ref: '#/components/schemas/DeclaredObject'
+    DeclaredObject:
       type: object
       description: >-
         An object of a kind cluster-connection v1alpha1 declares
@@ -5656,7 +5656,7 @@ components:
       additionalProperties: true
       # Carried as written, so no number in spec is rounded on the way.
       x-go-type: json.RawMessage
-    ClusterDeclaration:
+    Declaration:
       type: object
       description: >-
         One declaration placed on an instance of garam-bot-connector,
@@ -5674,22 +5674,22 @@ components:
           format: int64
           description: 1 when placed, and one more at every write.
         object:
-          $ref: '#/components/schemas/ClusterDeclaredObject'
+          $ref: '#/components/schemas/DeclaredObject'
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
-    ClusterDeclarationList:
+    DeclarationList:
       type: object
       required: [declarations]
       properties:
         declarations:
           type: array
           items:
-            $ref: '#/components/schemas/ClusterDeclaration'
-    ClusterReportView:
+            $ref: '#/components/schemas/Declaration'
+    InstanceReportView:
       type: object
       description: What garam holds of an instance's reports.
       required: [instance, lastContactAt, report]
@@ -5705,29 +5705,29 @@ components:
             garam, to within a second; null where none has.
         report:
           oneOf:
-            - $ref: '#/components/schemas/ClusterReport'
+            - $ref: '#/components/schemas/InstanceReport'
             - type: 'null'
-    ClusterReport:
+    InstanceReport:
       type: object
       description: >-
-        A connected cluster's report (cluster-connection v1alpha1
-        REP-1), as garam kept it.
+        An instance's report (cluster-connection v1alpha1 REP-1), as
+        garam kept it.
       required: [observedAt, connector, declarations, objects]
       properties:
         observedAt:
           type: string
           format: date-time
         connector:
-          $ref: '#/components/schemas/ClusterReportConnector'
+          $ref: '#/components/schemas/ReportConnector'
         declarations:
           type: array
           items:
-            $ref: '#/components/schemas/ClusterDeclarationOutcome'
+            $ref: '#/components/schemas/DeclarationOutcome'
         objects:
           type: array
           items:
-            $ref: '#/components/schemas/ClusterReportedObject'
-    ClusterReportConnector:
+            $ref: '#/components/schemas/ReportedObject'
+    ReportConnector:
       type: object
       required: [version, mode, namespaces]
       properties:
@@ -5746,9 +5746,9 @@ components:
           description: The watched namespaces another release holds, or none does.
           items:
             type: string
-    ClusterDeclarationOutcome:
+    DeclarationOutcome:
       type: object
-      description: What the connector made of one declaration placed on this cluster.
+      description: What the connector made of one declaration placed on this instance.
       required: [id, generation, outcome]
       properties:
         id:
@@ -5762,7 +5762,7 @@ components:
         message:
           type: string
           description: Display data, rendered as text.
-    ClusterReportedObject:
+    ReportedObject:
       type: object
       description: >-
         One object of a declared kind the connector reported. A
@@ -5789,7 +5789,7 @@ components:
           format: int64
         cluster:
           type: string
-          description: A garam-owned object's record, always this cluster.
+          description: A garam-owned object's instance, always this one.
         declarationId:
           type: string
           description: A garam-owned object's declaration.

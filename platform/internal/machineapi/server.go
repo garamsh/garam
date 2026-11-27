@@ -25,7 +25,7 @@ import (
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/app"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/message"
@@ -76,11 +76,11 @@ type Server struct {
 	issuer     *identity.Issuer
 	principals *identity.Principals
 	// instances exchanges an app's instance's assertions (ADR-0184
-	// decision 5, ADR-0192 decision 5), and clusters mints a placed
+	// decision 5, ADR-0192 decision 5), and bots mints a placed
 	// bot's token for garam-bot-connector's (ADR-0189); nil refuses
 	// either as unavailable.
 	instances app.Service
-	clusters  cluster.Service
+	bots      bot.Service
 }
 
 // Rechecker reads again, for one decision, what admitted the caller's

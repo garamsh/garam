@@ -33,29 +33,29 @@ import (
 
 // fixture wires a Server to in-memory doubles.
 type fixture struct {
-	handler     http.Handler
-	server      *api.Server
-	users       *fakeUserStore
-	orgs        *fakeOrgStore
-	agents      *fakeAgentStore
-	operators   *fakeOperatorStore
-	consents    *fakeConsentStore
-	leases      *fakeWatchLeases
-	relay       *fakeTurnEvents
-	sessions    *fakeSessionStore
-	states      *fakeOAuthStateStore
-	credentials *fakePasswordCredentialStore
-	attempts    *fakePasswordAttemptStore
-	provider    *fakeProvider
-	decisions   *policydecisionmocks.MockService
-	authorities *fakeAuthorityReader
-	authority   *operatormocks.MockAuthorityService
-	standalone  *agentmocks.MockStandaloneService
-	devices     *fakeDeviceStore
-	apps        *fakeAppStore
-	clusterKeys *fakeClusterCredentials
-	declared    *fakeDeclarations
-	reports     *fakeReports
+	handler      http.Handler
+	server       *api.Server
+	users        *fakeUserStore
+	orgs         *fakeOrgStore
+	agents       *fakeAgentStore
+	operators    *fakeOperatorStore
+	consents     *fakeConsentStore
+	leases       *fakeWatchLeases
+	relay        *fakeTurnEvents
+	sessions     *fakeSessionStore
+	states       *fakeOAuthStateStore
+	credentials  *fakePasswordCredentialStore
+	attempts     *fakePasswordAttemptStore
+	provider     *fakeProvider
+	decisions    *policydecisionmocks.MockService
+	authorities  *fakeAuthorityReader
+	authority    *operatormocks.MockAuthorityService
+	standalone   *agentmocks.MockStandaloneService
+	devices      *fakeDeviceStore
+	apps         *fakeAppStore
+	instanceKeys *fakeInstanceCredentials
+	declared     *fakeDeclarations
+	reports      *fakeReports
 	// policies is the policy relay as an install and an uninstall
 	// write through it.
 	policies *fakePolicies
@@ -94,7 +94,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		apps:        newFakeAppStore(),
 		policies:    &fakePolicies{},
 	}
-	f.clusterKeys = newFakeClusterCredentials(f.apps)
+	f.instanceKeys = newFakeInstanceCredentials(f.apps)
 	f.declared = newFakeDeclarations(f.apps)
 	f.reports = newFakeReports(f.apps)
 	// The events a stream carries were forwarded to another process, so
@@ -108,7 +108,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	go func() { _ = watches.Receive(ctx) }()
 	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.authorities, f.authority, f.standalone, cfg).
 		WithDeviceGrant(f.devices).
-		WithApps(f.apps, f.clusterKeys, f.declared, f.reports).
+		WithApps(f.apps, f.instanceKeys, f.declared, f.reports).
 		WithPolicyRelay(f.policies)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.

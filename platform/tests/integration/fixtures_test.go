@@ -132,7 +132,7 @@ func connect(t *testing.T, url string, tune func(*pgxpool.Config)) *pgxpool.Pool
 // truncate resets every table so tests are independent.
 func truncate(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
-	// cluster_declaration_ids outlives every organization by design
+	// bot_declaration_ids outlives every organization by design
 	// (ADR-0187), so no cascade from orgs empties it. The cascade from
 	// orgs empties apps whole, its platform rows with it, so those are
 	// put back as migration 000088 seeded them.
@@ -145,7 +145,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		operator_assertions,
 		messages, message_consents, message_signing_keys, agent_watches,
 		audit_send_events, policy_outbox,
-		cluster_declaration_ids CASCADE;
+		bot_declaration_ids CASCADE;
 		INSERT INTO apps SELECT * FROM platform_apps;
 		DROP TABLE platform_apps`)
 	require.NoError(t, err)

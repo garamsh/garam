@@ -10,7 +10,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/app"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/policyrelay"
@@ -23,8 +23,8 @@ import (
 type appStores struct {
 	records      app.Store
 	credentials  app.CredentialStore
-	declarations cluster.DeclarationStore
-	reports      cluster.ReportStore
+	declarations bot.DeclarationStore
+	reports      bot.ReportStore
 	// declared is what the manifests declare, which an app's requested
 	// actions are checked against (ADR-0192 decision 6).
 	declared []grn.ActionInfo
@@ -35,7 +35,7 @@ type appStores struct {
 // (ADR-0188). A server without them answers the app system's routes
 // unavailable, one with nil declarations the declaration routes, and
 // one with nil reports the report route.
-func (s *Server) WithApps(records app.Store, credentials app.CredentialStore, declarations cluster.DeclarationStore, reports cluster.ReportStore) *Server {
+func (s *Server) WithApps(records app.Store, credentials app.CredentialStore, declarations bot.DeclarationStore, reports bot.ReportStore) *Server {
 	s.apps = &appStores{records: records, credentials: credentials, declarations: declarations, reports: reports,
 		declared: grn.Actions()}
 	return s

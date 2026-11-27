@@ -393,7 +393,7 @@ func (f *fixture) declare(ctx context.Context, file []byte) (declared, error) {
 	if err != nil {
 		return declared{}, &refusal{Code: "invalid_request", Message: "the declare file's object is not JSON"}
 	}
-	var out apigen.ClusterDeclaration
+	var out apigen.Declaration
 	if q.ID == "" {
 		err = f.call(ctx, http.MethodPost, recordPath(g)+"/declarations", string(body), &out, http.StatusCreated)
 	} else {
@@ -425,7 +425,7 @@ func (f *fixture) tombstone(ctx context.Context, id string) (declared, error) {
 			return declared{}, err
 		}
 		path := recordPath(g) + "/declarations/" + url.PathEscape(id)
-		var live apigen.ClusterDeclaration
+		var live apigen.Declaration
 		err = f.call(ctx, http.MethodGet, path, "", &live, http.StatusOK)
 		var r *refusal
 		if errors.As(err, &r) && r.Code == "not_found" {
@@ -481,11 +481,11 @@ func (f *fixture) expireCursors(ctx context.Context, g grn.GRN, databaseURL stri
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	for _, statement := range []string{
-		`INSERT INTO cluster_declaration_heads (cluster_grn, head, purged_through) VALUES ($1, 1, 0)
-		 ON CONFLICT (cluster_grn) DO UPDATE
-		 SET purged_through = cluster_declaration_heads.head, head = cluster_declaration_heads.head + 1`,
-		`DELETE FROM cluster_declaration_changes WHERE cluster_grn = $1`,
-		`SELECT pg_notify('garam_cluster_declarations', $1)`,
+		`INSERT INTO bot_declaration_heads (instance_grn, head, purged_through) VALUES ($1, 1, 0)
+		 ON CONFLICT (instance_grn) DO UPDATE
+		 SET purged_through = bot_declaration_heads.head, head = bot_declaration_heads.head + 1`,
+		`DELETE FROM bot_declaration_changes WHERE instance_grn = $1`,
+		`SELECT pg_notify('garam_bot_declarations', $1)`,
 	} {
 		if _, err := tx.Exec(ctx, statement, g.String()); err != nil {
 			return named{}, errors.New("the record's cursors could not be expired")

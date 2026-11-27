@@ -19,7 +19,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	connectiongen "github.com/garamsh/garam/platform/api/cluster-connection/v1alpha1"
 	"github.com/garamsh/garam/platform/internal/app"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -44,7 +44,7 @@ var instanceReach = map[grn.GRN]machine.Reach{
 	}),
 }
 
-// connectionClusters is app.Service and cluster.Service answering err,
+// connectionClusters is app.Service and bot.Service answering err,
 // or what it was asked, and recording the arguments.
 type connectionClusters struct {
 	err    error
@@ -53,21 +53,21 @@ type connectionClusters struct {
 	token  string
 	// page is what WatchDeclarations answers, and after and wait what
 	// it was asked.
-	page  cluster.Page
+	page  bot.Page
 	after *string
 	wait  time.Duration
 	// report is what Report was handed.
-	report *cluster.Report
+	report *bot.Report
 	// exchange is what MintBotToken was handed.
-	exchange *cluster.BotExchange
+	exchange *bot.BotExchange
 }
 
-func (c *connectionClusters) Report(_ context.Context, caller grn.GRN, r cluster.Report) error {
+func (c *connectionClusters) Report(_ context.Context, caller grn.GRN, r bot.Report) error {
 	c.caller, c.report = caller, &r
 	return c.err
 }
 
-func (c *connectionClusters) WatchDeclarations(_ context.Context, caller grn.GRN, after *string, wait time.Duration) (cluster.Page, error) {
+func (c *connectionClusters) WatchDeclarations(_ context.Context, caller grn.GRN, after *string, wait time.Duration) (bot.Page, error) {
 	c.caller, c.after, c.wait = caller, after, wait
 	return c.page, c.err
 }
@@ -85,13 +85,13 @@ func (c *connectionClusters) ExchangeAssertion(_ context.Context, _ string, clie
 	return &app.Token{Value: app.TokenPrefix + "answered", Instance: client, ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
-func (c *connectionClusters) MintBotToken(_ context.Context, exchange cluster.BotExchange) (*cluster.BotToken, error) {
+func (c *connectionClusters) MintBotToken(_ context.Context, exchange bot.BotExchange) (*bot.BotToken, error) {
 	c.exchange = &exchange
 	if c.err != nil {
 		return nil, c.err
 	}
-	return &cluster.BotToken{Value: cluster.BotTokenPrefix + "answered", Bot: grn.New("acme", cluster.BotServiceType, "decl-a"),
-		Place: connectedGRN, Scope: []string{}, ExpiresAt: time.Now().Add(cluster.BotTokenTTL)}, nil
+	return &bot.BotToken{Value: bot.BotTokenPrefix + "answered", Bot: grn.New("acme", bot.BotServiceType, "decl-a"),
+		Place: connectedGRN, Scope: []string{}, ExpiresAt: time.Now().Add(bot.BotTokenTTL)}, nil
 }
 
 func (c *connectionClusters) Rotate(_ context.Context, caller grn.GRN, jwk []byte, _, _ string) (app.Rotation, error) {
@@ -301,7 +301,7 @@ func TestClusterConnection_AReportIsRefusedAsREP6AndREP7Refuse(t *testing.T) {
 			"generation":1,"status":{}}`
 	}
 	big := withObject(`{"apiVersion":"bot.garam.sh/v1alpha1","kind":"Bot","namespace":"team-a","name":"x","uid":"u",
-		"owner":"cluster","generation":1,"status":{"note":"` + strings.Repeat("x", cluster.ReportMaxBytes) + `"}}`)
+		"owner":"cluster","generation":1,"status":{"note":"` + strings.Repeat("x", bot.ReportMaxBytes) + `"}}`)
 	for name, tc := range map[string]struct {
 		body, code string
 		status     int
@@ -362,9 +362,9 @@ func TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord(t *testing
 // for the wait sent, an apply carries its object byte for byte, so no
 // number of spec is rounded, and a delete carries none.
 func TestClusterConnection_WatchAnswersThePageAsGaramKeptIt(t *testing.T) {
-	clusters := &connectionClusters{page: cluster.Page{Cursor: "c.2", More: true, Changes: []cluster.Change{
-		{Op: cluster.OpApply, ID: "decl-a", Generation: 1, Object: json.RawMessage(`{"spec":{"replicas":12345678901234567890}}`)},
-		{Op: cluster.OpDelete, ID: "decl-b", Generation: 3},
+	clusters := &connectionClusters{page: bot.Page{Cursor: "c.2", More: true, Changes: []bot.Change{
+		{Op: bot.OpApply, ID: "decl-a", Generation: 1, Object: json.RawMessage(`{"spec":{"replicas":12345678901234567890}}`)},
+		{Op: bot.OpDelete, ID: "decl-b", Generation: 3},
 	}}}
 	base, client := serveConnection(t, clusters)
 	req, err := http.NewRequest(http.MethodGet, base+"/clusters/self/declarations?after=c.0&wait=7", nil)
@@ -387,7 +387,7 @@ func TestClusterConnection_WatchAnswersThePageAsGaramKeptIt(t *testing.T) {
 
 	_, _, _ = connect(t, client, http.MethodGet, base+"/clusters/self/declarations", "cluster", "")
 	assert.Nil(t, clusters.after, "an absent cursor reaches the service as none")
-	assert.Equal(t, cluster.MaxWait, clusters.wait, "an absent wait is DECL-3's fifty seconds")
+	assert.Equal(t, bot.MaxWait, clusters.wait, "an absent wait is DECL-3's fifty seconds")
 }
 
 // TestClusterConnection_WatchAnswersAPurgedCursorGone holds DECL-6: a
@@ -400,8 +400,8 @@ func TestClusterConnection_WatchAnswersAPurgedCursorGone(t *testing.T) {
 		status int
 		code   string
 	}{
-		{cluster.ErrCursorExpired, http.StatusGone, "cursor_expired"},
-		{cluster.ErrCursorInvalid, http.StatusBadRequest, "invalid_request"},
+		{bot.ErrCursorExpired, http.StatusGone, "cursor_expired"},
+		{bot.ErrCursorInvalid, http.StatusBadRequest, "invalid_request"},
 	} {
 		base, client := serveConnection(t, &connectionClusters{err: c.err})
 		status, body, _ := connect(t, client, http.MethodGet, base+"/clusters/self/declarations?after=c.0&wait=0", "cluster", "")

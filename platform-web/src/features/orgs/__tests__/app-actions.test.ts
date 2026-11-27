@@ -2,6 +2,10 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { createInstance } from "@/features/orgs/api/create-instance";
+import {
+  grantInstallationBotHosting,
+  withdrawInstallationBotHosting,
+} from "@/features/orgs/api/installation-bot-hosting";
 import { installApp } from "@/features/orgs/api/install-app";
 import { reissueInstanceToken } from "@/features/orgs/api/reissue-instance-token";
 import { REFUSAL_COPY } from "@garam/platform-sdk-ts/refusal-copy";
@@ -157,5 +161,57 @@ describe("reissueInstanceToken", () => {
       registrationToken: "again",
       expiresAt: "2026-11-03T09:00:00Z",
     });
+  });
+});
+
+describe("installation bot hosting", () => {
+  it("grants with a PUT and withdraws with a DELETE on the installation's bot-hosting", async () => {
+    const calls: string[] = [];
+    server.use(
+      http.put(`${INSTALLATION}/bot-hosting`, () => {
+        calls.push("PUT");
+        return HttpResponse.json({
+          grn: "grn:acme/iam/installation/garam-bot-connector",
+          orgGrn: "grn:root/iam/org/acme",
+          appGrn: "grn:root/iam/app/garam-bot-connector",
+          incarnation: "1",
+          botHosting: true,
+          projects: [],
+          createdBy: "grn:root/iam/user/alice",
+          createdAt: "2026-11-02T08:00:00Z",
+        });
+      }),
+      http.delete(`${INSTALLATION}/bot-hosting`, () => {
+        calls.push("DELETE");
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const data = form({ installation: "garam-bot-connector" });
+
+    await expect(
+      grantInstallationBotHosting({ status: "idle" }, data),
+    ).resolves.toEqual({ status: "granted" });
+    await expect(
+      withdrawInstallationBotHosting({ status: "idle" }, data),
+    ).resolves.toEqual({ status: "withdrawn" });
+    expect(calls).toEqual(["PUT", "DELETE"]);
+  });
+
+  it("answers garam's refusal of a grant for an app that does not ask to host bots", async () => {
+    server.use(
+      http.put(`${INSTALLATION}/bot-hosting`, () =>
+        HttpResponse.json(
+          { kind: "invalid_argument", message: "no request" },
+          { status: 400 },
+        ),
+      ),
+    );
+
+    const answer = await grantInstallationBotHosting(
+      { status: "idle" },
+      form({ installation: "garam-bot-connector" }),
+    );
+
+    expect(answer.status).toBe("error");
   });
 });

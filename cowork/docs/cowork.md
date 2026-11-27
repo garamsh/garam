@@ -276,13 +276,27 @@ mentions and delivers none.
   origin. `viewArtifact` asks `cowork:artifact.read` as the viewer and
   answers an address on the user-content origin, signed for that
   version and good for ten minutes. The second listener `serve` starts
-  there serves that version and nothing else. The web app loads it in
+  there serves that version and nothing else, and only under its own
+  artifact's host: in production each result is its own origin,
+  `c-<artifact id>.garam.run` (#2114), so no two results share a cookie
+  or storage. The web app loads it in
   an iframe sandboxed with `allow-scripts` alone, so the page runs in
   an opaque origin: no cookie, no storage, no reach into its parent.
   Its policy is `default-src 'none'`, with inline script and style,
   `data:` images and fonts, `connect-src 'none'` and `form-action
   'none'`, framed only by `COWORK_WEB_ORIGINS`. A script in it can
-  call nothing, cowork's API included.
+  call nothing, cowork's API included. It is given no credential: the
+  listener sets no cookie, and a browser sends none of garam's, which
+  are host-only on `garam.sh` and never reach `garam.run`.
+- **The user-content domain.** `garam.run` is registered apart from
+  `garam.sh` for what users and bots make. It is on the Public Suffix
+  List (private section) as itself, so every label under it is a site
+  of its own. One label only, because Cloudflare's Universal SSL
+  certificate covers `garam.run` and `*.garam.run` and no second level.
+  Labels starting `c-` (cowork results) and `m-` are garam's; later
+  user sites take other labels. Aurora's part is in
+  [deployment-needs.md](../../docs/architecture/deployment-needs.md)
+  §The user-content origin.
 - **Embeds.** A page embeds an artifact as a block (`core/artifact`),
   and a message as one of its `artifacts`, each only one its author
   may read; each reader sees it as they may read it.
@@ -391,7 +405,7 @@ orgs use <org>` or tell the AI which one `list_workspaces` answers.
 | `COWORK_S3_ACCESS_KEY`, `COWORK_S3_SECRET_KEY` | the store's keys (required for `s3`) |
 | `COWORK_S3_PATH_STYLE` | `true` to name the bucket in the path, as RustFS and MinIO expect |
 | `COWORK_S3_CREATE_BUCKET` | `true` to create the bucket where it is missing |
-| `COWORK_USERCONTENT_ORIGIN` | the user-content origin as browsers reach it; unset views no HTML artifact |
+| `COWORK_USERCONTENT_ORIGIN` | the user-content origin as browsers reach it; unset views no HTML artifact. One `*` in the host, as `https://c-*.garam.run`, makes each artifact's identifier its own host; without one, every artifact shares the origin, as on a development stack |
 | `COWORK_USERCONTENT_ADDR` | where that origin listens, default `:8092` |
 | `COWORK_USERCONTENT_SECRET` | the key its addresses are signed with, at least 32 bytes; the same on every instance |
 | `COWORK_POLICY_ADDR` | the policy service's gRPC address (required: cowork refuses to start unless all five policy settings are set, and names the missing ones) |
@@ -471,6 +485,3 @@ builds from `garam-cli/` for the client commands.
   authorization server. Not scheduled.
 - **Loading plugins at runtime.** Plugins are bundled at build time
   until a later decision.
-- **The production user-content domain.** The owner chooses it, and
-  registers it apart from garam's, so no cookie of garam's reaches it.
-  `COWORK_USERCONTENT_ORIGIN` names it.

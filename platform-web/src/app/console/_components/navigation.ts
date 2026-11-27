@@ -1,4 +1,5 @@
 import {
+  Blocks,
   Bot,
   FolderGit2,
   Handshake,
@@ -40,6 +41,12 @@ export type ConsoleSection = {
     fallback: string;
     /** Pages below an entry's own page, each a segment of its own. */
     pages?: readonly ConsoleItemPage[];
+    /**
+     * Present where an entry holds entries of its own, each with a
+     * page of its own below the entry's: what the breadcrumb calls one
+     * before its page has named it.
+     */
+    children?: { fallback: string };
   };
 };
 
@@ -79,6 +86,15 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     icon: FolderGit2,
     read: "iam:project.read",
     items: { fallback: "Project" },
+  },
+  {
+    segment: "apps",
+    label: "Apps",
+    icon: Blocks,
+    read: "iam:app.read",
+    // An installation is named by its app's slug, and each of its
+    // instances by the identifier garam minted (ADR-0192).
+    items: { fallback: "App", children: { fallback: "Instance" } },
   },
   {
     segment: "operators",
@@ -157,6 +173,7 @@ export const CONSOLE_NAV: readonly NavGroup[] = [
       "teams",
       "permissions",
       "audit",
+      "apps",
       "operators",
       "hosts",
       "settings",
@@ -197,6 +214,8 @@ export type ConsoleLocation =
       section: ConsoleSection;
       item?: string;
       itemPage?: ConsoleItemPage;
+      /** The identifier of the entry below `item`, where the section nests entries. */
+      child?: string;
     }
   | { kind: "invitation" }
   | { kind: "device" }
@@ -242,6 +261,15 @@ export function parseConsolePath(pathname: string): ConsoleLocation {
   const section = CONSOLE_SECTIONS.find((item) => item.segment === segment);
   if (!section) return { kind: "unknown" };
   if (segments.length === 6) {
+    if (section.items?.children) {
+      return {
+        kind: "org",
+        org: segments[2],
+        section,
+        item: segments[4],
+        child: segments[5],
+      };
+    }
     const itemPage = section.items?.pages?.find(
       (page) => page.segment === segments[5],
     );
@@ -288,7 +316,7 @@ export function consoleCrumbs(
         organizations,
         { label: org?.name ?? location.org, href: orgHref(location.org, "") },
       ];
-      const { section, item, itemPage } = location;
+      const { section, item, itemPage, child } = location;
       if (item === undefined || !section.items) {
         return [...trail, { label: section.label }];
       }
@@ -296,6 +324,19 @@ export function consoleCrumbs(
         label: section.label,
         href: orgHref(location.org, section.segment),
       };
+      if (child !== undefined && section.items.children) {
+        return [
+          ...trail,
+          sectionCrumb,
+          {
+            // The installation is named by its app's slug, which the
+            // trail already holds.
+            label: item,
+            href: orgHref(location.org, `${section.segment}/${item}`),
+          },
+          { label: itemName ?? section.items.children.fallback },
+        ];
+      }
       if (itemPage && section.items) {
         return [
           ...trail,

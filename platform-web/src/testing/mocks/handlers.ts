@@ -9,9 +9,13 @@ import type {
   Agent,
   AgentEnrollmentListing,
   AgentSupervisor,
+  App,
   Group,
   GroupMember,
   InvitationPreview,
+  Installation,
+  Instance,
+  InstanceKey,
   AuditRecord,
   AuditRecordPage,
   Member,
@@ -83,6 +87,69 @@ export const fieldOneKey: OperatorKey = {
   state: "active",
   issuedAt: "2026-10-01T09:00:00Z",
   lastExchangedAt: "2026-10-14T08:30:00Z",
+};
+
+/**
+ * The seeded app (ADR-0192) as the registry serves it: it requests no
+ * action and runs many instances, so a page reading it shows an app
+ * whose install writes nothing.
+ */
+export const botConnector: App = {
+  grn: "grn:root/iam/app/garam-bot-connector",
+  slug: "garam-bot-connector",
+  name: "Bot connector",
+  description: "Connects a bot runtime to garam.",
+  visibility: "public",
+  requestedActions: [],
+  requestsBotHosting: false,
+  instances: "many",
+  delivery: "pull",
+};
+
+/**
+ * An app that requests actions, so a page reading it has permits to
+ * show before an install. Not installed in Acme.
+ */
+export const deployHelper: App = {
+  grn: "grn:acme/iam/app/deploy-helper",
+  slug: "deploy-helper",
+  name: "Deploy helper",
+  description: "Rolls a service out.",
+  visibility: "private",
+  requestedActions: ["iam:project.read", "iam:agent.read"],
+  requestsBotHosting: true,
+  instances: "one",
+  delivery: "pull",
+};
+
+/** Acme's installation of `botConnector`, over the whole organization. */
+export const botConnectorInstallation: Installation = {
+  grn: "grn:acme/iam/installation/garam-bot-connector",
+  orgGrn: acme.grn,
+  appGrn: botConnector.grn,
+  incarnation: "1",
+  projects: [],
+  createdBy: alice.grn,
+  createdAt: "2026-11-02T08:00:00Z",
+};
+
+/** The one instance of Acme's installation, with a kind garam never reads. */
+export const fieldBot: Instance = {
+  grn: "grn:acme/iam/instance/i-1a2b3c",
+  installationGrn: botConnectorInstallation.grn,
+  name: "Field bot",
+  description: "Runs in the field cluster.",
+  kind: "k8s-deployment",
+  orgGrn: acme.grn,
+  createdBy: alice.grn,
+  createdAt: "2026-11-03T08:00:00Z",
+};
+
+/** The one key `fieldBot` holds. */
+export const fieldBotKey: InstanceKey = {
+  kid: "Zk4wMx3eAs6hQ1uC9nLdXi8MgB2vKf0tSjPpWoU5Yz7",
+  state: "active",
+  createdAt: "2026-11-03T09:00:00Z",
 };
 
 /** The single agent Acme holds. */
@@ -436,6 +503,46 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
     path: "/orgs/acme/operators/field-one/keys",
     guarded: true,
     body: { keys: [fieldOneKey] },
+  },
+  {
+    path: "/orgs/acme/apps",
+    guarded: true,
+    body: [botConnector, deployHelper],
+  },
+  {
+    path: "/orgs/acme/apps/garam-bot-connector",
+    guarded: true,
+    body: botConnector,
+  },
+  {
+    path: "/orgs/acme/installations",
+    guarded: true,
+    body: [botConnectorInstallation],
+  },
+  {
+    path: "/orgs/acme/installations/garam-bot-connector",
+    guarded: true,
+    body: botConnectorInstallation,
+  },
+  {
+    path: "/orgs/acme/installations/garam-bot-connector/instances",
+    guarded: true,
+    body: [fieldBot],
+  },
+  {
+    path: "/orgs/acme/installations/garam-bot-connector/instances/i-1a2b3c",
+    guarded: true,
+    body: fieldBot,
+  },
+  {
+    path: "/orgs/acme/installations/garam-bot-connector/instances/i-1a2b3c/keys",
+    guarded: true,
+    body: { keys: [fieldBotKey] },
+  },
+  {
+    path: "/orgs/acme/installations/garam-bot-connector/instances/i-1a2b3c/report",
+    guarded: true,
+    body: { lastContactAt: "2026-11-10T08:00:00Z" },
   },
   { path: "/orgs/acme/agents", guarded: true, body: [reportedAgent] },
   { path: "/orgs/acme/consents", guarded: true, body: [globexConsent] },

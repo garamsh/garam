@@ -32,6 +32,7 @@ describe("parseConsolePath", () => {
     "people",
     "agents",
     "projects",
+    "apps",
     "operators",
     "consents",
     "permissions",
@@ -265,6 +266,7 @@ describe("CONSOLE_NAV", () => {
       "teams",
       "permissions",
       "audit",
+      "apps",
       "operators",
       "hosts",
       "settings",
@@ -322,5 +324,52 @@ describe("an operator's setup page", () => {
     expect(
       parseConsolePath("/console/orgs/acme/operators/field-one/elsewhere"),
     ).toEqual({ kind: "unknown" });
+  });
+});
+
+describe("an installed app's instance page", () => {
+  it("reads as an instance of the installation, not as a page of it", () => {
+    const location = parseConsolePath(
+      "/console/orgs/acme/apps/garam-bot-connector/i-1a2b",
+    );
+
+    expect(location).toMatchObject({
+      kind: "org",
+      item: "garam-bot-connector",
+      child: "i-1a2b",
+    });
+  });
+
+  it("links the app above its instance and names all three", () => {
+    const location = parseConsolePath(
+      "/console/orgs/acme/apps/garam-bot-connector/i-1a2b",
+    );
+
+    // The page names the instance; the installation above it is the
+    // app's slug, which is its name in the address.
+    expect(consoleCrumbs(location, orgs, "Field one").slice(2)).toEqual([
+      { label: "Apps", href: "/console/orgs/acme/apps" },
+      {
+        label: "garam-bot-connector",
+        href: "/console/orgs/acme/apps/garam-bot-connector",
+      },
+      { label: "Field one" },
+    ]);
+    expect(consoleCrumbs(location, orgs).at(-1)).toEqual({
+      label: "Instance",
+    });
+  });
+
+  it("reads an instance's page deeper than that as unknown", () => {
+    // Control: only the section's declared depth is a page.
+    expect(
+      parseConsolePath("/console/orgs/acme/apps/garam-bot-connector/i-1a2b/x"),
+    ).toEqual({ kind: "unknown" });
+  });
+
+  it("does not read a third segment of a section that has no instances", () => {
+    expect(parseConsolePath("/console/orgs/acme/teams/core/members")).toEqual({
+      kind: "unknown",
+    });
   });
 });

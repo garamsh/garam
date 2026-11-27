@@ -8,6 +8,24 @@ export {
   type ActivatePolicyState,
 } from "./api/activate-policy";
 export {
+  createInstance,
+  type CreateInstanceState,
+} from "./api/create-instance";
+export {
+  deleteInstance,
+  type DeleteInstanceState,
+} from "./api/delete-instance";
+export { installApp, type InstallAppState } from "./api/install-app";
+export {
+  reissueInstanceToken,
+  type ReissueInstanceTokenState,
+} from "./api/reissue-instance-token";
+export {
+  revokeInstanceKey,
+  type RevokeInstanceKeyState,
+} from "./api/revoke-instance-key";
+export { uninstallApp, type UninstallAppState } from "./api/uninstall-app";
+export {
   addGroupMember,
   type AddGroupMemberState,
 } from "./api/add-group-member";

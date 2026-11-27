@@ -61,7 +61,7 @@ var generatedActions = []ActionInfo{
 	{Name: "iam:agent.watch", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Iam::Agent"}},
 	{Name: "iam:app.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:audit.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
-	{Name: "iam:cluster.declare", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
+	{Name: "iam:bot.place", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Iam::Instance"}},
 	{Name: "iam:consent.grant", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:consent.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "iam:consent.withdraw", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},

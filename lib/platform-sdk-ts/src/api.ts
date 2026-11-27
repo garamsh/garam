@@ -1151,7 +1151,7 @@ export interface paths {
         put?: never;
         /**
          * Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
-         * @description Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+         * @description Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
          */
         post: operations["createInstanceDeclaration"];
         delete?: never;
@@ -1174,13 +1174,13 @@ export interface paths {
         get: operations["getInstanceDeclaration"];
         /**
          * Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
-         * @description An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+         * @description An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
          */
         put: operations["putInstanceDeclaration"];
         post?: never;
         /**
          * Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
-         * @description Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+         * @description Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
          */
         delete: operations["deleteInstanceDeclaration"];
         options?: never;
@@ -1983,7 +1983,7 @@ export interface components {
             id: string;
         };
         /** @enum {string} */
-        PermissionResourceType: "group" | "project" | "agent" | "policy" | "installation" | "cowork-page" | "cowork-channel" | "cowork-task" | "cowork-artifact";
+        PermissionResourceType: "group" | "project" | "agent" | "policy" | "installation" | "instance" | "cowork-page" | "cowork-channel" | "cowork-task" | "cowork-artifact";
         PermissionCheckAnswer: {
             results: components["schemas"]["PermissionCheckResult"][];
         };
@@ -2666,15 +2666,15 @@ export interface components {
          * @example cluster
          */
         InstanceKind: string;
-        ClusterDeclarationWrite: {
-            object: components["schemas"]["ClusterDeclaredObject"];
+        DeclarationWrite: {
+            object: components["schemas"]["DeclaredObject"];
         };
         /** @description An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept. */
-        ClusterDeclaredObject: {
+        DeclaredObject: {
             [key: string]: unknown;
         };
         /** @description One declaration placed on an instance of garam-bot-connector, which its connector applies (ADR-0187). */
-        ClusterDeclaration: {
+        Declaration: {
             /** @example decl-5f60710a1b2c3d4e */
             id: string;
             /** @description The GRN of the instance it is placed on. */
@@ -2684,17 +2684,17 @@ export interface components {
              * @description 1 when placed, and one more at every write.
              */
             generation: number;
-            object: components["schemas"]["ClusterDeclaredObject"];
+            object: components["schemas"]["DeclaredObject"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
         };
-        ClusterDeclarationList: {
-            declarations: components["schemas"]["ClusterDeclaration"][];
+        DeclarationList: {
+            declarations: components["schemas"]["Declaration"][];
         };
         /** @description What garam holds of an instance's reports. */
-        ClusterReportView: {
+        InstanceReportView: {
             /** @description The instance's GRN. */
             instance: string;
             /**
@@ -2702,17 +2702,17 @@ export interface components {
              * @description When the instance's latest authenticated request reached garam, to within a second; null where none has.
              */
             lastContactAt: string | null;
-            report: components["schemas"]["ClusterReport"] | null;
+            report: components["schemas"]["InstanceReport"] | null;
         };
-        /** @description A connected cluster's report (cluster-connection v1alpha1 REP-1), as garam kept it. */
-        ClusterReport: {
+        /** @description An instance's report (cluster-connection v1alpha1 REP-1), as garam kept it. */
+        InstanceReport: {
             /** Format: date-time */
             observedAt: string;
-            connector: components["schemas"]["ClusterReportConnector"];
-            declarations: components["schemas"]["ClusterDeclarationOutcome"][];
-            objects: components["schemas"]["ClusterReportedObject"][];
+            connector: components["schemas"]["ReportConnector"];
+            declarations: components["schemas"]["DeclarationOutcome"][];
+            objects: components["schemas"]["ReportedObject"][];
         };
-        ClusterReportConnector: {
+        ReportConnector: {
             version: string;
             /** @enum {string} */
             mode: "apply" | "reportOnly";
@@ -2721,8 +2721,8 @@ export interface components {
             /** @description The watched namespaces another release holds, or none does. */
             claimedElsewhere?: string[];
         };
-        /** @description What the connector made of one declaration placed on this cluster. */
-        ClusterDeclarationOutcome: {
+        /** @description What the connector made of one declaration placed on this instance. */
+        DeclarationOutcome: {
             id: string;
             /** Format: int64 */
             generation: number;
@@ -2732,7 +2732,7 @@ export interface components {
             message?: string;
         };
         /** @description One object of a declared kind the connector reported. A cluster-owned one is shown read-only, with the cluster as its source. */
-        ClusterReportedObject: {
+        ReportedObject: {
             apiVersion: string;
             /** @enum {string} */
             kind: "Bot" | "Workspace" | "WorkspaceClass" | "BotPool";
@@ -2743,7 +2743,7 @@ export interface components {
             owner: "garam" | "cluster";
             /** Format: int64 */
             generation: number;
-            /** @description A garam-owned object's record, always this cluster. */
+            /** @description A garam-owned object's instance, always this one. */
             cluster?: string;
             /** @description A garam-owned object's declaration. */
             declarationId?: string;
@@ -4988,7 +4988,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterReportView"];
+                    "application/json": components["schemas"]["InstanceReportView"];
                 };
             };
             400: components["responses"]["Error"];
@@ -5019,7 +5019,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterDeclarationList"];
+                    "application/json": components["schemas"]["DeclarationList"];
                 };
             };
             400: components["responses"]["Error"];
@@ -5044,7 +5044,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ClusterDeclarationWrite"];
+                "application/json": components["schemas"]["DeclarationWrite"];
             };
         };
         responses: {
@@ -5054,7 +5054,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterDeclaration"];
+                    "application/json": components["schemas"]["Declaration"];
                 };
             };
             400: components["responses"]["Error"];
@@ -5089,7 +5089,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterDeclaration"];
+                    "application/json": components["schemas"]["Declaration"];
                 };
             };
             400: components["responses"]["Error"];
@@ -5116,7 +5116,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ClusterDeclarationWrite"];
+                "application/json": components["schemas"]["DeclarationWrite"];
             };
         };
         responses: {
@@ -5126,7 +5126,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterDeclaration"];
+                    "application/json": components["schemas"]["Declaration"];
                 };
             };
             /** @description The declaration, placed. */
@@ -5135,7 +5135,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClusterDeclaration"];
+                    "application/json": components["schemas"]["Declaration"];
                 };
             };
             400: components["responses"]["Error"];

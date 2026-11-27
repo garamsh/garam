@@ -50,8 +50,8 @@ GARAM_FIXTURE_DATABASE_URL=postgres://... \
   root as the console's `/api/*` rewrite reaches them.
 - `GARAM_FIXTURE_SESSION_TOKEN`: the session of a principal holding
   `iam:installation.create` and `.read`, `iam:instance.register`,
-  `.read`, `.reissue` and `.delete`, and `iam:cluster.declare` in the
-  organization, sent as the `garam_session` cookie. Installing is the
+  `.read`, `.reissue` and `.delete`, and `iam:bot.place` on the
+  instance, sent as the `garam_session` cookie. Installing is the
   owner's alone. `testprincipal prepare` answers one, and that
   principal owns any organization it creates.
 - `GARAM_FIXTURE_ORG`: the organization a new record is created in. A

@@ -13,7 +13,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/app"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -46,7 +46,7 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 	header.Set("Pragma", "no-cache")
 
 	form, refusal := assertionForm(r)
-	if refusal == nil && form.Get("grant_type") == cluster.GrantTypeTokenExchange {
+	if refusal == nil && form.Get("grant_type") == bot.GrantTypeTokenExchange {
 		s.exchangeBotToken(w, r, form)
 		return
 	}
@@ -99,9 +99,9 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 // WithInstances gives the exchange an app's instances' service
 // (ADR-0184 decision 5, ADR-0192 decision 5) and the bot-token mint of
 // garam-bot-connector's (ADR-0189 decision 2).
-func (s *Server) WithInstances(instances app.Service, clusters cluster.Service) *Server {
+func (s *Server) WithInstances(instances app.Service, bots bot.Service) *Server {
 	s.instances = instances
-	s.clusters = clusters
+	s.bots = bots
 	return s
 }
 
@@ -288,13 +288,13 @@ func writeOAuthError(w http.ResponseWriter, err error) {
 	case errors.As(err, &exceeded):
 		status = http.StatusTooManyRequests
 		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))
-	case errors.Is(err, cluster.ErrBotNotPlaced), errors.Is(err, cluster.ErrActorTokenRefused):
+	case errors.Is(err, bot.ErrBotNotPlaced), errors.Is(err, bot.ErrActorTokenRefused):
 		// RFC 8693 §2.2.2: a subject or actor token that is invalid or
 		// unacceptable by policy is invalid_request.
 		status, body.Error = http.StatusBadRequest, machinegen.InvalidRequest
-	case errors.Is(err, cluster.ErrAudienceRefused):
+	case errors.Is(err, bot.ErrAudienceRefused):
 		status, body.Error = http.StatusBadRequest, machinegen.InvalidTarget
-	case errors.Is(err, cluster.ErrScopeUndefined):
+	case errors.Is(err, bot.ErrScopeUndefined):
 		status, body.Error = http.StatusBadRequest, machinegen.InvalidScope
 	case errors.Is(err, identity.ErrOrganizationUnknown):
 		status, body.Error = http.StatusBadRequest, machinegen.UnauthorizedClient

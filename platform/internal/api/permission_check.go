@@ -29,6 +29,9 @@ const (
 	// kindInstallation is an app installed in the organization, which
 	// its own routes and its instances' are decided on (ADR-0192).
 	kindInstallation = apigen.PermissionResourceTypeInstallation
+	// kindInstance is one of an installation's instances, which a
+	// declaration is placed on (ADR-0192 decision 10).
+	kindInstance = apigen.PermissionResourceTypeInstance
 	// kindCoworkPage is a page cowork keeps (ADR-0127). No operation
 	// here addresses one; cowork asks before it acts on one.
 	kindCoworkPage = apigen.PermissionResourceTypeCoworkPage
@@ -138,7 +141,7 @@ var actionRules = map[string]actionRule{
 	org.ActionInstanceUpdate:     {on: []apigen.PermissionResourceType{kindInstallation}},
 	org.ActionInstanceReissue:    {on: []apigen.PermissionResourceType{kindInstallation}},
 	org.ActionInstanceDelete:     {on: []apigen.PermissionResourceType{kindInstallation}},
-	org.ActionClusterDeclare:     {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionBotPlace:           {on: []apigen.PermissionResourceType{kindInstance}},
 
 	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
 	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},
@@ -319,6 +322,8 @@ func permissionTarget(orgSlug string, check apigen.PermissionCheck) (grn.GRN, er
 		g = policyGRN(orgSlug, id)
 	case kindInstallation:
 		g = grn.New(orgSlug, app.InstallationType, id)
+	case kindInstance:
+		g = grn.New(orgSlug, app.InstanceType, id)
 	case kindCoworkPage:
 		g = grn.New(orgSlug, org.ServiceTypeCoworkPage, id)
 	case kindCoworkChannel:

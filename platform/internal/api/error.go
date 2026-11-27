@@ -10,7 +10,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	apigen "github.com/garamsh/garam/platform/api"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/wire"
@@ -113,7 +113,7 @@ func writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errBodyTooLarge):
 		status = http.StatusRequestEntityTooLarge
-	case errors.Is(err, cluster.ErrDeclaredObjectInvalid):
+	case errors.Is(err, bot.ErrDeclaredObjectInvalid):
 		// A well-formed request whose object the connector refuses.
 		status = http.StatusUnprocessableEntity
 	}

@@ -158,13 +158,14 @@ first-party service's principal is still ADR-0129's
   `.delete` arrive with what they decide (#2083).
   `platform/internal/org/role.go` §machineActions and
   `policy/schema/iam.cedarschema` are authoritative for the grants.
-  Placing a declaration is still `iam:cluster.declare` on the
-  organization until the bot domain replaces it (#2082).
+  Placing a declaration is the bot domain's `iam:bot.place` on the
+  instance ([bots.md](./bots.md)).
 - **The routes as built** are `listApps`, `getApp`,
   `createInstallation`, `listInstallations`, `getInstallation`,
   `deleteInstallation`, and the instance routes under
-  `/orgs/{org}/installations/{installation}/instances`; a cluster's
-  declarations and report hang from its instance there.
+  `/orgs/{org}/installations/{installation}/instances`; the bot
+  domain's declarations and report hang from an instance there
+  ([bots.md](./bots.md)).
   `platform/api/openapi.yaml` §app, §installation and §instance are
   authoritative for them. An instance of another installation is
   answered 404, as one that is not there is. An app the organization

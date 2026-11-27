@@ -5,6 +5,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -180,6 +181,19 @@ func (s *Store) ListInstances(ctx context.Context, installation grn.GRN) ([]*app
 		return nil, pgxerr.Classify(err, "list instances", nil, nil)
 	}
 	return each(rows, rowToInstance)
+}
+
+// LastContact reads the time ResolveToken last recorded for g.
+func (s *Store) LastContact(ctx context.Context, g grn.GRN) (*time.Time, error) {
+	rows, err := s.q.GetInstanceContact(ctx, g.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "get instance contact", nil, nil)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	at := rows[0].Time.UTC()
+	return &at, nil
 }
 
 // UpdateInstance writes the name, description and kind patch sets.

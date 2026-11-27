@@ -517,7 +517,7 @@ func TestCheckPermissions_EveryActionPairsWithSomething(t *testing.T) {
 		apigen.PermissionResourceTypeAgent, apigen.PermissionResourceTypePolicy,
 		apigen.PermissionResourceTypeCoworkPage, apigen.PermissionResourceTypeCoworkChannel,
 		apigen.PermissionResourceTypeCoworkTask, apigen.PermissionResourceTypeCoworkArtifact,
-		apigen.PermissionResourceTypeInstallation,
+		apigen.PermissionResourceTypeInstallation, apigen.PermissionResourceTypeInstance,
 	} {
 		resources = append(resources, &apigen.PermissionResource{Type: kind, Id: "x"})
 	}

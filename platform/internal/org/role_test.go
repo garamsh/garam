@@ -93,7 +93,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionInstanceUpdate, "iam:instance.update"},
 		{org.ActionInstanceReissue, "iam:instance.reissue"},
 		{org.ActionInstanceDelete, "iam:instance.delete"},
-		{org.ActionClusterDeclare, "iam:cluster.declare"},
+		{org.ActionBotPlace, "iam:bot.place"},
 
 		{org.ActionAgentRead, "iam:agent.read"},
 		{org.ActionAgentWatch, "iam:agent.watch"},
@@ -145,7 +145,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
 			org.ActionAppRead, org.ActionInstallationRead, org.ActionInstallationDelete,
 			org.ActionInstanceRead, org.ActionInstanceRegister, org.ActionInstanceUpdate,
-			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionClusterDeclare, org.ActionAgentRead,
+			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionBotPlace, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -168,7 +168,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
 			org.ActionAppRead, org.ActionInstallationRead, org.ActionInstallationDelete,
 			org.ActionInstanceRead, org.ActionInstanceRegister, org.ActionInstanceUpdate,
-			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionClusterDeclare, org.ActionAgentRead,
+			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionBotPlace, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -274,7 +274,7 @@ func TestRoleActions_OnlyTheOwnerInstallsAndOnlyOwnerAndAdminStandAnInstanceUp(t
 	assert.NotContains(t, org.RoleAdmin.Actions(), org.ActionInstallationCreate)
 	assert.NotContains(t, org.RoleMember.Actions(), org.ActionInstallationCreate)
 	for _, action := range []string{org.ActionInstallationDelete, org.ActionInstanceRegister, org.ActionInstanceUpdate,
-		org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionClusterDeclare} {
+		org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionBotPlace} {
 		assert.Contains(t, org.RoleOwner.Actions(), action)
 		assert.Contains(t, org.RoleAdmin.Actions(), action)
 		assert.NotContains(t, org.RoleMember.Actions(), action)
@@ -379,7 +379,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorReissue, org.ActionOperatorDelegate,
 			org.ActionInstallationDelete, org.ActionInstanceRegister, org.ActionInstanceUpdate,
-			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionClusterDeclare, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
+			org.ActionInstanceReissue, org.ActionInstanceDelete, org.ActionBotPlace, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
 			org.ActionCodehubRepoWrite, org.ActionCodehubRepoCreate, org.ActionCodehubRunnerAdminister,

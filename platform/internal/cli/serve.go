@@ -20,7 +20,7 @@ import (
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
-	clusterpg "github.com/garamsh/garam/platform/internal/cluster/postgres"
+	botpg "github.com/garamsh/garam/platform/internal/bot/postgres"
 	"github.com/garamsh/garam/platform/internal/health"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -119,7 +119,7 @@ func serveAPI(cmd *cobra.Command) error {
 	// credentials, another what is declared on an instance and what it
 	// reports.
 	apps := apppg.New(pool)
-	clusters := clusterpg.New(pool)
+	bots := botpg.New(pool)
 	srv := api.NewServer(
 		userpg.New(pool),
 		orgpg.New(pool),
@@ -145,7 +145,7 @@ func serveAPI(cmd *cobra.Command) error {
 		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
 		WithIdentity(issuer).
 		WithPolicyRelay(relay).
-		WithApps(apps, apps, clusters, clusters)
+		WithApps(apps, apps, bots, bots)
 
 	gate, stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger, obs.registry)
 	if err != nil {

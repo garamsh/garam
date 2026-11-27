@@ -252,90 +252,6 @@ func (e AuditRecordKind) Valid() bool {
 	}
 }
 
-// Defines values for ClusterDeclarationOutcomeOutcome.
-const (
-	Applied             ClusterDeclarationOutcomeOutcome = "applied"
-	Conflict            ClusterDeclarationOutcomeOutcome = "conflict"
-	Invalid             ClusterDeclarationOutcomeOutcome = "invalid"
-	NamespaceNotWatched ClusterDeclarationOutcomeOutcome = "namespaceNotWatched"
-)
-
-// Valid indicates whether the value is a known member of the ClusterDeclarationOutcomeOutcome enum.
-func (e ClusterDeclarationOutcomeOutcome) Valid() bool {
-	switch e {
-	case Applied:
-		return true
-	case Conflict:
-		return true
-	case Invalid:
-		return true
-	case NamespaceNotWatched:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClusterReportConnectorMode.
-const (
-	Apply      ClusterReportConnectorMode = "apply"
-	ReportOnly ClusterReportConnectorMode = "reportOnly"
-)
-
-// Valid indicates whether the value is a known member of the ClusterReportConnectorMode enum.
-func (e ClusterReportConnectorMode) Valid() bool {
-	switch e {
-	case Apply:
-		return true
-	case ReportOnly:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClusterReportedObjectKind.
-const (
-	Bot            ClusterReportedObjectKind = "Bot"
-	BotPool        ClusterReportedObjectKind = "BotPool"
-	Workspace      ClusterReportedObjectKind = "Workspace"
-	WorkspaceClass ClusterReportedObjectKind = "WorkspaceClass"
-)
-
-// Valid indicates whether the value is a known member of the ClusterReportedObjectKind enum.
-func (e ClusterReportedObjectKind) Valid() bool {
-	switch e {
-	case Bot:
-		return true
-	case BotPool:
-		return true
-	case Workspace:
-		return true
-	case WorkspaceClass:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ClusterReportedObjectOwner.
-const (
-	Cluster ClusterReportedObjectOwner = "cluster"
-	Garam   ClusterReportedObjectOwner = "garam"
-)
-
-// Valid indicates whether the value is a known member of the ClusterReportedObjectOwner enum.
-func (e ClusterReportedObjectOwner) Valid() bool {
-	switch e {
-	case Cluster:
-		return true
-	case Garam:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for CredentialEventAction.
 const (
 	EventIssue CredentialEventAction = "issue"
@@ -390,6 +306,30 @@ func (e CredentialEventOutcome) Valid() bool {
 	case EventIssued:
 		return true
 	case EventRefused:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeclarationOutcomeOutcome.
+const (
+	Applied             DeclarationOutcomeOutcome = "applied"
+	Conflict            DeclarationOutcomeOutcome = "conflict"
+	Invalid             DeclarationOutcomeOutcome = "invalid"
+	NamespaceNotWatched DeclarationOutcomeOutcome = "namespaceNotWatched"
+)
+
+// Valid indicates whether the value is a known member of the DeclarationOutcomeOutcome enum.
+func (e DeclarationOutcomeOutcome) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Conflict:
+		return true
+	case Invalid:
+		return true
+	case NamespaceNotWatched:
 		return true
 	default:
 		return false
@@ -957,6 +897,7 @@ const (
 	PermissionResourceTypeCoworkTask     PermissionResourceType = "cowork-task"
 	PermissionResourceTypeGroup          PermissionResourceType = "group"
 	PermissionResourceTypeInstallation   PermissionResourceType = "installation"
+	PermissionResourceTypeInstance       PermissionResourceType = "instance"
 	PermissionResourceTypePolicy         PermissionResourceType = "policy"
 	PermissionResourceTypeProject        PermissionResourceType = "project"
 )
@@ -977,6 +918,8 @@ func (e PermissionResourceType) Valid() bool {
 	case PermissionResourceTypeGroup:
 		return true
 	case PermissionResourceTypeInstallation:
+		return true
+	case PermissionResourceTypeInstance:
 		return true
 	case PermissionResourceTypePolicy:
 		return true
@@ -999,6 +942,66 @@ func (e PolicyStatus) Valid() bool {
 	case Active:
 		return true
 	case Draft:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportConnectorMode.
+const (
+	Apply      ReportConnectorMode = "apply"
+	ReportOnly ReportConnectorMode = "reportOnly"
+)
+
+// Valid indicates whether the value is a known member of the ReportConnectorMode enum.
+func (e ReportConnectorMode) Valid() bool {
+	switch e {
+	case Apply:
+		return true
+	case ReportOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportedObjectKind.
+const (
+	Bot            ReportedObjectKind = "Bot"
+	BotPool        ReportedObjectKind = "BotPool"
+	Workspace      ReportedObjectKind = "Workspace"
+	WorkspaceClass ReportedObjectKind = "WorkspaceClass"
+)
+
+// Valid indicates whether the value is a known member of the ReportedObjectKind enum.
+func (e ReportedObjectKind) Valid() bool {
+	switch e {
+	case Bot:
+		return true
+	case BotPool:
+		return true
+	case Workspace:
+		return true
+	case WorkspaceClass:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportedObjectOwner.
+const (
+	Cluster ReportedObjectOwner = "cluster"
+	Garam   ReportedObjectOwner = "garam"
+)
+
+// Valid indicates whether the value is a known member of the ReportedObjectOwner enum.
+func (e ReportedObjectOwner) Valid() bool {
+	switch e {
+	case Cluster:
+		return true
+	case Garam:
 		return true
 	default:
 		return false
@@ -1383,113 +1386,6 @@ type AuditRecordPage struct {
 	Records       []AuditRecord `json:"records"`
 }
 
-// ClusterDeclaration One declaration placed on an instance of garam-bot-connector, which its connector applies (ADR-0187).
-type ClusterDeclaration struct {
-	CreatedAt time.Time `json:"createdAt"`
-
-	// Generation 1 when placed, and one more at every write.
-	Generation int64  `json:"generation"`
-	Id         string `json:"id"`
-
-	// Instance The GRN of the instance it is placed on.
-	Instance string `json:"instance"`
-
-	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
-	Object    ClusterDeclaredObject `json:"object"`
-	UpdatedAt time.Time             `json:"updatedAt"`
-}
-
-// ClusterDeclarationList defines model for ClusterDeclarationList.
-type ClusterDeclarationList struct {
-	Declarations []ClusterDeclaration `json:"declarations"`
-}
-
-// ClusterDeclarationOutcome What the connector made of one declaration placed on this cluster.
-type ClusterDeclarationOutcome struct {
-	Generation int64  `json:"generation"`
-	Id         string `json:"id"`
-
-	// Message Display data, rendered as text.
-	Message *string                          `json:"message,omitempty"`
-	Outcome ClusterDeclarationOutcomeOutcome `json:"outcome"`
-}
-
-// ClusterDeclarationOutcomeOutcome defines model for ClusterDeclarationOutcome.Outcome.
-type ClusterDeclarationOutcomeOutcome string
-
-// ClusterDeclarationWrite defines model for ClusterDeclarationWrite.
-type ClusterDeclarationWrite struct {
-	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
-	Object ClusterDeclaredObject `json:"object"`
-}
-
-// ClusterDeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
-type ClusterDeclaredObject = json.RawMessage
-
-// ClusterReport A connected cluster's report (cluster-connection v1alpha1 REP-1), as garam kept it.
-type ClusterReport struct {
-	Connector    ClusterReportConnector      `json:"connector"`
-	Declarations []ClusterDeclarationOutcome `json:"declarations"`
-	Objects      []ClusterReportedObject     `json:"objects"`
-	ObservedAt   time.Time                   `json:"observedAt"`
-}
-
-// ClusterReportConnector defines model for ClusterReportConnector.
-type ClusterReportConnector struct {
-	// ClaimedElsewhere The watched namespaces another release holds, or none does.
-	ClaimedElsewhere *[]string                  `json:"claimedElsewhere,omitempty"`
-	Mode             ClusterReportConnectorMode `json:"mode"`
-
-	// Namespaces The namespaces the connector acts in.
-	Namespaces []string `json:"namespaces"`
-	Version    string   `json:"version"`
-}
-
-// ClusterReportConnectorMode defines model for ClusterReportConnector.Mode.
-type ClusterReportConnectorMode string
-
-// ClusterReportView What garam holds of an instance's reports.
-type ClusterReportView struct {
-	// Instance The instance's GRN.
-	Instance string `json:"instance"`
-
-	// LastContactAt When the instance's latest authenticated request reached garam, to within a second; null where none has.
-	LastContactAt *time.Time     `json:"lastContactAt"`
-	Report        *ClusterReport `json:"report"`
-}
-
-// ClusterReportedObject One object of a declared kind the connector reported. A cluster-owned one is shown read-only, with the cluster as its source.
-type ClusterReportedObject struct {
-	ApiVersion string `json:"apiVersion"`
-
-	// Cluster A garam-owned object's record, always this cluster.
-	Cluster *string `json:"cluster,omitempty"`
-
-	// DeclarationId A garam-owned object's declaration.
-	DeclarationId *string                   `json:"declarationId,omitempty"`
-	Generation    int64                     `json:"generation"`
-	Kind          ClusterReportedObjectKind `json:"kind"`
-	Name          string                    `json:"name"`
-	Namespace     string                    `json:"namespace"`
-
-	// Orphaned A garam-owned object no live declaration names.
-	Orphaned *bool                      `json:"orphaned,omitempty"`
-	Owner    ClusterReportedObjectOwner `json:"owner"`
-
-	// Spec A cluster-owned object's spec. Display data, rendered as text.
-	Spec *json.RawMessage `json:"spec,omitempty"`
-
-	// Status Display data, rendered as text.
-	Status json.RawMessage `json:"status"`
-	Uid    string          `json:"uid"`
-}
-
-// ClusterReportedObjectKind defines model for ClusterReportedObject.Kind.
-type ClusterReportedObjectKind string
-
-// ClusterReportedObjectOwner defines model for ClusterReportedObject.Owner.
-type ClusterReportedObjectOwner string
-
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
 	Url string `json:"url"`
@@ -1534,6 +1430,49 @@ type CredentialEventCredential string
 
 // CredentialEventOutcome defines model for CredentialEvent.Outcome.
 type CredentialEventOutcome string
+
+// Declaration One declaration placed on an instance of garam-bot-connector, which its connector applies (ADR-0187).
+type Declaration struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Generation 1 when placed, and one more at every write.
+	Generation int64  `json:"generation"`
+	Id         string `json:"id"`
+
+	// Instance The GRN of the instance it is placed on.
+	Instance string `json:"instance"`
+
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
+	Object    DeclaredObject `json:"object"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+}
+
+// DeclarationList defines model for DeclarationList.
+type DeclarationList struct {
+	Declarations []Declaration `json:"declarations"`
+}
+
+// DeclarationOutcome What the connector made of one declaration placed on this instance.
+type DeclarationOutcome struct {
+	Generation int64  `json:"generation"`
+	Id         string `json:"id"`
+
+	// Message Display data, rendered as text.
+	Message *string                   `json:"message,omitempty"`
+	Outcome DeclarationOutcomeOutcome `json:"outcome"`
+}
+
+// DeclarationOutcomeOutcome defines model for DeclarationOutcome.Outcome.
+type DeclarationOutcomeOutcome string
+
+// DeclarationWrite defines model for DeclarationWrite.
+type DeclarationWrite struct {
+	// Object An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
+	Object DeclaredObject `json:"object"`
+}
+
+// DeclaredObject An object of a kind cluster-connection v1alpha1 declares (DECL-7): `apiVersion`, `kind`, `metadata.namespace`, `metadata.name`, optional `metadata.labels` and `metadata.annotations`, and `spec`. garam keeps these members alone. The object must be one the parser of garam-bot's interface 1 admits, which refuses an unknown field, a field naming an image (DECL-9) and a secret named other than as `<secret-name>/<key>` (DECL-8). At most 65536 bytes once kept.
+type DeclaredObject = json.RawMessage
 
 // DelegatedOperation `iam:agent.activate` bounds the hosted operator's own lifecycle authority; no user mints it. `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
 type DelegatedOperation string
@@ -1924,6 +1863,24 @@ type InstancePatch struct {
 type InstanceRegistrationToken struct {
 	ExpiresAt         time.Time `json:"expiresAt"`
 	RegistrationToken string    `json:"registrationToken"`
+}
+
+// InstanceReport An instance's report (cluster-connection v1alpha1 REP-1), as garam kept it.
+type InstanceReport struct {
+	Connector    ReportConnector      `json:"connector"`
+	Declarations []DeclarationOutcome `json:"declarations"`
+	Objects      []ReportedObject     `json:"objects"`
+	ObservedAt   time.Time            `json:"observedAt"`
+}
+
+// InstanceReportView What garam holds of an instance's reports.
+type InstanceReportView struct {
+	// Instance The instance's GRN.
+	Instance string `json:"instance"`
+
+	// LastContactAt When the instance's latest authenticated request reached garam, to within a second; null where none has.
+	LastContactAt *time.Time      `json:"lastContactAt"`
+	Report        *InstanceReport `json:"report"`
 }
 
 // Invitation defines model for Invitation.
@@ -2480,6 +2437,52 @@ type RegistryType struct {
 	Parents []string `json:"parents"`
 }
 
+// ReportConnector defines model for ReportConnector.
+type ReportConnector struct {
+	// ClaimedElsewhere The watched namespaces another release holds, or none does.
+	ClaimedElsewhere *[]string           `json:"claimedElsewhere,omitempty"`
+	Mode             ReportConnectorMode `json:"mode"`
+
+	// Namespaces The namespaces the connector acts in.
+	Namespaces []string `json:"namespaces"`
+	Version    string   `json:"version"`
+}
+
+// ReportConnectorMode defines model for ReportConnector.Mode.
+type ReportConnectorMode string
+
+// ReportedObject One object of a declared kind the connector reported. A cluster-owned one is shown read-only, with the cluster as its source.
+type ReportedObject struct {
+	ApiVersion string `json:"apiVersion"`
+
+	// Cluster A garam-owned object's instance, always this one.
+	Cluster *string `json:"cluster,omitempty"`
+
+	// DeclarationId A garam-owned object's declaration.
+	DeclarationId *string            `json:"declarationId,omitempty"`
+	Generation    int64              `json:"generation"`
+	Kind          ReportedObjectKind `json:"kind"`
+	Name          string             `json:"name"`
+	Namespace     string             `json:"namespace"`
+
+	// Orphaned A garam-owned object no live declaration names.
+	Orphaned *bool               `json:"orphaned,omitempty"`
+	Owner    ReportedObjectOwner `json:"owner"`
+
+	// Spec A cluster-owned object's spec. Display data, rendered as text.
+	Spec *json.RawMessage `json:"spec,omitempty"`
+
+	// Status Display data, rendered as text.
+	Status json.RawMessage `json:"status"`
+	Uid    string          `json:"uid"`
+}
+
+// ReportedObjectKind defines model for ReportedObject.Kind.
+type ReportedObjectKind string
+
+// ReportedObjectOwner defines model for ReportedObject.Owner.
+type ReportedObjectOwner string
+
 // RequestId defines model for RequestId.
 type RequestId = string
 
@@ -2885,10 +2888,10 @@ type CreateInstanceJSONRequestBody = InstanceCreation
 type UpdateInstanceJSONRequestBody = InstancePatch
 
 // CreateInstanceDeclarationJSONRequestBody defines body for CreateInstanceDeclaration for application/json ContentType.
-type CreateInstanceDeclarationJSONRequestBody = ClusterDeclarationWrite
+type CreateInstanceDeclarationJSONRequestBody = DeclarationWrite
 
 // PutInstanceDeclarationJSONRequestBody defines body for PutInstanceDeclaration for application/json ContentType.
-type PutInstanceDeclarationJSONRequestBody = ClusterDeclarationWrite
+type PutInstanceDeclarationJSONRequestBody = DeclarationWrite
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreate
@@ -3714,7 +3717,7 @@ type ClientInterface interface {
 
 	// CreateInstanceDeclarationWithBody Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3723,7 +3726,7 @@ type ClientInterface interface {
 
 	// CreateInstanceDeclaration Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3732,7 +3735,7 @@ type ClientInterface interface {
 
 	// DeleteInstanceDeclaration Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
 	//
-	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
 	//
 	// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `DeleteInstanceDeclaration` operationId).
 	DeleteInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3746,7 +3749,7 @@ type ClientInterface interface {
 
 	// PutInstanceDeclarationWithBody Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3755,7 +3758,7 @@ type ClientInterface interface {
 
 	// PutInstanceDeclaration Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5805,7 +5808,7 @@ func (c *Client) ListInstanceDeclarations(ctx context.Context, org Org, installa
 
 // CreateInstanceDeclarationWithBody Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5824,7 +5827,7 @@ func (c *Client) CreateInstanceDeclarationWithBody(ctx context.Context, org Org,
 
 // CreateInstanceDeclaration Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5843,7 +5846,7 @@ func (c *Client) CreateInstanceDeclaration(ctx context.Context, org Org, install
 
 // DeleteInstanceDeclaration Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
 //
-// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
 //
 // Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `DeleteInstanceDeclaration` operationId).
 func (c *Client) DeleteInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5877,7 +5880,7 @@ func (c *Client) GetInstanceDeclaration(ctx context.Context, org Org, installati
 
 // PutInstanceDeclarationWithBody Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 //
-// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5896,7 +5899,7 @@ func (c *Client) PutInstanceDeclarationWithBody(ctx context.Context, org Org, in
 
 // PutInstanceDeclaration Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 //
-// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -12893,7 +12896,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateInstanceDeclarationWithBodyWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12902,7 +12905,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateInstanceDeclarationWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12911,7 +12914,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteInstanceDeclarationWithResponse Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
 	//
-	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12929,7 +12932,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutInstanceDeclarationWithBodyWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12938,7 +12941,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutInstanceDeclarationWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -17587,7 +17590,7 @@ type ListInstanceDeclarationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterDeclarationList
+	JSON200 *DeclarationList
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -17599,7 +17602,7 @@ type ListInstanceDeclarationsResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListInstanceDeclarationsResponse) GetJSON200() *ClusterDeclarationList {
+func (r ListInstanceDeclarationsResponse) GetJSON200() *DeclarationList {
 	return r.JSON200
 }
 
@@ -17656,7 +17659,7 @@ type CreateInstanceDeclarationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *ClusterDeclaration
+	JSON201 *Declaration
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -17672,7 +17675,7 @@ type CreateInstanceDeclarationResponse struct {
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateInstanceDeclarationResponse) GetJSON201() *ClusterDeclaration {
+func (r CreateInstanceDeclarationResponse) GetJSON201() *Declaration {
 	return r.JSON201
 }
 
@@ -17801,7 +17804,7 @@ type GetInstanceDeclarationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterDeclaration
+	JSON200 *Declaration
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -17813,7 +17816,7 @@ type GetInstanceDeclarationResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetInstanceDeclarationResponse) GetJSON200() *ClusterDeclaration {
+func (r GetInstanceDeclarationResponse) GetJSON200() *Declaration {
 	return r.JSON200
 }
 
@@ -17870,9 +17873,9 @@ type PutInstanceDeclarationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterDeclaration
+	JSON200 *Declaration
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *ClusterDeclaration
+	JSON201 *Declaration
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -17888,12 +17891,12 @@ type PutInstanceDeclarationResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r PutInstanceDeclarationResponse) GetJSON200() *ClusterDeclaration {
+func (r PutInstanceDeclarationResponse) GetJSON200() *Declaration {
 	return r.JSON200
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r PutInstanceDeclarationResponse) GetJSON201() *ClusterDeclaration {
+func (r PutInstanceDeclarationResponse) GetJSON201() *Declaration {
 	return r.JSON201
 }
 
@@ -18167,7 +18170,7 @@ type GetInstanceReportResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ClusterReportView
+	JSON200 *InstanceReportView
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -18179,7 +18182,7 @@ type GetInstanceReportResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetInstanceReportResponse) GetJSON200() *ClusterReportView {
+func (r GetInstanceReportResponse) GetJSON200() *InstanceReportView {
 	return r.JSON200
 }
 
@@ -21984,7 +21987,7 @@ func (c *ClientWithResponses) ListInstanceDeclarationsWithResponse(ctx context.C
 
 // CreateInstanceDeclarationWithBodyWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -21999,7 +22002,7 @@ func (c *ClientWithResponses) CreateInstanceDeclarationWithBodyWithResponse(ctx 
 
 // CreateInstanceDeclarationWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:cluster.declare` on the organization.
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -22014,7 +22017,7 @@ func (c *ClientWithResponses) CreateInstanceDeclarationWithResponse(ctx context.
 
 // DeleteInstanceDeclarationWithResponse Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
 //
-// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:cluster.declare` on the organization.
+// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -22044,7 +22047,7 @@ func (c *ClientWithResponses) GetInstanceDeclarationWithResponse(ctx context.Con
 
 // PutInstanceDeclarationWithBodyWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 //
-// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -22059,7 +22062,7 @@ func (c *ClientWithResponses) PutInstanceDeclarationWithBodyWithResponse(ctx con
 
 // PutInstanceDeclarationWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 //
-// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:cluster.declare` on the organization.
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -26142,7 +26145,7 @@ func ParseListInstanceDeclarationsResponse(rsp *http.Response) (*ListInstanceDec
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterDeclarationList
+		var dest DeclarationList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26196,7 +26199,7 @@ func ParseCreateInstanceDeclarationResponse(rsp *http.Response) (*CreateInstance
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ClusterDeclaration
+		var dest Declaration
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26314,7 +26317,7 @@ func ParseGetInstanceDeclarationResponse(rsp *http.Response) (*GetInstanceDeclar
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterDeclaration
+		var dest Declaration
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26368,14 +26371,14 @@ func ParsePutInstanceDeclarationResponse(rsp *http.Response) (*PutInstanceDeclar
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterDeclaration
+		var dest Declaration
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ClusterDeclaration
+		var dest Declaration
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26614,7 +26617,7 @@ func ParseGetInstanceReportResponse(rsp *http.Response) (*GetInstanceReportRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ClusterReportView
+		var dest InstanceReportView
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

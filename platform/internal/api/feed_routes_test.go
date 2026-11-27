@@ -65,9 +65,9 @@ var feedClassification = map[string]string{
 	"updateInstance":                   "writes the name, description and kind, which no trigger watches",
 	"reissueInstanceRegistrationToken": "writes instance_registration_tokens",
 	"revokeInstanceKey":                "writes instance_keys",
-	"createInstanceDeclaration":        "writes cluster_declarations, which no trigger watches",
-	"putInstanceDeclaration":           "writes cluster_declarations, which no trigger watches",
-	"deleteInstanceDeclaration":        "writes cluster_declarations, which no trigger watches",
+	"createInstanceDeclaration":        "writes bot_declarations, which no trigger watches",
+	"putInstanceDeclaration":           "writes bot_declarations, which no trigger watches",
+	"deleteInstanceDeclaration":        "writes bot_declarations, which no trigger watches",
 	"createInvitation":                 "writes invitations", "revokeInvitation": "writes invitations",
 	// The relayed writes (ADR-0169): the service stores in the call.
 	"createIamPolicy": relayed, "createIamPolicyVersion": relayed,

@@ -21,7 +21,8 @@ with a private key it holds, as an operator and a first-party service
 principal do ([ADR-0184](./adr/0184-a-connected-cluster-is-a-machine-identity-that-registers-once-with-a-one-time-token-and-a-key-it-generates.md)).
 Its registration, its exchange, its rotation and their revocation are
 built (#2046), and [clusters.md](./clusters.md) holds their current
-decisions; the bot-token mint a cluster's token also reaches is not.
+decisions; the bot-token mint a cluster's token also reaches is the
+bot domain's ([bots.md](./bots.md)).
 It registers once by spending a one-time token with a key it generated,
 which supersedes ADR-0117 in part for a cluster only, because that key
 never leaves the cluster. After that it exchanges `private_key_jwt`
@@ -311,7 +312,8 @@ credential, and an agent holds the tokens its assignee mints for it
   not list, and a connected cluster's app lists none of them: it
   reaches the cluster-connection routes alone, which the same listener
   serves from the interface's own specification (ADR-0186,
-  [clusters.md](./clusters.md), [apps.md](./apps.md)).
+  [clusters.md](./clusters.md), [bots.md](./bots.md),
+  [apps.md](./apps.md)).
 
 ## Browser tokens
 
@@ -383,10 +385,11 @@ and its place's connector obtains its token. The claims are garam-bot's
   domain does (#2082), so the place is any instance, and
   garam-bot-connector is the one app there is.
 - **The token is `garam_bt_` and opaque, accepted for an hour.**
-  `cluster_bot_tokens` (migration 000087) keeps its hash beside its
-  `sub`, the bot, by the declaration that places it; its `act.sub`, the
-  record; the connector key whose token acted; and the scope allowed,
-  empty. Its `aud` is garam's. A record exchanges at most 600 a minute.
+  `bot_tokens` (migration 000087, renamed by 000091) keeps its hash
+  beside its `sub`, the bot, by the declaration that places it; its
+  `act.sub`, the record; the connector key whose token acted; and the
+  scope allowed, empty. Its `aud` is garam's. A record exchanges at
+  most 600 a minute.
 - **A token goes with what it rests on, in the transaction that
   withdraws it.** Tombstoning its declaration or declaring another kind
   under its identifier, revoking the connector key it was minted

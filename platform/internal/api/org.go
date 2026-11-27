@@ -380,6 +380,11 @@ func (s *Server) resourceExists(ctx context.Context, orgGRN, target grn.GRN) (bo
 			return false, nil
 		}
 		_, err = s.apps.records.GetInstallation(ctx, target)
+	case app.InstanceType:
+		if s.apps == nil {
+			return false, nil
+		}
+		_, err = s.apps.records.GetInstance(ctx, target)
 	default:
 		return false, errorx.New(errorx.KindInternal, "no lookup for resource kind "+target.ServiceType)
 	}

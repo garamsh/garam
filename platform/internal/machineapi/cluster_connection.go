@@ -13,7 +13,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	connectiongen "github.com/garamsh/garam/platform/api/cluster-connection/v1alpha1"
 	"github.com/garamsh/garam/platform/internal/app"
-	"github.com/garamsh/garam/platform/internal/cluster"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/wire"
@@ -29,7 +29,7 @@ import (
 // rather than this listener's.
 type ClusterConnection struct {
 	instances app.Service
-	clusters  cluster.Service
+	clusters  bot.Service
 	tokenURL  string
 }
 
@@ -38,7 +38,7 @@ var _ connectiongen.ServerInterface = (*ClusterConnection)(nil)
 // NewClusterConnection serves instances and what is declared for them,
 // answering tokenURL as where a registered instance exchanges its
 // assertions (REG-6).
-func NewClusterConnection(instances app.Service, clusters cluster.Service, tokenURL string) *ClusterConnection {
+func NewClusterConnection(instances app.Service, clusters bot.Service, tokenURL string) *ClusterConnection {
 	return &ClusterConnection{instances: instances, clusters: clusters, tokenURL: tokenURL}
 }
 
@@ -93,10 +93,10 @@ func (c *ClusterConnection) RotateKey(w http.ResponseWriter, r *http.Request) {
 }
 
 // ReportPath is the report route's path, whose body is bounded at
-// cluster.ReportMaxBytes rather than the listener's own bound.
+// bot.ReportMaxBytes rather than the listener's own bound.
 const ReportPath = "/cluster-connection/v1alpha1/clusters/self/reports"
 
-// errReportTooLarge answers a report past cluster.ReportMaxBytes
+// errReportTooLarge answers a report past bot.ReportMaxBytes
 // (REP-6).
 var errReportTooLarge = errorx.New(errorx.KindInvalidArgument, "the report is over 4 MiB")
 
@@ -125,7 +125,7 @@ func (c *ClusterConnection) WatchDeclarations(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	wait := cluster.MaxWait
+	wait := bot.MaxWait
 	if params.Wait != nil {
 		wait = time.Duration(*params.Wait) * time.Second
 	}
@@ -153,7 +153,7 @@ func (c *ClusterConnection) Report(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, cluster.ReportMaxBytes))
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, bot.ReportMaxBytes))
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		writeConnectionError(w, errReportTooLarge)
@@ -163,7 +163,7 @@ func (c *ClusterConnection) Report(w http.ResponseWriter, r *http.Request) {
 		writeConnectionError(w, errorx.Wrap(err, "read report", errorx.KindInvalidArgument))
 		return
 	}
-	report, err := cluster.ParseReport(raw)
+	report, err := bot.ParseReport(raw)
 	if err != nil {
 		writeConnectionError(w, err)
 		return
@@ -221,7 +221,7 @@ var connectionCodes = []struct {
 	{app.ErrTooManyKeys, "too_many_keys", 0},
 	// No kind maps to 410, which DECL-6 answers, or to 413, which REP-6
 	// answers.
-	{cluster.ErrCursorExpired, "cursor_expired", http.StatusGone},
+	{bot.ErrCursorExpired, "cursor_expired", http.StatusGone},
 	{errReportTooLarge, "report_too_large", http.StatusRequestEntityTooLarge},
 }
 

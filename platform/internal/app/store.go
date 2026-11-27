@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/garamsh/garam/lib/grn"
 )
@@ -40,6 +41,10 @@ type Store interface {
 	// ListInstances returns the installation's instances, ordered by
 	// GRN.
 	ListInstances(ctx context.Context, installation grn.GRN) ([]*Instance, error)
+	// LastContact answers the time of the instance's latest
+	// authenticated request, which CredentialStore.ResolveToken
+	// records, nil where it has made none.
+	LastContact(ctx context.Context, g grn.GRN) (*time.Time, error)
 	// UpdateInstance applies patch to the instance's name, description
 	// and kind and answers the instance as stored, or
 	// ErrInstanceNotFound. It writes nothing keyed on the GRN.

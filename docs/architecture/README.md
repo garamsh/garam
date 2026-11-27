@@ -459,9 +459,11 @@ Responsibility documents:
 - [operators.md](./operators.md) — what an organization records about an
   operator and what it authenticates with
 - [clusters.md](./clusters.md) — a connected cluster, an instance of
-  the connector app whose connector authenticates as it, the
-  declarations its organization places on it and what the cluster
-  reports back
+  the connector app whose connector authenticates as it, and the wire
+  it speaks
+- [bots.md](./bots.md) — the bot domain: the declarations an
+  organization places on an instance, what the instance reports back
+  and the tokens its connector exchanges for the bots placed on it
 - [apps.md](./apps.md) — how every system that connects to garam is
   registered, reviewed, installed in an organization and
   authenticated, and what each app's settings decide; built in part

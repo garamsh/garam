@@ -21,9 +21,9 @@ import (
 	apppg "github.com/garamsh/garam/platform/internal/app/postgres"
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	"github.com/garamsh/garam/platform/internal/bot"
+	botpg "github.com/garamsh/garam/platform/internal/bot/postgres"
 	"github.com/garamsh/garam/platform/internal/ca"
-	"github.com/garamsh/garam/platform/internal/cluster"
-	clusterpg "github.com/garamsh/garam/platform/internal/cluster/postgres"
 	"github.com/garamsh/garam/platform/internal/health"
 	"github.com/garamsh/garam/platform/internal/identity"
 	identitypg "github.com/garamsh/garam/platform/internal/identity/postgres"
@@ -127,8 +127,8 @@ func serveMachine(cmd *cobra.Command) error {
 
 	// A declaration written through `serve api` wakes the polls this
 	// process holds on its record (ADR-0187).
-	wakes := cluster.NewWakes()
-	go clusterpg.ListenDeclarations(ctx, clusterpg.New(pool), wakes, func(err error, in time.Duration) {
+	wakes := bot.NewWakes()
+	go botpg.ListenDeclarations(ctx, botpg.New(pool), wakes, func(err error, in time.Duration) {
 		obs.logger.Warn("declarations listener reconnecting", slog.String("error", err.Error()), slog.Duration("in", in))
 	})
 
@@ -216,7 +216,7 @@ type MachineConfig struct {
 	InstanceRegistrationLimit int
 	// DeclarationWakes is where a held declarations poll waits for a
 	// write to its record. Nil holds each poll until its recheck.
-	DeclarationWakes *cluster.Wakes
+	DeclarationWakes *bot.Wakes
 	// TokenURL is the token endpoint URL an operator's assertion names
 	// as its audience, which operator.ParseTokenEndpoint read
 	// (ADR-0102). Empty serves no assertion exchange.
@@ -302,7 +302,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// A lifecycle decision reads the caller's token dates and record
 	// again, on the same clock.
 	appStore := apppg.New(pool)
-	clusterStore := clusterpg.New(pool)
+	botStore := botpg.New(pool)
 	recheck := machine.NewRecheck(identityRegistrations{operators: operatorStore, supervisors: agentpg.New(pool),
 		instances: appStore}, cfg.Now)
 	// The listener notes how each request authenticated, and the issuing
@@ -342,7 +342,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	authority := NewAuthorityService(pool, cfg.Decisions)
 	instances := app.NewService(appStore, app.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
 		RotationURL: clusterRotationURL(cfg.TokenURL), RegistrationLimit: cfg.InstanceRegistrationLimit})
-	clusters := cluster.NewService(appStore, clusterStore, clusterStore, clusterStore, cluster.Config{Now: cfg.Now,
+	bots := bot.NewService(appStore, botStore, botStore, botStore, bot.Config{Now: cfg.Now,
 		TokenEndpoint: cfg.TokenURL, Wakes: cfg.DeclarationWakes})
 	// One mux carries both specifications' routes: the machine
 	// specification's, and cluster-connection's under its own prefix
@@ -358,7 +358,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			WithSendPolicy(cfg.Decisions, agentStore).
 			WithFeed(cfg.Feed).
 			WithIdentity(cfg.Identity, principals).
-			WithInstances(instances, clusters),
+			WithInstances(instances, bots),
 		machinegen.StdHTTPServerOptions{
 			BaseRouter: mux,
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.ConfineApps, machineapi.RecoverPanics,
@@ -368,7 +368,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	connectiongen.HandlerWithOptions(machineapi.NewClusterConnection(instances, clusters, cfg.TokenURL),
+	connectiongen.HandlerWithOptions(machineapi.NewClusterConnection(instances, bots, cfg.TokenURL),
 		connectiongen.StdHTTPServerOptions{
 			BaseRouter: mux,
 			Middlewares: []connectiongen.MiddlewareFunc{machineapi.RecoverPanics,
@@ -407,7 +407,7 @@ func boundedBodies(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit := int64(maxRequestBody)
 		if r.URL.Path == machineapi.ReportPath {
-			limit = cluster.ReportMaxBytes
+			limit = bot.ReportMaxBytes
 		}
 		http.MaxBytesHandler(next, limit).ServeHTTP(w, r)
 	})

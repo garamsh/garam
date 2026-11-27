@@ -276,6 +276,30 @@ func (q *Queries) GetInstance(ctx context.Context, grn string) (Instance, error)
 	return i, err
 }
 
+const getInstanceContact = `-- name: GetInstanceContact :many
+SELECT last_contact_at FROM instance_contacts WHERE instance_grn = $1
+`
+
+func (q *Queries) GetInstanceContact(ctx context.Context, instanceGrn string) ([]pgtype.Timestamptz, error) {
+	rows, err := q.db.Query(ctx, getInstanceContact, instanceGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.Timestamptz
+	for rows.Next() {
+		var last_contact_at pgtype.Timestamptz
+		if err := rows.Scan(&last_contact_at); err != nil {
+			return nil, err
+		}
+		items = append(items, last_contact_at)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLiveInstanceKey = `-- name: GetLiveInstanceKey :one
 SELECT k.id, k.instance_grn, k.kid, k.public_jwk, k.created_at, k.retires_at, k.revoked_at
 FROM instance_keys k

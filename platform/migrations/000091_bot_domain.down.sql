@@ -1,0 +1,54 @@
+ALTER SEQUENCE instance_keys_id_seq RENAME TO cluster_keys_id_seq;
+
+CREATE OR REPLACE FUNCTION instance_key_withdrawn() RETURNS trigger
+LANGUAGE plpgsql VOLATILE AS $$
+BEGIN
+    DELETE FROM cluster_bot_tokens WHERE key_id = NEW.id;
+    RETURN NULL;
+END
+$$;
+
+
+ALTER INDEX bot_tokens_instance_idx RENAME TO cluster_bot_tokens_cluster_idx;
+ALTER INDEX bot_tokens_declaration_idx RENAME TO cluster_bot_tokens_declaration_idx;
+ALTER INDEX bot_tokens_key_idx RENAME TO cluster_bot_tokens_key_idx;
+ALTER TABLE bot_tokens RENAME CONSTRAINT bot_tokens_instance_grn_fkey TO cluster_bot_tokens_cluster_grn_fkey;
+ALTER TABLE bot_tokens RENAME CONSTRAINT bot_tokens_declaration_id_fkey TO cluster_bot_tokens_declaration_id_fkey;
+ALTER TABLE bot_tokens RENAME CONSTRAINT bot_tokens_key_id_fkey TO cluster_bot_tokens_key_id_fkey;
+ALTER TABLE bot_tokens RENAME CONSTRAINT bot_tokens_lifetime TO cluster_bot_tokens_lifetime;
+ALTER TABLE bot_tokens RENAME CONSTRAINT bot_tokens_pkey TO cluster_bot_tokens_pkey;
+ALTER TABLE bot_tokens RENAME COLUMN instance_grn TO cluster_grn;
+ALTER TABLE bot_tokens RENAME TO cluster_bot_tokens;
+
+ALTER TABLE bot_reports RENAME CONSTRAINT bot_reports_instance_grn_fkey TO cluster_reports_cluster_grn_fkey;
+ALTER TABLE bot_reports RENAME CONSTRAINT bot_reports_pkey TO cluster_reports_pkey;
+ALTER TABLE bot_reports RENAME COLUMN instance_grn TO cluster_grn;
+ALTER TABLE bot_reports RENAME TO cluster_reports;
+
+ALTER INDEX bot_declaration_changes_written_at_idx RENAME TO cluster_declaration_changes_written_at_idx;
+ALTER TABLE bot_declaration_changes RENAME CONSTRAINT bot_declaration_changes_instance_grn_fkey TO cluster_declaration_changes_cluster_grn_fkey;
+ALTER TABLE bot_declaration_changes RENAME CONSTRAINT bot_declaration_changes_object TO cluster_declaration_changes_object;
+ALTER TABLE bot_declaration_changes RENAME CONSTRAINT bot_declaration_changes_op TO cluster_declaration_changes_op;
+ALTER TABLE bot_declaration_changes RENAME CONSTRAINT bot_declaration_changes_pkey TO cluster_declaration_changes_pkey;
+ALTER TABLE bot_declaration_changes RENAME COLUMN instance_grn TO cluster_grn;
+ALTER TABLE bot_declaration_changes RENAME TO cluster_declaration_changes;
+
+ALTER INDEX bot_declarations_instance_idx RENAME TO cluster_declarations_cluster_idx;
+ALTER INDEX bot_declarations_live_object_idx RENAME TO cluster_declarations_live_object_idx;
+ALTER TABLE bot_declarations RENAME CONSTRAINT bot_declarations_instance_grn_fkey TO cluster_declarations_cluster_grn_fkey;
+ALTER TABLE bot_declarations RENAME CONSTRAINT bot_declarations_generation TO cluster_declarations_generation;
+ALTER TABLE bot_declarations RENAME CONSTRAINT bot_declarations_id_fkey TO cluster_declarations_id_fkey;
+ALTER TABLE bot_declarations RENAME CONSTRAINT bot_declarations_object TO cluster_declarations_object;
+ALTER TABLE bot_declarations RENAME CONSTRAINT bot_declarations_pkey TO cluster_declarations_pkey;
+ALTER TABLE bot_declarations RENAME COLUMN instance_grn TO cluster_grn;
+ALTER TABLE bot_declarations RENAME TO cluster_declarations;
+
+ALTER TABLE bot_declaration_heads RENAME CONSTRAINT bot_declaration_heads_instance_grn_fkey TO cluster_declaration_heads_cluster_grn_fkey;
+ALTER TABLE bot_declaration_heads RENAME CONSTRAINT bot_declaration_heads_order TO cluster_declaration_heads_order;
+ALTER TABLE bot_declaration_heads RENAME CONSTRAINT bot_declaration_heads_pkey TO cluster_declaration_heads_pkey;
+ALTER TABLE bot_declaration_heads RENAME COLUMN instance_grn TO cluster_grn;
+ALTER TABLE bot_declaration_heads RENAME TO cluster_declaration_heads;
+
+ALTER TABLE bot_declaration_ids RENAME CONSTRAINT bot_declaration_ids_pkey TO cluster_declaration_ids_pkey;
+ALTER TABLE bot_declaration_ids RENAME CONSTRAINT bot_declaration_ids_shape TO cluster_declaration_ids_shape;
+ALTER TABLE bot_declaration_ids RENAME TO cluster_declaration_ids;

@@ -176,7 +176,7 @@ func TestCreateInstance_RefusesDetailsItCannotStore(t *testing.T) {
 // caller holding every other instance action is refused it.
 func TestInstance_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
 	all := []string{org.ActionInstanceRead, org.ActionInstanceRegister, org.ActionInstanceUpdate, org.ActionInstanceReissue,
-		org.ActionInstanceDelete, org.ActionClusterDeclare}
+		org.ActionInstanceDelete, org.ActionBotPlace}
 	tests := []struct {
 		name    string
 		actions []string
@@ -194,11 +194,11 @@ func TestInstance_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
 		{"revoke a key", []string{org.ActionInstanceReissue}, "DELETE", "/keys/held", "", http.StatusNoContent},
 		{"list declarations", []string{org.ActionInstanceRead}, "GET", "/declarations", "", http.StatusOK},
 		{"read a declaration", []string{org.ActionInstanceRead}, "GET", "/declarations/placed", "", http.StatusOK},
-		{"declare", []string{org.ActionInstanceRead, org.ActionClusterDeclare}, "POST", "/declarations",
+		{"declare", []string{org.ActionInstanceRead, org.ActionBotPlace}, "POST", "/declarations",
 			declarationWrite("other"), http.StatusCreated},
-		{"declare under an id", []string{org.ActionInstanceRead, org.ActionClusterDeclare}, "PUT", "/declarations/placed",
+		{"declare under an id", []string{org.ActionInstanceRead, org.ActionBotPlace}, "PUT", "/declarations/placed",
 			declarationWrite("reviewer"), http.StatusOK},
-		{"tombstone", []string{org.ActionInstanceRead, org.ActionClusterDeclare}, "DELETE", "/declarations/placed", "",
+		{"tombstone", []string{org.ActionInstanceRead, org.ActionBotPlace}, "DELETE", "/declarations/placed", "",
 			http.StatusNoContent},
 		{"read the report", []string{org.ActionInstanceRead}, "GET", "/report", "", http.StatusOK},
 	}
@@ -233,7 +233,7 @@ func TestInstance_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
 			path := connectorPath(slug) + "/instances"
 			if tt.path != "list" {
 				g := decodeBody[apigen.CreatedInstance](t, rec).Instance.Grn
-				f.clusterKeys.place(g, app.Key{KID: "held", State: app.KeyStateActive})
+				f.instanceKeys.place(g, app.Key{KID: "held", State: app.KeyStateActive})
 				f.declare(t, g, "placed", "reviewer")
 				path += "/" + g[len(g)-16:] + tt.path
 			}
@@ -320,7 +320,7 @@ func TestInstance_ARegistrationTokenIsAnsweredOnceAndStoredAsItsHash(t *testing.
 	first := created.Registration.RegistrationToken
 	assert.True(t, app.WellFormed(first, app.RegistrationTokenPrefix), first)
 	assert.WithinDuration(t, time.Now().Add(app.RegistrationTokenTTL), created.Registration.ExpiresAt, time.Minute)
-	assert.Equal(t, app.HashSecret(first), f.clusterKeys.tokenHash(created.Instance.Grn), "the hash is what is stored")
+	assert.Equal(t, app.HashSecret(first), f.instanceKeys.tokenHash(created.Instance.Grn), "the hash is what is stored")
 
 	g := created.Instance.Grn
 	rec = f.do(t, "POST", connectorPath(slug)+"/instances/"+g[len(g)-16:]+"/registration-token", "", owner)
@@ -328,7 +328,7 @@ func TestInstance_ARegistrationTokenIsAnsweredOnceAndStoredAsItsHash(t *testing.
 	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
 	second := decodeBody[apigen.InstanceRegistrationToken](t, rec).RegistrationToken
 	assert.NotEqual(t, first, second)
-	assert.Equal(t, app.HashSecret(second), f.clusterKeys.tokenHash(g), "a reissue replaces the token held")
+	assert.Equal(t, app.HashSecret(second), f.instanceKeys.tokenHash(g), "a reissue replaces the token held")
 
 	rec = f.do(t, "POST", connectorPath(slug)+"/instances/0000000000000000/registration-token", "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "no token for a record that does not exist")

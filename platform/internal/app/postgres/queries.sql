@@ -57,6 +57,9 @@ SELECT * FROM instances WHERE grn = $1;
 -- name: ListInstances :many
 SELECT * FROM instances WHERE installation_grn = $1 ORDER BY grn;
 
+-- name: GetInstanceContact :many
+SELECT last_contact_at FROM instance_contacts WHERE instance_grn = $1;
+
 -- An absent argument keeps the column it would have written, so a
 -- caller changing one leaves the others as they stand.
 -- name: UpdateInstance :one

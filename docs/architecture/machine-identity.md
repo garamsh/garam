@@ -502,7 +502,11 @@ revocation and the machine-listener-only audience stand.
   most two per service for a rotation, beside those of each platform
   app under its slug (#2081): a set's name is a slug, and a service
   principal is still one only where its record is; nothing on either
-  listener issues or withdraws them. Built: the file is re-read and
+  listener issues or withdraws them. One set can therefore prove two
+  identities: cowork's proves `grn:<org>/iam/service/cowork` and, once
+  an app of slug `cowork` is installed, its installation in every
+  organization, which is #2085's intent and widens what one leaked key
+  reaches. Built: the file is re-read and
   re-parsed on every authentication, so removing a compromised key
   takes no restart, and a file that is gone or no longer parses
   refuses every principal as unavailable (503), not as a bad client.

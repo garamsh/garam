@@ -105,15 +105,16 @@ func (c *Client) Delete(ctx context.Context, w policyrelay.Write) error {
 	return relayed(err)
 }
 
-// Purge removes, for actor, every policy of orgGRN naming one of
-// entities, and returns the identifiers the service removed.
-func (c *Client) Purge(ctx context.Context, actor, orgGRN grn.GRN, entities []grn.GRN) ([]string, error) {
-	who, err := subject(actor)
+// Purge removes, for its actor, every policy of its organization
+// naming one of its entities, and returns the identifiers the service
+// removed.
+func (c *Client) Purge(ctx context.Context, p policyrelay.Purge) ([]string, error) {
+	who, err := subject(p.Actor)
 	if err != nil {
 		return nil, err
 	}
-	refs := make([]*policyv1.EntityRef, 0, len(entities))
-	for _, g := range entities {
+	refs := make([]*policyv1.EntityRef, 0, len(p.Entities))
+	for _, g := range p.Entities {
 		ref, err := entityRef(g)
 		if err != nil {
 			return nil, err
@@ -123,7 +124,7 @@ func (c *Client) Purge(ctx context.Context, actor, orgGRN grn.GRN, entities []gr
 	ctx, cancel := context.WithTimeout(ctx, feedgrpc.CallTimeout)
 	defer cancel()
 	resp, err := c.client.PurgePolicies(ctx, &policyv1.PurgePoliciesRequest{
-		Actor: who, Org: orgGRN.String(), Entities: refs,
+		Actor: who, Org: p.Org.String(), Entities: refs, IdPrefix: p.Within,
 	})
 	if err != nil {
 		return nil, relayed(err)

@@ -56,7 +56,9 @@ service PolicyService {
   // uninstall takes away, whoever wrote each policy. The platform alone
   // calls it, once it has decided the actor may take the entities
   // away, so the service evaluates nothing and records each removal as
-  // the actor's.
+  // the actor's. With id_prefix, only a policy whose identifier opens
+  // with it is judged: an install takes back what an earlier
+  // incarnation's install wrote, and nothing a person wrote.
   rpc PurgePolicies(PurgePoliciesRequest) returns (PurgePoliciesResponse);
 
   // GetPolicy reads one policy with its versions.
@@ -398,6 +400,10 @@ message PurgePoliciesRequest {
   Subject actor = 1;
   string org = 2;
   repeated EntityRef entities = 3;
+  // id_prefix, where set, limits the purge to the policies whose
+  // identifier, the last segment of their GRN, opens with it. It is a
+  // slug's characters and nothing else.
+  string id_prefix = 4;
 }
 
 message PurgePoliciesResponse {

@@ -126,6 +126,9 @@ it through `garam policy-feed` (#1689, #1888).
   reinstall starts clean. A scoped caller is refused whole, as above.
   The request names its actor, each removal is recorded as the actor's,
   and an entity of another organization, or none, refuses the request.
+  An `id_prefix` limits it to the policies whose identifier opens with
+  it, as an install's purge of its earlier incarnation's `permit`s
+  does, and one that is not a slug's characters refuses the request.
   The answer is the GRNs removed.
 - **A `permit` never reaches an operator or a supervisor.** A decision
   for an `Iam::Operator` or an `Iam::Supervisor` composes the

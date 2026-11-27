@@ -380,8 +380,6 @@ fn qualify(namespace: &str, name: &str) -> String {
     }
 }
 
-/// One to 64 characters of lowercase letters, digits and `-`
-/// (ADR-0142 item 4).
 /// The actions no app may request (ADR-0192 decision 6): those that
 /// grant, delegate or change membership, roles, invitations, policies,
 /// consent, a principal's credentials or the organization itself. A
@@ -455,6 +453,8 @@ fn floor_problem(action: &Action) -> Option<String> {
     })
 }
 
+/// One to 64 characters of lowercase letters, digits and `-`
+/// (ADR-0142 item 4).
 pub fn is_slug(text: &str) -> bool {
     !text.is_empty()
         && text.len() <= SEGMENT_MAX

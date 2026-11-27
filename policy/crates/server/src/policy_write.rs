@@ -433,7 +433,9 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
     /// entities (ADR-0192 decision 4). It is the platform's alone, which
     /// has decided the actor may take them away, so it evaluates
     /// nothing; each entity must be the organization's own, and each
-    /// removal is recorded as the actor's.
+    /// removal is recorded as the actor's. An `id_prefix` limits it to
+    /// the policies whose identifier opens with it, and must be a
+    /// slug's characters.
     pub(crate) async fn purge_policies(
         &self,
         principal: &Principal,
@@ -464,7 +466,16 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let policies = store.purge(&org, &entities).await?;
+        let within = match request.id_prefix.as_str() {
+            "" => None,
+            prefix if is_slug(prefix) => Some(prefix),
+            prefix => {
+                return Err(ServiceError::Malformed(format!(
+                    "id_prefix {prefix:?} is not a slug's characters"
+                )));
+            }
+        };
+        let policies = store.purge(&org, &entities, within).await?;
         Ok(proto::PurgePoliciesResponse { policies })
     }
 

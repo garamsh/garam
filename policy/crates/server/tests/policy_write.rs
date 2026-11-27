@@ -369,10 +369,21 @@ impl Platform {
         org: &str,
         entities: &[Named],
     ) -> Result<Vec<String>, tonic::Status> {
+        self.purge_within(actor, org, entities, "").await
+    }
+
+    async fn purge_within(
+        &mut self,
+        actor: Option<Named>,
+        org: &str,
+        entities: &[Named],
+        id_prefix: &str,
+    ) -> Result<Vec<String>, tonic::Status> {
         let request = self.request(pb::PurgePoliciesRequest {
             actor: actor.and_then(subject),
             org: org.into(),
             entities: entities.iter().copied().filter_map(entity).collect(),
+            id_prefix: id_prefix.into(),
         });
         Ok(self
             .grpc
@@ -1016,9 +1027,11 @@ const NO_ONE_READS_INSTALLATION: &str = r#"forbid (
 /// An uninstall's purge over the wire (ADR-0192 decision 4): the
 /// platform takes away an owner's policy naming the installation for
 /// the administrator who uninstalled, evaluating nothing, and leaves
-/// the rest. A request naming no actor, no entity or another
-/// organization's entity removes nothing; a scoped caller is refused
-/// in `a_scoped_caller_is_refused_every_write`.
+/// the rest. A request naming no actor, no entity, another
+/// organization's entity or a prefix that is not a slug's characters
+/// removes nothing, and so does one within a prefix no identifier
+/// opens with; a scoped caller is refused in
+/// `a_scoped_caller_is_refused_every_write`.
 #[sqlx::test(migrator = "MIGRATIONS")]
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn the_platform_purges_what_names_an_installation_for_the_actor(pool: PgPool) {
@@ -1051,7 +1064,21 @@ async fn the_platform_purges_what_names_an_installation_for_the_actor(pool: PgPo
             .await,
         Code::InvalidArgument,
     );
+    refused(
+        platform
+            .purge_within(Some(ADA), ACME, &[INSTALLATION], "Install/")
+            .await,
+        Code::InvalidArgument,
+    );
     assert_eq!(platform.list(Some(OWEN), ACME).await.unwrap().len(), 6);
+    assert!(
+        platform
+            .purge_within(Some(ADA), ACME, &[INSTALLATION], "install-")
+            .await
+            .unwrap()
+            .is_empty(),
+        "no identifier opens with the prefix"
+    );
 
     let purged = platform
         .purge(Some(ADA), ACME, &[INSTALLATION])

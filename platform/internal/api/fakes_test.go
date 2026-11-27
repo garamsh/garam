@@ -1914,8 +1914,9 @@ func newFakeReports(records *fakeAppStore) *fakeReports {
 // fakePolicies is the policy relay as far as an install and an
 // uninstall write through it: the policies created and activated, each
 // by its identifier, and the purges asked. failAt, from 1, fails that
-// creation, standing for a refusal of the policy service. Any other
-// method panics on the nil interface.
+// creation, standing for a refusal of the policy service, and
+// purgeFailAt that purge. A call on a context already done fails as
+// the client's does. Any other method panics on the nil interface.
 type fakePolicies struct {
 	policyrelay.Service
 	mu sync.Mutex
@@ -1924,22 +1925,25 @@ type fakePolicies struct {
 	created map[string]policyrelay.Body
 	writers map[string]grn.GRN
 	active  []string
-	purges  []purge
+	purges  []policyrelay.Purge
 	failAt  int
 	creates int
+	// onFail runs where a creation fails, before it answers.
+	onFail      func()
+	purgeFailAt int
 }
 
-// purge is one purge the relay was asked.
-type purge struct {
-	actor, org grn.GRN
-	entities   []grn.GRN
-}
-
-func (p *fakePolicies) Create(_ context.Context, w policyrelay.Write, _ string, body policyrelay.Body) error {
+func (p *fakePolicies) Create(ctx context.Context, w policyrelay.Write, _ string, body policyrelay.Body) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return errorx.Wrap(err, "policy service", errorx.KindUnavailable)
+	}
 	p.creates++
 	if p.creates == p.failAt {
+		if p.onFail != nil {
+			p.onFail()
+		}
 		return errorx.New(errorx.KindUnavailable, "policy service unavailable")
 	}
 	if p.created == nil {
@@ -1949,22 +1953,35 @@ func (p *fakePolicies) Create(_ context.Context, w policyrelay.Write, _ string, 
 	return nil
 }
 
-func (p *fakePolicies) Activate(_ context.Context, w policyrelay.Write) error {
+func (p *fakePolicies) Activate(ctx context.Context, w policyrelay.Write) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return errorx.Wrap(err, "policy service", errorx.KindUnavailable)
+	}
 	p.active = append(p.active, w.ID)
 	return nil
 }
 
-// Purge removes every policy whose text names one of entities, as the
-// service's purge does, and answers the identifiers it removed.
-func (p *fakePolicies) Purge(_ context.Context, actor, org grn.GRN, entities []grn.GRN) ([]string, error) {
+// Purge removes every policy whose text names one of the entities,
+// under the prefix where one is given, as the service's purge does,
+// and answers the identifiers it removed.
+func (p *fakePolicies) Purge(ctx context.Context, purge policyrelay.Purge) ([]string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.purges = append(p.purges, purge{actor, org, entities})
+	if err := ctx.Err(); err != nil {
+		return nil, errorx.Wrap(err, "policy service", errorx.KindUnavailable)
+	}
+	p.purges = append(p.purges, purge)
+	if len(p.purges) == p.purgeFailAt {
+		return nil, errorx.New(errorx.KindUnavailable, "policy service unavailable")
+	}
 	var removed []string
 	for id, body := range p.created {
-		for _, g := range entities {
+		if !strings.HasPrefix(id, purge.Within) {
+			continue
+		}
+		for _, g := range purge.Entities {
 			if strings.Contains(body.Text, `"`+g.String()+`"`) {
 				removed = append(removed, id)
 				delete(p.created, id)

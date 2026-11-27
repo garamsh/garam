@@ -81,7 +81,9 @@ type PolicyServiceClient interface {
 	// uninstall takes away, whoever wrote each policy. The platform alone
 	// calls it, once it has decided the actor may take the entities
 	// away, so the service evaluates nothing and records each removal as
-	// the actor's.
+	// the actor's. With id_prefix, only a policy whose identifier opens
+	// with it is judged: an install takes back what an earlier
+	// incarnation's install wrote, and nothing a person wrote.
 	PurgePolicies(ctx context.Context, in *PurgePoliciesRequest, opts ...grpc.CallOption) (*PurgePoliciesResponse, error)
 	// GetPolicy reads one policy with its versions.
 	GetPolicy(ctx context.Context, in *GetPolicyRequest, opts ...grpc.CallOption) (*GetPolicyResponse, error)
@@ -269,7 +271,9 @@ type PolicyServiceServer interface {
 	// uninstall takes away, whoever wrote each policy. The platform alone
 	// calls it, once it has decided the actor may take the entities
 	// away, so the service evaluates nothing and records each removal as
-	// the actor's.
+	// the actor's. With id_prefix, only a policy whose identifier opens
+	// with it is judged: an install takes back what an earlier
+	// incarnation's install wrote, and nothing a person wrote.
 	PurgePolicies(context.Context, *PurgePoliciesRequest) (*PurgePoliciesResponse, error)
 	// GetPolicy reads one policy with its versions.
 	GetPolicy(context.Context, *GetPolicyRequest) (*GetPolicyResponse, error)

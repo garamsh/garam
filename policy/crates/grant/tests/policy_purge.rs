@@ -132,7 +132,7 @@ async fn a_purge_takes_every_policy_naming_the_entities_and_no_other(pool: PgPoo
         .unwrap();
 
     let purged = store
-        .purge(&org, &[uid(INSTALLATION), uid(INSTANCE)])
+        .purge(&org, &[uid(INSTALLATION), uid(INSTANCE)], None)
         .await
         .unwrap();
 
@@ -163,7 +163,7 @@ async fn a_purge_takes_every_policy_naming_the_entities_and_no_other(pool: PgPoo
 
     assert!(
         store
-            .purge(&org, &[uid(INSTALLATION)])
+            .purge(&org, &[uid(INSTALLATION)], None)
             .await
             .unwrap()
             .is_empty(),
@@ -194,9 +194,41 @@ async fn a_purge_reads_only_its_organizations_policies(pool: PgPool) {
         .unwrap();
 
     let purged = store
-        .purge(&OrgGrn::new(ACME), &[uid(globex_installation)])
+        .purge(&OrgGrn::new(ACME), &[uid(globex_installation)], None)
         .await
         .unwrap();
     assert!(purged.is_empty());
     assert_eq!(store.list(&globex).await.unwrap().len(), 1);
+}
+
+/// A purge within a prefix judges only the policies whose identifier
+/// opens with it: an install takes back an earlier incarnation's
+/// `permit`s and leaves a guardrail a person wrote naming the
+/// installation, which the same purge without the prefix takes.
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_purge_within_a_prefix_judges_only_the_policies_under_it(pool: PgPool) {
+    let world = World::new();
+    let store = store(pool);
+    let org = OrgGrn::new(ACME);
+    let guardrail = |source: &str| Body::guardrail(&world.engine, &org, source).unwrap();
+    let earlier = "grn:acme/iam/policy/install-0d1e-0";
+    let persons = "grn:acme/iam/policy/p-0123";
+    store
+        .create(policy(earlier, &org, guardrail(&no_reading(INSTALLATION))))
+        .await
+        .unwrap();
+    store
+        .create(policy(persons, &org, guardrail(&no_reading(INSTALLATION))))
+        .await
+        .unwrap();
+
+    let purged = store
+        .purge(&org, &[uid(INSTALLATION)], Some("install-"))
+        .await
+        .unwrap();
+    assert_eq!(purged, [earlier]);
+
+    let purged = store.purge(&org, &[uid(INSTALLATION)], None).await.unwrap();
+    assert_eq!(purged, [persons], "the control: without the prefix it goes");
 }

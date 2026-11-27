@@ -198,21 +198,33 @@ first-party service's principal is still ADR-0129's
   other is refused 500 before anything is written, since garam wrote
   its record. No declared action is requestable yet, so
   garam-bot-connector requests none and its install writes no
-  `permit`. Past the feed's wait, the route purges what already names
-  the installation, then creates and activates through the relay one
-  `permit` per action and per entity of the scope, `principal ==` the
-  installation and `resource in` the organization or the project,
-  under `install-<incarnation>-<n>`. A failure of any write deletes
-  the installation and purges what it wrote, and answers the failure.
-- **An uninstall purges what names what it removed.** After the
-  deletion, the route asks the policy service's `PurgePolicies`, for
-  the administrator who uninstalled, with the installation and the
-  instances the deletion answered: every policy of the organization
-  any version of which names one of them goes, whoever wrote it and
-  wherever it names it (`policy/README.md` §Callers). A purge that
-  fails leaves policies naming a GRN no record holds: an instance's
-  identifier is never minted again, and the next install of the app
-  purges the installation's before it grants.
+  `permit`. Past the feed's wait, the route purges the `permit`s an
+  earlier incarnation's install wrote, those naming the installation
+  under `install-` (`app.GrantPrefix`), and nothing else: a guardrail
+  or any other policy a person wrote naming the installation, before
+  the install or between incarnations, stands. It then creates and
+  activates through the relay one `permit` per action and per entity
+  of the scope, `principal in` the installation, so each instance,
+  whose parent it is, holds it, and `resource in` the organization or
+  the project, under `install-<incarnation>-<n>`. A failure of any
+  write uninstalls, on a context of its own bounded at 30 seconds so a
+  client that left does not stop it, and answers the failure. A
+  process that ends between the installation's write and its last
+  `permit` leaves an installation holding fewer grants than it
+  requested: that denies rather than allows, and its owner repairs it
+  by uninstalling and installing again.
+- **An uninstall purges, deletes, and purges again.** The route asks
+  the policy service's `PurgePolicies`, for the administrator who
+  uninstalled, with the installation and the instances it holds:
+  every policy of the organization any version of which names one of
+  them goes, whoever wrote it and wherever it names it
+  (`policy/README.md` §Callers). It then deletes the installation with
+  its instances, and purges again with the installation and the
+  instances the deletion answered, for a policy written or an instance
+  created between the two. A failure of the first purge leaves the
+  installation standing, so the uninstall can be asked again; only a
+  failure of the second leaves policies naming a GRN no record holds,
+  and an instance's identifier is never minted again.
 - **An installation exchanges its app key for the issuer's token.**
   The service keys file names a set by a first-party service's name
   or a platform app's slug, each a slug, and an installation's

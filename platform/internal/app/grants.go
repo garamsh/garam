@@ -62,16 +62,19 @@ type Grant struct {
 	Text string
 }
 
-// grantPrefix opens the identifier of every policy an install writes.
-const grantPrefix = "install-"
+// GrantPrefix opens the identifier of every policy an install writes,
+// which an install's purge is limited to.
+const GrantPrefix = "install-"
 
 // Grants are the `permit`s installing a writes (ADR-0192 decision 4):
 // one per requested action and per entity of the scope, its principal
-// the installation and its resource in the organization or in the
-// project. Each identifier is the installation's incarnation and the
-// grant's place, so the same install names the same policies and a
-// reinstall, another incarnation, names others. declared is as
-// Requestable reads it.
+// `in` the installation and its resource in the organization or in the
+// project. `in` and not `==`: an instance's token is decided with the
+// instance, whose parent is its installation, so each instance holds
+// what the installation does (decision 6). Each identifier is the
+// installation's incarnation and the grant's place, so the same install
+// names the same policies and a reinstall, another incarnation, names
+// others. declared is as Requestable reads it.
 func (i *Installation) Grants(a *App, declared []grn.ActionInfo) ([]Grant, error) {
 	if a.GRN != i.App {
 		return nil, errorx.New(errorx.KindInternal, "app: grants of "+a.GRN.String()+" for an installation of "+i.App.String())
@@ -94,9 +97,9 @@ func (i *Installation) Grants(a *App, declared []grn.ActionInfo) ([]Grant, error
 		}
 		for _, scope := range scopes {
 			grants = append(grants, Grant{
-				ID:   grantPrefix + i.Incarnation + "-" + strconv.Itoa(len(grants)),
+				ID:   GrantPrefix + i.Incarnation + "-" + strconv.Itoa(len(grants)),
 				Name: a.Slug + " " + action,
-				Text: fmt.Sprintf("permit (principal == %s, action == %s, resource in %s);",
+				Text: fmt.Sprintf("permit (principal in %s, action == %s, resource in %s);",
 					entityOf(installationEntity, i.GRN), cedarAction, scope),
 			})
 		}

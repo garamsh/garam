@@ -130,6 +130,18 @@ type Write struct {
 	ID     string
 }
 
+// Purge names what a purge takes away.
+type Purge struct {
+	// Actor is who took the entities away, each removal's subject.
+	Actor grn.GRN
+	Org   grn.GRN
+	// Entities are those whose policies go, each of Org.
+	Entities []grn.GRN
+	// Within, where set, limits the purge to the policies whose
+	// identifier opens with it.
+	Within string
+}
+
 // Service relays writes and reads of an organization's policies. Every
 // refusal is the service's, carried as its kind: permission denied for
 // a writer who may not, invalid argument for a body it rejects,
@@ -145,11 +157,11 @@ type Service interface {
 	RollBack(ctx context.Context, w Write, version int32) error
 	// Delete removes the policy.
 	Delete(ctx context.Context, w Write) error
-	// Purge removes, as the platform for actor, every policy of org
-	// naming one of entities, whoever wrote it, and returns the
-	// identifiers removed (ADR-0192 decision 4). It evaluates nothing:
-	// the caller has decided the uninstall it follows.
-	Purge(ctx context.Context, actor, org grn.GRN, entities []grn.GRN) ([]string, error)
+	// Purge removes, as the platform, every policy of the purge's
+	// organization naming one of its entities, whoever wrote it, and
+	// returns the identifiers removed (ADR-0192 decision 4). It
+	// evaluates nothing: the caller has decided the act it follows.
+	Purge(ctx context.Context, p Purge) ([]string, error)
 	// Get reads a policy and its versions.
 	Get(ctx context.Context, w Write) (Detail, error)
 	// List reads the organization's policies.

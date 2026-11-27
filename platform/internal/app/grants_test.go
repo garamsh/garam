@@ -57,9 +57,9 @@ func TestGrants_OnePermitPerActionAndScopeNamedByTheIncarnation(t *testing.T) {
 	grants, err := installation.Grants(deployer, declared)
 	require.NoError(t, err)
 	assert.Equal(t, []app.Grant{
-		{ID: "install-0d1e-0", Name: "deployer iam:org.read", Text: `permit (principal == Iam::Installation::"grn:acme/iam/installation/deployer", ` +
+		{ID: "install-0d1e-0", Name: "deployer iam:org.read", Text: `permit (principal in Iam::Installation::"grn:acme/iam/installation/deployer", ` +
 			`action == Iam::Action::"org.read", resource in Iam::Org::"grn:root/iam/org/acme");`},
-		{ID: "install-0d1e-1", Name: "deployer iam:project.read", Text: `permit (principal == Iam::Installation::"grn:acme/iam/installation/deployer", ` +
+		{ID: "install-0d1e-1", Name: "deployer iam:project.read", Text: `permit (principal in Iam::Installation::"grn:acme/iam/installation/deployer", ` +
 			`action == Iam::Action::"project.read", resource in Iam::Org::"grn:root/iam/org/acme");`},
 	}, grants)
 
@@ -75,6 +75,8 @@ func TestGrants_OnePermitPerActionAndScopeNamedByTheIncarnation(t *testing.T) {
 		`resource in Iam::Project::"grn:acme/iam/project/backend"`)
 	for _, g := range grants {
 		assert.NotContains(t, g.Text, "Iam::Org::", "a project scope names nothing outside its projects")
+		assert.Contains(t, g.Text, `permit (principal in Iam::Installation::"grn:acme/iam/installation/deployer", `,
+			"each instance, in the installation, holds the grant")
 	}
 
 	deployer.RequestedActions = []string{"iam:org.read", "iam:org.delete"}

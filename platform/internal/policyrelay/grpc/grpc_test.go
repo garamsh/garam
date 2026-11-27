@@ -221,8 +221,9 @@ func TestListAudit_AnUnspecifiedKindIsTheServicesFault(t *testing.T) {
 
 // TestPurge_NamesEachEntityByItsTypeAndAnswersTheIdentifiers holds the
 // purge an uninstall sends: the actor, the organization and each
-// entity under the type its GRN's service declares, and the GRNs the
-// service removed read back as identifiers.
+// entity under the type its GRN's service declares, the prefix it is
+// limited to, and the GRNs the service removed read back as
+// identifiers.
 func TestPurge_NamesEachEntityByItsTypeAndAnswersTheIdentifiers(t *testing.T) {
 	var asked []*policyv1.PurgePoliciesRequest
 	client := relaygrpc.New(stubClient{purgedIn: &asked, purged: &policyv1.PurgePoliciesResponse{
@@ -231,13 +232,16 @@ func TestPurge_NamesEachEntityByItsTypeAndAnswersTheIdentifiers(t *testing.T) {
 	installation := grn.New("acme", "installation", "deployer")
 	instance := grn.New("acme", "instance", "5f60710a1b2c3d4e")
 
-	got, err := client.Purge(context.Background(), reader, grn.Org("acme"), []grn.GRN{installation, instance})
+	got, err := client.Purge(context.Background(), policyrelay.Purge{
+		Actor: reader, Org: grn.Org("acme"), Entities: []grn.GRN{installation, instance}, Within: "install-",
+	})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"p-1", "install-2"}, got)
 	require.Len(t, asked, 1)
 	assert.Equal(t, reader.String(), asked[0].GetActor().GetId())
 	assert.Equal(t, "grn:root/iam/org/acme", asked[0].GetOrg())
+	assert.Equal(t, "install-", asked[0].GetIdPrefix())
 	require.Len(t, asked[0].GetEntities(), 2)
 	assert.Equal(t, "Iam::Installation", asked[0].GetEntities()[0].GetType())
 	assert.Equal(t, installation.String(), asked[0].GetEntities()[0].GetId())

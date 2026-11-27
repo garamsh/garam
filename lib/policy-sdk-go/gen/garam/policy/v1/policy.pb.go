@@ -2320,9 +2320,13 @@ type PurgePoliciesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// actor is who took the entities away, recorded as each removal's
 	// subject.
-	Actor         *Subject     `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
-	Org           string       `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
-	Entities      []*EntityRef `protobuf:"bytes,3,rep,name=entities,proto3" json:"entities,omitempty"`
+	Actor    *Subject     `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
+	Org      string       `protobuf:"bytes,2,opt,name=org,proto3" json:"org,omitempty"`
+	Entities []*EntityRef `protobuf:"bytes,3,rep,name=entities,proto3" json:"entities,omitempty"`
+	// id_prefix, where set, limits the purge to the policies whose
+	// identifier, the last segment of their GRN, opens with it. It is a
+	// slug's characters and nothing else.
+	IdPrefix      string `protobuf:"bytes,4,opt,name=id_prefix,json=idPrefix,proto3" json:"id_prefix,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2376,6 +2380,13 @@ func (x *PurgePoliciesRequest) GetEntities() []*EntityRef {
 		return x.Entities
 	}
 	return nil
+}
+
+func (x *PurgePoliciesRequest) GetIdPrefix() string {
+	if x != nil {
+		return x.IdPrefix
+	}
+	return ""
 }
 
 type PurgePoliciesResponse struct {
@@ -3061,11 +3072,12 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\x06writer\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\x06writer\x12\x10\n" +
 	"\x03org\x18\x02 \x01(\tR\x03org\x12\x16\n" +
 	"\x06policy\x18\x03 \x01(\tR\x06policy\"\x16\n" +
-	"\x14DeletePolicyResponse\"\x90\x01\n" +
+	"\x14DeletePolicyResponse\"\xad\x01\n" +
 	"\x14PurgePoliciesRequest\x12.\n" +
 	"\x05actor\x18\x01 \x01(\v2\x18.garam.policy.v1.SubjectR\x05actor\x12\x10\n" +
 	"\x03org\x18\x02 \x01(\tR\x03org\x126\n" +
-	"\bentities\x18\x03 \x03(\v2\x1a.garam.policy.v1.EntityRefR\bentities\"3\n" +
+	"\bentities\x18\x03 \x03(\v2\x1a.garam.policy.v1.EntityRefR\bentities\x12\x1b\n" +
+	"\tid_prefix\x18\x04 \x01(\tR\bidPrefix\"3\n" +
 	"\x15PurgePoliciesResponse\x12\x1a\n" +
 	"\bpolicies\x18\x01 \x03(\tR\bpolicies\"n\n" +
 	"\x10GetPolicyRequest\x120\n" +

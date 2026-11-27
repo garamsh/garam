@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
@@ -189,17 +190,23 @@ func (s *Server) CreateInstallation(w http.ResponseWriter, r *http.Request, orgS
 	writeJSON(w, http.StatusCreated, installationToAPI(created))
 }
 
+// undoTimeout bounds the undo of a failed install, which runs past the
+// request's own end so a client that left does not stop it.
+const undoTimeout = 30 * time.Second
+
 // grantInstallation writes and activates each `permit` an install
 // grants, as the owner who installed, since writing one is
-// `iam:permit.write`. It first purges what names the installation, so
-// a reinstall inherits nothing even where an earlier uninstall's purge
-// failed. A failure uninstalls what was written, the installation and
-// its `permit`s, and answers the failure.
+// `iam:permit.write`. It first purges the `permit`s an earlier
+// incarnation's install wrote and an uninstall left, those under
+// [app.GrantPrefix] naming the installation, and nothing a person
+// wrote. A failure uninstalls what was written, the installation and
+// its `permit`s, on a context of its own, and answers the failure.
 func (s *Server) grantInstallation(ctx context.Context, stores *appStores, a *app.App, installation *app.Installation) error {
 	owner := installation.CreatedBy
 	grants, err := installation.Grants(a, stores.declared)
 	if err == nil {
-		_, err = s.policyRelay.Purge(ctx, owner, installation.Organization, []grn.GRN{installation.GRN})
+		_, err = s.policyRelay.Purge(ctx, policyrelay.Purge{Actor: owner, Org: installation.Organization,
+			Entities: []grn.GRN{installation.GRN}, Within: app.GrantPrefix})
 	}
 	for i := 0; err == nil && i < len(grants); i++ {
 		write := policyrelay.Write{Writer: owner, Org: installation.Organization, ID: grants[i].ID}
@@ -211,25 +218,41 @@ func (s *Server) grantInstallation(ctx context.Context, stores *appStores, a *ap
 	if err == nil {
 		return nil
 	}
-	if _, undo := s.uninstall(ctx, stores, owner, installation); undo != nil {
-		return errors.Join(err, errorx.Wrap(undo, "undo the installation", errorx.KindInternal))
+	undo, cancel := context.WithTimeout(context.WithoutCancel(ctx), undoTimeout)
+	defer cancel()
+	if _, failed := s.uninstall(undo, stores, owner, installation); failed != nil {
+		return errors.Join(err, errorx.Wrap(failed, "undo the installation", errorx.KindInternal))
 	}
 	return err
 }
 
-// uninstall deletes the installation with its instances, then every
-// policy naming the installation or one of them, whoever wrote it, for
-// actor (ADR-0192 decision 4), and answers the instances it removed.
-// A purge that fails after the deletion leaves policies naming a GRN
-// no record holds: an instance's is never minted again, and the next
-// install of the app purges the installation's before it grants.
+// uninstall takes away, for actor, every policy naming the
+// installation or one of its instances, whoever wrote it (ADR-0192
+// decision 4), then deletes the installation with its instances, then
+// purges again, for a policy written or an instance created between
+// the two, and answers the instances it removed. A failure of the
+// first purge leaves the installation standing, so the uninstall can
+// be asked again; only the second can leave a policy naming a GRN no
+// record holds, and an instance's identifier is never minted again.
 func (s *Server) uninstall(ctx context.Context, stores *appStores, actor grn.GRN, installation *app.Installation) ([]grn.GRN, error) {
+	held, err := stores.records.ListInstances(ctx, installation.GRN)
+	if err != nil {
+		return nil, err
+	}
+	entities := []grn.GRN{installation.GRN}
+	for _, i := range held {
+		entities = append(entities, i.GRN)
+	}
+	purge := policyrelay.Purge{Actor: actor, Org: installation.Organization, Entities: entities}
+	if _, err := s.policyRelay.Purge(ctx, purge); err != nil {
+		return nil, err
+	}
 	removed, err := stores.records.DeleteInstallation(ctx, installation.GRN)
 	if err != nil {
 		return nil, err
 	}
-	entities := append([]grn.GRN{installation.GRN}, removed...)
-	if _, err := s.policyRelay.Purge(ctx, actor, installation.Organization, entities); err != nil {
+	purge.Entities = append([]grn.GRN{installation.GRN}, removed...)
+	if _, err := s.policyRelay.Purge(ctx, purge); err != nil {
 		return nil, err
 	}
 	return removed, nil

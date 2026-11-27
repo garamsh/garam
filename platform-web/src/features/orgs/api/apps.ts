@@ -44,6 +44,7 @@ export const InstallationParser = parserFor<Installation>()(
     appGrn: GrnParser,
     incarnation: z.string(),
     projects: z.array(GrnParser),
+    botHosting: z.boolean(),
     createdBy: GrnParser,
     createdAt: z.string(),
   }),

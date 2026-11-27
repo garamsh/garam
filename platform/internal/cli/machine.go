@@ -343,7 +343,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	instances := app.NewService(appStore, app.Config{Now: cfg.Now, TokenEndpoint: cfg.TokenURL,
 		RotationURL: clusterRotationURL(cfg.TokenURL), RegistrationLimit: cfg.InstanceRegistrationLimit})
 	bots := bot.NewService(appStore, botStore, botStore, botStore, bot.Config{Now: cfg.Now,
-		TokenEndpoint: cfg.TokenURL, Wakes: cfg.DeclarationWakes})
+		TokenEndpoint: cfg.TokenURL, Wakes: cfg.DeclarationWakes, Decisions: cfg.Decisions})
 	// One mux carries both specifications' routes: the machine
 	// specification's, and cluster-connection's under its own prefix
 	// with its own error body (ADR-0186).

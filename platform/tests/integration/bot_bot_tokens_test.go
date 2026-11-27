@@ -222,3 +222,30 @@ func TestBotTokens_ADeclarationIDNamingAnAgentRecordIsRefused(t *testing.T) {
 	require.NoError(t, err, "the control: an identifier no agent record holds")
 	assert.True(t, created)
 }
+
+// TestBotTokens_AWithdrawalOfBotHostingRevokesTheInstallationsTokens
+// holds ADR-0192 decision 10's withdrawal at the store: every bot token
+// minted for an instance of the installation goes, so a token minted
+// before the withdrawal is held by nothing afterwards. Revoking another
+// installation's tokens is the control, and takes none of them.
+func TestBotTokens_AWithdrawalOfBotHostingRevokesTheInstallationsTokens(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := botpg.New(p)
+	actors := connectedActors(t, p, 2)
+	for i, a := range actors {
+		id := "bot-" + string(rune('a'+i))
+		_, _, err := s.Declare(ctx, a.g, id, object(t, id))
+		require.NoError(t, err)
+		require.NoError(t, a.mint(ctx, s, id, "garam_bt_"+id))
+	}
+	require.Len(t, botTokenHashes(t, p), 2)
+
+	other := grn.New("acme", app.InstallationType, "deployer")
+	require.NoError(t, s.RevokeInstallationBotTokens(ctx, other))
+	assert.Len(t, botTokenHashes(t, p), 2, "the control: another installation's withdrawal takes none")
+
+	installation := grn.New("acme", app.InstallationType, "garam-bot-connector")
+	require.NoError(t, s.RevokeInstallationBotTokens(ctx, installation))
+	assert.Empty(t, botTokenHashes(t, p), "every token of the installation's instances goes")
+}

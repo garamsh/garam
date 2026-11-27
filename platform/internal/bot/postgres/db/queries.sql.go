@@ -75,6 +75,16 @@ func (q *Queries) DeleteDeclarationBotTokens(ctx context.Context, declarationID 
 	return err
 }
 
+const deleteInstallationBotTokens = `-- name: DeleteInstallationBotTokens :exec
+DELETE FROM bot_tokens t USING instances i
+WHERE t.instance_grn = i.grn AND i.installation_grn = $1
+`
+
+func (q *Queries) DeleteInstallationBotTokens(ctx context.Context, installationGrn string) error {
+	_, err := q.db.Exec(ctx, deleteInstallationBotTokens, installationGrn)
+	return err
+}
+
 const getDeclarationForWrite = `-- name: GetDeclarationForWrite :one
 
 SELECT id, instance_grn, generation, kind, namespace, name, object, last_seq, tombstoned, created_at, updated_at FROM bot_declarations WHERE id = $1 FOR UPDATE

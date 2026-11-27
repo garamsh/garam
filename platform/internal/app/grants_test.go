@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,73 @@ func TestRequestable_AnActionAppliesToTheInstallationAndItsInstances(t *testing.
 	}
 	assert.Error(t, app.Requestable("iam:org.read", grn.Actions()),
 		"no action the manifests declare today is requestable")
+}
+
+// TestRequestable_NoAppRequestsAnActionOfTheFloor holds ADR-0193: an
+// action of the floor is refused in a request even where its manifest
+// lists the installation and the instance among its principals, so the
+// refusal is the floor's and not the principals'. iam:bot.host, which
+// an installation holds by its owner's grant, is among them. The
+// control is a non-floor action declared the same way.
+func TestRequestable_NoAppRequestsAnActionOfTheFloor(t *testing.T) {
+	assert.Contains(t, app.Floor, "iam:bot.host")
+	principals := []string{"Iam::User", "Iam::Installation", "Iam::Instance"}
+	for _, action := range append(app.Floor, "iam:org.read") {
+		asIfRequestable := []grn.ActionInfo{{Name: action, Principals: principals, Resources: []string{"Iam::Org"}}}
+		err := app.Requestable(action, asIfRequestable)
+		if action == "iam:org.read" {
+			assert.NoError(t, err, "the control")
+			continue
+		}
+		assert.ErrorIs(t, err, app.ErrUnrequestable, action)
+		assert.ErrorContains(t, err, "of the floor", action)
+	}
+}
+
+// reviewedRequestable is every action a manifest lets an installation
+// and its instances hold that a review found outside the floor's
+// property, so an app may request it. An action is added here, or to
+// app.Floor, in the pull request that first declares it that way.
+var reviewedRequestable = []string{}
+
+// unreviewed answers the actions of declared that list both the
+// installation and the instance among their principals and stand in
+// neither app.Floor nor reviewedRequestable.
+func unreviewed(declared []grn.ActionInfo) []string {
+	var out []string
+	for _, a := range declared {
+		if slices.Contains(a.Principals, "Iam::Installation") && slices.Contains(a.Principals, "Iam::Instance") &&
+			!slices.Contains(app.Floor, a.Name) && !slices.Contains(reviewedRequestable, a.Name) {
+			out = append(out, a.Name)
+		}
+	}
+	return out
+}
+
+// TestFloor_EveryActionAnAppCouldRequestWasReviewed holds ADR-0193's
+// review duty as a test: no action the manifests declare for an
+// installation and its instances stands outside both the floor and
+// the reviewed list. The control is a declaration of that shape that
+// neither names, which is reported.
+func TestFloor_EveryActionAnAppCouldRequestWasReviewed(t *testing.T) {
+	assert.Empty(t, unreviewed(grn.Actions()), "add each to app.Floor or to reviewedRequestable")
+	both := []string{"Iam::User", "Iam::Installation", "Iam::Instance"}
+	assert.Equal(t, []string{"iam:org.frobnicate"}, unreviewed([]grn.ActionInfo{
+		{Name: "iam:org.frobnicate", Principals: both},
+		{Name: "iam:org.delete", Principals: both},
+		{Name: "iam:org.read", Principals: []string{"Iam::User", "Iam::Installation"}},
+	}), "the control")
+}
+
+// TestFloor_HoldsTheAgentLifecycleActions holds ADR-0193's extension
+// of the floor: creating, enrolling, recovering, replacing and
+// activating an agent each make or change a principal or its
+// credentials.
+func TestFloor_HoldsTheAgentLifecycleActions(t *testing.T) {
+	for _, action := range []string{"iam:agent.create", "iam:agent.enroll", "iam:agent.recover",
+		"iam:agent.replace", "iam:agent.activate"} {
+		assert.Contains(t, app.Floor, action)
+	}
 }
 
 // TestGrants_OnePermitPerActionAndScopeNamedByTheIncarnation holds

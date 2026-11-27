@@ -221,7 +221,7 @@ func TestInstance_EachRouteOnARecordTakesItsOwnAction(t *testing.T) {
 			}
 			f.permit(append(perms,
 				permission{userGRNOf("owner-sub"), org.ActionInstallationCreate},
-				permission{userGRNOf("owner-sub"), org.ActionInstanceRegister})...)
+				permission{userGRNOf("owner-sub"), org.ActionInstanceRegister}, hosting(slug))...)
 			lacking := f.sessionCookieFor(t, "lacking-sub", "Lacking")
 			holder := f.sessionCookieFor(t, "holder-sub", "Holder")
 			require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("lacking-sub"), org.RoleAdmin)))

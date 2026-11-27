@@ -1934,12 +1934,14 @@ func newFakeReports(records *fakeAppStore) *fakeReports {
 	return &fakeReports{records: records, kept: map[string]bot.KeptReport{}}
 }
 
-// fakePolicies is the policy relay as far as an install and an
-// uninstall write through it: the policies created and activated, each
-// by its identifier, and the purges asked. failAt, from 1, fails that
-// creation, standing for a refusal of the policy service, and
-// purgeFailAt that purge. A call on a context already done fails as
-// the client's does. Any other method panics on the nil interface.
+// fakePolicies is the policy relay as far as an install, an uninstall
+// and bot hosting write through it: the policies created, activated
+// and deleted, each by its identifier, and the purges asked. A second
+// creation under one identifier is refused as the service refuses
+// it. failAt, from 1, fails that creation, standing for a refusal of
+// the policy service, and purgeFailAt that purge. A call on a context
+// already done fails as the client's does. Any other method panics on
+// the nil interface.
 type fakePolicies struct {
 	policyrelay.Service
 	mu sync.Mutex
@@ -1972,7 +1974,24 @@ func (p *fakePolicies) Create(ctx context.Context, w policyrelay.Write, _ string
 	if p.created == nil {
 		p.created, p.writers = map[string]policyrelay.Body{}, map[string]grn.GRN{}
 	}
+	if _, ok := p.created[w.ID]; ok {
+		return errorx.New(errorx.KindAlreadyExists, "policy already exists")
+	}
 	p.created[w.ID], p.writers[w.ID] = body, w.Writer
+	return nil
+}
+
+func (p *fakePolicies) Delete(ctx context.Context, w policyrelay.Write) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return errorx.Wrap(err, "policy service", errorx.KindUnavailable)
+	}
+	if _, ok := p.created[w.ID]; !ok {
+		return errorx.New(errorx.KindNotFound, "policy not found")
+	}
+	delete(p.created, w.ID)
+	p.active = slices.DeleteFunc(p.active, func(id string) bool { return id == w.ID })
 	return nil
 }
 
@@ -2015,6 +2034,15 @@ func (p *fakePolicies) Purge(ctx context.Context, purge policyrelay.Purge) ([]st
 	return removed, nil
 }
 
+// isActive reports whether the policy id names stands and was
+// activated.
+func (p *fakePolicies) isActive(id string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, held := p.created[id]
+	return held && slices.Contains(p.active, id)
+}
+
 // held answers the identifiers of the policies that stand, sorted.
 func (p *fakePolicies) held() []string {
 	p.mu.Lock()
@@ -2025,4 +2053,20 @@ func (p *fakePolicies) held() []string {
 	}
 	slices.Sort(ids)
 	return ids
+}
+
+// fakeBotTokens is the bot domain's token store as a withdrawal of bot
+// hosting reaches it: it records each installation revoked. Any other
+// method panics on the nil interface.
+type fakeBotTokens struct {
+	bot.BotTokenStore
+	mu      sync.Mutex
+	revoked []grn.GRN
+}
+
+func (s *fakeBotTokens) RevokeInstallationBotTokens(_ context.Context, installation grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.revoked = append(s.revoked, installation)
+	return nil
 }

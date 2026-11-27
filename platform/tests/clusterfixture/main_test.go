@@ -54,6 +54,8 @@ func (b *browserAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST /orgs/acme/installations":
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{"grn":"grn:acme/iam/installation/garam-bot-connector"}`))
+	case "PUT /orgs/acme/installations/garam-bot-connector/bot-hosting":
+		_, _ = w.Write([]byte(`{"grn":"grn:acme/iam/installation/garam-bot-connector","botHosting":true}`))
 	case "POST " + record + "/registration-token":
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{"registrationToken":"garam_crt_reissued"}`))
@@ -136,8 +138,9 @@ func TestMintToken_RefusesAnExpiredMintAgainstADatabaseOffThisMachine(t *testing
 
 	code, _, _ := runFixture(t, srv.URL, nil, "mint-token")
 	assert.Equal(t, 0, code)
-	assert.Equal(t, []string{"POST /orgs/acme/installations", "POST /orgs/acme/installations/garam-bot-connector/instances"},
-		api.requests, "it installs the connector where the organization has not, then creates the record")
+	assert.Equal(t, []string{"POST /orgs/acme/installations", "PUT /orgs/acme/installations/garam-bot-connector/bot-hosting",
+		"POST /orgs/acme/installations/garam-bot-connector/instances"},
+		api.requests, "it installs the connector where the organization has not, grants it bot hosting, then creates the record")
 }
 
 // TestRevokeKeys_WithdrawsEveryKeyNotYetWithdrawn holds that a revoked

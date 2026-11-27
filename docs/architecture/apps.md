@@ -19,8 +19,8 @@ installing with the requested actions and the scope shown first,
 an installation's instances with their last contact, a registration
 token shown once, key revocation and uninstalling. Not yet built, and
 described below as decided: registration by organizations, review, app
-keys an owner sets, the events feed and webhooks (#2083); the bot domain and
-`iam:bot.place` and `iam:bot.host` (#2082); cowork and codehub as
+keys an owner sets, the events feed and webhooks (#2083); the console's
+bot hosting toggle (#2082); cowork and codehub as
 platform apps, automatic installation and fixed policies (#2085). A
 first-party service's principal is still ADR-0129's
 ([machine-identity.md](./machine-identity.md) §cowork's principal).
@@ -122,8 +122,12 @@ first-party service's principal is still ADR-0129's
   policies, consent, a principal's credentials or the organization
   itself. ADR-0192 decision 6 lists today's members, among them the
   group and project membership actions, `iam:org.invite`,
-  `iam:operator.delegate`, every policy write and `iam:bot.host`. The
-  manifest check keeps a new action of that property unrequestable.
+  `iam:operator.delegate`, every policy write and `iam:bot.host`.
+  `app.Floor` lists them, and `app.Requestable` refuses each in an
+  app's requested set whatever principals its declaration lists
+  ([ADR-0193](./adr/0193-the-floor-is-held-in-an-apps-requested-set-and-not-in-the-schema-and-an-instances-last-contact-stays-the-app-systems.md)),
+  so a new action of that property is unrequestable once it is added
+  there.
   An instance holds what its installation holds and nothing of its
   own, and no grant crosses the organization.
 - **A token reaches** the app system's own machine routes, the machine
@@ -147,22 +151,23 @@ first-party service's principal is still ADR-0129's
   `.update`, `.reissue` and `.delete`, each named and none granted by
   wildcard. Placing a bot on an instance is the bot domain's
   `iam:bot.place`.
-- **What is built of the actions** (#2081): `iam:app.read`, decided on
-  the reader's organization; `iam:installation.create`, `.read` and
-  `.delete`; and `iam:instance.register`, `.read`, `.update`,
-  `.reissue` and `.delete`, decided on the installation, so a grant on
-  one installation reaches its instances and no other's. Every role
-  holds the three `.read`s, the owner alone `iam:installation.create`,
-  and the owner and the administrator the rest.
-  `iam:installation.update` and `iam:app.create`, `.update` and
-  `.delete` arrive with what they decide (#2083).
+- **What is built of the actions** (#2081, #2082): `iam:app.read`,
+  decided on the reader's organization; `iam:installation.create`,
+  `.read`, `.update` and `.delete`; and `iam:instance.register`,
+  `.read`, `.update`, `.reissue` and `.delete`, decided on the
+  installation, so a grant on one installation reaches its instances
+  and no other's. Every role holds the three `.read`s, the owner alone
+  `iam:installation.create` and `.update`, and the owner and the
+  administrator the rest. `iam:app.create`, `.update` and `.delete`
+  arrive with what they decide (#2083).
   `platform/internal/org/role.go` §machineActions and
   `policy/schema/iam.cedarschema` are authoritative for the grants.
   Placing a declaration is the bot domain's `iam:bot.place` on the
   instance ([bots.md](./bots.md)).
 - **The routes as built** are `listApps`, `getApp`,
   `createInstallation`, `listInstallations`, `getInstallation`,
-  `deleteInstallation`, and the instance routes under
+  `deleteInstallation`, `grantInstallationBotHosting`,
+  `withdrawInstallationBotHosting`, and the instance routes under
   `/orgs/{org}/installations/{installation}/instances`; the bot
   domain's declarations and report hang from an instance there
   ([bots.md](./bots.md)).
@@ -244,10 +249,21 @@ first-party service's principal is still ADR-0129's
   written by the platform alone (`000090`); the connector's is empty,
   so its installations exchange for nothing, and the policy service
   accepts no installation as a caller until #2085.
-- **The floor is held by the manifest check.** `policy/crates/manifest`
-  names an action of decision 6's floor that lists `Iam::Installation`
-  or `Iam::Instance` among its principals as a problem, so the pull
-  request declaring one fails.
+- **The owner grants bot hosting apart from the requested actions**
+  (ADR-0192 decision 10). `grantInstallationBotHosting` writes and
+  activates, as the owner, a `permit` of `iam:bot.host` whose
+  principal and resource are the installation itself, under
+  `install-<incarnation>-bot-host`, so an uninstall's purge and a
+  reinstall's take it. `withdrawInstallationBotHosting` deletes it,
+  whatever the app now asks, and then revokes the bot tokens minted for
+  the installation's instances; the declarations placed on them stay
+  until the organization tombstones them. Both are
+  `iam:installation.update`, and a grant for an app that does not ask
+  to host bots is refused 400. The gates read the app's flag as well
+  as the policy service, so a broader permit an owner writes does not
+  host bots for an app that does not ask to. An installation's
+  `botHosting` is the policy service's answer to that question. What
+  the grant opens is [bots.md](./bots.md)'s.
 - **Registration is throttled per source address** at
   `GARAM_INSTANCE_REGISTRATION_LIMIT` a minute, ten unless set
   (`deploy/charts/garam/README.md` is authoritative for the value),
@@ -266,14 +282,19 @@ first-party service's principal is still ADR-0129's
 - Why registration by organizations is built now: the owner's
   direction; why public apps are reviewed: the PM's decision (ADR-0192
   §Context).
+- Why the floor is a list the requested-set check reads rather than a
+  manifest check, and why an instance's last contact, which every
+  app's token resolution writes, stays here and not in the bot
+  domain: ADR-0193.
 - Why webhooks are signed by the issuer key under a type of their own:
   garam already publishes that key set (ADR-0141), and a distinct
   `typ` and audience keep an event from being taken for a token.
 
 ## Open questions
 
-- Not yet built, each its own issue: the bot domain under `iam:bot.place` and
-  `iam:bot.host` (#2082); registration by organizations, review,
+- Not yet built, each its own issue: the console's bot hosting toggle
+  and an instance's declarations and report pages (#2082);
+  registration by organizations, review,
   owner-set app keys, the events feed and webhooks (#2083); the
   cluster-connection split (#2084); cowork and codehub as platform
   apps (#2085).
@@ -286,7 +307,3 @@ first-party service's principal is still ADR-0129's
   instance's kind, last contact and keys, and creates, reissues,
   revokes and deletes. Renaming (`PATCH`) and the reports an instance
   made are the bot domain's to show (#2082).
-- An instance's latest contact is written by the query that resolves
-  its token, in `platform/internal/app/postgres`, into
-  `instance_contacts`; ADR-0192 decision 10 puts last contact in the
-  bot domain, and #2082 moves it there with the reports.

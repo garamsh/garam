@@ -128,6 +128,7 @@ export const botConnectorInstallation: Installation = {
   orgGrn: acme.grn,
   appGrn: botConnector.grn,
   incarnation: "1",
+  botHosting: false,
   projects: [],
   createdBy: alice.grn,
   createdAt: "2026-11-02T08:00:00Z",

@@ -87,6 +87,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionAppRead, "iam:app.read"},
 		{org.ActionInstallationCreate, "iam:installation.create"},
 		{org.ActionInstallationRead, "iam:installation.read"},
+		{org.ActionInstallationUpdate, "iam:installation.update"},
 		{org.ActionInstallationDelete, "iam:installation.delete"},
 		{org.ActionInstanceRead, "iam:instance.read"},
 		{org.ActionInstanceRegister, "iam:instance.register"},
@@ -141,7 +142,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 		[]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
 			org.ActionAuditRead, org.ActionPermitWrite, org.ActionInstallationCreate,
-			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
+			org.ActionInstallationUpdate, org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate,
 			org.ActionAppRead, org.ActionInstallationRead, org.ActionInstallationDelete,
 			org.ActionInstanceRead, org.ActionInstanceRegister, org.ActionInstanceUpdate,

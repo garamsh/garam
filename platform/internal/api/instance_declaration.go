@@ -14,8 +14,8 @@ import (
 // declarationCall is what every declaration route reads before it
 // acts: the instance's GRN, the caller authorized to read the instance
 // on its installation, and to place a declaration on the instance
-// where declare is set (iam:bot.place, ADR-0192 decision 10), and the
-// declarations.
+// where declare is set (iam:bot.place, ADR-0192 decision 10) of an
+// instance whose installation hosts bots, and the declarations.
 func (s *Server) declarationCall(r *http.Request, orgSlug apigen.Org, installationSlug apigen.InstallationSlug, instanceSlug apigen.InstanceSlug, declare bool) (grn.GRN, bot.DeclarationStore, error) {
 	stores, i, err := s.instanceCall(r, orgSlug, installationSlug, instanceSlug, org.ActionInstanceRead)
 	if err != nil {
@@ -29,11 +29,32 @@ func (s *Server) declarationCall(r *http.Request, orgSlug apigen.Org, installati
 		if err := s.authorizeOn(r, orgGRN(orgSlug), i.GRN, u, org.ActionBotPlace); err != nil {
 			return grn.GRN{}, nil, err
 		}
+		asks, err := s.asksToHostBots(r, stores, i.Installation)
+		if err != nil {
+			return grn.GRN{}, nil, err
+		}
+		if err := bot.Hosts(r.Context(), s.decisions, i.Installation, asks); err != nil {
+			return grn.GRN{}, nil, err
+		}
 	}
 	if stores.declarations == nil {
 		return grn.GRN{}, nil, errorx.New(errorx.KindUnavailable, "declarations are not configured")
 	}
 	return i.GRN, stores.declarations, nil
+}
+
+// asksToHostBots reads whether installation's app asks to host bots,
+// which bot.Hosts requires whatever a permit grants.
+func (s *Server) asksToHostBots(r *http.Request, stores *appStores, installation grn.GRN) (bool, error) {
+	held, err := stores.records.GetInstallation(r.Context(), installation)
+	if err != nil {
+		return false, err
+	}
+	a, err := stores.records.GetApp(r.Context(), held.App)
+	if err != nil {
+		return false, err
+	}
+	return a.RequestsBotHosting, nil
 }
 
 // ListInstanceDeclarations answers the instance's live declarations.

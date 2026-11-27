@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
 // actorToken is the connector's token botTokens resolves to self.
@@ -26,8 +27,9 @@ type botTokens struct {
 	placed   map[string]bool
 	resolved []string
 	// actorGone has RecordBotToken find the actor's key withdrawn since
-	// it resolved.
+	// it resolved, and asksNot has the actor's app not ask to host bots.
 	actorGone bool
+	asksNot   bool
 	recorded  []recordedBot
 }
 
@@ -42,7 +44,7 @@ func (s *botTokens) ResolveToken(_ context.Context, hash string) (app.TokenHolde
 	if hash != app.HashSecret(actorToken) {
 		return app.TokenHolder{}, app.ErrTokenInvalid
 	}
-	return app.TokenHolder{Instance: self}, nil
+	return app.TokenHolder{Instance: self, Installation: selfInstallation, RequestsBotHosting: !s.asksNot}, nil
 }
 
 func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, actor, hash string, ttl time.Duration) (time.Time, error) {
@@ -56,9 +58,19 @@ func (s *botTokens) RecordBotToken(_ context.Context, g grn.GRN, id, actor, hash
 	return time.Now().Add(ttl), nil
 }
 
+func (s *botTokens) RevokeInstallationBotTokens(context.Context, grn.GRN) error { return nil }
+
 func newBotService() (bot.Service, *botTokens) {
+	svc, store, _ := newHostedBotService()
+	return svc, store
+}
+
+// newHostedBotService is newBotService with the installation's hosting
+// the test changes.
+func newHostedBotService() (bot.Service, *botTokens, *hosting) {
 	store := &botTokens{placed: map[string]bool{"decl-a": true}}
-	return bot.NewService(store, nil, nil, store, bot.Config{TokenEndpoint: tokenURL}), store
+	hosts := &hosting{hosts: map[grn.GRN]bool{selfInstallation: true}}
+	return bot.NewService(store, nil, nil, store, bot.Config{TokenEndpoint: tokenURL, Decisions: hosts}), store, hosts
 }
 
 var placedBot = bot.BotGRN(self.Organization, "decl-a").String()
@@ -132,6 +144,33 @@ func TestMintBotToken_AuthenticatesTheActorBeforeAnythingElse(t *testing.T) {
 	_, err = svc.MintBotToken(context.Background(), bot.BotExchange{ActorToken: actorToken, Subject: placedBot, Scope: "tools:read"})
 	assert.ErrorIs(t, err, bot.ErrScopeUndefined)
 	assert.Empty(t, store.resolved, "a scope is refused before the actor is read")
+}
+
+// TestMintBotToken_RefusesAnActorWhoseInstallationHostsNoBots holds
+// ADR-0192 decision 10's gate on the exchange: the question is
+// iam:bot.host with the actor's installation as principal and as
+// resource, read past the cache, and an installation not granted it
+// draws no token, nor one whose app does not ask to host bots though a
+// permit grants it. The same exchange minted while it was granted is
+// the control.
+func TestMintBotToken_RefusesAnActorWhoseInstallationHostsNoBots(t *testing.T) {
+	svc, store, hosts := newHostedBotService()
+	exchange := bot.BotExchange{ActorToken: actorToken, Subject: placedBot}
+	_, err := svc.MintBotToken(context.Background(), exchange)
+	require.NoError(t, err, "the control")
+	require.Len(t, hosts.asked, 1)
+	assert.Equal(t, policydecision.Question{Subject: selfInstallation, Action: "iam:bot.host",
+		Resource: selfInstallation, Current: true}, hosts.asked[0], "asked past the service's cache")
+
+	hosts.hosts[selfInstallation] = false
+	_, err = svc.MintBotToken(context.Background(), exchange)
+	assert.ErrorIs(t, err, bot.ErrNotHosting)
+	assert.Len(t, store.recorded, 1, "the refused exchange draws no token")
+
+	hosts.hosts[selfInstallation], store.asksNot = true, true
+	_, err = svc.MintBotToken(context.Background(), exchange)
+	assert.ErrorIs(t, err, bot.ErrNotHosting, "a permit does not host bots for an app that does not ask to")
+	assert.Len(t, store.recorded, 1)
 }
 
 // TestMintBotToken_TakesGaramsAudienceOrNone holds ADR-0189 decision

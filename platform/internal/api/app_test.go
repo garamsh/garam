@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/app"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyrelay"
@@ -405,4 +406,111 @@ func TestDeleteInstallation_AFailedPurgeLeavesTheInstallationToUninstallAgain(t 
 	_, err = f.apps.GetInstallation(testCtx(t), installation)
 	assert.ErrorIs(t, err, app.ErrInstallationNotFound)
 	assert.Empty(t, f.policies.held())
+}
+
+// TestInstallationBotHosting_TheOwnerGrantsAPermitOnTheInstallationAndWithdrawsIt
+// holds ADR-0192 decision 10's grant on the routes. It is
+// `iam:installation.update` on the installation, which an
+// administrator here lacks. The grant writes and activates, as the
+// owner, one `permit` of `iam:bot.host` naming the installation as
+// principal and resource, under an identifier the incarnation names;
+// a repeat answers as the first did. The view reads the decision,
+// a withdrawal deletes the permit, and an uninstall's purge takes a
+// grant left standing.
+func TestInstallationBotHosting_TheOwnerGrantsAPermitOnTheInstallationAndWithdrawsIt(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	installation := grn.New(slug, app.InstallationType, "garam-bot-connector")
+	allowed := []permission{
+		{userGRNOf("owner-sub"), org.ActionInstallationCreate},
+		{userGRNOf("owner-sub"), org.ActionInstallationRead},
+		{userGRNOf("owner-sub"), org.ActionInstallationUpdate},
+		{userGRNOf("owner-sub"), org.ActionInstallationDelete},
+		{userGRNOf("admin-sub"), org.ActionInstallationRead},
+	}
+	var grantID string
+	f.answers(func(q policydecision.Question) (bool, error) {
+		if q.Action == bot.ActionHost {
+			return q.Subject == installation && q.Resource == installation && f.policies.isActive(grantID), nil
+		}
+		return slices.Contains(allowed, permission{q.Subject, q.Action}), nil
+	})
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	installConnector(t, f, slug, owner)
+	rec := f.do(t, "GET", connectorPath(slug), "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	read := decodeBody[apigen.Installation](t, rec)
+	assert.False(t, read.BotHosting, "an installation holds no bot hosting until its owner grants it")
+	grantID = "install-" + read.Incarnation + "-bot-host"
+	path := connectorPath(slug) + "/bot-hosting"
+
+	rec = f.do(t, "PUT", path, "", admin)
+	assert.Equal(t, http.StatusForbidden, rec.Code, "an administrator does not hold iam:installation.update")
+	assert.NotContains(t, f.policies.held(), grantID)
+	rec = f.do(t, "DELETE", path, "", admin)
+	assert.Equal(t, http.StatusForbidden, rec.Code, "nor withdraws")
+	assert.Empty(t, f.botTokens.revoked, "a refused withdrawal revokes nothing")
+
+	for _, attempt := range []string{"the grant", "a repeat"} {
+		rec = f.do(t, "PUT", path, "", owner)
+		require.Equal(t, http.StatusOK, rec.Code, attempt+": "+rec.Body.String())
+		assert.True(t, decodeBody[apigen.Installation](t, rec).BotHosting, attempt)
+	}
+	assert.Equal(t, policyrelay.Body{Kind: policyrelay.KindPermit,
+		Text: `permit (principal == Iam::Installation::"` + installation.String() + `", action == Iam::Action::"bot.host", ` +
+			`resource == Iam::Installation::"` + installation.String() + `");`}, f.policies.created[grantID])
+	assert.Equal(t, userGRNOf("owner-sub"), f.policies.writers[grantID], "written as the owner who granted it")
+	rec = f.do(t, "GET", "/orgs/"+slug+"/installations", "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, decodeBody[[]apigen.Installation](t, rec)[0].BotHosting, "the list reads the decision")
+
+	for _, attempt := range []string{"the withdrawal", "a repeat"} {
+		rec = f.do(t, "DELETE", path, "", owner)
+		require.Equal(t, http.StatusNoContent, rec.Code, attempt)
+	}
+	assert.NotContains(t, f.policies.held(), grantID)
+	assert.Equal(t, []grn.GRN{installation, installation}, f.botTokens.revoked,
+		"each withdrawal revokes the bot tokens minted for the installation's instances")
+	rec = f.do(t, "GET", connectorPath(slug), "", owner)
+	assert.False(t, decodeBody[apigen.Installation](t, rec).BotHosting, "withdrawn")
+
+	rec = f.do(t, "PUT", path, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	rec = f.do(t, "DELETE", connectorPath(slug), "", owner)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	assert.NotContains(t, f.policies.held(), grantID, "the uninstall's purge takes the grant")
+}
+
+// TestInstallationBotHosting_IsRefusedForAnAppThatDoesNotAskToHostBots
+// holds that only an app asking to host bots is granted it: the grant
+// is answered 400 and writes nothing. A grant written while the app
+// asked is still withdrawn once it no longer does, with the bot tokens
+// it opened. The grant of the connector, which asks, is the control in
+// the test above.
+func TestInstallationBotHosting_IsRefusedForAnAppThatDoesNotAskToHostBots(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionInstallationCreate},
+		permission{userGRNOf("owner-sub"), org.ActionInstallationRead},
+		permission{userGRNOf("owner-sub"), org.ActionInstallationUpdate})
+	installConnector(t, f, slug, owner)
+	path := connectorPath(slug) + "/bot-hosting"
+	rec := f.do(t, "PUT", path, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code, "granted while the app asks")
+	rec = f.do(t, "GET", connectorPath(slug), "", owner)
+	grantID := "install-" + decodeBody[apigen.Installation](t, rec).Incarnation + "-bot-host"
+	require.Contains(t, f.policies.held(), grantID)
+
+	f.apps.apps[connectorApp().GRN.String()].RequestsBotHosting = false
+	held := f.policies.held()
+	rec = f.do(t, "PUT", path, "", owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	assert.Equal(t, held, f.policies.held(), "nothing is written")
+	rec = f.do(t, "DELETE", path, "", owner)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.NotContains(t, f.policies.held(), grantID, "the standing grant is withdrawn")
+	assert.Len(t, f.botTokens.revoked, 1, "with the bot tokens it opened")
 }

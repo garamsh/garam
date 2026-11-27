@@ -309,7 +309,7 @@ var apiOperations = []apiOperation{
 		ID: "listInstallations", Method: "GET", Path: "/orgs/{org}/installations",
 		Words: []string{"installations"}, Verb: "list", Short: "List the apps an organization has installed. Requires the `member` role.",
 		Args: []string(nil), FromOrg: true,
-		Columns: []string{"grn", "orgGrn", "appGrn", "incarnation", "createdBy", "createdAt"},
+		Columns: []string{"grn", "orgGrn", "appGrn", "incarnation", "botHosting", "createdBy", "createdAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			return sdk.NewListInstallationsRequest(server, path[0])
 		},
@@ -323,7 +323,7 @@ var apiOperations = []apiOperation{
 			{Name: "projects", In: "body", Kind: "strings", Required: false, Help: "The slugs of the projects its grants reach."},
 		},
 		BodyType: "application/json",
-		Columns:  []string{"grn", "orgGrn", "appGrn", "incarnation", "createdBy", "createdAt"},
+		Columns:  []string{"grn", "orgGrn", "appGrn", "incarnation", "botHosting", "createdBy", "createdAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			return sdk.NewCreateInstallationRequestWithBody(server, path[0], contentType, body)
 		},
@@ -332,7 +332,7 @@ var apiOperations = []apiOperation{
 		ID: "getInstallation", Method: "GET", Path: "/orgs/{org}/installations/{installation}",
 		Words: []string{"installations"}, Verb: "get", Short: "Read one of an organization's installations. Requires the `member` role.",
 		Args: []string{"installation"}, FromOrg: true,
-		Columns: []string{"grn", "orgGrn", "appGrn", "incarnation", "createdBy", "createdAt"},
+		Columns: []string{"grn", "orgGrn", "appGrn", "incarnation", "botHosting", "createdBy", "createdAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			return sdk.NewGetInstallationRequest(server, path[0], path[1])
 		},
@@ -343,6 +343,23 @@ var apiOperations = []apiOperation{
 		Args: []string{"installation"}, FromOrg: true,
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			return sdk.NewDeleteInstallationRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "grantInstallationBotHosting", Method: "PUT", Path: "/orgs/{org}/installations/{installation}/bot-hosting",
+		Words: []string{"installations", "bot-hosting"}, Verb: "grant", Short: "Grant an installation bot hosting. Requires the `owner` role.",
+		Args: []string{"installation"}, FromOrg: true,
+		Columns: []string{"grn", "orgGrn", "appGrn", "incarnation", "botHosting", "createdBy", "createdAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewGrantInstallationBotHostingRequest(server, path[0], path[1])
+		},
+	},
+	{
+		ID: "withdrawInstallationBotHosting", Method: "DELETE", Path: "/orgs/{org}/installations/{installation}/bot-hosting",
+		Words: []string{"installations", "bot-hosting"}, Verb: "withdraw", Short: "Withdraw an installation's bot hosting. Requires the `owner` role.",
+		Args: []string{"installation"}, FromOrg: true,
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewWithdrawInstallationBotHostingRequest(server, path[0], path[1])
 		},
 	},
 	{

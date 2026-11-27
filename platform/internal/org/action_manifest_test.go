@@ -60,17 +60,18 @@ func TestActions_AreDeclaredByTheManifests(t *testing.T) {
 	}
 }
 
-// TestActions_OmitNoActionTheIamManifestDeclaresButTwo holds that the
-// actions of the `iam` service role.go does not define are the two
-// named here and no other. `iam:message.send` is the platform's own and
-// belongs to no role; `iam:agent.activate` is a delegated operation the
-// operator package names and no role holds.
-func TestActions_OmitNoActionTheIamManifestDeclaresButTwo(t *testing.T) {
+// TestActions_OmitNoActionTheIamManifestDeclaresButThree holds that
+// the actions of the `iam` service role.go does not define are the
+// three named here and no other. `iam:message.send` is the platform's
+// own and belongs to no role; `iam:agent.activate` is a delegated
+// operation the operator package names and no role holds;
+// `iam:bot.host` is an installation's, by its owner's grant.
+func TestActions_OmitNoActionTheIamManifestDeclaresButThree(t *testing.T) {
 	var omitted []string
 	for _, name := range declared() {
 		if strings.HasPrefix(name, "iam:") && !org.IsAction(name) {
 			omitted = append(omitted, name)
 		}
 	}
-	assert.Equal(t, []string{"iam:agent.activate", "iam:message.send"}, omitted)
+	assert.Equal(t, []string{"iam:agent.activate", "iam:bot.host", "iam:message.send"}, omitted)
 }

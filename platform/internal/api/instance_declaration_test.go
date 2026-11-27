@@ -12,6 +12,7 @@ import (
 
 	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/policydecision"
@@ -40,6 +41,12 @@ func (f *fixture) declare(t *testing.T, instanceGRN, id, name string) {
 	require.NoError(t, err)
 }
 
+// hosting is slug's installation of garam-bot-connector holding
+// iam:bot.host, which its owner grants (ADR-0192 decision 10).
+func hosting(slug string) permission {
+	return permission{grn.New(slug, app.InstallationType, "garam-bot-connector"), bot.ActionHost}
+}
+
 // declaringOrg is an organization whose owner may read and declare on
 // the instance of garam-bot-connector it creates, and the instance's
 // declarations path.
@@ -53,6 +60,7 @@ func declaringOrg(t *testing.T, f *fixture) (owner *http.Cookie, slug, instanceG
 		permission{userGRNOf("owner-sub"), org.ActionInstanceRead},
 		permission{userGRNOf("owner-sub"), org.ActionInstanceDelete},
 		permission{userGRNOf("owner-sub"), org.ActionBotPlace},
+		hosting(slug),
 	)
 	installConnector(t, f, slug, owner)
 	rec := f.do(t, "POST", connectorPath(slug)+"/instances", `{}`, owner)
@@ -285,4 +293,61 @@ func TestInstanceDeclaration_EachWriteIsDecidedAsBotPlaceOnTheInstance(t *testin
 	}
 	rec = f.do(t, "GET", path, "", member)
 	assert.Equal(t, http.StatusOK, rec.Code, "the control: a member reads what is placed")
+}
+
+// TestInstanceDeclaration_AnInstanceWhoseInstallationHostsNoBotsIsNoTarget
+// holds ADR-0192 decision 10's gate on the routes: each write asks
+// `iam:bot.host` with the instance's installation as principal and as
+// resource, past the service's cache, and where it is refused the owner
+// holding `iam:bot.place` is answered 403 and places nothing, while
+// reading is unchanged. A granted installation whose app does not ask
+// to host bots is refused as well. The same write once the installation
+// hosts bots is the control.
+func TestInstanceDeclaration_AnInstanceWhoseInstallationHostsNoBotsIsNoTarget(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	installation := grn.New(slug, app.InstallationType, "garam-bot-connector")
+	hosts := false
+	var asked []policydecision.Question
+	f.answers(func(q policydecision.Question) (bool, error) {
+		if q.Action == bot.ActionHost {
+			asked = append(asked, q)
+			return hosts, nil
+		}
+		return q.Subject == userGRNOf("owner-sub"), nil
+	})
+	installConnector(t, f, slug, owner)
+	rec := f.do(t, "POST", connectorPath(slug)+"/instances", `{}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	instance := decodeBody[apigen.CreatedInstance](t, rec).Instance.Grn
+	f.declare(t, instance, "placed", "reviewer")
+	path := connectorPath(slug) + "/instances/" + instance[len(instance)-16:] + "/declarations"
+
+	for _, write := range []struct{ method, path, body string }{
+		{"POST", "", declarationWrite("mira")},
+		{"PUT", "/placed", declarationWrite("mira")},
+		{"DELETE", "/placed", ""},
+	} {
+		asked = nil
+		rec = f.do(t, write.method, path+write.path, write.body, owner)
+		assert.Equal(t, http.StatusForbidden, rec.Code, write.method+write.path)
+		require.Len(t, asked, 1, write.method+write.path)
+		assert.Equal(t, policydecision.Question{Subject: installation, Action: bot.ActionHost,
+			Resource: installation, Current: true}, asked[0], write.method+write.path)
+	}
+	rec = f.do(t, "GET", path, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code, "reading is not gated")
+	list := decodeBody[apigen.DeclarationList](t, rec).Declarations
+	require.Len(t, list, 1, "nothing was placed")
+	assert.Equal(t, int64(1), list[0].Generation, "nothing was changed")
+
+	hosts = true
+	f.apps.apps[connectorApp().GRN.String()].RequestsBotHosting = false
+	rec = f.do(t, "POST", path, declarationWrite("mira"), owner)
+	assert.Equal(t, http.StatusForbidden, rec.Code, "a permit does not host bots for an app that does not ask to")
+
+	f.apps.apps[connectorApp().GRN.String()].RequestsBotHosting = true
+	rec = f.do(t, "POST", path, declarationWrite("mira"), owner)
+	assert.Equal(t, http.StatusCreated, rec.Code, "the control: "+rec.Body.String())
 }

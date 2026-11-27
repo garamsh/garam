@@ -1702,8 +1702,20 @@ ADRs:
   settings, and no path branches on the app; `iam:cluster.*`
   becomes `iam:app.*`, `iam:installation.*` and `iam:instance.*`, and
   placing a bot `iam:bot.place`; accepted, built in part (#2081: the
-  core, the connector seeded, the record of a cluster an instance);
+  core, the connector seeded, the record of a cluster an instance;
+  #2082: the bot domain, `iam:bot.place` and `iam:bot.host`);
   supersedes in part 0184 (decisions 1, 2 and 9), 0187 (decision 1),
   0129 (decision 1's principal and decision 5's three operations) and
   0189 (decision 2's actor), and reads 0185's "every cluster" as every
-  connector
+  connector; decision 6's manifest check and its list and decision 10's
+  "last contact" superseded by 0193
+- [0193](./adr/0193-the-floor-is-held-in-an-apps-requested-set-and-not-in-the-schema-and-an-instances-last-contact-stays-the-app-systems.md)
+  — the floor of ADR-0192 decision 6 is held where an app's requested
+  actions are checked, refusing an action of it whatever principals
+  it lists, and not by a manifest check, so `iam:bot.host` lists the
+  installation it is granted to; the floor adds the agent lifecycle
+  actions, and an action open to an installation and its instances is
+  on the floor or a reviewed list; an instance's last contact stays the
+  app system's; accepted, built (#2082); supersedes 0192 in part
+  (decision 6's manifest check and its list, and decision 10's "last
+  contact")

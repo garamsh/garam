@@ -21,4 +21,8 @@ type BotTokenStore interface {
 	// Bot of g is ErrBotNotPlaced, and an actor token no longer live is
 	// app.ErrTokenInvalid.
 	RecordBotToken(ctx context.Context, g grn.GRN, id, actorHash, hash string, ttl time.Duration) (time.Time, error)
+	// RevokeInstallationBotTokens deletes every bot token minted for an
+	// instance of installation, as its owner's withdrawal of bot
+	// hosting takes them (ADR-0192 decision 10).
+	RevokeInstallationBotTokens(ctx context.Context, installation grn.GRN) error
 }

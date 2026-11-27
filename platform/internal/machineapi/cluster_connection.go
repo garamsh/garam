@@ -29,7 +29,7 @@ import (
 // rather than this listener's.
 type ClusterConnection struct {
 	instances app.Service
-	clusters  bot.Service
+	bots      bot.Service
 	tokenURL  string
 }
 
@@ -38,8 +38,8 @@ var _ connectiongen.ServerInterface = (*ClusterConnection)(nil)
 // NewClusterConnection serves instances and what is declared for them,
 // answering tokenURL as where a registered instance exchanges its
 // assertions (REG-6).
-func NewClusterConnection(instances app.Service, clusters bot.Service, tokenURL string) *ClusterConnection {
-	return &ClusterConnection{instances: instances, clusters: clusters, tokenURL: tokenURL}
+func NewClusterConnection(instances app.Service, bots bot.Service, tokenURL string) *ClusterConnection {
+	return &ClusterConnection{instances: instances, bots: bots, tokenURL: tokenURL}
 }
 
 // Register spends the registration token and binds the connector's key
@@ -129,7 +129,7 @@ func (c *ClusterConnection) WatchDeclarations(w http.ResponseWriter, r *http.Req
 	if params.Wait != nil {
 		wait = time.Duration(*params.Wait) * time.Second
 	}
-	page, err := c.clusters.WatchDeclarations(r.Context(), caller, params.After, wait)
+	page, err := c.bots.WatchDeclarations(r.Context(), caller, params.After, wait)
 	if errors.Is(err, context.Canceled) {
 		// The connector went; there is no one to answer.
 		return
@@ -168,7 +168,7 @@ func (c *ClusterConnection) Report(w http.ResponseWriter, r *http.Request) {
 		writeConnectionError(w, err)
 		return
 	}
-	if err := c.clusters.Report(r.Context(), caller, report); err != nil {
+	if err := c.bots.Report(r.Context(), caller, report); err != nil {
 		writeConnectionError(w, err)
 		return
 	}

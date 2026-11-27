@@ -223,11 +223,16 @@ func (f *fixture) mintToken(ctx context.Context, named string, expired bool, dat
 const connectorSlug = "garam-bot-connector"
 
 // install installs garam-bot-connector in the organization, which
-// creating its first record needs. One installed already answers 409,
-// and stands.
+// creating its first record needs, and grants the installation bot
+// hosting, which placing a declaration on its records needs (ADR-0192
+// decision 10). One installed already answers 409, and stands; a grant
+// repeated answers as the first.
 func (f *fixture) install(ctx context.Context) error {
-	return f.call(ctx, http.MethodPost, "/orgs/"+f.org+"/installations", `{"app":"`+connectorSlug+`"}`, nil,
-		http.StatusCreated, http.StatusConflict)
+	if err := f.call(ctx, http.MethodPost, "/orgs/"+f.org+"/installations", `{"app":"`+connectorSlug+`"}`, nil,
+		http.StatusCreated, http.StatusConflict); err != nil {
+		return err
+	}
+	return f.call(ctx, http.MethodPut, installationPath(f.org)+"/bot-hosting", "", nil, http.StatusOK)
 }
 
 // localDatabase parses the database --expired and expire-cursors

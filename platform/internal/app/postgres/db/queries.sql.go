@@ -628,7 +628,7 @@ func (q *Queries) RecordInstanceToken(ctx context.Context, arg RecordInstanceTok
 
 const resolveInstanceToken = `-- name: ResolveInstanceToken :one
 WITH resolved AS (
-    SELECT t.instance_grn, t.expires_at, a.machine_operations
+    SELECT t.instance_grn, i.installation_grn, t.expires_at, a.machine_operations, a.requests_bot_hosting
     FROM instance_tokens t
     JOIN instances i ON i.grn = t.instance_grn
     JOIN installations n ON n.grn = i.installation_grn
@@ -642,13 +642,15 @@ WITH resolved AS (
     ON CONFLICT (instance_grn) DO UPDATE SET last_contact_at = EXCLUDED.last_contact_at
     WHERE instance_contacts.last_contact_at < EXCLUDED.last_contact_at - interval '1 second'
 )
-SELECT instance_grn, expires_at, machine_operations FROM resolved
+SELECT instance_grn, installation_grn, expires_at, machine_operations, requests_bot_hosting FROM resolved
 `
 
 type ResolveInstanceTokenRow struct {
-	InstanceGrn       string
-	ExpiresAt         pgtype.Timestamptz
-	MachineOperations []string
+	InstanceGrn        string
+	InstallationGrn    string
+	ExpiresAt          pgtype.Timestamptz
+	MachineOperations  []string
+	RequestsBotHosting bool
 }
 
 // A token that resolves records its instance's contact (REP-5,
@@ -657,7 +659,13 @@ type ResolveInstanceTokenRow struct {
 func (q *Queries) ResolveInstanceToken(ctx context.Context, tokenHash string) (ResolveInstanceTokenRow, error) {
 	row := q.db.QueryRow(ctx, resolveInstanceToken, tokenHash)
 	var i ResolveInstanceTokenRow
-	err := row.Scan(&i.InstanceGrn, &i.ExpiresAt, &i.MachineOperations)
+	err := row.Scan(
+		&i.InstanceGrn,
+		&i.InstallationGrn,
+		&i.ExpiresAt,
+		&i.MachineOperations,
+		&i.RequestsBotHosting,
+	)
 	return i, err
 }
 

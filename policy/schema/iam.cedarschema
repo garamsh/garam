@@ -156,6 +156,10 @@ namespace Iam {
     appliesTo { principal: [User, Agent], resource: [Org, Installation] };
   action "installation.delete" in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Installation] };
+  // Granting or withdrawing what an installation holds beyond its
+  // requested actions writes a permit, so it is the owner's alone.
+  action "installation.update" in ["role-owner"]
+    appliesTo { principal: [User, Agent], resource: [Org, Installation] };
   action "instance.read" in ["role-owner", "role-admin", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org, Installation] };
   action "instance.register", "instance.update", "instance.reissue",
@@ -168,6 +172,12 @@ namespace Iam {
   // instance (ADR-0192 decision 10).
   action "bot.place" in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Instance] };
+  // Hosting bots: an installation holds it where its owner granted it,
+  // by a permit on the installation itself, and only its instances are
+  // a declaration's target or a bot exchange's actor (ADR-0192
+  // decision 10). No role holds it, and no app may request it.
+  action "bot.host"
+    appliesTo { principal: [Installation], resource: [Installation] };
 
   action "agent.read", "agent.rename"
     in ["role-owner", "role-admin", "role-member"]

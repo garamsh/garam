@@ -142,6 +142,10 @@ RETURNING expires_at;
 -- name: DeleteDeclarationBotTokens :exec
 DELETE FROM bot_tokens WHERE declaration_id = $1;
 
+-- name: DeleteInstallationBotTokens :exec
+DELETE FROM bot_tokens t USING instances i
+WHERE t.instance_grn = i.grn AND i.installation_grn = $1;
+
 -- Whether the organization holds an agent record under the GRN
 -- ADR-0179 renames into the identifier space a declaration takes.
 -- name: AgentRecordExists :one

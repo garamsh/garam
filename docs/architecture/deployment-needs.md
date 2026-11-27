@@ -402,7 +402,8 @@ the MCP tools (`cowork/internal/cli/serve.go:189-270`). Image
 
 - `COWORK_MIGRATIONS_DIR` is `migrate`'s and not `serve`'s.
 - `COWORK_USERCONTENT_ORIGIN` must be an `http` or `https` origin with
-  no path (`usercontent/usercontent.go:47-51`).
+  no path; a `*` in its host, once, is replaced by the artifact's
+  identifier (`usercontent/usercontent.go`, `NewSigner`).
 - **Files, three.** `COWORK_POLICY_CA_FILE`: PEM, read at start; the
   gRPC to the policy service trusts only it, and the token request
   trusts the system roots and it (`policy/client.go:29`,
@@ -559,7 +560,7 @@ leave the cluster.
 | The site | `garam/site`, port 3000, behind a TLS-terminating proxy; `/api/*` reaches the api | `GARAM_SITE_URL` on the console and on cowork-web; `GOOGLE_REDIRECT_URL` where Google sign-in is on |
 | The console | `garam/console`, port 3000; `/api/*` reaches the api | `GARAM_CONSOLE_URL` on the site |
 | cowork's host | one host split by path: `/api/` to cowork's server with the prefix stripped, `/mcp` to the same server as it stands, the rest to cowork-web (port 3000) | `GARAM_COWORK_URL` on the site, `COWORK_WEB_URL` on the console (optional), `COWORK_SYNC_URL` on cowork-web, `COWORK_WEB_ORIGINS` on cowork's server |
-| The user-content origin | cowork's `COWORK_USERCONTENT_ADDR` listener, port 8092 by default | `COWORK_USERCONTENT_ORIGIN`; a name apart from cowork's host is the only reading the source supports, and is not otherwise established |
+| The user-content origin | cowork's `COWORK_USERCONTENT_ADDR` listener, port 8092 by default | `COWORK_USERCONTENT_ORIGIN`, in production `https://c-*.garam.run`: one host per result, `c-<artifact id>.garam.run`, so the listener answers a wildcard name. Aurora's part: Cloudflare's Universal SSL certificate for `garam.run` and `*.garam.run` is the edge's, and the Gateway needs a `*.garam.run` listener with the origin certificate for it, routing hosts `c-*.garam.run` to port 8092 (the user-content listener checks the host itself, so it serves nothing under another) |
 | The machine listener | `serve machine`, port 8443, TLS terminated by the process | `GARAM_MACHINE_ISSUER`, an https origin with no path and no trailing slash; the certificate named by `GARAM_MACHINE_TLS_CERT_FILE` and the root in `GARAM_MACHINE_SERVER_ROOT_FILE` |
 | The identity issuer | `serve api` and `serve machine` serving the issuer's four operations | `GARAM_IDENTITY_ISSUER`, exactly `https://<host>/api`, lowercase host, no empty port, no trailing slash (`platform/internal/identity/issuer.go:76-92`); and `GARAM_POLICY_TOKEN_ISSUER`, which where both are set must equal it, as must the policy service's `POLICY_TOKEN_ISSUER` ([deployment-contract.md](./deployment-contract.md) §The identity issuer is off until it is named) |
 | The token endpoint | `serve machine`'s `/oauth/token` | `GARAM_MACHINE_TOKEN_URL`, an absolute https URL that ends `/oauth/token` where the service-keys file is set (`identity.go:92-99`, `platform/internal/operator/assertion.go:118-137`); `COWORK_MACHINE_TOKEN_URL` is the one cowork posts to, and the introspection address an assertion names is this value with `/oauth/token` replaced ([deployment-contract.md](./deployment-contract.md) §The identity issuer is off until it is named) |
@@ -733,11 +734,10 @@ that depends on one decides it and records it as decided.
   service.
 - **The PostgreSQL privileges** each migration and each serve process
   needs beyond creating and altering its own objects.
-- **Whether the user-content origin is a separate public name**
-  beyond the listener and the origin check the source shows, and how it
-  relates to `COWORK_WEB_ORIGINS`. The source reads as a name apart
-  from cowork's host; the documents read for this entry do not say it
-  is required.
+- **Whether aurora serves `c-*.garam.run` yet.** The origin is decided
+  (#2114); the Gateway's `*.garam.run` origin certificate and listener
+  are aurora's to add, and until they are, no HTML result is viewable
+  from there.
 - **Where codehub runs**, beside garam or apart from it, and the
   address it reaches each of the three places in §codehub as a caller
   by. codehub is a caller the documents establish; its place is the

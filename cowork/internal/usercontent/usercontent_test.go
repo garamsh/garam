@@ -91,3 +91,36 @@ func TestNewSigner_RefusesAShortSecretAndAnOriginWithAPath(t *testing.T) {
 	_, err = usercontent.NewSigner("http://localhost:8092/x", secret)
 	assert.Error(t, err)
 }
+
+// TestPerArtifactOrigin_ServesAVersionOnlyFromItsOwnHost: an origin
+// with a "*" gives each artifact a host, and a version asked for under
+// another's is refused.
+func TestPerArtifactOrigin_ServesAVersionOnlyFromItsOwnHost(t *testing.T) {
+	signer, err := usercontent.NewSigner("https://c-*.garam.run", secret)
+	require.NoError(t, err)
+	address := signer.URL("acme", "a1", 1)
+	require.True(t, strings.HasPrefix(address, "https://c-a1.garam.run/a/acme/a1/1?"), address)
+
+	srv := httptest.NewServer(signer.Handler(versions{"acme/a1": "<p>hi</p>"}, nil))
+	t.Cleanup(srv.Close)
+	get := func(host string) int {
+		req, err := http.NewRequest(http.MethodGet, srv.URL+address[strings.Index(address, "/a/"):], nil)
+		require.NoError(t, err)
+		req.Host = host
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	assert.Equal(t, http.StatusOK, get("c-a1.garam.run"))
+	assert.Equal(t, http.StatusForbidden, get("c-b2.garam.run"), "another result's host")
+	assert.Equal(t, http.StatusForbidden, get("garam.sh"), "a host that is not a result's")
+}
+
+// TestNewSigner_RefusesAWildcardOutsideTheHost.
+func TestNewSigner_RefusesAWildcardOutsideTheHost(t *testing.T) {
+	for _, origin := range []string{"https://c-*.*.garam.run", "https://garam.run/*", "https://garam.run?x=*"} {
+		_, err := usercontent.NewSigner(origin, secret)
+		assert.Error(t, err, origin)
+	}
+}

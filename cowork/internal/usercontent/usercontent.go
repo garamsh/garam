@@ -35,6 +35,10 @@ const minSecret = 32
 // number.
 const Path = "GET /a/{org}/{artifact}/{version}"
 
+// wildcard stands for the artifact's identifier in an origin that gives
+// each artifact a host of its own.
+const wildcard = "*"
+
 // Signer signs and checks the addresses of versions.
 type Signer struct {
 	origin string
@@ -43,16 +47,32 @@ type Signer struct {
 }
 
 // NewSigner answers a signer for origin, the user-content origin's URL
-// as browsers reach it, under secret.
+// as browsers reach it, under secret. An origin whose host holds one
+// "*" in a single label, as in https://c-*.garam.run, is one origin per
+// artifact: the identifier stands in for the "*", so a result's page
+// shares no cookie or storage with any other (#2114). Any other origin
+// is one for all of them, which a development stack uses.
 func NewSigner(origin string, secret []byte) (*Signer, error) {
 	u, err := url.Parse(origin)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || (u.Path != "" && u.Path != "/") {
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || (u.Path != "" && u.Path != "/") ||
+		(strings.Contains(origin, wildcard) && (strings.Count(origin, wildcard) != 1 || !strings.Contains(u.Hostname(), wildcard))) {
 		return nil, errorx.New(errorx.KindInvalidArgument, fmt.Sprintf("user-content origin %q is not an origin", origin))
 	}
 	if len(secret) < minSecret {
 		return nil, errorx.New(errorx.KindInvalidArgument, fmt.Sprintf("the user-content secret is at least %d bytes", minSecret))
 	}
 	return &Signer{origin: u.Scheme + "://" + u.Host, secret: secret, now: time.Now}, nil
+}
+
+// originFor is the origin an artifact's versions are served from.
+func (s *Signer) originFor(id string) string {
+	return strings.Replace(s.origin, wildcard, id, 1)
+}
+
+// hostFor is the host an artifact's versions are served from.
+func (s *Signer) hostFor(id string) string {
+	u, _ := url.Parse(s.originFor(id))
+	return u.Host
 }
 
 // WithClock answers the signer reading the time from now, for a test
@@ -73,7 +93,7 @@ func (s *Signer) mac(org, id string, number int, exp int64) string {
 func (s *Signer) URL(org, id string, number int) string {
 	exp := s.now().Add(lifetime).Unix()
 	q := url.Values{"exp": {strconv.FormatInt(exp, 10)}, "sig": {s.mac(org, id, number, exp)}}
-	return fmt.Sprintf("%s/a/%s/%s/%d?%s", s.origin, url.PathEscape(org), url.PathEscape(id), number, q.Encode())
+	return fmt.Sprintf("%s/a/%s/%s/%d?%s", s.originFor(id), url.PathEscape(org), url.PathEscape(id), number, q.Encode())
 }
 
 // verify reports whether r's address is one URL signed and has not
@@ -126,6 +146,13 @@ func (s *Signer) Handler(versions Versions, ancestors []string) http.Handler {
 		number, err := strconv.Atoi(r.PathValue("version"))
 		if err != nil || number < 1 || !s.verify(org, id, number, r) {
 			http.Error(w, "this address is not one cowork signed, or it has lapsed", http.StatusForbidden)
+			return
+		}
+		// A version is served only from its own artifact's host, so a
+		// page reached under another's is refused rather than sharing
+		// its origin.
+		if strings.Contains(s.origin, wildcard) && !strings.EqualFold(r.Host, s.hostFor(id)) {
+			http.Error(w, "this version is served from its own address", http.StatusForbidden)
 			return
 		}
 		b, err := versions.Served(r.Context(), org, id, number)

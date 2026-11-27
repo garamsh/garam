@@ -266,8 +266,10 @@ garam's retired templates and the browser's `operatorGrn`
   (ADR-0042); which address each process answers on and which of them
   leaves the cluster stays the repository that owns the cluster's, and
   the chart renders no exposure at all.
-- Workflow execution engine, scheduler, queue.
-- Notifications.
+- Workflow execution engine, scheduler, queue. Not built now: the
+  owner decided on 2026-11-27 that it waits, and it stays out of v1
+  ([decision on #2102](https://github.com/garamsh/garam/issues/2102#issuecomment-7220047876)).
+- Notifications. Not built now, by the same decision.
 - The rest of the agent surface. An operator creates an agent, mints
   its tokens and reports what it sees of the pod, the agent reports
   itself, and a message is posted, claimed, renewed and completed (see
@@ -318,7 +320,8 @@ garam's retired templates and the browser's `operatorGrn`
   [agents.md](./agents.md) §Separated execution carries the target.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
-  ships first-party is undecided.
+  ships first-party is undecided. Slack and LINE are not built now
+  either, by the 2026-11-27 decision above.
 - Resource-based policies: a statement names no `Principal`, so a
   policy reaches subjects through an identity attachment only
   (ADR-0008).

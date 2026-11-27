@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -95,14 +96,25 @@ func assertionAs(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, typ, 
 	return compact
 }
 
-// admitter records what it was asked to admit and answers err.
+// admitter records what it was asked to admit and answers err. An
+// installation's audience outside listed is refused as the store
+// refuses it.
 type admitter struct {
 	admitted []grn.GRN
 	err      error
+	listed   []string
 }
 
 func (a *admitter) Admit(_ context.Context, principal grn.GRN, _ operator.VerifiedAssertion) error {
 	a.admitted = append(a.admitted, principal)
+	return a.err
+}
+
+func (a *admitter) AdmitInstallation(_ context.Context, installation grn.GRN, audience string, _ operator.VerifiedAssertion) error {
+	if !slices.Contains(a.listed, audience) {
+		return identity.ErrAudienceNotListed
+	}
+	a.admitted = append(a.admitted, installation)
 	return a.err
 }
 
@@ -275,7 +287,7 @@ func TestPrincipals_ReadTheKeysFileOnEveryAuthentication(t *testing.T) {
 	assert.ErrorIs(t, ask(removed, jtiB), operator.ErrClientInvalid, "the removed key is refused at once")
 	assert.NoError(t, ask(added, jtiB), "the added key is admitted at once")
 
-	for name, raw := range map[string][]byte{"not parsing": []byte("x"), "a service off the list": keysFile(t, map[string][]*rsa.PrivateKey{identity.AudiencePolicy: {added}})} {
+	for name, raw := range map[string][]byte{"not parsing": []byte("x"), "a name that is not a slug": keysFile(t, map[string][]*rsa.PrivateKey{"Not A Slug": {added}})} {
 		write(raw)
 		err := ask(added, jtiA)
 		assert.Equal(t, errorx.KindUnavailable, errorx.KindOf(err), name)
@@ -302,9 +314,13 @@ func TestParseServiceKeys(t *testing.T) {
 	assert.Equal(t, []operator.Key{publicKeyOf(t, b)}, both[identity.ServiceCodehub], "codehub holds its own key set")
 	assert.Equal(t, []operator.Key{publicKeyOf(t, a)}, both[identity.ServiceCowork])
 
+	apps, err := identity.ParseServiceKeys(keysFile(t, map[string][]*rsa.PrivateKey{"deployer": {c}}))
+	require.NoError(t, err)
+	assert.Equal(t, []operator.Key{publicKeyOf(t, c)}, apps["deployer"], "a platform app's set, by its slug")
+
 	for name, raw := range map[string][]byte{
 		"not JSON":                    []byte("x"),
-		"a service off the list":      keysFile(t, map[string][]*rsa.PrivateKey{identity.AudiencePolicy: {a}}),
+		"a name that is not a slug":   keysFile(t, map[string][]*rsa.PrivateKey{"Not A Slug": {a}}),
 		"three keys of one service":   keysFile(t, map[string][]*rsa.PrivateKey{identity.ServiceCowork: {a, b, c}}),
 		"three keys of codehub":       keysFile(t, map[string][]*rsa.PrivateKey{identity.ServiceCodehub: {a, b, c}}),
 		"a private key":               []byte(`{"cowork":{"keys":[` + privateJWK(t, a) + `]}}`),
@@ -358,4 +374,66 @@ func TestIssueCaller_SignsThePrincipalsTokenForPolicyWithNoSession(t *testing.T)
 	_, active, err := issuer.Introspect(context.Background(), identity.AudiencePolicy, got.Token)
 	require.NoError(t, err)
 	assert.False(t, active, "introspection answers for a session, and a principal's token has none")
+}
+
+// deployerInstallation is acme's installation of the platform app
+// deployer, whose keys the file holds under its slug.
+var deployerInstallation = grn.New("acme", "installation", "deployer")
+
+// TestPrincipals_AuthenticateAnInstallationByItsAppsKey holds ADR-0192
+// decision 5's app key: an assertion signed by a key the file holds
+// under the app's slug, `iss` and `sub` the installation, proves the
+// installation, for an audience its app lists.
+func TestPrincipals_AuthenticateAnInstallationByItsAppsKey(t *testing.T) {
+	private := rsaKey(t)
+	store := &admitter{listed: []string{identity.AudiencePolicy}}
+	principals := principalsOf(identity.ServiceKeys{"deployer": {publicKeyOf(t, private)}}, store)
+
+	got, err := principals.AuthenticateInstallation(context.Background(), "10.0.0.1",
+		deployerInstallation.String(), identity.AudiencePolicy, assertion(t, private, deployerInstallation, jtiA))
+
+	require.NoError(t, err)
+	assert.Equal(t, identity.Principal{GRN: deployerInstallation, Service: "deployer"}, got)
+	assert.Equal(t, []grn.GRN{deployerInstallation}, store.admitted)
+
+	_, err = principals.AuthenticateInstallation(context.Background(), "10.0.0.1",
+		deployerInstallation.String(), identity.AudienceCodehub, assertion(t, private, deployerInstallation, jtiB))
+	assert.ErrorIs(t, err, identity.ErrAudienceNotListed, "an audience its app does not list")
+}
+
+// TestPrincipals_RefuseAnInstallationNotItsAppsKeyProves holds the
+// refusals of the app key, each one invalid client: another app's key,
+// an installation of an app with no keys, one of the root, an
+// and an assertion naming another subject.
+func TestPrincipals_RefuseAnInstallationNotItsAppsKeyProves(t *testing.T) {
+	deployer, cowork := rsaKey(t), rsaKey(t)
+	store := &admitter{listed: []string{identity.AudiencePolicy}}
+	principals := principalsOf(identity.ServiceKeys{
+		"deployer":             {publicKeyOf(t, deployer)},
+		identity.ServiceCowork: {publicKeyOf(t, cowork)},
+	}, store)
+	keyless := grn.New("acme", "installation", "builder")
+	root := grn.New(grn.RootOwner, "installation", "deployer")
+
+	for name, c := range map[string]struct {
+		client    grn.GRN
+		assertion string
+	}{
+		"another app's key":       {deployerInstallation, assertion(t, cowork, deployerInstallation, jtiA)},
+		"an app with no keys":     {keyless, assertion(t, deployer, keyless, jtiA)},
+		"the root's installation": {root, assertion(t, deployer, root, jtiA)},
+		"another subject":         {deployerInstallation, assertion(t, deployer, grn.New("globex", "installation", "deployer"), jtiA)},
+	} {
+		_, err := principals.AuthenticateInstallation(context.Background(), "10.0.0.1",
+			c.client.String(), identity.AudiencePolicy, c.assertion)
+		assert.ErrorIs(t, err, operator.ErrClientInvalid, name)
+	}
+	assert.Empty(t, store.admitted, "nothing reached the store")
+}
+
+func TestIsInstallationClient(t *testing.T) {
+	assert.True(t, identity.IsInstallationClient(deployerInstallation.String()))
+	assert.True(t, identity.IsInstallationClient("grn:root/iam/installation/x"), "which authentication, not whether it is live")
+	assert.False(t, identity.IsInstallationClient(coworkID.String()))
+	assert.False(t, identity.IsInstallationClient("grn:acme/iam/instance/5f60710a1b2c3d4e"))
 }

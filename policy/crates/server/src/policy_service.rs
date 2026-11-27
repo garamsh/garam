@@ -365,6 +365,17 @@ where
         Ok(Response::new(done))
     }
 
+    async fn purge_policies(
+        &self,
+        request: Request<proto::PurgePoliciesRequest>,
+    ) -> Result<Response<proto::PurgePoliciesResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::purge_policies(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
+    }
+
     async fn get_policy(
         &self,
         request: Request<proto::GetPolicyRequest>,

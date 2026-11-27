@@ -100,6 +100,7 @@ func TestSearch_PoliciesAreLeftOutWhereTheCallerMayNotRead(t *testing.T) {
 	})
 	t.Run("no policy service", func(t *testing.T) {
 		f := newFixture(t)
+		f.server.WithPolicyRelay(nil)
 		owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 		slug := createOrg(t, f, owner, "acme")
 		f.answers(func(q policydecision.Question) (bool, error) { return q.Action == org.ActionPolicyRead, nil })

@@ -116,6 +116,20 @@ it through `garam policy-feed` (#1689, #1888).
   (ADR-0161). The identifiers opening `link-scoped-` are the same for
   the scoped link of a team or a project on itself, named by
   `grant::scoped_link_policy` (ADR-0163).
+- **An uninstall's purge is the platform's alone and evaluates
+  nothing.** `PurgePolicies` deletes every policy of the organization
+  any version of which names one of the request's entities: a role
+  link as its principal or resource, a guardrail or a `permit` as an
+  entity its text names anywhere, its scope or its conditions. It
+  implements ADR-0192 decision 4, so an uninstall leaves no policy
+  naming the installation or its instances, whoever wrote it, and a
+  reinstall starts clean. A scoped caller is refused whole, as above.
+  The request names its actor, each removal is recorded as the actor's,
+  and an entity of another organization, or none, refuses the request.
+  An `id_prefix` limits it to the policies whose identifier opens with
+  it, as an install's purge of its earlier incarnation's `permit`s
+  does, and one that is not a slug's characters refuses the request.
+  The answer is the GRNs removed.
 - **A `permit` never reaches an operator or a supervisor.** A decision
   for an `Iam::Operator` or an `Iam::Supervisor` composes the
   organization's guardrails and none of its `permit`s, whatever a

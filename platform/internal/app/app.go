@@ -113,6 +113,10 @@ type App struct {
 	// router matches them, that its instances' tokens reach beyond the
 	// app system's own.
 	MachineOperations []string
+	// IssuerAudiences are the audiences of the issuer's JWT an
+	// installation of it exchanges an app key's assertion for
+	// (ADR-0192 decision 7).
+	IssuerAudiences []string
 }
 
 // InstallableIn reports whether an organization may install the app:

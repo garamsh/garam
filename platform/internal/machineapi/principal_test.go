@@ -39,6 +39,16 @@ func (a *spendingAdmitter) Admit(_ context.Context, principal grn.GRN, _ operato
 	return nil
 }
 
+// AdmitInstallation admits an installation whose app lists the policy
+// service alone, as a record listing it would.
+func (a *spendingAdmitter) AdmitInstallation(_ context.Context, installation grn.GRN, audience string, _ operator.VerifiedAssertion) error {
+	if audience != identity.AudiencePolicy {
+		return identity.ErrAudienceNotListed
+	}
+	a.admitted = append(a.admitted, installation)
+	return nil
+}
+
 type noSessions struct{}
 
 func (noSessions) Get(context.Context, string) (*authn.Session, error) {
@@ -53,6 +63,13 @@ func (noSessions) GetByID(context.Context, string) (*authn.Session, error) {
 // store it admits through and the key the issuer signs with.
 func principalListener(t *testing.T, private *rsa.PrivateKey, issuerOn bool) (string, *http.Client, *spendingAdmitter, *signer.Key) {
 	t.Helper()
+	return keyedListener(t, identity.ServiceCowork, private, issuerOn)
+}
+
+// keyedListener serves the exchange with private's public half the one
+// key of the set named set, as principalListener does.
+func keyedListener(t *testing.T, set string, private *rsa.PrivateKey, issuerOn bool) (string, *http.Client, *spendingAdmitter, *signer.Key) {
+	t.Helper()
 	pkcs8, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 	der, err := x509.MarshalPKCS8PrivateKey(pkcs8)
@@ -64,7 +81,7 @@ func principalListener(t *testing.T, private *rsa.PrivateKey, issuerOn bool) (st
 
 	store := &spendingAdmitter{}
 	principals := identity.NewPrincipals(identity.PrincipalsConfig{
-		Keys: identity.FixedKeys{identity.ServiceCowork: {
+		Keys: identity.FixedKeys{set: {
 			{KID: kid, Algorithm: operator.KeyAlgorithm, Public: &private.PublicKey},
 		}},
 		Issuer:   principalIssuer,
@@ -82,6 +99,13 @@ func principalListener(t *testing.T, private *rsa.PrivateKey, issuerOn bool) (st
 
 func principalForm(t *testing.T, private *rsa.PrivateKey, audience string) url.Values {
 	t.Helper()
+	return clientForm(t, private, coworkPrincipal, audience)
+}
+
+// clientForm is the exchange's form for client, its assertion signed
+// by private, as principalForm's is for cowork's principal.
+func clientForm(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, audience string) url.Values {
+	t.Helper()
 	kid, err := operator.Thumbprint(&private.PublicKey)
 	require.NoError(t, err)
 	signing, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: private},
@@ -90,7 +114,7 @@ func principalForm(t *testing.T, private *rsa.PrivateKey, audience string) url.V
 	raw := make([]byte, 32)
 	_, err = rand.Read(raw)
 	require.NoError(t, err)
-	client := coworkPrincipal.String()
+	client := principal.String()
 	payload, err := json.Marshal(map[string]any{
 		"iss": client, "sub": client, "aud": principalIssuer,
 		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(),
@@ -162,4 +186,46 @@ func TestExchangeClientAssertion_RefusesAPrincipalBeforeSpendingItsAssertion(t *
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode, body)
 	assert.Equal(t, "temporarily_unavailable", oauthError(t, body))
 	assert.Empty(t, offStore.admitted)
+}
+
+// TestExchangeClientAssertion_AnswersAnInstallationTheIssuersTokenOfItsAudience
+// is the app key's path from the wire (ADR-0192 decisions 5 and 7): an
+// installation whose assertion its app's key signed is answered the
+// issuer's token, `sub` the installation, of an audience its app lists.
+// An audience it does not list is refused once the signature verified;
+// one the issuer does not serve, or none, before the assertion is
+// read, spending nothing.
+func TestExchangeClientAssertion_AnswersAnInstallationTheIssuersTokenOfItsAudience(t *testing.T) {
+	private, err := rsa.GenerateKey(rand.Reader, operator.MinKeyBits)
+	require.NoError(t, err)
+	base, client, store, key := keyedListener(t, "deployer", private, true)
+	installation := grn.New("acme", "installation", "deployer")
+
+	resp, body := exchangeForm(t, client, base, clientForm(t, private, installation, identity.AudiencePolicy).Encode(), nil)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, body)
+	var token struct {
+		AccessToken string `json:"access_token"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &token))
+	claims, err := key.Verify(token.AccessToken, time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, installation.String(), claims.Subject)
+	assert.Equal(t, identity.AudiencePolicy, claims.Audience)
+	assert.Empty(t, claims.SessionID)
+	assert.Equal(t, []grn.GRN{installation}, store.admitted)
+
+	resp, body = exchangeForm(t, client, base, clientForm(t, private, installation, identity.AudienceCodehub).Encode(), nil)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, body)
+	assert.Equal(t, "invalid_request", oauthError(t, body), "an audience its app does not list")
+	for name, audience := range map[string]string{"an unknown one": "cowork", "none": ""} {
+		resp, body := exchangeForm(t, client, base, clientForm(t, private, installation, audience).Encode(), nil)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, name+": "+body)
+		assert.Equal(t, "invalid_request", oauthError(t, body), name)
+	}
+	assert.Len(t, store.admitted, 1, "no refused request was admitted")
+
+	off, offClient, _, _ := keyedListener(t, "deployer", private, false)
+	resp, body = exchangeForm(t, offClient, off, clientForm(t, private, installation, identity.AudiencePolicy).Encode(), nil)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode, body)
 }

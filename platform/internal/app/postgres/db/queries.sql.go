@@ -212,7 +212,7 @@ func (q *Queries) DeleteInstanceTokens(ctx context.Context, instanceGrn string) 
 }
 
 const getApp = `-- name: GetApp :one
-SELECT grn, slug, org_grn, name, description, visibility, requested_actions, requests_bot_hosting, instances, delivery, machine_operations, created_at FROM apps WHERE grn = $1
+SELECT grn, slug, org_grn, name, description, visibility, requested_actions, requests_bot_hosting, instances, delivery, machine_operations, created_at, issuer_audiences FROM apps WHERE grn = $1
 `
 
 func (q *Queries) GetApp(ctx context.Context, grn string) (App, error) {
@@ -231,6 +231,7 @@ func (q *Queries) GetApp(ctx context.Context, grn string) (App, error) {
 		&i.Delivery,
 		&i.MachineOperations,
 		&i.CreatedAt,
+		&i.IssuerAudiences,
 	)
 	return i, err
 }
@@ -406,7 +407,7 @@ func (q *Queries) IssueRegistrationToken(ctx context.Context, arg IssueRegistrat
 }
 
 const listApps = `-- name: ListApps :many
-SELECT grn, slug, org_grn, name, description, visibility, requested_actions, requests_bot_hosting, instances, delivery, machine_operations, created_at FROM apps
+SELECT grn, slug, org_grn, name, description, visibility, requested_actions, requests_bot_hosting, instances, delivery, machine_operations, created_at, issuer_audiences FROM apps
 WHERE visibility = 'public' OR org_grn = $1
 ORDER BY grn
 `
@@ -434,6 +435,7 @@ func (q *Queries) ListApps(ctx context.Context, orgGrn pgtype.Text) ([]App, erro
 			&i.Delivery,
 			&i.MachineOperations,
 			&i.CreatedAt,
+			&i.IssuerAudiences,
 		); err != nil {
 			return nil, err
 		}

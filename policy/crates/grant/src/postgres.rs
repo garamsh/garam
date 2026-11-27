@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use audit::{Origin, Outcome, Write, Written, record_write};
+use cedar_policy::EntityUid;
 use decision::{Cause, OrgGrn, OrgPolicies, PolicySource};
 use sqlx::postgres::PgRow;
 use sqlx::types::Json;
@@ -12,11 +13,19 @@ use crate::error::Error;
 use crate::permit_right::PermitRight;
 use crate::step::{Step, action_for};
 
-/// The kind of a policy, which its first version holds.
+/// The kind of a policy, which its first version holds: of the policy
+/// whose GRN is `$1`, or of the one the column given names.
 macro_rules! kind_sql {
     () => {
-        "(SELECT body->>'kind' FROM policy_versions
-          WHERE policy_grn = $1 AND version = 1)"
+        kind_sql!("$1")
+    };
+    ($grn:literal) => {
+        concat!(
+            "(SELECT body->>'kind' FROM policy_versions
+          WHERE policy_grn = ",
+            $grn,
+            " AND version = 1)"
+        )
     };
 }
 
@@ -466,6 +475,74 @@ impl PolicyStore {
         )
         .await?;
         transaction.commit().await.map_err(Error::Store)
+    }
+
+    /// Retires every policy of `org` any version of which names one of
+    /// `entities` (`Body::names`), whoever wrote it, and answers their
+    /// GRNs in order (ADR-0192 decision 4). With `within`, only a
+    /// policy whose identifier opens with it is judged. The policies
+    /// that stand are locked while they are read, so a version appended
+    /// to one meanwhile is read before it is judged or waits for the
+    /// retirement; a policy created meanwhile is neither read nor
+    /// blocked, which a second purge takes. Each is recorded as a
+    /// removal.
+    pub async fn purge(
+        &self,
+        org: &OrgGrn,
+        entities: &[EntityUid],
+        within: Option<&str>,
+    ) -> Result<Vec<String>, Error> {
+        let mut transaction = self.pool.begin().await.map_err(Error::Store)?;
+        let rows = sqlx::query(concat!(
+            "SELECT p.grn, ",
+            kind_sql!("p.grn"),
+            " AS kind FROM policies p WHERE p.org_grn = $1 ORDER BY p.grn FOR UPDATE"
+        ))
+        .bind(org.as_str())
+        .fetch_all(&mut *transaction)
+        .await
+        .map_err(Error::Store)?;
+        let mut purged = Vec::new();
+        for row in rows {
+            let grn: String = row.try_get("grn").map_err(Error::Store)?;
+            let identifier = grn.rsplit('/').next().unwrap_or_default();
+            if within.is_some_and(|prefix| !identifier.starts_with(prefix)) {
+                continue;
+            }
+            let kind = kind_of(&grn, &row)?;
+            let versions = sqlx::query("SELECT body FROM policy_versions WHERE policy_grn = $1")
+                .bind(&grn)
+                .fetch_all(&mut *transaction)
+                .await
+                .map_err(Error::Store)?;
+            let mut named = false;
+            for version in versions {
+                let body: Json<Stored> = version.try_get("body").map_err(Error::Store)?;
+                if Body(body.0).names(&grn, entities)? {
+                    named = true;
+                    break;
+                }
+            }
+            if !named {
+                continue;
+            }
+            sqlx::query("DELETE FROM policies WHERE grn = $1")
+                .bind(&grn)
+                .execute(&mut *transaction)
+                .await
+                .map_err(Error::Store)?;
+            self.record(
+                &mut transaction,
+                org,
+                &grn,
+                (kind, Step::Remove),
+                (Outcome::Removed, None, None),
+            )
+            .await?;
+            purged.push(grn);
+        }
+        transaction.commit().await.map_err(Error::Store)?;
+        Ok(purged)
     }
 
     /// One policy of the organization, without its versions.

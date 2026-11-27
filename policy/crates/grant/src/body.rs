@@ -193,6 +193,21 @@ impl Body {
         }
     }
 
+    /// Whether this version names one of `entities`: a role link as
+    /// its principal or resource, a guardrail or a permit as an entity
+    /// its text names anywhere, its scope or its conditions.
+    pub(crate) fn names(&self, grn: &str, entities: &[EntityUid]) -> Result<bool, Error> {
+        Ok(match self.clone().into_policy(grn)? {
+            StoredPolicy::Link(link) => {
+                entities.contains(&link.principal) || entities.contains(&link.resource)
+            }
+            StoredPolicy::Guardrail(policy) | StoredPolicy::Permit(policy) => policy
+                .entity_literals()
+                .iter()
+                .any(|entity| entities.contains(entity)),
+        })
+    }
+
     /// The Cedar form of a stored version, under the policy's GRN.
     pub(crate) fn into_policy(self, grn: &str) -> Result<StoredPolicy, Error> {
         let id = PolicyId::new(grn);

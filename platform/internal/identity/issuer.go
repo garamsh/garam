@@ -222,6 +222,16 @@ func (i *Issuer) Exchange(ctx context.Context, req ExchangeRequest) (Exchanged, 
 // [signer.MaxLifetime], and the caller has proved itself before this is
 // asked (ADR-0129 item 3).
 func (i *Issuer) IssueCaller(subject grn.GRN) (Exchanged, error) {
+	return i.IssueFor(subject, AudiencePolicy)
+}
+
+// IssueFor answers a token as [Issuer.IssueCaller] does, of audience,
+// for an installation its app key proved (ADR-0192 decision 7). An
+// audience outside [Audiences] is [ErrInvalidTarget].
+func (i *Issuer) IssueFor(subject grn.GRN, audience string) (Exchanged, error) {
+	if !knownAudience(audience) {
+		return Exchanged{}, ErrInvalidTarget
+	}
 	jti, err := newJTI()
 	if err != nil {
 		return Exchanged{}, err
@@ -229,7 +239,7 @@ func (i *Issuer) IssueCaller(subject grn.GRN) (Exchanged, error) {
 	token, err := i.key.Sign(signer.Claims{
 		Issuer:   i.issuer,
 		Subject:  subject.String(),
-		Audience: AudiencePolicy,
+		Audience: audience,
 		IssuedAt: i.now(),
 		Lifetime: signer.MaxLifetime,
 		JTI:      jti,
@@ -239,6 +249,9 @@ func (i *Issuer) IssueCaller(subject grn.GRN) (Exchanged, error) {
 	}
 	return Exchanged{Token: token, ExpiresIn: int(signer.MaxLifetime / time.Second)}, nil
 }
+
+// IsAudience reports whether audience is one of [Audiences].
+func IsAudience(audience string) bool { return knownAudience(audience) }
 
 func knownAudience(audience string) bool {
 	for _, known := range Audiences {

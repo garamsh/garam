@@ -363,6 +363,36 @@ impl Platform {
         self.grpc.delete_policy(request).await.map(|_| ())
     }
 
+    async fn purge(
+        &mut self,
+        actor: Option<Named>,
+        org: &str,
+        entities: &[Named],
+    ) -> Result<Vec<String>, tonic::Status> {
+        self.purge_within(actor, org, entities, "").await
+    }
+
+    async fn purge_within(
+        &mut self,
+        actor: Option<Named>,
+        org: &str,
+        entities: &[Named],
+        id_prefix: &str,
+    ) -> Result<Vec<String>, tonic::Status> {
+        let request = self.request(pb::PurgePoliciesRequest {
+            actor: actor.and_then(subject),
+            org: org.into(),
+            entities: entities.iter().copied().filter_map(entity).collect(),
+            id_prefix: id_prefix.into(),
+        });
+        Ok(self
+            .grpc
+            .purge_policies(request)
+            .await?
+            .into_inner()
+            .policies)
+    }
+
     async fn get(
         &mut self,
         reader: Option<Named>,
@@ -964,6 +994,10 @@ async fn a_scoped_caller_is_refused_every_write(pool: PgPool) {
         );
         refused(scoped.delete(who, "kept").await, Code::PermissionDenied);
         refused(
+            scoped.purge(who, ACME, &[BOT]).await,
+            Code::PermissionDenied,
+        );
+        refused(
             scoped.get(who, ACME, &policy_of("kept")).await,
             Code::PermissionDenied,
         );
@@ -978,4 +1012,89 @@ async fn a_scoped_caller_is_refused_every_write(pool: PgPool) {
         .create(None, LEE_ADMIN, role_link(Role::Admin, LEE))
         .await
         .unwrap();
+}
+
+const INSTALLATION: Named = (
+    "Iam::Installation",
+    "grn:acme/iam/installation/garam-bot-connector",
+);
+const NO_ONE_READS_INSTALLATION: &str = r#"forbid (
+    principal,
+    action == Iam::Action::"installation.read",
+    resource == Iam::Installation::"grn:acme/iam/installation/garam-bot-connector"
+);"#;
+
+/// An uninstall's purge over the wire (ADR-0192 decision 4): the
+/// platform takes away an owner's policy naming the installation for
+/// the administrator who uninstalled, evaluating nothing, and leaves
+/// the rest. A request naming no actor, no entity, another
+/// organization's entity or a prefix that is not a slug's characters
+/// removes nothing, and so does one within a prefix no identifier
+/// opens with; a scoped caller is refused in
+/// `a_scoped_caller_is_refused_every_write`.
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn the_platform_purges_what_names_an_installation_for_the_actor(pool: PgPool) {
+    seed(&pool).await;
+    let mut platform = platform(pool.clone()).await;
+    platform
+        .create(Some(OWEN), "inst", guardrail(NO_ONE_READS_INSTALLATION))
+        .await
+        .unwrap();
+    platform
+        .create(Some(OWEN), "kept", guardrail(NO_ONE_WATCHES_BOT))
+        .await
+        .unwrap();
+    let globex_installation: Named = (
+        "Iam::Installation",
+        "grn:globex/iam/installation/garam-bot-connector",
+    );
+
+    refused(
+        platform.purge(None, ACME, &[INSTALLATION]).await,
+        Code::InvalidArgument,
+    );
+    refused(
+        platform.purge(Some(ADA), ACME, &[]).await,
+        Code::InvalidArgument,
+    );
+    refused(
+        platform
+            .purge(Some(ADA), ACME, &[INSTALLATION, globex_installation])
+            .await,
+        Code::InvalidArgument,
+    );
+    refused(
+        platform
+            .purge_within(Some(ADA), ACME, &[INSTALLATION], "Install/")
+            .await,
+        Code::InvalidArgument,
+    );
+    assert_eq!(platform.list(Some(OWEN), ACME).await.unwrap().len(), 6);
+    assert!(
+        platform
+            .purge_within(Some(ADA), ACME, &[INSTALLATION], "install-")
+            .await
+            .unwrap()
+            .is_empty(),
+        "no identifier opens with the prefix"
+    );
+
+    let purged = platform
+        .purge(Some(ADA), ACME, &[INSTALLATION])
+        .await
+        .unwrap();
+    assert_eq!(purged, [policy_of("inst")]);
+    let left: Vec<String> = platform
+        .list(Some(OWEN), ACME)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|summary| summary.policy)
+        .collect();
+    assert!(!left.contains(&policy_of("inst")), "{left:?}");
+    assert!(
+        left.contains(&policy_of("kept")),
+        "the control stands: {left:?}"
+    );
 }

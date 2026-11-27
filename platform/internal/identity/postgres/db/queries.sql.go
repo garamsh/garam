@@ -11,6 +11,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const holdInstallation = `-- name: HoldInstallation :one
+SELECT now()::timestamptz AS decided_at,
+       $1::text = ANY (a.issuer_audiences) AS listed
+FROM installations n
+JOIN apps a ON a.grn = n.app_grn
+WHERE n.grn = $2
+FOR KEY SHARE OF n
+`
+
+type HoldInstallationParams struct {
+	Audience string
+	Grn      string
+}
+
+type HoldInstallationRow struct {
+	DecidedAt pgtype.Timestamptz
+	Listed    bool
+}
+
+// Holds an installation's record for the transaction, as
+// HoldServicePrincipal holds a principal's, and answers the database's
+// clock and whether the installation's app lists the audience its
+// exchange asks for (ADR-0192 decision 7). An installation that is
+// gone answers no row. FOR KEY SHARE OF n blocks the uninstall from
+// removing it before this commits, and locks no app.
+func (q *Queries) HoldInstallation(ctx context.Context, arg HoldInstallationParams) (HoldInstallationRow, error) {
+	row := q.db.QueryRow(ctx, holdInstallation, arg.Audience, arg.Grn)
+	var i HoldInstallationRow
+	err := row.Scan(&i.DecidedAt, &i.Listed)
+	return i, err
+}
+
 const holdServicePrincipal = `-- name: HoldServicePrincipal :one
 SELECT now()::timestamptz AS decided_at
 FROM service_principals

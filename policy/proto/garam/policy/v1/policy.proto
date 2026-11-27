@@ -49,6 +49,18 @@ service PolicyService {
   // DeletePolicy removes the policy with its versions.
   rpc DeletePolicy(DeletePolicyRequest) returns (DeletePolicyResponse);
 
+  // PurgePolicies removes, with their versions, every policy of the
+  // organization any version of which names one of the entities: a
+  // role link as its principal or resource, a guardrail or a permit as
+  // an entity its text names (ADR-0192 decision 4). It is what an
+  // uninstall takes away, whoever wrote each policy. The platform alone
+  // calls it, once it has decided the actor may take the entities
+  // away, so the service evaluates nothing and records each removal as
+  // the actor's. With id_prefix, only a policy whose identifier opens
+  // with it is judged: an install takes back what an earlier
+  // incarnation's install wrote, and nothing a person wrote.
+  rpc PurgePolicies(PurgePoliciesRequest) returns (PurgePoliciesResponse);
+
   // GetPolicy reads one policy with its versions.
   rpc GetPolicy(GetPolicyRequest) returns (GetPolicyResponse);
 
@@ -379,6 +391,25 @@ message DeletePolicyRequest {
 }
 
 message DeletePolicyResponse {}
+
+// PurgePoliciesRequest names the entities whose policies go. Each is
+// of the organization, and at least one is named.
+message PurgePoliciesRequest {
+  // actor is who took the entities away, recorded as each removal's
+  // subject.
+  Subject actor = 1;
+  string org = 2;
+  repeated EntityRef entities = 3;
+  // id_prefix, where set, limits the purge to the policies whose
+  // identifier, the last segment of their GRN, opens with it. It is a
+  // slug's characters and nothing else.
+  string id_prefix = 4;
+}
+
+message PurgePoliciesResponse {
+  // policies are the GRNs of the policies removed, in GRN order.
+  repeated string policies = 1;
+}
 
 // GetPolicyRequest names the reader, who must hold `iam:policy.read`
 // on the organization.

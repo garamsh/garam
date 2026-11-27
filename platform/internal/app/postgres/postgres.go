@@ -257,6 +257,7 @@ func rowToApp(row db.App) (*app.App, error) {
 		Instances:          app.Instances(row.Instances),
 		Delivery:           app.Delivery(row.Delivery),
 		MachineOperations:  row.MachineOperations,
+		IssuerAudiences:    row.IssuerAudiences,
 	}, nil
 }
 

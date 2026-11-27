@@ -9,11 +9,12 @@ settings decide
 holds the three records, persisted through
 `platform/internal/app/postgres`, and an instance's registration,
 exchange, rotation and revocation, which were a connected cluster's.
-`garam-bot-connector` is the one app, seeded by
-`platform/migrations/000088_apps.up.sql`. Not yet built, and described
-below as decided: the `permit`s an install writes and the policies an
-uninstall deletes, the app-key exchange and the console pages (each
-the rest of #2081); registration by organizations, review, app keys an
+An install writes its `permit`s, an uninstall purges the policies
+naming what it removed, and an installation exchanges an app key's
+assertion for the issuer's token. `garam-bot-connector` is the one
+app, seeded by `platform/migrations/000088_apps.up.sql`. Not yet
+built, and described below as decided: the console pages (the rest of
+#2081); registration by organizations, review, app keys an
 owner sets, the events feed and webhooks (#2083); the bot domain and
 `iam:bot.place` and `iam:bot.host` (#2082); cowork and codehub as
 platform apps, automatic installation and fixed policies (#2085). A
@@ -27,6 +28,7 @@ first-party service's principal is still ADR-0129's
 | `Instance` | one running copy of an installation's app under an identifier garam minted, with what the organization calls it, says it is for and says it runs on |
 | `Instances` | an app's instance setting, `none`, `one` or `many`, and whether an installation holding some admits one more |
 | `Scope` | what an installation's grants reach: the whole organization, the zero value, or projects of it |
+| `Grant` | one `permit` an install writes: its identifier under the installation's incarnation, its name and its Cedar text |
 | `DetailsPatch` | a parsed name, description and kind, each absent where the caller said nothing |
 | `Store` | reads the apps an organization may see, installs and uninstalls, and creates, reads, lists, changes and deletes instances |
 | `PublicKey` | the public half of an instance's RSA key, parsed from the JWK it sent, with its RFC 7638 thumbprint as `kid` |
@@ -189,6 +191,58 @@ first-party service's principal is still ADR-0129's
   `machine_operations` lists, as the machine listener's router matches
   it, and refuses it 401 everywhere else. garam-bot-connector's list
   is the cluster-connection declarations and reports routes.
+- **An install writes its grants as the owner who installed.** Each
+  action the app requests must be requestable, its manifest listing
+  `Iam::Installation` and `Iam::Instance` among its principals
+  (`app.Requestable`, against `grn.Actions()`); an app requesting any
+  other is refused 500 before anything is written, since garam wrote
+  its record. No declared action is requestable yet, so
+  garam-bot-connector requests none and its install writes no
+  `permit`. Past the feed's wait, the route purges the `permit`s an
+  earlier incarnation's install wrote, those naming the installation
+  under `install-` (`app.GrantPrefix`), and nothing else: a guardrail
+  or any other policy a person wrote naming the installation, before
+  the install or between incarnations, stands. It then creates and
+  activates through the relay one `permit` per action and per entity
+  of the scope, `principal in` the installation, so each instance,
+  whose parent it is, holds it, and `resource in` the organization or
+  the project, under `install-<incarnation>-<n>`. A failure of any
+  write uninstalls, on a context of its own bounded at 30 seconds so a
+  client that left does not stop it, and answers the failure. A
+  process that ends between the installation's write and its last
+  `permit` leaves an installation holding fewer grants than it
+  requested: that denies rather than allows, and its owner repairs it
+  by uninstalling and installing again.
+- **An uninstall purges, deletes, and purges again.** The route asks
+  the policy service's `PurgePolicies`, for the administrator who
+  uninstalled, with the installation and the instances it holds:
+  every policy of the organization any version of which names one of
+  them goes, whoever wrote it and wherever it names it
+  (`policy/README.md` §Callers). It then deletes the installation with
+  its instances, and purges again with the installation and the
+  instances the deletion answered, for a policy written or an instance
+  created between the two. A failure of the first purge leaves the
+  installation standing, so the uninstall can be asked again; only a
+  failure of the second leaves policies naming a GRN no record holds,
+  and an instance's identifier is never minted again.
+- **An installation exchanges its app key for the issuer's token.**
+  The service keys file names a set by a first-party service's name
+  or a platform app's slug, each a slug, and an installation's
+  identifier is its app's slug, so its keys are found with no lookup.
+  An assertion with `client_id`, `iss` and `sub` the installation's
+  GRN, signed by a key of that set, is verified as a service
+  principal's is (`identity.Principals.AuthenticateInstallation`); the
+  installation's row is held, its app's `issuer_audiences` must list
+  the requested audience, and the jti is spent where a principal's is.
+  The answer is the issuer's JWT of that audience, `sub` the
+  installation (`identity.Issuer.IssueFor`). `issuer_audiences` is
+  written by the platform alone (`000090`); the connector's is empty,
+  so its installations exchange for nothing, and the policy service
+  accepts no installation as a caller until #2085.
+- **The floor is held by the manifest check.** `policy/crates/manifest`
+  names an action of decision 6's floor that lists `Iam::Installation`
+  or `Iam::Instance` among its principals as a problem, so the pull
+  request declaring one fails.
 - **Registration is throttled per source address** at
   `GARAM_INSTANCE_REGISTRATION_LIMIT` a minute, ten unless set
   (`deploy/charts/garam/README.md` is authoritative for the value),
@@ -213,9 +267,8 @@ first-party service's principal is still ADR-0129's
 
 ## Open questions
 
-- Not yet built, each its own issue: the `permit`s on install, the
-  policies an uninstall deletes, the app-key exchange and the console
-  pages (the rest of #2081); the bot domain under `iam:bot.place` and
+- Not yet built, each its own issue: the console pages (the rest of
+  #2081); the bot domain under `iam:bot.place` and
   `iam:bot.host` (#2082); registration by organizations, review,
   owner-set app keys, the events feed and webhooks (#2083); the
   cluster-connection split (#2084); cowork and codehub as platform

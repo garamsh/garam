@@ -105,6 +105,41 @@ func (c *Client) Delete(ctx context.Context, w policyrelay.Write) error {
 	return relayed(err)
 }
 
+// Purge removes, for its actor, every policy of its organization
+// naming one of its entities, and returns the identifiers the service
+// removed.
+func (c *Client) Purge(ctx context.Context, p policyrelay.Purge) ([]string, error) {
+	who, err := subject(p.Actor)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]*policyv1.EntityRef, 0, len(p.Entities))
+	for _, g := range p.Entities {
+		ref, err := entityRef(g)
+		if err != nil {
+			return nil, err
+		}
+		refs = append(refs, ref)
+	}
+	ctx, cancel := context.WithTimeout(ctx, feedgrpc.CallTimeout)
+	defer cancel()
+	resp, err := c.client.PurgePolicies(ctx, &policyv1.PurgePoliciesRequest{
+		Actor: who, Org: p.Org.String(), Entities: refs, IdPrefix: p.Within,
+	})
+	if err != nil {
+		return nil, relayed(err)
+	}
+	ids := make([]string, 0, len(resp.GetPolicies()))
+	for _, p := range resp.GetPolicies() {
+		g, err := grn.Parse(p)
+		if err != nil {
+			return nil, errorx.Wrap(err, "policy service purged no GRN", errorx.KindInternal)
+		}
+		ids = append(ids, g.Identifier)
+	}
+	return ids, nil
+}
+
 // Get reads a policy and its versions.
 func (c *Client) Get(ctx context.Context, w policyrelay.Write) (policyrelay.Detail, error) {
 	writer, err := subject(w.Writer)

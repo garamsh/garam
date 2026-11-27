@@ -298,9 +298,11 @@ func TestInstanceDeclaration_EachWriteIsDecidedAsBotPlaceOnTheInstance(t *testin
 // TestInstanceDeclaration_AnInstanceWhoseInstallationHostsNoBotsIsNoTarget
 // holds ADR-0192 decision 10's gate on the routes: each write asks
 // `iam:bot.host` with the instance's installation as principal and as
-// resource, and where it is refused the owner holding `iam:bot.place`
-// is answered 403 and places nothing, while reading is unchanged. The
-// same write once the installation hosts bots is the control.
+// resource, past the service's cache, and where it is refused the owner
+// holding `iam:bot.place` is answered 403 and places nothing, while
+// reading is unchanged. A granted installation whose app does not ask
+// to host bots is refused as well. The same write once the installation
+// hosts bots is the control.
 func TestInstanceDeclaration_AnInstanceWhoseInstallationHostsNoBotsIsNoTarget(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -332,7 +334,7 @@ func TestInstanceDeclaration_AnInstanceWhoseInstallationHostsNoBotsIsNoTarget(t 
 		assert.Equal(t, http.StatusForbidden, rec.Code, write.method+write.path)
 		require.Len(t, asked, 1, write.method+write.path)
 		assert.Equal(t, policydecision.Question{Subject: installation, Action: bot.ActionHost,
-			Resource: installation}, asked[0], write.method+write.path)
+			Resource: installation, Current: true}, asked[0], write.method+write.path)
 	}
 	rec = f.do(t, "GET", path, "", owner)
 	require.Equal(t, http.StatusOK, rec.Code, "reading is not gated")
@@ -341,6 +343,11 @@ func TestInstanceDeclaration_AnInstanceWhoseInstallationHostsNoBotsIsNoTarget(t 
 	assert.Equal(t, int64(1), list[0].Generation, "nothing was changed")
 
 	hosts = true
+	f.apps.apps[connectorApp().GRN.String()].RequestsBotHosting = false
+	rec = f.do(t, "POST", path, declarationWrite("mira"), owner)
+	assert.Equal(t, http.StatusForbidden, rec.Code, "a permit does not host bots for an app that does not ask to")
+
+	f.apps.apps[connectorApp().GRN.String()].RequestsBotHosting = true
 	rec = f.do(t, "POST", path, declarationWrite("mira"), owner)
 	assert.Equal(t, http.StatusCreated, rec.Code, "the control: "+rec.Body.String())
 }

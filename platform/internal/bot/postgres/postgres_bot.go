@@ -39,3 +39,12 @@ func (s *Store) RecordBotToken(ctx context.Context, g grn.GRN, id, actorHash, ha
 	})
 	return expiresAt, err
 }
+
+// RevokeInstallationBotTokens deletes the bot tokens of every instance
+// of installation in one statement.
+func (s *Store) RevokeInstallationBotTokens(ctx context.Context, installation grn.GRN) error {
+	if err := s.q.DeleteInstallationBotTokens(ctx, installation.String()); err != nil {
+		return pgxerr.Classify(err, "revoke installation bot tokens", nil, nil)
+	}
+	return nil
+}

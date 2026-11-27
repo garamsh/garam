@@ -36,20 +36,36 @@ connector is `garamsh/garam-bot-operator`'s interface
 - **`iam:cluster.declare` is withdrawn without a mapping.** No action
   takes its place for a grant an organization wrote, so policy
   migration `policy/migrations/000004_cluster_declare_withdrawn.up.sql`
-  deletes every stored policy any version of which names it, one
+  deletes every stored permit any version of which names it, one
   naming other actions beside it included: a version is never
-  rewritten. A grant of it to someone outside the owner and the
-  administrator lapses with it, and its organization writes the grant
-  again as `iam:bot.place`.
+  rewritten, and deleting a permit only takes grants away. Each
+  removal is recorded in the organization's audit as an
+  `iam:policy.delete` the service made. A grant of it to someone
+  outside the owner and the administrator lapses with it, and its
+  organization writes the grant again as `iam:bot.place`. A guardrail
+  naming it stays: a forbid of an action no manifest declares decides
+  nothing, and deleting one naming another action beside it would
+  lift that action's deny.
 - **Only an instance whose installation hosts bots is a target or an
   actor** (ADR-0192 decision 10). Each declaration write asks the
   policy service `iam:bot.host` with the instance's installation as
-  principal and as resource (`bot.Hosts`), and a refusal is answered
-  403. The
-  bot-token exchange asks the same of the actor's installation, and a
-  refusal is answered 400 `invalid_request`. Reads, the long poll and
-  the report are not gated. The owner grants it
+  principal and as resource (`bot.Hosts`), past the service's cache,
+  and a refusal is answered 403. The bot-token exchange asks the same
+  of the actor's installation, and a refusal is answered 400
+  `invalid_request`. An installation whose app does not ask to host
+  bots is refused at both, whatever a permit grants. Reads, the long
+  poll and the report are not gated. The owner grants it
   ([apps.md](./apps.md) §Current decisions, bot hosting).
+- **A withdrawal of bot hosting stops what comes next, not what is
+  placed.** It deletes the grant and then every bot token minted for
+  an instance of the installation, so a token minted before it is held
+  by nothing after it. The grant is the policy service's and the
+  tokens this database's, so the two are not one transaction. The
+  declarations already placed stay until the organization tombstones
+  them: the connector goes on reading them on its long poll and
+  applying them, and its reports are kept, while a write placing or
+  changing one is answered 403 and an exchange for a bot's token 400
+  `invalid_request`.
 - **An organization places declarations on an instance, and its
   connector long-polls them**
   ([ADR-0187](./adr/0187-a-declaration-placed-on-a-cluster-is-written-under-iam-cluster-declare-into-a-log-per-record-the-connector-long-polls.md)).

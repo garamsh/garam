@@ -43,8 +43,18 @@ its declaration lists, and the manifests carry no check of the floor.
 This supersedes ADR-0192 decision 6's sentence "The manifest check
 refuses an action of that property that lists `Iam::Installation` or
 `Iam::Instance` as a principal, so a later action of that property is
-unrequestable from the pull request that declares it." The floor's
-members, and the rest of decision 6, stand.
+unrequestable from the pull request that declares it." The rest of
+decision 6 stands.
+
+The floor also holds `iam:agent.create`, `iam:agent.recover`,
+`iam:agent.replace` and `iam:agent.activate`. Each makes an agent
+principal, or replaces, fences or activates its credential lineage, as
+`iam:agent.enroll`, which decision 6 lists, does: they are of the
+property decision 6 names and were missing from its list, which this
+supersedes in part by adding them. An action the manifests let an
+installation and its instances hold is either of the floor or on a
+list of actions a review found requestable, and a test refuses one on
+neither.
 
 An instance's last contact stays in the app system, and the bot
 domain reads it from there where it answers a report. This supersedes
@@ -60,8 +70,10 @@ the rest of decision 10 stands.
   check every install and every requested action passes through, and
   a test refuses each of its members in a request.
 - A later action of the floor no longer fails the pull request that
-  declares it. It is unrequestable only once it is added to the list,
-  so the list is part of the review of such a pull request.
+  declares it by its property alone. The pull request that first lets
+  an installation and its instances hold an action fails until the
+  action is on the floor or on the reviewed list, so the review of it
+  is a red test and not a duty.
 - A report and its instance's last contact are two reads of two
   stores and not one row, so an answer can pair them from different
   moments. Both are display data (ADR-0188).
@@ -70,8 +82,7 @@ the rest of decision 10 stands.
 
 - An app's requested set reaches a grant by some path that does not
   pass the requested-set check, so the floor no longer holds.
-- An action of the floor's property is declared and requested before
-  anyone adds it to the list, which the manifest check would have
-  stopped.
+- An action of the floor's property reaches the reviewed list, so an
+  app requests what the floor was for.
 - A reader needs a report and the contact that preceded it as one
   view, and two reads keep answering them apart.

@@ -26,6 +26,7 @@ type appStores struct {
 	credentials  app.CredentialStore
 	declarations bot.DeclarationStore
 	reports      bot.ReportStore
+	botTokens    bot.BotTokenStore
 	// declared is what the manifests declare, which an app's requested
 	// actions are checked against (ADR-0192 decision 6).
 	declared []grn.ActionInfo
@@ -33,12 +34,13 @@ type appStores struct {
 
 // WithApps gives the server the stores the app system keeps (ADR-0192),
 // the declarations placed on an instance (ADR-0187) and what it reports
-// (ADR-0188). A server without them answers the app system's routes
-// unavailable, one with nil declarations the declaration routes, and
-// one with nil reports the report route.
-func (s *Server) WithApps(records app.Store, credentials app.CredentialStore, declarations bot.DeclarationStore, reports bot.ReportStore) *Server {
+// (ADR-0188) and the bot tokens a withdrawal of bot hosting revokes. A
+// server without them answers the app system's routes unavailable, one
+// with nil declarations the declaration routes, one with nil reports
+// the report route, and one with nil bot tokens the withdrawal.
+func (s *Server) WithApps(records app.Store, credentials app.CredentialStore, declarations bot.DeclarationStore, reports bot.ReportStore, botTokens bot.BotTokenStore) *Server {
 	s.apps = &appStores{records: records, credentials: credentials, declarations: declarations, reports: reports,
-		declared: grn.Actions()}
+		botTokens: botTokens, declared: grn.Actions()}
 	return s
 }
 
@@ -379,34 +381,30 @@ func (s *Server) GrantInstallationBotHosting(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, installationToAPI(installation, true))
 }
 
-// WithdrawInstallationBotHosting deletes the `permit` the grant wrote.
-// One never written is answered as withdrawn.
+// WithdrawInstallationBotHosting deletes the `permit` the grant wrote,
+// then every bot token minted for an instance of the installation, so
+// neither a new exchange nor a token already minted outlives it. The
+// permit is the policy service's and the tokens this database's, so
+// the two are not one transaction: the permit goes first, and a token
+// whose exchange was decided before it went is the one the revocation
+// takes. One never written is answered as withdrawn, whether or not
+// the app still asks to host bots.
 func (s *Server) WithdrawInstallationBotHosting(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, installationSlug apigen.InstallationSlug) {
 	u, stores, installation, err := s.installationCall(r, orgSlug, installationSlug, org.ActionInstallationUpdate)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if s.policyRelay == nil {
-		writeError(w, errorx.New(errorx.KindUnavailable, "policy service is not configured"))
+	if s.policyRelay == nil || stores.botTokens == nil {
+		writeError(w, errorx.New(errorx.KindUnavailable, "the policy service or the bot domain is not configured"))
 		return
 	}
-	a, err := stores.records.GetApp(r.Context(), installation.App)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	grant, err := installation.BotHostGrant(a)
-	if errors.Is(err, app.ErrBotHostingNotRequested) {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	write := policyrelay.Write{Writer: u.GRN, Org: installation.Organization, ID: grant.ID}
+	write := policyrelay.Write{Writer: u.GRN, Org: installation.Organization, ID: installation.BotHostGrantID()}
 	if err := s.policyRelay.Delete(r.Context(), write); err != nil && !errorx.IsKind(err, errorx.KindNotFound) {
+		writeError(w, err)
+		return
+	}
+	if err := stores.botTokens.RevokeInstallationBotTokens(r.Context(), installation.GRN); err != nil {
 		writeError(w, err)
 		return
 	}

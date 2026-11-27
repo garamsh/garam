@@ -2,7 +2,8 @@
 
 > Status: accepted; superseded in part by
 > [ADR-0193](./0193-the-floor-is-held-in-an-apps-requested-set-and-not-in-the-schema-and-an-instances-last-contact-stays-the-app-systems.md)
-> (decision 6's manifest check, and decision 10's "last contact")
+> (decision 6's manifest check and its list, and decision 10's "last
+> contact")
 > Date: 2026-11-25
 
 Append-only: once merged, the body below is not rewritten. A fact later

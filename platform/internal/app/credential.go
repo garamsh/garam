@@ -183,9 +183,11 @@ type Token struct {
 // and the key it rests on.
 type TokenHolder struct {
 	Instance grn.GRN
-	// Installation is the installation the instance is a copy of.
-	Installation grn.GRN
-	ExpiresAt    time.Time
+	// Installation is the installation the instance is a copy of, and
+	// RequestsBotHosting whether its app asks to host bots.
+	Installation       grn.GRN
+	RequestsBotHosting bool
+	ExpiresAt          time.Time
 	// Operations are the machine operations the instance's app lists,
 	// the routes its token reaches beyond the app system's own.
 	Operations []string

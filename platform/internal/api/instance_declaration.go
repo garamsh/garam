@@ -29,7 +29,11 @@ func (s *Server) declarationCall(r *http.Request, orgSlug apigen.Org, installati
 		if err := s.authorizeOn(r, orgGRN(orgSlug), i.GRN, u, org.ActionBotPlace); err != nil {
 			return grn.GRN{}, nil, err
 		}
-		if err := bot.Hosts(r.Context(), s.decisions, i.Installation); err != nil {
+		asks, err := s.asksToHostBots(r, stores, i.Installation)
+		if err != nil {
+			return grn.GRN{}, nil, err
+		}
+		if err := bot.Hosts(r.Context(), s.decisions, i.Installation, asks); err != nil {
 			return grn.GRN{}, nil, err
 		}
 	}
@@ -37,6 +41,20 @@ func (s *Server) declarationCall(r *http.Request, orgSlug apigen.Org, installati
 		return grn.GRN{}, nil, errorx.New(errorx.KindUnavailable, "declarations are not configured")
 	}
 	return i.GRN, stores.declarations, nil
+}
+
+// asksToHostBots reads whether installation's app asks to host bots,
+// which bot.Hosts requires whatever a permit grants.
+func (s *Server) asksToHostBots(r *http.Request, stores *appStores, installation grn.GRN) (bool, error) {
+	held, err := stores.records.GetInstallation(r.Context(), installation)
+	if err != nil {
+		return false, err
+	}
+	a, err := stores.records.GetApp(r.Context(), held.App)
+	if err != nil {
+		return false, err
+	}
+	return a.RequestsBotHosting, nil
 }
 
 // ListInstanceDeclarations answers the instance's live declarations.

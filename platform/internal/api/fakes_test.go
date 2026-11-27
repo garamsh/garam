@@ -2054,3 +2054,19 @@ func (p *fakePolicies) held() []string {
 	slices.Sort(ids)
 	return ids
 }
+
+// fakeBotTokens is the bot domain's token store as a withdrawal of bot
+// hosting reaches it: it records each installation revoked. Any other
+// method panics on the nil interface.
+type fakeBotTokens struct {
+	bot.BotTokenStore
+	mu      sync.Mutex
+	revoked []grn.GRN
+}
+
+func (s *fakeBotTokens) RevokeInstallationBotTokens(_ context.Context, installation grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.revoked = append(s.revoked, installation)
+	return nil
+}

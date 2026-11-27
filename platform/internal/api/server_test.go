@@ -59,6 +59,8 @@ type fixture struct {
 	// policies is the policy relay as an install and an uninstall
 	// write through it.
 	policies *fakePolicies
+	// botTokens records each installation whose bot tokens were revoked.
+	botTokens *fakeBotTokens
 }
 
 // fixtureTokenURL is the token endpoint every fixture is configured
@@ -93,6 +95,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 		devices:     &fakeDeviceStore{},
 		apps:        newFakeAppStore(),
 		policies:    &fakePolicies{},
+		botTokens:   &fakeBotTokens{},
 	}
 	f.instanceKeys = newFakeInstanceCredentials(f.apps)
 	f.declared = newFakeDeclarations(f.apps)
@@ -108,7 +111,7 @@ func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider)
 	go func() { _ = watches.Receive(ctx) }()
 	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.decisions, f.authorities, f.authority, f.standalone, cfg).
 		WithDeviceGrant(f.devices).
-		WithApps(f.apps, f.instanceKeys, f.declared, f.reports).
+		WithApps(f.apps, f.instanceKeys, f.declared, f.reports, f.botTokens).
 		WithPolicyRelay(f.policies)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.

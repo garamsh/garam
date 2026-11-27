@@ -19,15 +19,21 @@ const ActionHost = "iam:bot.host"
 // exchange's actor (ADR-0192 decision 10).
 var ErrNotHosting = errorx.New(errorx.KindPermissionDenied, "the instance's installation is not granted bot hosting")
 
-// Hosts refuses with ErrNotHosting an installation that does not hold
-// iam:bot.host on itself. A question the policy service could not
-// answer is its error, which refuses as well.
-func Hosts(ctx context.Context, decisions policydecision.Service, installation grn.GRN) error {
+// Hosts refuses with ErrNotHosting an installation whose app does not
+// ask to host bots, asks false, however a permit granted it, or one
+// that does not hold iam:bot.host on itself. The question reads the
+// policies as they are now (ADR-0146 item 12), so a withdrawal is not
+// outlived by an allow the service cached. A question the policy
+// service could not answer is its error, which refuses as well.
+func Hosts(ctx context.Context, decisions policydecision.Service, installation grn.GRN, asks bool) error {
+	if !asks {
+		return ErrNotHosting
+	}
 	if decisions == nil {
 		return errorx.New(errorx.KindUnavailable, "bot: no policy service decides bot hosting")
 	}
 	decision, err := decisions.Evaluate(ctx, policydecision.Question{
-		Subject: installation, Action: ActionHost, Resource: installation,
+		Subject: installation, Action: ActionHost, Resource: installation, Current: true,
 	})
 	if err != nil {
 		return err

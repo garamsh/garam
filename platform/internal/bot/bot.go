@@ -132,7 +132,7 @@ func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotT
 	if err := s.botTokenLimit.Check(place.String()); err != nil {
 		return nil, err
 	}
-	if err := Hosts(ctx, s.cfg.Decisions, holder.Installation); err != nil {
+	if err := Hosts(ctx, s.cfg.Decisions, holder.Installation, holder.RequestsBotHosting); err != nil {
 		return nil, err
 	}
 	bot, err := grn.Parse(exchange.Subject)

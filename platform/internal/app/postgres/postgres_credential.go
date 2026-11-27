@@ -147,7 +147,8 @@ func (s *Store) ResolveToken(ctx context.Context, hash string) (app.TokenHolder,
 	if err != nil {
 		return app.TokenHolder{}, err
 	}
-	return app.TokenHolder{Instance: g, Installation: installation[0], ExpiresAt: row.ExpiresAt.Time.UTC(),
+	return app.TokenHolder{Instance: g, Installation: installation[0], RequestsBotHosting: row.RequestsBotHosting,
+		ExpiresAt:  row.ExpiresAt.Time.UTC(),
 		Operations: row.MachineOperations}, nil
 }
 

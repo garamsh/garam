@@ -24,11 +24,11 @@ const (
 var ErrUnrequestable = errorx.New(errorx.KindInternal, "the app requests an action no installation may be granted")
 
 // Floor is the actions no app may request (ADR-0192 decision 6, as
-// ADR-0193 holds it): those that grant, delegate or change membership,
-// roles, invitations, policies, consent, a principal's credentials or
-// the organization itself. Who may hold one is the schema's to say;
-// that no app requests one is held here. A name no manifest declares
-// yet stands for the action that will.
+// ADR-0193 holds and extends it): those that grant, delegate or change
+// membership, roles, invitations, policies, consent, a principal or its
+// credentials, or the organization itself. Who may hold one is the
+// schema's to say; that no app requests one is held here. A name no
+// manifest declares yet stands for the action that will.
 var Floor = []string{
 	"iam:org.update", "iam:org.delete", "iam:org.invite",
 	"iam:group.create", "iam:group.update", "iam:group.delete",
@@ -40,7 +40,8 @@ var Floor = []string{
 	"iam:consent.grant", "iam:consent.withdraw",
 	"iam:operator.register", "iam:operator.update", "iam:operator.delete",
 	"iam:operator.reissue", "iam:operator.delegate",
-	"iam:agent.enroll",
+	"iam:agent.enroll", "iam:agent.create", "iam:agent.recover", "iam:agent.replace",
+	"iam:agent.activate",
 	"iam:app.create", "iam:app.update", "iam:app.delete",
 	"iam:installation.create", "iam:installation.update", "iam:installation.delete",
 	"iam:instance.register", "iam:instance.update", "iam:instance.reissue",
@@ -133,6 +134,12 @@ func (i *Installation) Grants(a *App, declared []grn.ActionInfo) ([]Grant, error
 	return grants, nil
 }
 
+// BotHostGrantID is the identifier of the installation's grant of bot
+// hosting, which a withdrawal deletes whatever its app now asks.
+func (i *Installation) BotHostGrantID() string {
+	return GrantPrefix + i.Incarnation + "-bot-host"
+}
+
 // ErrBotHostingNotRequested refuses bot hosting for an installation
 // whose app does not ask to host bots.
 var ErrBotHostingNotRequested = errorx.New(errorx.KindInvalidArgument, "the app does not ask to host bots")
@@ -152,7 +159,7 @@ func (i *Installation) BotHostGrant(a *App) (Grant, error) {
 	}
 	installation := entityOf(installationEntity, i.GRN)
 	return Grant{
-		ID:   GrantPrefix + i.Incarnation + "-bot-host",
+		ID:   i.BotHostGrantID(),
 		Name: a.Slug + " iam:bot.host",
 		Text: fmt.Sprintf("permit (principal == %s, action == Iam::Action::%q, resource == %s);",
 			installation, "bot.host", installation),

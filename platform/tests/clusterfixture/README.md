@@ -52,8 +52,9 @@ GARAM_FIXTURE_DATABASE_URL=postgres://... \
   `iam:installation.create`, `.read` and `.update`,
   `iam:instance.register`, `.read`, `.reissue` and `.delete`, and
   `iam:bot.place` on the instance, sent as the `garam_session` cookie.
-  Installing and granting bot hosting are the owner's alone. `testprincipal prepare` answers one, and that
-  principal owns any organization it creates.
+  Installing and granting bot hosting are the owner's alone.
+  `testprincipal prepare` answers one, and that principal owns any
+  organization it creates.
 - `GARAM_FIXTURE_ORG`: the organization a new record is created in. A
   subcommand naming a record by GRN reaches it in the GRN's own
   organization.

@@ -449,6 +449,9 @@ func TestInstallationBotHosting_TheOwnerGrantsAPermitOnTheInstallationAndWithdra
 	rec = f.do(t, "PUT", path, "", admin)
 	assert.Equal(t, http.StatusForbidden, rec.Code, "an administrator does not hold iam:installation.update")
 	assert.NotContains(t, f.policies.held(), grantID)
+	rec = f.do(t, "DELETE", path, "", admin)
+	assert.Equal(t, http.StatusForbidden, rec.Code, "nor withdraws")
+	assert.Empty(t, f.botTokens.revoked, "a refused withdrawal revokes nothing")
 
 	for _, attempt := range []string{"the grant", "a repeat"} {
 		rec = f.do(t, "PUT", path, "", owner)
@@ -468,6 +471,8 @@ func TestInstallationBotHosting_TheOwnerGrantsAPermitOnTheInstallationAndWithdra
 		require.Equal(t, http.StatusNoContent, rec.Code, attempt)
 	}
 	assert.NotContains(t, f.policies.held(), grantID)
+	assert.Equal(t, []grn.GRN{installation, installation}, f.botTokens.revoked,
+		"each withdrawal revokes the bot tokens minted for the installation's instances")
 	rec = f.do(t, "GET", connectorPath(slug), "", owner)
 	assert.False(t, decodeBody[apigen.Installation](t, rec).BotHosting, "withdrawn")
 
@@ -480,22 +485,32 @@ func TestInstallationBotHosting_TheOwnerGrantsAPermitOnTheInstallationAndWithdra
 
 // TestInstallationBotHosting_IsRefusedForAnAppThatDoesNotAskToHostBots
 // holds that only an app asking to host bots is granted it: the grant
-// is answered 400 and writes nothing. The grant of the connector, which
-// asks, is the control in the test above; a withdrawal has nothing to
-// take and is answered as one.
+// is answered 400 and writes nothing. A grant written while the app
+// asked is still withdrawn once it no longer does, with the bot tokens
+// it opened. The grant of the connector, which asks, is the control in
+// the test above.
 func TestInstallationBotHosting_IsRefusedForAnAppThatDoesNotAskToHostBots(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	f.permit(permission{userGRNOf("owner-sub"), org.ActionInstallationCreate},
+		permission{userGRNOf("owner-sub"), org.ActionInstallationRead},
 		permission{userGRNOf("owner-sub"), org.ActionInstallationUpdate})
 	installConnector(t, f, slug, owner)
+	path := connectorPath(slug) + "/bot-hosting"
+	rec := f.do(t, "PUT", path, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code, "granted while the app asks")
+	rec = f.do(t, "GET", connectorPath(slug), "", owner)
+	grantID := "install-" + decodeBody[apigen.Installation](t, rec).Incarnation + "-bot-host"
+	require.Contains(t, f.policies.held(), grantID)
+
 	f.apps.apps[connectorApp().GRN.String()].RequestsBotHosting = false
 	held := f.policies.held()
-
-	rec := f.do(t, "PUT", connectorPath(slug)+"/bot-hosting", "", owner)
+	rec = f.do(t, "PUT", path, "", owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
 	assert.Equal(t, held, f.policies.held(), "nothing is written")
-	rec = f.do(t, "DELETE", connectorPath(slug)+"/bot-hosting", "", owner)
+	rec = f.do(t, "DELETE", path, "", owner)
 	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.NotContains(t, f.policies.held(), grantID, "the standing grant is withdrawn")
+	assert.Len(t, f.botTokens.revoked, 1, "with the bot tokens it opened")
 }

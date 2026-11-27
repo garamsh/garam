@@ -254,11 +254,16 @@ first-party service's principal is still ADR-0129's
   activates, as the owner, a `permit` of `iam:bot.host` whose
   principal and resource are the installation itself, under
   `install-<incarnation>-bot-host`, so an uninstall's purge and a
-  reinstall's take it. `withdrawInstallationBotHosting` deletes it.
-  Both are `iam:installation.update`, and an app that does not ask to
-  host bots is refused 400. An installation's `botHosting` is the
-  policy service's answer to that question. What the grant opens is
-  [bots.md](./bots.md)'s.
+  reinstall's take it. `withdrawInstallationBotHosting` deletes it,
+  whatever the app now asks, and then revokes the bot tokens minted for
+  the installation's instances; the declarations placed on them stay
+  until the organization tombstones them. Both are
+  `iam:installation.update`, and a grant for an app that does not ask
+  to host bots is refused 400. The gates read the app's flag as well
+  as the policy service, so a broader permit an owner writes does not
+  host bots for an app that does not ask to. An installation's
+  `botHosting` is the policy service's answer to that question. What
+  the grant opens is [bots.md](./bots.md)'s.
 - **Registration is throttled per source address** at
   `GARAM_INSTANCE_REGISTRATION_LIMIT` a minute, ten unless set
   (`deploy/charts/garam/README.md` is authoritative for the value),

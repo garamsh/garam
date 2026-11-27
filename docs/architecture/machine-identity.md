@@ -381,9 +381,9 @@ and its place's connector obtains its token. The claims are garam-bot's
 - **The place is an instance whose installation holds
   `iam:bot.host`**, and `act.sub` is the instance's GRN
   ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
-  decision 10). Unbuilt: no check reads `iam:bot.host` until the bot
-  domain does (#2082), so the place is any instance, and
-  garam-bot-connector is the one app there is.
+  decision 10). The exchange asks `iam:bot.host` of the actor's
+  installation and refuses it 400 `invalid_request` where it is not
+  granted ([bots.md](./bots.md)).
 - **The token is `garam_bt_` and opaque, accepted for an hour.**
   `bot_tokens` (migration 000087, renamed by 000091) keeps its hash
   beside its `sub`, the bot, by the declaration that places it; its

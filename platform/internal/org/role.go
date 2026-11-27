@@ -124,6 +124,10 @@ const (
 	ActionInstallationCreate = "iam:installation.create"
 	ActionInstallationRead   = "iam:installation.read"
 	ActionInstallationDelete = "iam:installation.delete"
+	// ActionInstallationUpdate changes what an installation is granted
+	// beyond its requested actions, today bot hosting, so it writes a
+	// permit and is the owner's as ActionInstallationCreate is.
+	ActionInstallationUpdate = "iam:installation.update"
 	ActionInstanceRead       = "iam:instance.read"
 	ActionInstanceRegister   = "iam:instance.register"
 	ActionInstanceUpdate     = "iam:instance.update"
@@ -251,7 +255,8 @@ var actions = []string{
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
-	ActionAppRead, ActionInstallationCreate, ActionInstallationRead, ActionInstallationDelete,
+	ActionAppRead, ActionInstallationCreate, ActionInstallationRead, ActionInstallationUpdate,
+	ActionInstallationDelete,
 	ActionInstanceRead, ActionInstanceRegister, ActionInstanceUpdate,
 	ActionInstanceReissue, ActionInstanceDelete, ActionBotPlace,
 	ActionAgentRead, ActionAgentWatch, ActionAgentRename, ActionAgentCreate,
@@ -390,7 +395,7 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
-			ActionAuditRead, ActionPermitWrite, ActionInstallationCreate,
+			ActionAuditRead, ActionPermitWrite, ActionInstallationCreate, ActionInstallationUpdate,
 		}, machineActionsHeld(false), coworkActions, codehubActionsHeld(false))
 	case RoleAdmin:
 		return slices.Concat([]string{

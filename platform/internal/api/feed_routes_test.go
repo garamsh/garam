@@ -72,7 +72,8 @@ var feedClassification = map[string]string{
 	// The relayed writes (ADR-0169): the service stores in the call.
 	"createIamPolicy": relayed, "createIamPolicyVersion": relayed,
 	"activateIamPolicy": relayed, "rollbackIamPolicy": relayed,
-	"deleteIamPolicy": relayed,
+	"deleteIamPolicy":             relayed,
+	"grantInstallationBotHosting": relayed, "withdrawInstallationBotHosting": relayed,
 	// api/machine.yaml, what waits.
 	"createManagedAgent": waitsForDelivery, "admitAgentEnrollment": waitsForDelivery + " when it admits a new agent or replaces a supervisor's",
 	"enrollStandaloneAgent": waitsForDelivery,

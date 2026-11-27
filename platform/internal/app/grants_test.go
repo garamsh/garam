@@ -39,6 +39,27 @@ func TestRequestable_AnActionAppliesToTheInstallationAndItsInstances(t *testing.
 		"no action the manifests declare today is requestable")
 }
 
+// TestRequestable_NoAppRequestsAnActionOfTheFloor holds ADR-0193: an
+// action of the floor is refused in a request even where its manifest
+// lists the installation and the instance among its principals, so the
+// refusal is the floor's and not the principals'. iam:bot.host, which
+// an installation holds by its owner's grant, is among them. The
+// control is a non-floor action declared the same way.
+func TestRequestable_NoAppRequestsAnActionOfTheFloor(t *testing.T) {
+	assert.Contains(t, app.Floor, "iam:bot.host")
+	principals := []string{"Iam::User", "Iam::Installation", "Iam::Instance"}
+	for _, action := range append(app.Floor, "iam:org.read") {
+		asIfRequestable := []grn.ActionInfo{{Name: action, Principals: principals, Resources: []string{"Iam::Org"}}}
+		err := app.Requestable(action, asIfRequestable)
+		if action == "iam:org.read" {
+			assert.NoError(t, err, "the control")
+			continue
+		}
+		assert.ErrorIs(t, err, app.ErrUnrequestable, action)
+		assert.ErrorContains(t, err, "of the floor", action)
+	}
+}
+
 // TestGrants_OnePermitPerActionAndScopeNamedByTheIncarnation holds
 // ADR-0192 decision 4's `permit`s: one per requested action and per
 // entity of the scope, the installation its principal and its resource

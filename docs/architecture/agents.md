@@ -169,8 +169,8 @@ on an instance by a declaration
   organization's owner granted `iam:bot.host`, and placing it is
   `iam:bot.place` on that instance
   ([ADR-0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
-  decision 10, [apps.md](./apps.md)). Placing it is built; until
-  `iam:bot.host` is, the place is any instance (#2082).
+  decision 10, [apps.md](./apps.md), [bots.md](./bots.md)). Both are
+  built.
 
 ## Acting on the browser-facing listener
 

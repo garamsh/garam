@@ -105,8 +105,9 @@ type BotExchange struct {
 // to the record whose token is its actor (ADR-0189 decision 2). The
 // actor is read as every request's token is, and again as the token
 // is written, so a withdrawn key or a deleted record refuses it with
-// ErrActorTokenRefused. A bot no live Bot declaration places on that
-// record is ErrBotNotPlaced. The audience is garam's, the token
+// ErrActorTokenRefused. A record whose installation hosts no bots is
+// ErrNotHosting, and a bot no live Bot declaration places on that
+// record ErrBotNotPlaced. The audience is garam's, the token
 // endpoint's URL, or none; another is ErrAudienceRefused. A scope is
 // refused, none being defined yet.
 func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error) {
@@ -129,6 +130,9 @@ func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotT
 	}
 	place := holder.Instance
 	if err := s.botTokenLimit.Check(place.String()); err != nil {
+		return nil, err
+	}
+	if err := Hosts(ctx, s.cfg.Decisions, holder.Installation); err != nil {
 		return nil, err
 	}
 	bot, err := grn.Parse(exchange.Subject)

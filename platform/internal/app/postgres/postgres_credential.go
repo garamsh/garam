@@ -143,7 +143,12 @@ func (s *Store) ResolveToken(ctx context.Context, hash string) (app.TokenHolder,
 	if err != nil {
 		return app.TokenHolder{}, err
 	}
-	return app.TokenHolder{Instance: g, ExpiresAt: row.ExpiresAt.Time.UTC(), Operations: row.MachineOperations}, nil
+	installation, err := storedGRNs("installation", row.InstallationGrn)
+	if err != nil {
+		return app.TokenHolder{}, err
+	}
+	return app.TokenHolder{Instance: g, Installation: installation[0], ExpiresAt: row.ExpiresAt.Time.UTC(),
+		Operations: row.MachineOperations}, nil
 }
 
 // Rotate adds successor beside g's live keys.

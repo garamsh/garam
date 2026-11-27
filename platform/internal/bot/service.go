@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 )
 
 // WatchesPerInstance bounds the declaration polls one instance sends
@@ -38,6 +39,9 @@ type Config struct {
 	// DeclarationRecheck is how often a held poll reads again unwoken;
 	// zero takes DeclarationRecheck.
 	DeclarationRecheck time.Duration
+	// Decisions decides whether an exchange's actor's installation
+	// hosts bots; nil refuses every exchange as unavailable.
+	Decisions policydecision.Service
 }
 
 // Service is how a connector reads what is declared for its instance
@@ -58,7 +62,8 @@ type Service interface {
 	// MintBotToken answers a token for the bot a connector's exchange
 	// names, to the record whose token is its actor, where a live
 	// declaration places the bot on that record (ADR-0189 decision 2,
-	// AUTH-5). Past BotTokensPerInstance it answers
+	// AUTH-5) and the record's installation hosts bots (ADR-0192
+	// decision 10). Past BotTokensPerInstance it answers
 	// *operator.Exceeded.
 	MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error)
 }

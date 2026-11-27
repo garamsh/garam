@@ -124,7 +124,8 @@ func TestExchangeBotToken_RefusesAFormOutsideTheExchange(t *testing.T) {
 // TestExchangeBotToken_TranslatesTheDomainsRefusals maps each domain
 // answer to its OAuth status and code. RFC 8693 §2.2.2 makes an actor
 // or subject token that is invalid or refused by policy
-// invalid_request; another audience is invalid_target, a scope
+// invalid_request, an actor whose installation hosts no bots among
+// them; another audience is invalid_target, a scope
 // invalid_scope, and the bound is 429.
 func TestExchangeBotToken_TranslatesTheDomainsRefusals(t *testing.T) {
 	tests := []struct {
@@ -135,6 +136,7 @@ func TestExchangeBotToken_TranslatesTheDomainsRefusals(t *testing.T) {
 	}{
 		{"an actor that authenticates nothing", bot.ErrActorTokenRefused, http.StatusBadRequest, "invalid_request"},
 		{"a bot not placed on the record", bot.ErrBotNotPlaced, http.StatusBadRequest, "invalid_request"},
+		{"an actor whose installation hosts no bots", bot.ErrNotHosting, http.StatusBadRequest, "invalid_request"},
 		{"another audience", bot.ErrAudienceRefused, http.StatusBadRequest, "invalid_target"},
 		{"a scope", bot.ErrScopeUndefined, http.StatusBadRequest, "invalid_scope"},
 		{"the bound exceeded", &operator.Exceeded{RetryAfter: time.Second}, http.StatusTooManyRequests, "temporarily_unavailable"},

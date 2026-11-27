@@ -23,13 +23,39 @@ const (
 // fault is garam's and not the installer's.
 var ErrUnrequestable = errorx.New(errorx.KindInternal, "the app requests an action no installation may be granted")
 
-// Requestable refuses an action an installation may not be granted: one
-// declared does not hold, or one it holds without both the installation
-// and the instance among its principals. declared is what the manifests
-// declare, grn.Actions(). The floor of ADR-0192 decision 6 is held
-// where the manifests are, which refuse an action of that property
-// listing either.
+// Floor is the actions no app may request (ADR-0192 decision 6, as
+// ADR-0193 holds it): those that grant, delegate or change membership,
+// roles, invitations, policies, consent, a principal's credentials or
+// the organization itself. Who may hold one is the schema's to say;
+// that no app requests one is held here. A name no manifest declares
+// yet stands for the action that will.
+var Floor = []string{
+	"iam:org.update", "iam:org.delete", "iam:org.invite",
+	"iam:group.create", "iam:group.update", "iam:group.delete",
+	"iam:group.member-add", "iam:group.member-remove",
+	"iam:project.create", "iam:project.update", "iam:project.delete",
+	"iam:project.member-add", "iam:project.member-remove",
+	"iam:policy.create", "iam:policy.update", "iam:policy.attach",
+	"iam:policy.detach", "iam:policy.delete", "iam:permit.write",
+	"iam:consent.grant", "iam:consent.withdraw",
+	"iam:operator.register", "iam:operator.update", "iam:operator.delete",
+	"iam:operator.reissue", "iam:operator.delegate",
+	"iam:agent.enroll",
+	"iam:app.create", "iam:app.update", "iam:app.delete",
+	"iam:installation.create", "iam:installation.update", "iam:installation.delete",
+	"iam:instance.register", "iam:instance.update", "iam:instance.reissue",
+	"iam:instance.delete",
+	"iam:bot.host", "iam:bot.place",
+}
+
+// Requestable refuses an action an installation may not be granted:
+// one of the Floor, one declared does not hold, or one it holds
+// without both the installation and the instance among its
+// principals. declared is what the manifests declare, grn.Actions().
 func Requestable(action string, declared []grn.ActionInfo) error {
+	if slices.Contains(Floor, action) {
+		return errorx.Wrap(ErrUnrequestable, action+" is of the floor no app may request", errorx.KindInternal)
+	}
 	for _, a := range declared {
 		if a.Name != action {
 			continue
@@ -105,6 +131,32 @@ func (i *Installation) Grants(a *App, declared []grn.ActionInfo) ([]Grant, error
 		}
 	}
 	return grants, nil
+}
+
+// ErrBotHostingNotRequested refuses bot hosting for an installation
+// whose app does not ask to host bots.
+var ErrBotHostingNotRequested = errorx.New(errorx.KindInvalidArgument, "the app does not ask to host bots")
+
+// BotHostGrant is the `permit` of iam:bot.host on the installation
+// itself that its owner's grant of bot hosting writes (ADR-0192
+// decision 10). Its identifier is under GrantPrefix and names the
+// incarnation, so a reinstall's purge and an uninstall's take it, and
+// it names the installation alone, so no instance holds it of its own.
+// A refusal is ErrBotHostingNotRequested.
+func (i *Installation) BotHostGrant(a *App) (Grant, error) {
+	if a.GRN != i.App {
+		return Grant{}, errorx.New(errorx.KindInternal, "app: bot hosting of "+a.GRN.String()+" for an installation of "+i.App.String())
+	}
+	if !a.RequestsBotHosting {
+		return Grant{}, ErrBotHostingNotRequested
+	}
+	installation := entityOf(installationEntity, i.GRN)
+	return Grant{
+		ID:   GrantPrefix + i.Incarnation + "-bot-host",
+		Name: a.Slug + " iam:bot.host",
+		Text: fmt.Sprintf("permit (principal == %s, action == Iam::Action::%q, resource == %s);",
+			installation, "bot.host", installation),
+	}, nil
 }
 
 // entityOf is the Cedar literal of the entity of typ named g.

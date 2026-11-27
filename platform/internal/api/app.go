@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/app"
 	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/policydecision"
 	"github.com/garamsh/garam/platform/internal/policyfeed"
 	"github.com/garamsh/garam/platform/internal/policyrelay"
 	"github.com/garamsh/garam/platform/internal/user"
@@ -187,7 +188,8 @@ func (s *Server) CreateInstallation(w http.ResponseWriter, r *http.Request, orgS
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, installationToAPI(created))
+	// A new incarnation holds no grant of bot hosting yet.
+	writeJSON(w, http.StatusCreated, installationToAPI(created, false))
 }
 
 // undoTimeout bounds the undo of a failed install, which runs past the
@@ -291,9 +293,14 @@ func (s *Server) ListInstallations(w http.ResponseWriter, r *http.Request, orgSl
 		writeError(w, err)
 		return
 	}
+	hosting, err := s.botHosting(r.Context(), installations...)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	out := make([]apigen.Installation, 0, len(installations))
-	for _, i := range installations {
-		out = append(out, installationToAPI(i))
+	for n, i := range installations {
+		out = append(out, installationToAPI(i, hosting[n]))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -305,7 +312,105 @@ func (s *Server) GetInstallation(w http.ResponseWriter, r *http.Request, orgSlug
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, installationToAPI(installation))
+	hosting, err := s.botHosting(r.Context(), installation)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, installationToAPI(installation, hosting[0]))
+}
+
+// botHosting answers, for each installation, whether it holds
+// iam:bot.host on itself, as the gates on placing a declaration and on
+// a bot token exchange ask it.
+func (s *Server) botHosting(ctx context.Context, installations ...*app.Installation) ([]bool, error) {
+	questions := make([]policydecision.Question, 0, len(installations))
+	for _, i := range installations {
+		questions = append(questions, policydecision.Question{Subject: i.GRN, Action: bot.ActionHost, Resource: i.GRN})
+	}
+	if len(questions) == 0 {
+		return nil, nil
+	}
+	decisions, err := s.decisions.Evaluations(ctx, questions)
+	if err != nil {
+		return nil, err
+	}
+	hosting := make([]bool, 0, len(decisions))
+	for _, d := range decisions {
+		hosting = append(hosting, d.Allowed)
+	}
+	return hosting, nil
+}
+
+// GrantInstallationBotHosting writes and activates, as the owner who
+// asks, the `permit` of iam:bot.host on the installation (ADR-0192
+// decision 10). A grant already written is activated again, so the
+// route answers a repeat as it answered the first.
+func (s *Server) GrantInstallationBotHosting(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, installationSlug apigen.InstallationSlug) {
+	u, stores, installation, err := s.installationCall(r, orgSlug, installationSlug, org.ActionInstallationUpdate)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if s.policyRelay == nil {
+		writeError(w, errorx.New(errorx.KindUnavailable, "policy service is not configured"))
+		return
+	}
+	a, err := stores.records.GetApp(r.Context(), installation.App)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	grant, err := installation.BotHostGrant(a)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	write := policyrelay.Write{Writer: u.GRN, Org: installation.Organization, ID: grant.ID}
+	err = s.policyRelay.Create(r.Context(), write, grant.Name, policyrelay.Body{Kind: policyrelay.KindPermit, Text: grant.Text})
+	if err != nil && !errorx.IsKind(err, errorx.KindAlreadyExists) {
+		writeError(w, err)
+		return
+	}
+	if err := s.policyRelay.Activate(r.Context(), write); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, installationToAPI(installation, true))
+}
+
+// WithdrawInstallationBotHosting deletes the `permit` the grant wrote.
+// One never written is answered as withdrawn.
+func (s *Server) WithdrawInstallationBotHosting(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, installationSlug apigen.InstallationSlug) {
+	u, stores, installation, err := s.installationCall(r, orgSlug, installationSlug, org.ActionInstallationUpdate)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if s.policyRelay == nil {
+		writeError(w, errorx.New(errorx.KindUnavailable, "policy service is not configured"))
+		return
+	}
+	a, err := stores.records.GetApp(r.Context(), installation.App)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	grant, err := installation.BotHostGrant(a)
+	if errors.Is(err, app.ErrBotHostingNotRequested) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	write := policyrelay.Write{Writer: u.GRN, Org: installation.Organization, ID: grant.ID}
+	if err := s.policyRelay.Delete(r.Context(), write); err != nil && !errorx.IsKind(err, errorx.KindNotFound) {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // DeleteInstallation uninstalls the app: the installation goes with its
@@ -353,7 +458,7 @@ func appToAPI(a *app.App) apigen.App {
 	}
 }
 
-func installationToAPI(i *app.Installation) apigen.Installation {
+func installationToAPI(i *app.Installation, botHosting bool) apigen.Installation {
 	projects := make([]string, 0, len(i.Scope.Projects()))
 	for _, p := range i.Scope.Projects() {
 		projects = append(projects, p.String())
@@ -364,6 +469,7 @@ func installationToAPI(i *app.Installation) apigen.Installation {
 		AppGrn:      i.App.String(),
 		Incarnation: i.Incarnation,
 		Projects:    projects,
+		BotHosting:  botHosting,
 		CreatedBy:   i.CreatedBy.String(),
 		CreatedAt:   i.CreatedAt,
 	}

@@ -1004,6 +1004,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/installations/{installation}/bot-hosting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Grant an installation bot hosting. Requires the `owner` role.
+         * @description Writes and activates a `permit` of `iam:bot.host` on the installation itself, so its instances may be a declaration's target and a bot token exchange's actor (ADR-0192 decision 10). Granting it again is answered as the first grant was. An app that does not ask to host bots is refused 400. The permit names the installation, so an uninstall takes it. Authorized as `iam:installation.update` on the installation.
+         */
+        put: operations["grantInstallationBotHosting"];
+        post?: never;
+        /**
+         * Withdraw an installation's bot hosting. Requires the `owner` role.
+         * @description Deletes the `permit` the grant wrote, so its instances are refused as a declaration's target and as a bot token exchange's actor. Withdrawing what was never granted is answered as a withdrawal. Authorized as `iam:installation.update` on the installation.
+         */
+        delete: operations["withdrawInstallationBotHosting"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/installations/{installation}/instances": {
         parameters: {
             query?: never;
@@ -1151,7 +1175,7 @@ export interface paths {
         put?: never;
         /**
          * Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
-         * @description Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+         * @description Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
          */
         post: operations["createInstanceDeclaration"];
         delete?: never;
@@ -1174,13 +1198,13 @@ export interface paths {
         get: operations["getInstanceDeclaration"];
         /**
          * Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
-         * @description An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+         * @description An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
          */
         put: operations["putInstanceDeclaration"];
         post?: never;
         /**
          * Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
-         * @description Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
+         * @description Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
          */
         delete: operations["deleteInstanceDeclaration"];
         options?: never;
@@ -2572,6 +2596,8 @@ export interface components {
             incarnation: string;
             /** @description The GRNs of the projects its grants reach, empty where they reach the whole organization. */
             projects: string[];
+            /** @description Whether it holds `iam:bot.host`, which its owner grants apart from the actions its app requests (ADR-0192 decision 10). */
+            botHosting: boolean;
             /** @description The owner that installed it. */
             createdBy: string;
             /** Format: date-time */
@@ -4694,6 +4720,62 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Uninstalled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    grantInstallationBotHosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The installation, hosting bots. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Installation"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    withdrawInstallationBotHosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description An installation's identifier, its app's slug. */
+                installation: components["parameters"]["installation"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn. */
             204: {
                 headers: {
                     [name: string]: unknown;

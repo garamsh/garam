@@ -285,3 +285,69 @@ async fn no_permit_confers_the_right_and_a_guardrail_still_takes_it_away() {
         "{taken:?}"
     );
 }
+
+const CONNECTOR: Named = (
+    "Iam::Installation",
+    "grn:acme/iam/installation/garam-bot-connector",
+);
+const DEPLOYER: Named = ("Iam::Installation", "grn:acme/iam/installation/deployer");
+/// The `permit` an owner's grant of bot hosting writes (ADR-0192
+/// decision 10), as `platform/internal/app` §BotHostGrant draws it.
+const CONNECTOR_HOSTS: &str = r#"permit (principal == Iam::Installation::"grn:acme/iam/installation/garam-bot-connector", action == Iam::Action::"bot.host", resource == Iam::Installation::"grn:acme/iam/installation/garam-bot-connector");"#;
+
+/// ADR-0193's point: `iam:bot.host` lists the installation as its
+/// principal, so the owner's grant on the installation itself is a
+/// `permit` the schema admits, and it decides that installation's
+/// question alone. The same question with no permit, and another
+/// installation's, are the controls.
+#[tokio::test]
+async fn a_grant_of_bot_hosting_is_a_permit_on_the_installation_itself() {
+    let world = World::new();
+    let right = world.owner_right().await;
+    Body::permit(&world.engine, &right, CONNECTOR_HOSTS).unwrap();
+
+    let org = json!({"org": {"__entity": reference(ORG)}});
+    let entities = world
+        .engine
+        .entities(json!([
+            entity(MEMBERS, json!({}), &[]),
+            organization(ORG, MEMBERS),
+            entity(CONNECTOR, org.clone(), &[MEMBERS, ORG]),
+            entity(DEPLOYER, org, &[MEMBERS, ORG]),
+        ]))
+        .unwrap();
+    let id = PolicyId::new("grn:acme/iam/policy/install-1-bot-host");
+    let granted = OrgPolicies {
+        permits: vec![Policy::parse(Some(id), CONNECTOR_HOSTS).unwrap()],
+        ..world.held.clone()
+    };
+    let ask = |who: Named| Evaluation {
+        subject: EntityRef {
+            entity_type: who.0,
+            id: who.1,
+        },
+        action: "iam:bot.host",
+        resource: EntityRef {
+            entity_type: who.0,
+            id: who.1,
+        },
+        context: json!({}),
+    };
+    for (held, who, outcome) in [
+        (&granted, CONNECTOR, Outcome::Allow),
+        (&world.held, CONNECTOR, Outcome::Deny),
+        (&granted, DEPLOYER, Outcome::Deny),
+    ] {
+        let asked = World {
+            engine: world.engine.clone(),
+            entities: entities.clone(),
+            held: held.clone(),
+        };
+        let decision = asked
+            .engine
+            .evaluate(&asked, &asked, &ask(who))
+            .await
+            .unwrap();
+        assert_eq!(decision.outcome, outcome, "{who:?}: {decision:?}");
+    }
+}

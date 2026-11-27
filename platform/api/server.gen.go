@@ -1755,8 +1755,11 @@ type IamRoleLinkScope string
 
 // Installation One app installed in one organization (ADR-0192 decision 4).
 type Installation struct {
-	AppGrn    string    `json:"appGrn"`
-	CreatedAt time.Time `json:"createdAt"`
+	AppGrn string `json:"appGrn"`
+
+	// BotHosting Whether it holds `iam:bot.host`, which its owner grants apart from the actions its app requests (ADR-0192 decision 10).
+	BotHosting bool      `json:"botHosting"`
+	CreatedAt  time.Time `json:"createdAt"`
 
 	// CreatedBy The owner that installed it.
 	CreatedBy string `json:"createdBy"`
@@ -3115,6 +3118,12 @@ type ServerInterface interface {
 	// GetInstallation Read one of an organization's installations. Requires the `member` role.
 	// (GET /orgs/{org}/installations/{installation})
 	GetInstallation(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug)
+	// WithdrawInstallationBotHosting Withdraw an installation's bot hosting. Requires the `owner` role.
+	// (DELETE /orgs/{org}/installations/{installation}/bot-hosting)
+	WithdrawInstallationBotHosting(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug)
+	// GrantInstallationBotHosting Grant an installation bot hosting. Requires the `owner` role.
+	// (PUT /orgs/{org}/installations/{installation}/bot-hosting)
+	GrantInstallationBotHosting(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug)
 	// ListInstances List an installation's instances. Requires the `member` role.
 	// (GET /orgs/{org}/installations/{installation}/instances)
 	ListInstances(w http.ResponseWriter, r *http.Request, org Org, installationSlug InstallationSlug)
@@ -5111,6 +5120,76 @@ func (siw *ServerInterfaceWrapper) GetInstallation(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetInstallation(w, r, org, installationSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// WithdrawInstallationBotHosting operation middleware
+func (siw *ServerInterfaceWrapper) WithdrawInstallationBotHosting(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.WithdrawInstallationBotHosting(w, r, org, installationSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrantInstallationBotHosting operation middleware
+func (siw *ServerInterfaceWrapper) GrantInstallationBotHosting(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "installation" -------------
+	var installationSlug InstallationSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "installation", r.PathValue("installation"), &installationSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "installation", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrantInstallationBotHosting(w, r, org, installationSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7344,6 +7423,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/installations", wrapper.CreateInstallation)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/installations/{installation}", wrapper.DeleteInstallation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}", wrapper.GetInstallation)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/bot-hosting", wrapper.WithdrawInstallationBotHosting)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/bot-hosting", wrapper.GrantInstallationBotHosting)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances", wrapper.ListInstances)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances", wrapper.CreateInstance)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/installations/{installation}/instances/{instance}", wrapper.DeleteInstance)

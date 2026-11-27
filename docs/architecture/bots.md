@@ -13,11 +13,6 @@ connector is `garamsh/garam-bot-operator`'s interface
 `interfaces/cluster-connection/v1alpha1/`, served from
 `platform/internal/machineapi` §ClusterConnection.
 
-Not yet built: `iam:bot.host`, which refuses an instance whose
-installation lacks it as a declaration's target and as a bot-token
-exchange's actor (ADR-0192 decision 10, #2082). Today every instance
-of an app whose machine operations list the routes is such a target.
-
 | Type | Responsibility |
 |------|----------------|
 | `Service` | holds an instance's declarations poll until a change, a wake or the wait, keeps its report, and mints a declared bot's token for its connector |
@@ -38,6 +33,23 @@ of an app whose machine operations list the routes is such a target.
   the report is `iam:instance.read` on the installation.
   `platform/internal/org/role.go` §machineActions and
   `policy/schema/iam.cedarschema` are authoritative for the grants.
+- **`iam:cluster.declare` is withdrawn without a mapping.** No action
+  takes its place for a grant an organization wrote, so policy
+  migration `policy/migrations/000004_cluster_declare_withdrawn.up.sql`
+  deletes every stored policy any version of which names it, one
+  naming other actions beside it included: a version is never
+  rewritten. A grant of it to someone outside the owner and the
+  administrator lapses with it, and its organization writes the grant
+  again as `iam:bot.place`.
+- **Only an instance whose installation hosts bots is a target or an
+  actor** (ADR-0192 decision 10). Each declaration write asks the
+  policy service `iam:bot.host` with the instance's installation as
+  principal and as resource (`bot.Hosts`), and a refusal is answered
+  403. The
+  bot-token exchange asks the same of the actor's installation, and a
+  refusal is answered 400 `invalid_request`. Reads, the long poll and
+  the report are not gated. The owner grants it
+  ([apps.md](./apps.md) §Current decisions, bot hosting).
 - **An organization places declarations on an instance, and its
   connector long-polls them**
   ([ADR-0187](./adr/0187-a-declaration-placed-on-a-cluster-is-written-under-iam-cluster-declare-into-a-log-per-record-the-connector-long-polls.md)).
@@ -64,13 +76,12 @@ of an app whose machine operations list the routes is such a target.
 
   A refusal of the first two is answered 422 naming the field.
   `bot.ParseDeclaredObject` is the check. Two live declarations of an
-  instance never name one object, and
-  `platform/migrations/000085_cluster_declarations.up.sql`
-  §cluster_declarations_live_object_idx, which
-  `000091_bot_domain.up.sql` renames `bot_declarations_live_object_idx`,
-  holds that too. A declaration of a
-  kind, namespace and name the instance's kept report shows held by a
-  cluster-owned object is refused 409, whether it is new or a next
+  instance never name one object, and the index
+  `bot_declarations_live_object_idx` holds that too (created by
+  `platform/migrations/000085_cluster_declarations.up.sql` and renamed
+  by `000091_bot_domain.up.sql`). A declaration of a kind, namespace
+  and name the instance's kept report shows held by a cluster-owned
+  object is refused 409, whether it is new or a next
   generation moved onto that name. That refusal is a courtesy, read in
   the write's transaction: the connector's `conflict` is what holds
   ([ADR-0188](./adr/0188-garam-keeps-a-connected-clusters-latest-report-as-untrusted-display-data-and-its-last-contact-from-its-token.md)
@@ -121,7 +132,10 @@ of an app whose machine operations list the routes is such a target.
   are bounded, 120 a minute. Every `spec`, `status` and `message` is
   kept as sent and never read. `getInstanceReport` answers the kept
   report under `iam:instance.read`, for a console to render as text,
-  with the instance's last contact read from the app system.
+  with the instance's last contact read from the app system. The two
+  are separate reads of two stores, not one snapshot, so a report and
+  a contact written between them can be answered from different
+  moments; ADR-0188 makes both display data.
   `platform/migrations/000091_bot_domain.up.sql` holds the rows'
   current names.
 - **A placed bot's token is minted by an RFC 8693 exchange** at the
@@ -138,8 +152,10 @@ of an app whose machine operations list the routes is such a target.
 
 ## Rationale
 
-- Why placing a bot is the bot domain's act, decided on the instance:
-  ADR-0192 decision 10 and §Context.
+- Why placing a bot is the bot domain's act, decided on the instance,
+  and only on an instance whose installation hosts bots: ADR-0192
+  decision 10 and §Context. Why `iam:bot.host` lists the installation
+  as its principal though no app may request it: ADR-0193.
 - Why placing a declaration is an action of its own rather than
   `iam:instance.update`, why an identifier is never placed twice, and
   why the wake goes through Postgres: ADR-0187.
@@ -150,7 +166,5 @@ of an app whose machine operations list the routes is such a target.
 
 ## Open questions
 
-- `iam:bot.host`, the owner's grant to an installation, and the gates
-  it puts on placement and on the bot-token exchange (#2082).
 - The console pages for an instance's declarations and report
   (#2082).

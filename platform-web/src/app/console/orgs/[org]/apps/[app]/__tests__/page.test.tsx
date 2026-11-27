@@ -70,6 +70,7 @@ describe("installation page", () => {
           orgGrn: "grn:root/iam/org/acme",
           appGrn: botConnector.grn,
           incarnation: "1",
+          botHosting: false,
           projects: ["grn:acme/iam/project/frontend"],
           createdBy: "grn:root/iam/user/alice",
           createdAt: "2026-11-02T08:00:00Z",

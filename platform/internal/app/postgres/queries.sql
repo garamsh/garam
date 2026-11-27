@@ -147,7 +147,7 @@ VALUES (sqlc.arg('token_hash'), sqlc.arg('instance_grn'), sqlc.arg('key_id'),
 -- answers the machine operations its app lists.
 -- name: ResolveInstanceToken :one
 WITH resolved AS (
-    SELECT t.instance_grn, t.expires_at, a.machine_operations
+    SELECT t.instance_grn, i.installation_grn, t.expires_at, a.machine_operations
     FROM instance_tokens t
     JOIN instances i ON i.grn = t.instance_grn
     JOIN installations n ON n.grn = i.installation_grn
@@ -161,7 +161,7 @@ WITH resolved AS (
     ON CONFLICT (instance_grn) DO UPDATE SET last_contact_at = EXCLUDED.last_contact_at
     WHERE instance_contacts.last_contact_at < EXCLUDED.last_contact_at - interval '1 second'
 )
-SELECT instance_grn, expires_at, machine_operations FROM resolved;
+SELECT instance_grn, installation_grn, expires_at, machine_operations FROM resolved;
 
 -- name: ListInstanceKeys :many
 SELECT id, instance_grn, kid, public_jwk, created_at, retires_at, revoked_at, predecessor_id,

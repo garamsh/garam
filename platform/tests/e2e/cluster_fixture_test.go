@@ -201,7 +201,8 @@ func TestClusterFixture_DrivesTheBuiltServersThroughTheSuitesActions(t *testing.
 // answers the fixture, its environment, a connector, the token URL and
 // the organization's slug. The machine listener runs with
 // GARAM_INSTANCE_REGISTRATION_LIMIT raised, as the suite's run will
-// raise it.
+// raise it, and both ask the stack's policy service, since the bot
+// token exchange asks it whether the actor's installation hosts bots.
 func startFixtureStack(t *testing.T) (string, []string, *connector, string, string) {
 	t.Helper()
 	garam, bin := buildGaram(t), buildClusterFixture(t)
@@ -220,7 +221,7 @@ func startFixtureStack(t *testing.T) (string, []string, *connector, string, stri
 		"GARAM_CA_KEY_FILE=" + kekFile, "GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
 		"GARAM_MACHINE_ISSUER=https://garam.test", "GARAM_MACHINE_TOKEN_URL=" + tokenURL,
 		"GARAM_INSTANCE_REGISTRATION_LIMIT=1000",
-	}, policyEnv(t, rootFile)...), "http://"+machineHealthAddr+readyPath)
+	}, apiPolicyEnv(t)...), "http://"+machineHealthAddr+readyPath)
 
 	slug := consumerClient{t: t, base: "http://" + apiAddr}.createOrg(p.Session.Token, "connected")
 	awaitDelivery(t, p.DatabaseURL)

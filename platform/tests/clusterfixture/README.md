@@ -20,7 +20,7 @@ their arguments and what they print keep the interface's names:
 
 | Subcommand | Does | Prints | Through |
 |---|---|---|---|
-| `mint-token` | installs `garam-bot-connector` where the organization has not, creates a record of that installation and answers its registration token | `registrationToken`, `cluster` | `createInstallation`, `createInstance` |
+| `mint-token` | installs `garam-bot-connector` where the organization has not, grants the installation bot hosting, creates a record of that installation and answers its registration token | `registrationToken`, `cluster` | `createInstallation`, `grantInstallationBotHosting`, `createInstance` |
 | `mint-token --cluster <grn>` | answers a new registration token for that record | `registrationToken`, `cluster` | `reissueInstanceRegistrationToken` |
 | `mint-token … --expired` | as above, then moves that token's expiry into the past | `registrationToken`, `cluster` | the database |
 | `revoke-keys <grn>` | withdraws every key of the record not yet withdrawn | `cluster` | `listInstanceKeys`, `revokeInstanceKey` |
@@ -49,10 +49,10 @@ GARAM_FIXTURE_DATABASE_URL=postgres://... \
 - `GARAM_FIXTURE_API_URL`: `serve api`'s base URL, its routes at the
   root as the console's `/api/*` rewrite reaches them.
 - `GARAM_FIXTURE_SESSION_TOKEN`: the session of a principal holding
-  `iam:installation.create` and `.read`, `iam:instance.register`,
-  `.read`, `.reissue` and `.delete`, and `iam:bot.place` on the
-  instance, sent as the `garam_session` cookie. Installing is the
-  owner's alone. `testprincipal prepare` answers one, and that
+  `iam:installation.create`, `.read` and `.update`,
+  `iam:instance.register`, `.read`, `.reissue` and `.delete`, and
+  `iam:bot.place` on the instance, sent as the `garam_session` cookie.
+  Installing and granting bot hosting are the owner's alone. `testprincipal prepare` answers one, and that
   principal owns any organization it creates.
 - `GARAM_FIXTURE_ORG`: the organization a new record is created in. A
   subcommand naming a record by GRN reaches it in the GRN's own

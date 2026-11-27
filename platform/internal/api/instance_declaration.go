@@ -14,8 +14,8 @@ import (
 // declarationCall is what every declaration route reads before it
 // acts: the instance's GRN, the caller authorized to read the instance
 // on its installation, and to place a declaration on the instance
-// where declare is set (iam:bot.place, ADR-0192 decision 10), and the
-// declarations.
+// where declare is set (iam:bot.place, ADR-0192 decision 10) of an
+// instance whose installation hosts bots, and the declarations.
 func (s *Server) declarationCall(r *http.Request, orgSlug apigen.Org, installationSlug apigen.InstallationSlug, instanceSlug apigen.InstanceSlug, declare bool) (grn.GRN, bot.DeclarationStore, error) {
 	stores, i, err := s.instanceCall(r, orgSlug, installationSlug, instanceSlug, org.ActionInstanceRead)
 	if err != nil {
@@ -27,6 +27,9 @@ func (s *Server) declarationCall(r *http.Request, orgSlug apigen.Org, installati
 			return grn.GRN{}, nil, err
 		}
 		if err := s.authorizeOn(r, orgGRN(orgSlug), i.GRN, u, org.ActionBotPlace); err != nil {
+			return grn.GRN{}, nil, err
+		}
+		if err := bot.Hosts(r.Context(), s.decisions, i.Installation); err != nil {
 			return grn.GRN{}, nil, err
 		}
 	}

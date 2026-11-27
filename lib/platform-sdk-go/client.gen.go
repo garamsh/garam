@@ -1757,8 +1757,11 @@ type IamRoleLinkScope string
 
 // Installation One app installed in one organization (ADR-0192 decision 4).
 type Installation struct {
-	AppGrn    string    `json:"appGrn"`
-	CreatedAt time.Time `json:"createdAt"`
+	AppGrn string `json:"appGrn"`
+
+	// BotHosting Whether it holds `iam:bot.host`, which its owner grants apart from the actions its app requests (ADR-0192 decision 10).
+	BotHosting bool      `json:"botHosting"`
+	CreatedAt  time.Time `json:"createdAt"`
 
 	// CreatedBy The owner that installed it.
 	CreatedBy string `json:"createdBy"`
@@ -3651,6 +3654,20 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/installations/{installation} (the `GetInstallation` operationId).
 	GetInstallation(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// WithdrawInstallationBotHosting Withdraw an installation's bot hosting. Requires the `owner` role.
+	//
+	// Deletes the `permit` the grant wrote, so its instances are refused as a declaration's target and as a bot token exchange's actor. Withdrawing what was never granted is answered as a withdrawal. Authorized as `iam:installation.update` on the installation.
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation}/bot-hosting (the `WithdrawInstallationBotHosting` operationId).
+	WithdrawInstallationBotHosting(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GrantInstallationBotHosting Grant an installation bot hosting. Requires the `owner` role.
+	//
+	// Writes and activates a `permit` of `iam:bot.host` on the installation itself, so its instances may be a declaration's target and a bot token exchange's actor (ADR-0192 decision 10). Granting it again is answered as the first grant was. An app that does not ask to host bots is refused 400. The permit names the installation, so an uninstall takes it. Authorized as `iam:installation.update` on the installation.
+	//
+	// Corresponds with PUT /orgs/{org}/installations/{installation}/bot-hosting (the `GrantInstallationBotHosting` operationId).
+	GrantInstallationBotHosting(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListInstances List an installation's instances. Requires the `member` role.
 	//
 	// The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
@@ -3717,7 +3734,7 @@ type ClientInterface interface {
 
 	// CreateInstanceDeclarationWithBody Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3726,7 +3743,7 @@ type ClientInterface interface {
 
 	// CreateInstanceDeclaration Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3735,7 +3752,7 @@ type ClientInterface interface {
 
 	// DeleteInstanceDeclaration Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
 	//
-	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
+	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `DeleteInstanceDeclaration` operationId).
 	DeleteInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3749,7 +3766,7 @@ type ClientInterface interface {
 
 	// PutInstanceDeclarationWithBody Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3758,7 +3775,7 @@ type ClientInterface interface {
 
 	// PutInstanceDeclaration Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5662,6 +5679,40 @@ func (c *Client) GetInstallation(ctx context.Context, org Org, installationSlug 
 	return c.Client.Do(req)
 }
 
+// WithdrawInstallationBotHosting Withdraw an installation's bot hosting. Requires the `owner` role.
+//
+// Deletes the `permit` the grant wrote, so its instances are refused as a declaration's target and as a bot token exchange's actor. Withdrawing what was never granted is answered as a withdrawal. Authorized as `iam:installation.update` on the installation.
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation}/bot-hosting (the `WithdrawInstallationBotHosting` operationId).
+func (c *Client) WithdrawInstallationBotHosting(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewWithdrawInstallationBotHostingRequest(c.Server, org, installationSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GrantInstallationBotHosting Grant an installation bot hosting. Requires the `owner` role.
+//
+// Writes and activates a `permit` of `iam:bot.host` on the installation itself, so its instances may be a declaration's target and a bot token exchange's actor (ADR-0192 decision 10). Granting it again is answered as the first grant was. An app that does not ask to host bots is refused 400. The permit names the installation, so an uninstall takes it. Authorized as `iam:installation.update` on the installation.
+//
+// Corresponds with PUT /orgs/{org}/installations/{installation}/bot-hosting (the `GrantInstallationBotHosting` operationId).
+func (c *Client) GrantInstallationBotHosting(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGrantInstallationBotHostingRequest(c.Server, org, installationSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListInstances List an installation's instances. Requires the `member` role.
 //
 // The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
@@ -5808,7 +5859,7 @@ func (c *Client) ListInstanceDeclarations(ctx context.Context, org Org, installa
 
 // CreateInstanceDeclarationWithBody Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5827,7 +5878,7 @@ func (c *Client) CreateInstanceDeclarationWithBody(ctx context.Context, org Org,
 
 // CreateInstanceDeclaration Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5846,7 +5897,7 @@ func (c *Client) CreateInstanceDeclaration(ctx context.Context, org Org, install
 
 // DeleteInstanceDeclaration Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
 //
-// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
+// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Corresponds with DELETE /orgs/{org}/installations/{installation}/instances/{instance}/declarations/{declaration} (the `DeleteInstanceDeclaration` operationId).
 func (c *Client) DeleteInstanceDeclaration(ctx context.Context, org Org, installationSlug InstallationSlug, instanceSlug InstanceSlug, declarationID DeclarationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5880,7 +5931,7 @@ func (c *Client) GetInstanceDeclaration(ctx context.Context, org Org, installati
 
 // PutInstanceDeclarationWithBody Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 //
-// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5899,7 +5950,7 @@ func (c *Client) PutInstanceDeclarationWithBody(ctx context.Context, org Org, in
 
 // PutInstanceDeclaration Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 //
-// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9557,6 +9608,88 @@ func NewGetInstallationRequest(server string, org Org, installationSlug Installa
 	return req, nil
 }
 
+// NewWithdrawInstallationBotHostingRequest constructs an http.Request for the WithdrawInstallationBotHosting method
+func NewWithdrawInstallationBotHostingRequest(server string, org Org, installationSlug InstallationSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/bot-hosting", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGrantInstallationBotHostingRequest constructs an http.Request for the GrantInstallationBotHosting method
+func NewGrantInstallationBotHostingRequest(server string, org Org, installationSlug InstallationSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "installation", installationSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/installations/%s/bot-hosting", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListInstancesRequest constructs an http.Request for the ListInstances method
 func NewListInstancesRequest(server string, org Org, installationSlug InstallationSlug) (*http.Request, error) {
 	var err error
@@ -12822,6 +12955,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/installations/{installation} (the `GetInstallation` operationId).
 	GetInstallationWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*GetInstallationResponse, error)
 
+	// WithdrawInstallationBotHostingWithResponse Withdraw an installation's bot hosting. Requires the `owner` role.
+	//
+	// Deletes the `permit` the grant wrote, so its instances are refused as a declaration's target and as a bot token exchange's actor. Withdrawing what was never granted is answered as a withdrawal. Authorized as `iam:installation.update` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/installations/{installation}/bot-hosting (the `WithdrawInstallationBotHosting` operationId).
+	WithdrawInstallationBotHostingWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*WithdrawInstallationBotHostingResponse, error)
+
+	// GrantInstallationBotHostingWithResponse Grant an installation bot hosting. Requires the `owner` role.
+	//
+	// Writes and activates a `permit` of `iam:bot.host` on the installation itself, so its instances may be a declaration's target and a bot token exchange's actor (ADR-0192 decision 10). Granting it again is answered as the first grant was. An app that does not ask to host bots is refused 400. The permit names the installation, so an uninstall takes it. Authorized as `iam:installation.update` on the installation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/installations/{installation}/bot-hosting (the `GrantInstallationBotHosting` operationId).
+	GrantInstallationBotHostingWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*GrantInstallationBotHostingResponse, error)
+
 	// ListInstancesWithResponse List an installation's instances. Requires the `member` role.
 	//
 	// The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
@@ -12896,7 +13047,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateInstanceDeclarationWithBodyWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12905,7 +13056,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateInstanceDeclarationWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 	//
-	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+	// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12914,7 +13065,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteInstanceDeclarationWithResponse Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
 	//
-	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
+	// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12932,7 +13083,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutInstanceDeclarationWithBodyWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12941,7 +13092,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutInstanceDeclarationWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 	//
-	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+	// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -17235,6 +17386,137 @@ func (r GetInstallationResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetInstallationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type WithdrawInstallationBotHostingResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r WithdrawInstallationBotHostingResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r WithdrawInstallationBotHostingResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r WithdrawInstallationBotHostingResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r WithdrawInstallationBotHostingResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r WithdrawInstallationBotHostingResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r WithdrawInstallationBotHostingResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r WithdrawInstallationBotHostingResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r WithdrawInstallationBotHostingResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GrantInstallationBotHostingResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Installation
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GrantInstallationBotHostingResponse) GetJSON200() *Installation {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GrantInstallationBotHostingResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GrantInstallationBotHostingResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GrantInstallationBotHostingResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GrantInstallationBotHostingResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GrantInstallationBotHostingResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GrantInstallationBotHostingResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GrantInstallationBotHostingResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GrantInstallationBotHostingResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -21865,6 +22147,36 @@ func (c *ClientWithResponses) GetInstallationWithResponse(ctx context.Context, o
 	return ParseGetInstallationResponse(rsp)
 }
 
+// WithdrawInstallationBotHostingWithResponse Withdraw an installation's bot hosting. Requires the `owner` role.
+//
+// Deletes the `permit` the grant wrote, so its instances are refused as a declaration's target and as a bot token exchange's actor. Withdrawing what was never granted is answered as a withdrawal. Authorized as `iam:installation.update` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/installations/{installation}/bot-hosting (the `WithdrawInstallationBotHosting` operationId).
+func (c *ClientWithResponses) WithdrawInstallationBotHostingWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*WithdrawInstallationBotHostingResponse, error) {
+	rsp, err := c.WithdrawInstallationBotHosting(ctx, org, installationSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseWithdrawInstallationBotHostingResponse(rsp)
+}
+
+// GrantInstallationBotHostingWithResponse Grant an installation bot hosting. Requires the `owner` role.
+//
+// Writes and activates a `permit` of `iam:bot.host` on the installation itself, so its instances may be a declaration's target and a bot token exchange's actor (ADR-0192 decision 10). Granting it again is answered as the first grant was. An app that does not ask to host bots is refused 400. The permit names the installation, so an uninstall takes it. Authorized as `iam:installation.update` on the installation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/installations/{installation}/bot-hosting (the `GrantInstallationBotHosting` operationId).
+func (c *ClientWithResponses) GrantInstallationBotHostingWithResponse(ctx context.Context, org Org, installationSlug InstallationSlug, reqEditors ...RequestEditorFn) (*GrantInstallationBotHostingResponse, error) {
+	rsp, err := c.GrantInstallationBotHosting(ctx, org, installationSlug, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGrantInstallationBotHostingResponse(rsp)
+}
+
 // ListInstancesWithResponse List an installation's instances. Requires the `member` role.
 //
 // The installation's instances, ordered by GRN. Authorized as `iam:instance.read` on the installation.
@@ -21987,7 +22299,7 @@ func (c *ClientWithResponses) ListInstanceDeclarationsWithResponse(ctx context.C
 
 // CreateInstanceDeclarationWithBodyWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -22002,7 +22314,7 @@ func (c *ClientWithResponses) CreateInstanceDeclarationWithBodyWithResponse(ctx 
 
 // CreateInstanceDeclarationWithResponse Place a new declaration on an instance, under an identifier garam draws. Requires the `admin` role.
 //
-// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance.
+// Places the object on the instance for its connector to apply (ADR-0187), at generation 1. An object the parser of garam-bot's interface 1 refuses, or one with no namespace, answers 422 naming what was refused: the connector would hold it as invalid. garam keeps only the members a declared object has. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -22017,7 +22329,7 @@ func (c *ClientWithResponses) CreateInstanceDeclarationWithResponse(ctx context.
 
 // DeleteInstanceDeclarationWithResponse Tombstone a declaration, which has the instance delete its object. Requires the `admin` role.
 //
-// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance.
+// Sends the connector a delete at the declaration's next generation. The identifier is never placed again. A declaration already tombstoned answers 404. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -22047,7 +22359,7 @@ func (c *ClientWithResponses) GetInstanceDeclarationWithResponse(ctx context.Con
 
 // PutInstanceDeclarationWithBodyWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 //
-// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -22062,7 +22374,7 @@ func (c *ClientWithResponses) PutInstanceDeclarationWithBodyWithResponse(ctx con
 
 // PutInstanceDeclarationWithResponse Place a declaration on an instance under the identifier named, or its next generation. Requires the `admin` role.
 //
-// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance.
+// An identifier never placed is placed at generation 1 and answers 201. One live on this instance takes the object as its next generation and answers 200. One placed on another instance, or tombstoned, answers 409: an identifier names one declaration, once. The object is checked as `createInstanceDeclaration` checks it. Authorized as `iam:bot.place` on the instance, of an instance whose installation hosts bots (`iam:bot.host`); one whose installation does not answers 403.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -25806,6 +26118,110 @@ func ParseGetInstallationResponse(rsp *http.Response) (*GetInstallationResponse,
 	}
 
 	response := &GetInstallationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Installation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseWithdrawInstallationBotHostingResponse parses an HTTP response from a WithdrawInstallationBotHostingWithResponse call
+func ParseWithdrawInstallationBotHostingResponse(rsp *http.Response) (*WithdrawInstallationBotHostingResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &WithdrawInstallationBotHostingResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGrantInstallationBotHostingResponse parses an HTTP response from a GrantInstallationBotHostingWithResponse call
+func ParseGrantInstallationBotHostingResponse(rsp *http.Response) (*GrantInstallationBotHostingResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GrantInstallationBotHostingResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

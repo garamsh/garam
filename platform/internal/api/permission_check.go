@@ -135,6 +135,7 @@ var actionRules = map[string]actionRule{
 	org.ActionAppRead:            {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionInstallationCreate: {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionInstallationRead:   {on: []apigen.PermissionResourceType{onOrg, kindInstallation}},
+	org.ActionInstallationUpdate: {on: []apigen.PermissionResourceType{kindInstallation}},
 	org.ActionInstallationDelete: {on: []apigen.PermissionResourceType{kindInstallation}},
 	org.ActionInstanceRead:       {on: []apigen.PermissionResourceType{kindInstallation}},
 	org.ActionInstanceRegister:   {on: []apigen.PermissionResourceType{kindInstallation}},

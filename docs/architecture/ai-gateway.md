@@ -35,17 +35,27 @@ billing govern garam's deployment at `ai.garam.sh`.
   garam-bot's interface 5, whose specification is garam-bot's
   `api/model-gateway/v1alpha1/README.md` (garam-bot ADR 0044, proposed
   in garam-bot#1304). It is deployed:
-  - at `ai.garam.sh`, garam's, serving
-    `https://ai.garam.sh/v1/chat/completions`, OpenAI compatible and
-    streaming included;
+  - at `ai.garam.sh`, garam's;
   - in an organization's environment: its cluster, or built into
     garam-bot at the place, where call content stays.
+- **What interface 5 carries at `v1alpha1`** is the Anthropic Messages
+  API, passed through, with the model named as that API names it. A
+  gateway that maps a model's name does so as its own.
+  - `ai.garam.sh` serves interface 5's model surface alone, its
+    profile for a gateway whose tokens another party issues
+    (interface 5's PRO-2), since its tokens are ADR-0190's exchange.
+  - ADR-0126's `https://ai.garam.sh/v1/chat/completions`, OpenAI
+    compatible and streaming included, and its model name `auto` below,
+    are garam's deployment's own and outside interface 5 at
+    `v1alpha1`. Bringing an OpenAI-compatible surface into interface 5
+    is a later release's, its open question "Other provider APIs".
 - **A session has one brain**, the agent harness chosen when the work
   starts. Every other capability, another agent among them, reaches it
   as an MCP tool (ADR-0190 decision 3).
-- **What an agent asks for.** The model name `auto` asks the gateway to
-  route. Any other name asks for that model, which is refused unless
-  the organization's pool allows it.
+- **What an agent asks for at `ai.garam.sh`'s OpenAI-compatible
+  endpoint.** The model name `auto` asks the gateway to route. Any
+  other name asks for that model, which is refused unless the
+  organization's pool allows it.
 - **Authentication.** A model call carries a token that lives at most
   an hour, of the gateway's own audience, checked by that gateway
   alone (interface 5's TOKEN-1). The bot's process rewrites its token

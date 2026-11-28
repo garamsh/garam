@@ -1686,7 +1686,9 @@ ADRs:
   carries a JWT bound to the gateway's audience, exchanged from the
   bot's token; a session has one brain and every other capability is
   an MCP tool; BYOK at every deployment; accepted, not built (#2027);
-  supersedes 0126 in part and decides 0180's decision 3
+  supersedes 0126 in part and decides 0180's decision 3; decision 2
+  superseded in part by 0195, on the token at a gateway outside
+  `ai.garam.sh`
 - [0191](./adr/0191-every-token-garam-issues-to-a-bots-process-is-bound-to-that-processs-key-by-dpop.md)
   — every token garam issues to a bot's process is a DPoP token
   (RFC 9449) bound to an ES256 key the process made and never lets
@@ -1740,3 +1742,10 @@ ADRs:
   message, and leaves another key's claim to its lease; a replica
   holds two of a bot's polls at once and 300 a minute; the route
   holds ADR-0191 decision 6; accepted, built (#2075)
+- [0195](./adr/0195-a-places-model-gateway-issues-its-own-token-and-adr-0190s-exchange-stays-the-form-at-ai-garam-sh.md)
+  — a model gateway at the place issues its own model token to its
+  place's issuer, through interface 5's issue surface, and garam
+  neither issues nor verifies it; at `ai.garam.sh` the token stays
+  0190's exchange; what a token is lives in interface 5's TOKEN-1;
+  accepted, not built (garam-bot#1211); supersedes 0190 decision 2 in
+  part

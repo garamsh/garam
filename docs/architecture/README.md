@@ -474,8 +474,9 @@ Responsibility documents:
   presents to the browser-facing one, and how a first-party service
   acts in an organization
 - [messaging.md](./messaging.md) — the durable queue a message reaches
-  an agent through, the consent that lets one cross an organization
-  boundary, and the signature on every message garam hands out
+  an agent or a bot through, the consent that lets one cross an
+  organization boundary, and the signature on every message garam
+  hands out
 - [audit.md](./audit.md) — the record garam keeps of what it decided,
   which holds message sends alone
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
@@ -1695,8 +1696,8 @@ ADRs:
   Postgres; a resource server refuses a bound token
   presented as `Bearer` and one whose proof is not by its key;
   accepted, built in part (#2078: the exchange, the store and the
-  resource-side verification, which no route reaches yet; model and
-  tool tokens with #2027)
+  resource-side verification, which the bot's mailbox reaches, #2075;
+  model and tool tokens with #2027)
 - [0192](./adr/0192-every-system-that-connects-to-garam-is-an-app-installed-in-an-organization-and-each-running-copy-is-an-instance-with-its-own-key.md)
   — every system that connects to garam is an app, registered by the
   platform or by an organization, private or, after the platform's
@@ -1730,3 +1731,12 @@ ADRs:
   app system's; accepted, built (#2082); supersedes 0192 in part
   (decision 6's manifest check and its list, and decision 10's "last
   contact")
+- [0194](./adr/0194-a-bots-process-long-polls-the-messages-addressed-to-its-grn-with-its-own-token-and-acknowledges-each-by-its-next-polls-cursor.md)
+  — a message to a bot is a message of the queue addressed to its
+  GRN; the bot's process long-polls `pollBotMailbox` with its own
+  DPoP-bound token, for its own mailbox alone, and the next poll's
+  cursor acknowledges; each poll hands out again what was claimed
+  under its token's key and not acknowledged before any later
+  message, and leaves another key's claim to its lease; a replica
+  holds two of a bot's polls at once and 300 a minute; the route
+  holds ADR-0191 decision 6; accepted, built (#2075)

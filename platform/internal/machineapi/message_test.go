@@ -45,6 +45,8 @@ type messageCall struct {
 	body      string
 	author    message.Author
 	created   time.Time
+	// holder is the key a mailbox poll was held under.
+	holder string
 }
 
 // storedAt is when the queue stored the message this double answers a
@@ -91,6 +93,18 @@ func (s *messageService) Refuse(_ context.Context, sender, recipient grn.GRN, _ 
 func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN, fence *message.Fence, _ message.Signer) (*message.Claim, message.Signed, error) {
 	s.calls = append(s.calls, messageCall{method: "claim", caller: caller, recipient: recipient})
 	s.fences = append(s.fences, fence)
+	if s.err != nil {
+		return nil, message.Signed{}, s.err
+	}
+	return nil, message.Signed{}, message.ErrNoMessageReady
+}
+
+func (s *messageService) Poll(_ context.Context, caller, recipient grn.GRN, holder string, cursor *message.ClaimID, _ message.Signer) (*message.Claim, message.Signed, error) {
+	call := messageCall{method: "poll", caller: caller, recipient: recipient, holder: holder}
+	if cursor != nil {
+		call.claim = *cursor
+	}
+	s.calls = append(s.calls, call)
 	if s.err != nil {
 		return nil, message.Signed{}, s.err
 	}

@@ -346,7 +346,8 @@ listener.
 ## A declared bot's token
 
 **The exchange is built (#2049) and binds the token to the bot's
-process's key (#2078); nothing accepts the token yet.** A bot
+process's key (#2078); the bot's mailbox alone accepts the token
+(#2075).** A bot
 garam declares and places on a connected cluster is
 `grn:<org>/iam/bot/<declaration id>`
 ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)),
@@ -418,16 +419,21 @@ and its place's connector obtains its token. The claims are garam-bot's
   under its identifier, revoking the connector key it was minted
   under, registering the record again, and deleting the record each
   delete it. A record's expired tokens are swept at its next exchange.
-- **The resource side is built and reached by no route.** The bot
+- **The resource side is reached by `pollBotMailbox`**
+  ([ADR-0194](./adr/0194-a-bots-process-long-polls-the-messages-addressed-to-its-grn-with-its-own-token-and-acknowledges-each-by-its-next-polls-cursor.md),
+  [messaging.md](./messaging.md) §A bot's mailbox). The bot
   domain's `ResolveBotToken` reads a live token with the key it is
-  bound to, refusing one past its expiry or whose connector key is
-  revoked or past its rollover. `dpop.Presented` and `Verifier.Bound`
-  hold ADR-0191 decision 6: the token arrives as `Authorization:
-  DPoP`, `Bearer` is refused, and the proof is by the token's key,
-  for the request's method and URL, with `ath` the token's hash, spent
-  once. The first route that accepts a bot's token calls both.
-- **What is not built.** No route resolves a bot's token, so it reaches
-  no operation, and nothing introspects it. A party that verifies
+  bound to, refusing one malformed, past its expiry or whose
+  connector key is revoked or past its rollover. `dpop.Presented` and
+  `Verifier.Bound` hold ADR-0191 decision 6: the token arrives as
+  `Authorization: DPoP`, `Bearer` is refused, and the proof is by the
+  token's key, for the request's method and its URL at
+  `GARAM_MACHINE_ISSUER`, with `ath` the token's hash, spent once the
+  token resolved. A refusal is 401 with a `WWW-Authenticate`
+  challenge. The machine listener resolves no `DPoP` scheme itself,
+  so a bot's token is no machine identity on any other route.
+- **What is not built.** A bot's token reaches no operation but its
+  mailbox, and nothing introspects it. A party that verifies
   offline, ai-gateway among them, is to get a narrower
   JWT bound to its audience by a further exchange of the bot's token,
   which lives no longer than it (ADR-0141), and bound to the same key

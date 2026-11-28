@@ -60,6 +60,11 @@ type connectionClusters struct {
 	report *bot.Report
 	// exchange is what MintBotToken was handed.
 	exchange *bot.BotExchange
+	// held is the live bot token each value is, as ResolveBotToken
+	// answers it; a value it does not name is not live.
+	held map[string]bot.HeldBotToken
+	// holdErr is what HoldMailboxPoll answers; nil holds the poll.
+	holdErr error
 }
 
 func (c *connectionClusters) Report(_ context.Context, caller grn.GRN, r bot.Report) error {
@@ -98,6 +103,22 @@ func (c *connectionClusters) MintBotToken(ctx context.Context, exchange bot.BotE
 	}
 	return &bot.BotToken{Value: bot.BotTokenPrefix + "answered", Bot: grn.New("acme", bot.BotServiceType, "decl-a"),
 		Place: connectedGRN, Scope: []string{}, ExpiresAt: time.Now().Add(bot.BotTokenTTL)}, nil
+}
+
+func (c *connectionClusters) ResolveBotToken(_ context.Context, value string) (bot.HeldBotToken, error) {
+	c.token = value
+	held, ok := c.held[value]
+	if !ok {
+		return bot.HeldBotToken{}, bot.ErrBotTokenInvalid
+	}
+	return held, nil
+}
+
+func (c *connectionClusters) HoldMailboxPoll(grn.GRN) (func(), error) {
+	if c.holdErr != nil {
+		return nil, c.holdErr
+	}
+	return func() {}, nil
 }
 
 func (c *connectionClusters) Rotate(_ context.Context, caller grn.GRN, jwk []byte, _, _ string) (app.Rotation, error) {
@@ -343,7 +364,7 @@ func TestClusterConnection_AReportIsRefusedAsREP6AndREP7Refuse(t *testing.T) {
 func TestExchangeClientAssertion_SendsAnInstancesAssertionToItsRecord(t *testing.T) {
 	operators, clusters := &assertionService{}, &connectionClusters{}
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, operators, &messageService{}, unwatched(t),
-		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters, nil, ""), connectedGRN)
+		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(clusters, clusters, nil, "", ""), connectedGRN)
 	form := validForm()
 	form.Set("client_id", connectedGRN.String())
 

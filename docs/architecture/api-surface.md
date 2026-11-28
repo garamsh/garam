@@ -161,7 +161,13 @@ a token at `exchangeToken`, prefixed `garam_st_`. The token is read on
 every request, beside the registration, key or assignment it rests on,
 so a deleted operator, a withdrawn key, a reassignment or a recovery is
 refused from the next request on a connection already open
-([machine-identity.md](./machine-identity.md) §Tokens). The read is
+([machine-identity.md](./machine-identity.md) §Tokens). One route is
+outside that: a bot's process presents its token as `Authorization:
+DPoP` with a proof of its key at `pollBotMailbox` alone, which reads
+the token itself
+([ADR-0194](./adr/0194-a-bots-process-long-polls-the-messages-addressed-to-its-grn-with-its-own-token-and-acknowledges-each-by-its-next-polls-cursor.md),
+[machine-identity.md](./machine-identity.md) §A declared bot's token),
+and no other route accepts it. The read is
 bounded by a ten-second deadline, past which the request is answered
 unavailable rather than held. A request
 presenting a token in more than one `Authorization` header is refused,

@@ -21,6 +21,7 @@ type Message struct {
 	Attempts       int32
 	ClaimedAt      pgtype.Timestamptz
 	Author         string
+	ClaimHolder    pgtype.Text
 }
 
 type MessageConsent struct {

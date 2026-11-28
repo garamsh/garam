@@ -6,6 +6,7 @@
 package machine
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -630,6 +631,24 @@ type AuthorityIntrospection struct {
 	Authority string `json:"authority"`
 }
 
+// BotDelivery One message handed to a bot's process, the cursor that acknowledges it, and garam's signature over it (ADR-0101).
+type BotDelivery struct {
+	// Attempt Which hand-out of this message this is. Delivery is at-least-once (ADR-0018), so this tells a first delivery from a repeat.
+	Attempt int `json:"attempt"`
+
+	// Content The `garam-message.v1` object of `contract`, `sender` and `body`, as `Claim`'s `content` is.
+	Content string `json:"content"`
+
+	// Cursor What the next poll names to acknowledge this message.
+	Cursor string `json:"cursor"`
+
+	// Message One stored message, under an identifier the queue minted.
+	Message Message `json:"message"`
+
+	// Signature garam's signature over this hand-out, as `Claim`'s `signature` is, with the bot as its audience.
+	Signature string `json:"signature"`
+}
+
 // BoundAssignment Where the agent ran when an operation on it was authorized. Present for `iam:agent.configure`, `iam:agent.recover`, `iam:agent.execution-read` and `iam:agent.replace` only.
 type BoundAssignment struct {
 	// Epoch Opaque.
@@ -1097,6 +1116,9 @@ type AgentEnrollmentContractVersion = string
 // ApprovalId defines model for approval.
 type ApprovalId = string
 
+// BotGrn defines model for bot.
+type BotGrn = string
+
 // ClaimId defines model for claim.
 type ClaimId = string
 
@@ -1129,6 +1151,9 @@ type TokenContractVersion = string
 
 // AgentEnrollmentContractError defines model for AgentEnrollmentContractError.
 type AgentEnrollmentContractError = Error
+
+// BotTokenRefused defines model for BotTokenRefused.
+type BotTokenRefused = Error
 
 // ContractError defines model for ContractError.
 type ContractError = Error
@@ -1197,6 +1222,12 @@ type IntrospectAgentExecutionParams struct {
 type MintAgentTokenParams struct {
 	// TokenContractVersion Must be `machine-token.v1` (ADR-0100); any other value is refused with 400 naming it.
 	TokenContractVersion TokenContractVersion `json:"Garam-Contract-Version"`
+}
+
+// PollBotMailboxParams defines parameters for PollBotMailbox.
+type PollBotMailboxParams struct {
+	// Cursor The `cursor` the previous poll for this bot answered, which acknowledges its message. Absent acknowledges nothing.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // IntrospectOperationAuthorityParams defines parameters for IntrospectOperationAuthority.
@@ -1333,6 +1364,9 @@ type ServerInterface interface {
 	// ForwardTurnEvent Forward one turn event to whoever is watching the agent.
 	// (POST /agents/{agent}/turn-events)
 	ForwardTurnEvent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
+	// PollBotMailbox Long-poll the next message addressed to a bot, acknowledging the last.
+	// (POST /bots/{bot}/mailbox)
+	PollBotMailbox(w http.ResponseWriter, r *http.Request, botGrn BotGrn, params PollBotMailboxParams)
 	// GetIdentity Return the identity the connection authenticated as.
 	// (GET /identity)
 	GetIdentity(w http.ResponseWriter, r *http.Request)
@@ -1977,6 +2011,48 @@ func (siw *ServerInterfaceWrapper) ForwardTurnEvent(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// PollBotMailbox operation middleware
+func (siw *ServerInterfaceWrapper) PollBotMailbox(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bot" -------------
+	var botGrn BotGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bot", r.PathValue("bot"), &botGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bot", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PollBotMailboxParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PollBotMailbox(w, r, botGrn, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetIdentity operation middleware
 func (siw *ServerInterfaceWrapper) GetIdentity(w http.ResponseWriter, r *http.Request) {
 
@@ -2505,6 +2581,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/renewal", wrapper.RenewClaim)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/turn-events", wrapper.ForwardTurnEvent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/completion", wrapper.CompleteClaim)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/bots/{bot}/mailbox", wrapper.PollBotMailbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operation-authorities/introspection", wrapper.IntrospectOperationAuthority)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/operation-references/{ref}", wrapper.CheckOperationReference)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operators/{controller}/introspection", wrapper.IntrospectController)

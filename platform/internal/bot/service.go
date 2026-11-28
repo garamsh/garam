@@ -66,6 +66,16 @@ type Service interface {
 	// decision 10). Past BotTokensPerInstance it answers
 	// *operator.Exceeded.
 	MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error)
+	// ResolveBotToken answers the live bot token value is, with the
+	// bot and the key it is bound to, or ErrBotTokenInvalid. It proves
+	// nothing about the holder: a resource server verifies the proof
+	// of that key before it acts (ADR-0191 decision 6).
+	ResolveBotToken(ctx context.Context, value string) (HeldBotToken, error)
+	// HoldMailboxPoll admits a poll of the bot g's mailbox, under
+	// MailboxPollsPerBot and MailboxPollsHeld, and answers what ends
+	// the hold; past either it answers *operator.Exceeded (ADR-0194
+	// decision 3).
+	HoldMailboxPoll(g grn.GRN) (func(), error)
 }
 
 type service struct {
@@ -79,6 +89,10 @@ type service struct {
 	watches       *operator.Limiter
 	reportsLimit  *operator.Limiter
 	botTokenLimit *operator.Limiter
+	// mailboxLimit bounds each bot's mailbox polls, and polls counts
+	// the ones it holds.
+	mailboxLimit *operator.Limiter
+	polls        *heldPolls
 }
 
 // NewService constructs the service over the credentials an actor
@@ -107,5 +121,7 @@ func NewService(credentials app.CredentialStore, declarations DeclarationStore, 
 		watches:       limiter(WatchesPerInstance),
 		reportsLimit:  limiter(ReportsPerInstance),
 		botTokenLimit: limiter(BotTokensPerInstance),
+		mailboxLimit:  limiter(MailboxPollsPerBot),
+		polls:         &heldPolls{held: map[grn.GRN]int{}},
 	}
 }

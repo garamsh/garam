@@ -360,7 +360,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			WithSendPolicy(cfg.Decisions, agentStore).
 			WithFeed(cfg.Feed).
 			WithIdentity(cfg.Identity, principals).
-			WithInstances(instances, bots, dpop.NewVerifier(dpoppg.New(pool), cfg.Now), cfg.TokenURL),
+			WithInstances(instances, bots, dpop.NewVerifier(dpoppg.New(pool), cfg.Now), cfg.TokenURL,
+				string(cfg.Issuer)),
 		machinegen.StdHTTPServerOptions{
 			BaseRouter: mux,
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.ConfineApps, machineapi.RecoverPanics,
@@ -398,7 +399,12 @@ func (o *observability) machineServer(tokens machine.Tokens, evidence *machine.E
 	// 1.3, or a certificate the listener cannot present — is reported
 	// here rather than through a handler.
 	srv.ErrorLog = slog.NewLogLogger(o.logger.Handler(), slog.LevelWarn)
-	srv.ReadTimeout = requestReadTimeout
+	// The read deadline stays set while a handler runs and cancels its
+	// request when it passes, so it is held past a message wait: at
+	// requestReadTimeout a held claim or mailbox poll could be ended
+	// inside its last read instead of answering 204.
+	srv.ReadHeaderTimeout = requestReadTimeout
+	srv.ReadTimeout = message.DefaultWait + requestReadTimeout
 	return srv
 }
 

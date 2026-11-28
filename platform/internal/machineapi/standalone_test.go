@@ -27,6 +27,7 @@ const confined = "a supervisor reaches its lifecycle routes alone"
 func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing.T) {
 	routes := machineRoutes(t, map[string]string{
 		"agent":      agentGRN("acme", "0a1b2c3d4e5f6071").String(),
+		"bot":        "grn:acme/iam/bot/decl-a",
 		"claim":      "c-1",
 		"controller": operatorGRN("acme").String(),
 		"message":    "m-1",
@@ -77,6 +78,7 @@ func TestConfineApps_AnInstanceReachesNoMachineRouteItsAppDoesNotList(t *testing
 	const refused = "the caller's app does not reach this route"
 	routes := machineRoutes(t, map[string]string{
 		"agent":      agentGRN("acme", "0a1b2c3d4e5f6071").String(),
+		"bot":        "grn:acme/iam/bot/decl-a",
 		"claim":      "c-1",
 		"controller": operatorGRN("acme").String(),
 		"message":    "m-1",

@@ -42,7 +42,7 @@ func serveBotExchange(t *testing.T, bots *connectionClusters, operators *asserti
 	t.Helper()
 	proofs := dpop.NewVerifier(dpoptest.NewStore(nil), nil)
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, operators, &messageService{}, unwatched(t),
-		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(bots, bots, proofs, connectionTokenURL), connectedGRN)
+		nil, nil, nil, nil, nil, nil, stubKeyring{}).WithInstances(bots, bots, proofs, connectionTokenURL, ""), connectedGRN)
 	return base
 }
 
@@ -304,7 +304,7 @@ func TestExchangeBotToken_AnUnauthenticatedFloodWritesNoJTI(t *testing.T) {
 	bots := bot.NewService(refusingActors{}, nil, nil, nil, bot.Config{TokenEndpoint: connectionTokenURL})
 	base, _ := serveTLS(t, machineapi.NewServer(&agentService{}, &assertionService{}, &messageService{}, unwatched(t),
 		nil, nil, nil, nil, nil, nil, stubKeyring{}).
-		WithInstances(nil, bots, dpop.NewVerifier(store, nil), connectionTokenURL), connectedGRN)
+		WithInstances(nil, bots, dpop.NewVerifier(store, nil), connectionTokenURL, ""), connectedGRN)
 	client := anonymous(t)
 	form := botForm()
 	form.Set("actor_token", app.TokenPrefix+strings.Repeat("ab", 32))

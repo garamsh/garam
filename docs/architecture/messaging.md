@@ -25,7 +25,7 @@ reads the state of a message it sent, described below (ADR-0055).
 | `Consent` | one pair of organizations and the two halves of their cross-organization consent (ADR-0035); it stands while both halves do |
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
 | `Fence` | what an agent's call presents to the agent execution fence: the agent, the serial and dates of the token its request presented, and its execution token's hash (ADR-0080, ADR-0100) |
-| `Service` | what a machine identity does to its own queue: post, post a durable reply within its budget, record a post a policy denied, claim, renew, complete, and read the state of what it sent |
+| `Service` | what a machine identity does to its own queue: post, post a durable reply within its budget, record a post a policy denied, claim, renew, complete, poll its mailbox under its process's key, and read the state of what it sent |
 | `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, which the platform feeds to the policy service, the one that asks whether both halves stand (ADR-0147, ADR-0168) |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 | `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v2` (ADR-0083) |
@@ -263,6 +263,44 @@ side of it is the adapter garam ships ([adapter.md](./adapter.md)).
 The retention above is this domain's own work rather than a schedule a
 deployment carries: the sweep rides the enqueue, so a queue being
 written to is a queue being swept (ADR-0034).
+
+## A bot's mailbox
+
+The messages addressed to a bot garam declared, and how its process
+receives them
+([ADR-0194](./adr/0194-a-bots-process-long-polls-the-messages-addressed-to-its-grn-with-its-own-token-and-acknowledges-each-by-its-next-polls-cursor.md)).
+
+- **A message to a bot is a message of this queue** addressed to
+  `grn:<org>/iam/bot/<declaration id>`. An agent of the bot's
+  organization posts one with `postMessage`, admitted without asking
+  the policy service since it names no agent garam holds; across the
+  boundary the post is the crossing refusal, as for any recipient that
+  is not an agent.
+- **The bot's process long-polls `pollBotMailbox`** with its own token
+  and for its own GRN alone, under ADR-0191 decision 6
+  ([machine-identity.md](./machine-identity.md) §A declared bot's
+  token).
+- **The next poll's cursor acknowledges.** Each poll completes the
+  claim its cursor names, then hands out again whatever was claimed
+  under its token's key and not acknowledged, then claims as a claim
+  does, naming that key on the claim, under the queue's wait and
+  attempt bound and signed as every hand-out is. A cursor whose
+  message was handed out again is refused 409.
+- **A process reads what it was handed.** A claim under another key,
+  another process of the bot, is left to its lease and handed on once
+  it lapses, so two processes overlapping in a rolling update take no
+  message from each other at once. `messages.claim_holder`
+  (`platform/migrations/000093_message_claim_holder.up.sql`) holds the
+  key; an agent's claim names none.
+- **Each replica bounds a bot's polls**: two held at once and 300 a
+  minute, past which a poll is answered 429 (`bot.HoldMailboxPoll`).
+  A held poll re-reads the queue as a claim does, and nothing wakes it
+  on a write yet (#2125).
+- **A message to a bot that never polls** is kept as any undelivered
+  message is, and deleted by the thirty-day sweep; its sender's status
+  read then answers 404, as for every swept message.
+- `platform/api/machine.yaml` §pollBotMailbox is authoritative for the
+  route's members, statuses and challenge.
 
 ## Delivery from cowork
 

@@ -21,12 +21,15 @@ import (
 // the round trip in tests/integration, against the Postgres that
 // decides exclusivity, leases and the attempt bound.
 type queue struct {
-	mu           sync.Mutex
-	stored       []*message.Message
-	claims       int
-	renewals     int
-	completions  int
-	statuses     int
+	mu          sync.Mutex
+	stored      []*message.Message
+	claims      int
+	renewals    int
+	completions int
+	releases    int
+	statuses    int
+	// completeErr is what Complete answers.
+	completeErr  error
 	lease        time.Duration
 	ceiling      time.Duration
 	maxAttempts  int
@@ -78,7 +81,18 @@ func (q *queue) Complete(_ context.Context, _ grn.GRN, _ message.ClaimID, _ *mes
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.completions++
+	return q.completeErr
+}
+
+func (q *queue) Release(_ context.Context, _ grn.GRN, _ string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.releases++
 	return nil
+}
+
+func (q *queue) ClaimHeld(ctx context.Context, recipient grn.GRN, _ string, lease time.Duration, maxAttempts int, handOut func(*message.Claim) error) (*message.Claim, error) {
+	return q.Claim(ctx, recipient, lease, maxAttempts, nil, handOut)
 }
 
 func (q *queue) Status(_ context.Context, sender grn.GRN, id message.ID, maxAttempts int, _ *message.Fence) (*message.Status, error) {
@@ -97,7 +111,7 @@ func fenceOf(g grn.GRN) *message.Fence { return &message.Fence{Agent: g} }
 func (q *queue) reads() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	return q.claims + q.renewals + q.completions + q.statuses
+	return q.claims + q.renewals + q.completions + q.releases + q.statuses
 }
 
 // brief is a configuration a test can wait through. The delivery
@@ -174,6 +188,14 @@ func TestService_ActsOnlyOnTheQueueTheCallerIsAddressedBy(t *testing.T) {
 				return s.Complete(ctx, caller, bot, "claim-1", fenceOf(bot))
 			},
 		},
+		{
+			name: "poll",
+			act: func(s message.Service, caller grn.GRN) error {
+				cursor := message.ClaimID("claim-1")
+				_, _, err := s.Poll(ctx, caller, bot, "jkt", &cursor, nil)
+				return err
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -193,6 +215,33 @@ func TestService_ActsOnlyOnTheQueueTheCallerIsAddressedBy(t *testing.T) {
 			assert.NotZero(t, store.reads(), "the recipient's own call never reached the queue")
 		})
 	}
+}
+
+// TestService_PollWithAStaleCursorClaimsNothing holds that a cursor
+// whose message was handed on acknowledges nothing and hands nothing
+// out. The control is the same poll over a cursor the queue completes,
+// which releases and claims.
+func TestService_PollWithAStaleCursorClaimsNothing(t *testing.T) {
+	ctx := context.Background()
+	bot := recipientGRN()
+	cursor := message.ClaimID("claim-1")
+
+	stale := &queue{completeErr: message.ErrStaleClaim}
+	s, err := message.NewService(stale, brief())
+	require.NoError(t, err)
+	_, _, err = s.Poll(ctx, bot, bot, "jkt", &cursor, nil)
+	assert.ErrorIs(t, err, message.ErrStaleClaim)
+	assert.Zero(t, stale.releases, "a stale cursor released the caller's claims")
+	assert.Zero(t, stale.claims, "a stale cursor claimed a message")
+
+	current := &queue{}
+	s, err = message.NewService(current, brief())
+	require.NoError(t, err)
+	_, _, err = s.Poll(ctx, bot, bot, "jkt", &cursor, nil)
+	assert.ErrorIs(t, err, message.ErrNoMessageReady)
+	assert.Equal(t, 1, current.completions)
+	assert.Equal(t, 1, current.releases)
+	assert.NotZero(t, current.claims)
 }
 
 // TestService_ClaimWaitsForAMessageRatherThanAnsweringAnEmptyQueue

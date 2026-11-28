@@ -83,10 +83,13 @@ type Server struct {
 	instances app.Service
 	bots      bot.Service
 	// dpopProofs verifies the DPoP proof a bot exchange carries, for the
-	// token endpoint at tokenURL (ADR-0191); nil, or no URL, refuses
-	// the bot exchange as unavailable.
+	// token endpoint at tokenURL, and the one a bot's token is sent
+	// with, for the route it reaches at origin, this listener's
+	// external https origin (ADR-0191); nil, or no URL, refuses either
+	// as unavailable.
 	dpopProofs *dpop.Verifier
 	tokenURL   string
+	origin     string
 }
 
 // Rechecker reads again, for one decision, what admitted the caller's

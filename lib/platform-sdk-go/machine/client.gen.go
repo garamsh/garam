@@ -1701,9 +1701,12 @@ type ClientInterface interface {
 	// PollBotMailbox Long-poll the next message addressed to a bot, acknowledging the last.
 	//
 	// A bot garam declared and placed receives the messages addressed to its GRN by this long poll, which its own process opens with its bot token (ADR-0194). The caller polls for the bot its token names and is refused every other one.
-	// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018). A bot's mailbox has one reader: a poll hands out again what any earlier poll for the bot was handed, so two processes polling for one bot are each handed the other's messages.
-	// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor.
-	// The token is sent as `Authorization: DPoP <token>` with a `DPoP` proof signed by the key it is bound to, for this request's method and URL, with `ath` the token's hash. A proof is spent once. A missing or unknown token, one that expired or whose declaration, connector key or instance went, a token sent under any other scheme, `Bearer` included, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403.
+	// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018).
+	// What a poll hands out again is what was handed under its own token's key: each hand-out names the key the polling token is bound to, and a message handed to another process of the bot, under another key, is left to that process until its lease lapses, 30 seconds by default, and is then handed on. Each garam replica holds at most two polls of one bot at once and admits 300 of one bot's polls a minute; past either a poll is answered 429 with `Retry-After`, acknowledging and claiming nothing.
+	// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor. A cursor already acknowledged acknowledges nothing more and is not refused, so polling again with it after a 204 is harmless.
+	// The server holds a poll for longer than the 30 seconds it waits, since the poll first resolves the token, acknowledges and hands out again. A client and every proxy between it and garam read for at least 45 seconds, and a poll aborted on the client's side is sent again with the same cursor: an answer that never arrived spent an attempt of the message it carried, which the next poll hands out again.
+	// The token is sent as `Authorization: DPoP <token>`, in one `Authorization` header, with a `DPoP` proof signed by the key it is bound to, with `ath` the token's hash. The proof's `htm` is `POST`, and its `htu` is this route's URL at garam's machine origin, which is not the address a client dials where a proxy stands between: it is the `iss` of every hand-out's `signature`, and the bot's place is configured with it beside the address it dials. The bot's GRN is one path segment percent-encoded as the request's path encodes it, its `/` as `%2F` and its `:` literal, because the two paths are compared as written. This route takes no DPoP nonce and ignores one: it answers no `DPoP-Nonce` and never `use_dpop_nonce`. A proof is spent once.
+	// A missing or unknown token, one that expired or whose declaration, connector key or instance went, or whose installation stopped hosting bots, a token sent under any other scheme, `Bearer` included, or beside another `Authorization` header, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403. A listener with no bot tokens configured, and a store it cannot reach, answer 503, which the caller retries after a pause with the same cursor.
 	//
 	// Corresponds with POST /bots/{bot}/mailbox (the `PollBotMailbox` operationId).
 	PollBotMailbox(ctx context.Context, botGrn BotGrn, params *PollBotMailboxParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2473,9 +2476,12 @@ func (c *Client) ForwardTurnEvent(ctx context.Context, agentGrn AgentGrn, body F
 // PollBotMailbox Long-poll the next message addressed to a bot, acknowledging the last.
 //
 // A bot garam declared and placed receives the messages addressed to its GRN by this long poll, which its own process opens with its bot token (ADR-0194). The caller polls for the bot its token names and is refused every other one.
-// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018). A bot's mailbox has one reader: a poll hands out again what any earlier poll for the bot was handed, so two processes polling for one bot are each handed the other's messages.
-// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor.
-// The token is sent as `Authorization: DPoP <token>` with a `DPoP` proof signed by the key it is bound to, for this request's method and URL, with `ath` the token's hash. A proof is spent once. A missing or unknown token, one that expired or whose declaration, connector key or instance went, a token sent under any other scheme, `Bearer` included, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403.
+// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018).
+// What a poll hands out again is what was handed under its own token's key: each hand-out names the key the polling token is bound to, and a message handed to another process of the bot, under another key, is left to that process until its lease lapses, 30 seconds by default, and is then handed on. Each garam replica holds at most two polls of one bot at once and admits 300 of one bot's polls a minute; past either a poll is answered 429 with `Retry-After`, acknowledging and claiming nothing.
+// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor. A cursor already acknowledged acknowledges nothing more and is not refused, so polling again with it after a 204 is harmless.
+// The server holds a poll for longer than the 30 seconds it waits, since the poll first resolves the token, acknowledges and hands out again. A client and every proxy between it and garam read for at least 45 seconds, and a poll aborted on the client's side is sent again with the same cursor: an answer that never arrived spent an attempt of the message it carried, which the next poll hands out again.
+// The token is sent as `Authorization: DPoP <token>`, in one `Authorization` header, with a `DPoP` proof signed by the key it is bound to, with `ath` the token's hash. The proof's `htm` is `POST`, and its `htu` is this route's URL at garam's machine origin, which is not the address a client dials where a proxy stands between: it is the `iss` of every hand-out's `signature`, and the bot's place is configured with it beside the address it dials. The bot's GRN is one path segment percent-encoded as the request's path encodes it, its `/` as `%2F` and its `:` literal, because the two paths are compared as written. This route takes no DPoP nonce and ignores one: it answers no `DPoP-Nonce` and never `use_dpop_nonce`. A proof is spent once.
+// A missing or unknown token, one that expired or whose declaration, connector key or instance went, or whose installation stopped hosting bots, a token sent under any other scheme, `Bearer` included, or beside another `Authorization` header, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403. A listener with no bot tokens configured, and a store it cannot reach, answer 503, which the caller retries after a pause with the same cursor.
 //
 // Corresponds with POST /bots/{bot}/mailbox (the `PollBotMailbox` operationId).
 func (c *Client) PollBotMailbox(ctx context.Context, botGrn BotGrn, params *PollBotMailboxParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4578,9 +4584,12 @@ type ClientWithResponsesInterface interface {
 	// PollBotMailboxWithResponse Long-poll the next message addressed to a bot, acknowledging the last.
 	//
 	// A bot garam declared and placed receives the messages addressed to its GRN by this long poll, which its own process opens with its bot token (ADR-0194). The caller polls for the bot its token names and is refused every other one.
-	// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018). A bot's mailbox has one reader: a poll hands out again what any earlier poll for the bot was handed, so two processes polling for one bot are each handed the other's messages.
-	// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor.
-	// The token is sent as `Authorization: DPoP <token>` with a `DPoP` proof signed by the key it is bound to, for this request's method and URL, with `ath` the token's hash. A proof is spent once. A missing or unknown token, one that expired or whose declaration, connector key or instance went, a token sent under any other scheme, `Bearer` included, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403.
+	// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018).
+	// What a poll hands out again is what was handed under its own token's key: each hand-out names the key the polling token is bound to, and a message handed to another process of the bot, under another key, is left to that process until its lease lapses, 30 seconds by default, and is then handed on. Each garam replica holds at most two polls of one bot at once and admits 300 of one bot's polls a minute; past either a poll is answered 429 with `Retry-After`, acknowledging and claiming nothing.
+	// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor. A cursor already acknowledged acknowledges nothing more and is not refused, so polling again with it after a 204 is harmless.
+	// The server holds a poll for longer than the 30 seconds it waits, since the poll first resolves the token, acknowledges and hands out again. A client and every proxy between it and garam read for at least 45 seconds, and a poll aborted on the client's side is sent again with the same cursor: an answer that never arrived spent an attempt of the message it carried, which the next poll hands out again.
+	// The token is sent as `Authorization: DPoP <token>`, in one `Authorization` header, with a `DPoP` proof signed by the key it is bound to, with `ath` the token's hash. The proof's `htm` is `POST`, and its `htu` is this route's URL at garam's machine origin, which is not the address a client dials where a proxy stands between: it is the `iss` of every hand-out's `signature`, and the bot's place is configured with it beside the address it dials. The bot's GRN is one path segment percent-encoded as the request's path encodes it, its `/` as `%2F` and its `:` literal, because the two paths are compared as written. This route takes no DPoP nonce and ignores one: it answers no `DPoP-Nonce` and never `use_dpop_nonce`. A proof is spent once.
+	// A missing or unknown token, one that expired or whose declaration, connector key or instance went, or whose installation stopped hosting bots, a token sent under any other scheme, `Bearer` included, or beside another `Authorization` header, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403. A listener with no bot tokens configured, and a store it cannot reach, answer 503, which the caller retries after a pause with the same cursor.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -6207,6 +6216,11 @@ type PollBotMailboxResponse401Headers struct {
 	WWWAuthenticate *string
 }
 
+// PollBotMailboxResponse429Headers the declared response headers of an HTTP 429 response for PollBotMailbox
+type PollBotMailboxResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PollBotMailboxResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6220,8 +6234,12 @@ type PollBotMailboxResponse struct {
 	JSON403 *Error
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *Error
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *Error
 	// Headers401 the parsed response headers for an HTTP 401 response
 	Headers401 *PollBotMailboxResponse401Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PollBotMailboxResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -6247,6 +6265,11 @@ func (r PollBotMailboxResponse) GetJSON403() *Error {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PollBotMailboxResponse) GetJSON409() *Error {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PollBotMailboxResponse) GetJSON429() *Error {
+	return r.JSON429
 }
 
 // GetBody returns the raw response body bytes
@@ -7831,9 +7854,12 @@ func (c *ClientWithResponses) ForwardTurnEventWithResponse(ctx context.Context, 
 // PollBotMailboxWithResponse Long-poll the next message addressed to a bot, acknowledging the last.
 //
 // A bot garam declared and placed receives the messages addressed to its GRN by this long poll, which its own process opens with its bot token (ADR-0194). The caller polls for the bot its token names and is refused every other one.
-// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018). A bot's mailbox has one reader: a poll hands out again what any earlier poll for the bot was handed, so two processes polling for one bot are each handed the other's messages.
-// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor.
-// The token is sent as `Authorization: DPoP <token>` with a `DPoP` proof signed by the key it is bound to, for this request's method and URL, with `ath` the token's hash. A proof is spent once. A missing or unknown token, one that expired or whose declaration, connector key or instance went, a token sent under any other scheme, `Bearer` included, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403.
+// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018).
+// What a poll hands out again is what was handed under its own token's key: each hand-out names the key the polling token is bound to, and a message handed to another process of the bot, under another key, is left to that process until its lease lapses, 30 seconds by default, and is then handed on. Each garam replica holds at most two polls of one bot at once and admits 300 of one bot's polls a minute; past either a poll is answered 429 with `Retry-After`, acknowledging and claiming nothing.
+// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor. A cursor already acknowledged acknowledges nothing more and is not refused, so polling again with it after a 204 is harmless.
+// The server holds a poll for longer than the 30 seconds it waits, since the poll first resolves the token, acknowledges and hands out again. A client and every proxy between it and garam read for at least 45 seconds, and a poll aborted on the client's side is sent again with the same cursor: an answer that never arrived spent an attempt of the message it carried, which the next poll hands out again.
+// The token is sent as `Authorization: DPoP <token>`, in one `Authorization` header, with a `DPoP` proof signed by the key it is bound to, with `ath` the token's hash. The proof's `htm` is `POST`, and its `htu` is this route's URL at garam's machine origin, which is not the address a client dials where a proxy stands between: it is the `iss` of every hand-out's `signature`, and the bot's place is configured with it beside the address it dials. The bot's GRN is one path segment percent-encoded as the request's path encodes it, its `/` as `%2F` and its `:` literal, because the two paths are compared as written. This route takes no DPoP nonce and ignores one: it answers no `DPoP-Nonce` and never `use_dpop_nonce`. A proof is spent once.
+// A missing or unknown token, one that expired or whose declaration, connector key or instance went, or whose installation stopped hosting bots, a token sent under any other scheme, `Bearer` included, or beside another `Authorization` header, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403. A listener with no bot tokens configured, and a store it cannot reach, answer 503, which the caller retries after a pause with the same cursor.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -9620,6 +9646,13 @@ func ParsePollBotMailboxResponse(rsp *http.Response) (*PollBotMailboxResponse, e
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	}
 
 	switch {
@@ -9633,6 +9666,16 @@ func ParsePollBotMailboxResponse(rsp *http.Response) (*PollBotMailboxResponse, e
 			headers.WWWAuthenticate = &value
 		}
 		response.Headers401 = &headers
+	case rsp.StatusCode == 429:
+		var headers PollBotMailboxResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil

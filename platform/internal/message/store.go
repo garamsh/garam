@@ -57,11 +57,15 @@ type Store interface {
 	// ErrStaleClaim when the claim has since been handed on. Completing
 	// twice with the same claim reports the same delivery.
 	Complete(ctx context.Context, recipient grn.GRN, id ClaimID, fence *Fence) error
-	// Release lapses every live claim on the recipient's messages, so
-	// the next Claim hands them out again, oldest first. It is for a
-	// queue with one reader, whose every poll says that what it was
-	// handed and did not acknowledge did not reach it.
-	Release(ctx context.Context, recipient grn.GRN) error
+	// ClaimHeld is Claim, unfenced, for a claim that names holder, the
+	// key of the process that takes it (ADR-0194).
+	ClaimHeld(ctx context.Context, recipient grn.GRN, holder string, lease time.Duration, maxAttempts int, handOut func(*Claim) error) (*Claim, error)
+	// Release lapses the live claims holder took on the recipient's
+	// messages, so the next claim hands them out again, oldest first. A
+	// process's poll says that what it was handed and did not
+	// acknowledge did not reach it; another holder's claim is left to
+	// its lease.
+	Release(ctx context.Context, recipient grn.GRN, holder string) error
 	// Status returns how far the sender's message has got, or
 	// ErrNoSuchMessage when that sender stored none under the
 	// identifier. maxAttempts is the bound Claim hands the message out

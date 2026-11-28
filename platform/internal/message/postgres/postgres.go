@@ -254,6 +254,16 @@ func sameSubmission(row db.Message, m *message.Message) bool {
 // and handOut share one transaction, fenced or not, so a hand-out that
 // fails rolls the claim back.
 func (s *Store) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int, fence *message.Fence, handOut func(*message.Claim) error) (*message.Claim, error) {
+	return s.claim(ctx, recipient, pgtype.Text{}, lease, maxAttempts, fence, handOut)
+}
+
+// ClaimHeld is Claim for a claim holder takes, which names it, and
+// which only Release under the same holder lapses early.
+func (s *Store) ClaimHeld(ctx context.Context, recipient grn.GRN, holder string, lease time.Duration, maxAttempts int, handOut func(*message.Claim) error) (*message.Claim, error) {
+	return s.claim(ctx, recipient, pgtype.Text{String: holder, Valid: true}, lease, maxAttempts, nil, handOut)
+}
+
+func (s *Store) claim(ctx context.Context, recipient grn.GRN, holder pgtype.Text, lease time.Duration, maxAttempts int, fence *message.Fence, handOut func(*message.Claim) error) (*message.Claim, error) {
 	claimID, err := message.NewClaimID()
 	if err != nil {
 		return nil, err
@@ -265,6 +275,7 @@ func (s *Store) Claim(ctx context.Context, recipient grn.GRN, lease time.Duratio
 		row, err := q.ClaimMessage(ctx, db.ClaimMessageParams{
 			ClaimID:      pgtype.Text{String: string(claimID), Valid: true},
 			Lease:        interval(lease),
+			Holder:       holder,
 			RecipientGrn: recipient.String(),
 			MaxAttempts:  attemptBound(maxAttempts),
 		})
@@ -322,9 +333,13 @@ func (s *Store) Complete(ctx context.Context, recipient grn.GRN, id message.Clai
 	})
 }
 
-// Release lapses the recipient's live claims in one statement.
-func (s *Store) Release(ctx context.Context, recipient grn.GRN) error {
-	if err := s.q.ReleaseClaims(ctx, recipient.String()); err != nil {
+// Release lapses the recipient's live claims holder took in one
+// statement.
+func (s *Store) Release(ctx context.Context, recipient grn.GRN, holder string) error {
+	err := s.q.ReleaseClaims(ctx, db.ReleaseClaimsParams{
+		RecipientGrn: recipient.String(), Holder: pgtype.Text{String: holder, Valid: true},
+	})
+	if err != nil {
 		return pgxerr.Classify(err, "release", nil, nil)
 	}
 	return nil

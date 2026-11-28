@@ -47,23 +47,25 @@ UPDATE messages SET
     claim_id         = $1,
     claimed_at       = now(),
     claim_expires_at = now() + $2::interval,
+    claim_holder     = $3,
     attempts         = messages.attempts + 1
 WHERE id = (
     SELECT m.id FROM messages m
-    WHERE m.recipient_grn = $3
+    WHERE m.recipient_grn = $4
       AND m.completed_at IS NULL
-      AND m.attempts < $4
+      AND m.attempts < $5
       AND (m.claim_expires_at IS NULL OR m.claim_expires_at <= now())
     ORDER BY m.created_at, m.id
     LIMIT 1
     FOR UPDATE SKIP LOCKED
 )
-RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author, claim_holder
 `
 
 type ClaimMessageParams struct {
 	ClaimID      pgtype.Text
 	Lease        pgtype.Interval
+	Holder       pgtype.Text
 	RecipientGrn string
 	MaxAttempts  int32
 }
@@ -81,6 +83,7 @@ func (q *Queries) ClaimMessage(ctx context.Context, arg ClaimMessageParams) (Mes
 	row := q.db.QueryRow(ctx, claimMessage,
 		arg.ClaimID,
 		arg.Lease,
+		arg.Holder,
 		arg.RecipientGrn,
 		arg.MaxAttempts,
 	)
@@ -98,6 +101,7 @@ func (q *Queries) ClaimMessage(ctx context.Context, arg ClaimMessageParams) (Mes
 		&i.Attempts,
 		&i.ClaimedAt,
 		&i.Author,
+		&i.ClaimHolder,
 	)
 	return i, err
 }
@@ -209,7 +213,7 @@ INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, auth
 VALUES ($1, $2, $3, $4, $5, $6, now())
 ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
     idempotency_key = messages.idempotency_key
-RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author, claim_holder
 `
 
 type EnqueueMessageParams struct {
@@ -249,6 +253,7 @@ func (q *Queries) EnqueueMessage(ctx context.Context, arg EnqueueMessageParams) 
 		&i.Attempts,
 		&i.ClaimedAt,
 		&i.Author,
+		&i.ClaimHolder,
 	)
 	return i, err
 }
@@ -428,7 +433,7 @@ func (q *Queries) LockSigningKeys(ctx context.Context) error {
 }
 
 const messageByKey = `-- name: MessageByKey :one
-SELECT id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author FROM messages
+SELECT id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author, claim_holder FROM messages
 WHERE sender_grn = $1 AND idempotency_key = $2
 `
 
@@ -456,6 +461,7 @@ func (q *Queries) MessageByKey(ctx context.Context, arg MessageByKeyParams) (Mes
 		&i.Attempts,
 		&i.ClaimedAt,
 		&i.Author,
+		&i.ClaimHolder,
 	)
 	return i, err
 }
@@ -520,16 +526,24 @@ func (q *Queries) MessageStatus(ctx context.Context, arg MessageStatusParams) (M
 const releaseClaims = `-- name: ReleaseClaims :exec
 UPDATE messages SET claim_expires_at = now()
 WHERE recipient_grn = $1
+  AND claim_holder = $2
   AND completed_at IS NULL
   AND claim_expires_at > now()
 `
 
-// ReleaseClaims lapses the recipient's live claims at the database's
-// clock, the one ClaimMessage reads a lease against. The claim's
-// identifier stays until the next claim replaces it, so a completion
-// under it is still judged by whether the message was handed on.
-func (q *Queries) ReleaseClaims(ctx context.Context, recipientGrn string) error {
-	_, err := q.db.Exec(ctx, releaseClaims, recipientGrn)
+type ReleaseClaimsParams struct {
+	RecipientGrn string
+	Holder       pgtype.Text
+}
+
+// ReleaseClaims lapses the recipient's live claims that holder took,
+// at the database's clock, the one ClaimMessage reads a lease against.
+// A claim another holder took, or none named, is left to its lease.
+// The claim's identifier stays until the next claim replaces it, so a
+// completion under it is still judged by whether the message was
+// handed on.
+func (q *Queries) ReleaseClaims(ctx context.Context, arg ReleaseClaimsParams) error {
+	_, err := q.db.Exec(ctx, releaseClaims, arg.RecipientGrn, arg.Holder)
 	return err
 }
 
@@ -540,7 +554,7 @@ WHERE recipient_grn = $3
   AND claim_id = $4
   AND completed_at IS NULL
   AND claim_expires_at > now()
-RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author, claim_holder
 `
 
 type RenewClaimParams struct {
@@ -577,6 +591,7 @@ func (q *Queries) RenewClaim(ctx context.Context, arg RenewClaimParams) (Message
 		&i.Attempts,
 		&i.ClaimedAt,
 		&i.Author,
+		&i.ClaimHolder,
 	)
 	return i, err
 }

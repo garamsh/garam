@@ -1120,24 +1120,55 @@ paths:
         later one, so a process whose connection dropped polls again
         with the cursor it last held and is handed what it missed.
         Each hand-out spends one of the message's attempts, and one
-        that spends them all is not handed out again (ADR-0018). A
-        bot's mailbox has one reader: a poll hands out again what any
-        earlier poll for the bot was handed, so two processes polling
-        for one bot are each handed the other's messages.
+        that spends them all is not handed out again (ADR-0018).
+
+        What a poll hands out again is what was handed under its own
+        token's key: each hand-out names the key the polling token is
+        bound to, and a message handed to another process of the bot,
+        under another key, is left to that process until its lease
+        lapses, 30 seconds by default, and is then handed on. Each
+        garam replica holds at most two polls of one bot at once and
+        admits 300 of one bot's polls a minute; past either a poll is
+        answered 429 with `Retry-After`, acknowledging and claiming
+        nothing.
 
         A cursor whose message was handed out again since is answered
         409 `failed_precondition`, nothing is acknowledged and nothing
-        is claimed; the caller polls again with no cursor.
+        is claimed; the caller polls again with no cursor. A cursor
+        already acknowledged acknowledges nothing more and is not
+        refused, so polling again with it after a 204 is harmless.
 
-        The token is sent as `Authorization: DPoP <token>` with a
-        `DPoP` proof signed by the key it is bound to, for this
-        request's method and URL, with `ath` the token's hash. A proof
-        is spent once. A missing or unknown token, one that expired or
-        whose declaration, connector key or instance went, a token sent
-        under any other scheme, `Bearer` included, and a proof that
-        does not verify or was spent are each 401, with a
-        `WWW-Authenticate` challenge naming the scheme. A token of
-        another bot is 403.
+        The server holds a poll for longer than the 30 seconds it
+        waits, since the poll first resolves the token, acknowledges
+        and hands out again. A client and every proxy between it and
+        garam read for at least 45 seconds, and a poll aborted on the
+        client's side is sent again with the same cursor: an answer
+        that never arrived spent an attempt of the message it carried,
+        which the next poll hands out again.
+
+        The token is sent as `Authorization: DPoP <token>`, in one
+        `Authorization` header, with a `DPoP` proof signed by the key
+        it is bound to, with `ath` the token's hash. The proof's `htm`
+        is `POST`, and its `htu` is this route's URL at garam's
+        machine origin, which is not the address a client dials where
+        a proxy stands between: it is the `iss` of every hand-out's
+        `signature`, and the bot's place is configured with it beside
+        the address it dials. The bot's GRN is one path segment
+        percent-encoded as the request's path encodes it, its `/` as
+        `%2F` and its `:` literal, because the two paths are compared
+        as written. This route takes no DPoP nonce and ignores one:
+        it answers no `DPoP-Nonce` and never `use_dpop_nonce`. A proof
+        is spent once.
+
+        A missing or unknown token, one that expired or whose
+        declaration, connector key or instance went, or whose
+        installation stopped hosting bots, a token sent under any other
+        scheme, `Bearer` included, or beside another `Authorization`
+        header, and a proof that does not verify or was spent are each
+        401, with a `WWW-Authenticate` challenge naming the scheme. A
+        token of another bot is 403. A listener with no bot tokens
+        configured, and a store it cannot reach, answer 503, which the
+        caller retries after a pause with the same cursor.
       parameters:
         - $ref: '#/components/parameters/bot'
         - name: cursor
@@ -1157,7 +1188,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/BotDelivery'
         '204':
-          description: Nothing arrived before the wait ran out. Poll again with the same cursor.
+          description: >-
+            Nothing arrived before the wait ran out. Poll again with the
+            same cursor, which is harmless once acknowledged.
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -1166,6 +1199,15 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+        '429':
+          description: Too many polls of this bot held or sent; try again after `Retry-After`.
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /operation-authorities/introspection:
     post:
       operationId: introspectOperationAuthority

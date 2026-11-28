@@ -15,7 +15,7 @@ connector is `garamsh/garam-bot-operator`'s interface
 
 | Type | Responsibility |
 |------|----------------|
-| `Service` | holds an instance's declarations poll until a change, a wake or the wait, keeps its report, mints a declared bot's token for its connector, and resolves one presented to a route |
+| `Service` | holds an instance's declarations poll until a change, a wake or the wait, keeps its report, mints a declared bot's token for its connector, resolves one presented to a route, and bounds a bot's mailbox polls |
 | `BotTokenStore` | records a bot token for a live `Bot` declaration of the instance, under the key its connector's token rests on and bound to the key of the bot's process, and resolves a live one with that key |
 | `DeclaredObject` | an object DECL-7 to DECL-9 admit, kept to DECL-7's members, with the kind, namespace and name two live declarations never share |
 | `Declaration` | one declaration placed on an instance: its identifier, generation and object, or none once tombstoned |

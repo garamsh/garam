@@ -1735,7 +1735,8 @@ ADRs:
   — a message to a bot is a message of the queue addressed to its
   GRN; the bot's process long-polls `pollBotMailbox` with its own
   DPoP-bound token, for its own mailbox alone, and the next poll's
-  cursor acknowledges; a mailbox has one reader, so each poll hands
-  out again what the bot holds unacknowledged before any later
-  message; the route holds ADR-0191 decision 6; accepted, built
-  (#2075)
+  cursor acknowledges; each poll hands out again what was claimed
+  under its token's key and not acknowledged before any later
+  message, and leaves another key's claim to its lease; a replica
+  holds two of a bot's polls at once and 300 a minute; the route
+  holds ADR-0191 decision 6; accepted, built (#2075)

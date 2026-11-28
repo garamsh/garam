@@ -6,6 +6,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/bot"
 	"github.com/garamsh/garam/platform/internal/dpop"
 	"github.com/garamsh/garam/platform/internal/message"
 )
@@ -22,6 +23,14 @@ func (s *Server) PollBotMailbox(w http.ResponseWriter, r *http.Request, botGRN m
 	if !ok {
 		return
 	}
+	// The hold is the caller's, so a request that authenticated no bot
+	// takes no slot of one.
+	done, err := s.bots.HoldMailboxPoll(caller.Bot)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	defer done()
 	recipient, err := grn.Parse(botGRN)
 	if err != nil {
 		writeError(w, errorx.Wrap(err, "bot", errorx.KindInvalidArgument))
@@ -37,7 +46,7 @@ func (s *Server) PollBotMailbox(w http.ResponseWriter, r *http.Request, botGRN m
 		writeError(w, err)
 		return
 	}
-	claim, signed, err := s.messages.Poll(r.Context(), caller, recipient, cursor, signer)
+	claim, signed, err := s.messages.Poll(r.Context(), caller.Bot, recipient, caller.KeyThumbprint, cursor, signer)
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -52,32 +61,32 @@ func (s *Server) PollBotMailbox(w http.ResponseWriter, r *http.Request, botGRN m
 	})
 }
 
-// botCaller answers the bot a request's DPoP-bound token names once
+// botCaller answers the bot token a request presents as DPoP once
 // its proof verified, and writes the refusal itself, with the
 // challenge RFC 9449 §7.1 names, where it does not.
-func (s *Server) botCaller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
+func (s *Server) botCaller(w http.ResponseWriter, r *http.Request) (bot.HeldBotToken, bool) {
 	token, err := dpop.Presented(r.Header.Get("Authorization"))
 	if err == nil && len(r.Header.Values("Authorization")) > 1 {
 		err = dpop.ErrSchemeRefused
 	}
 	if err != nil {
 		refuseBotToken(w, err)
-		return grn.GRN{}, false
+		return bot.HeldBotToken{}, false
 	}
 	if s.bots == nil || s.dpopProofs == nil || s.origin == "" {
 		writeError(w, errorx.New(errorx.KindUnavailable, "no bot token is accepted on this listener"))
-		return grn.GRN{}, false
+		return bot.HeldBotToken{}, false
 	}
 	held, err := s.bots.ResolveBotToken(r.Context(), token)
 	if err != nil {
 		refuseBotToken(w, err)
-		return grn.GRN{}, false
+		return bot.HeldBotToken{}, false
 	}
 	if err := s.dpopProofs.Bound(r.Context(), r, s.origin+r.URL.EscapedPath(), token, held.KeyThumbprint); err != nil {
 		refuseBotToken(w, err)
-		return grn.GRN{}, false
+		return bot.HeldBotToken{}, false
 	}
-	return held.Bot, true
+	return held, true
 }
 
 // refuseBotToken answers a refused bot token or proof 401 with its

@@ -84,11 +84,15 @@ func (q *queue) Complete(_ context.Context, _ grn.GRN, _ message.ClaimID, _ *mes
 	return q.completeErr
 }
 
-func (q *queue) Release(_ context.Context, _ grn.GRN) error {
+func (q *queue) Release(_ context.Context, _ grn.GRN, _ string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.releases++
 	return nil
+}
+
+func (q *queue) ClaimHeld(ctx context.Context, recipient grn.GRN, _ string, lease time.Duration, maxAttempts int, handOut func(*message.Claim) error) (*message.Claim, error) {
+	return q.Claim(ctx, recipient, lease, maxAttempts, nil, handOut)
 }
 
 func (q *queue) Status(_ context.Context, sender grn.GRN, id message.ID, maxAttempts int, _ *message.Fence) (*message.Status, error) {
@@ -188,7 +192,7 @@ func TestService_ActsOnlyOnTheQueueTheCallerIsAddressedBy(t *testing.T) {
 			name: "poll",
 			act: func(s message.Service, caller grn.GRN) error {
 				cursor := message.ClaimID("claim-1")
-				_, _, err := s.Poll(ctx, caller, bot, &cursor, nil)
+				_, _, err := s.Poll(ctx, caller, bot, "jkt", &cursor, nil)
 				return err
 			},
 		},
@@ -225,7 +229,7 @@ func TestService_PollWithAStaleCursorClaimsNothing(t *testing.T) {
 	stale := &queue{completeErr: message.ErrStaleClaim}
 	s, err := message.NewService(stale, brief())
 	require.NoError(t, err)
-	_, _, err = s.Poll(ctx, bot, bot, &cursor, nil)
+	_, _, err = s.Poll(ctx, bot, bot, "jkt", &cursor, nil)
 	assert.ErrorIs(t, err, message.ErrStaleClaim)
 	assert.Zero(t, stale.releases, "a stale cursor released the caller's claims")
 	assert.Zero(t, stale.claims, "a stale cursor claimed a message")
@@ -233,7 +237,7 @@ func TestService_PollWithAStaleCursorClaimsNothing(t *testing.T) {
 	current := &queue{}
 	s, err = message.NewService(current, brief())
 	require.NoError(t, err)
-	_, _, err = s.Poll(ctx, bot, bot, &cursor, nil)
+	_, _, err = s.Poll(ctx, bot, bot, "jkt", &cursor, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
 	assert.Equal(t, 1, current.completions)
 	assert.Equal(t, 1, current.releases)

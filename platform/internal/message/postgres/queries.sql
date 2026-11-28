@@ -74,6 +74,7 @@ UPDATE messages SET
     claim_id         = sqlc.arg('claim_id'),
     claimed_at       = now(),
     claim_expires_at = now() + sqlc.arg('lease')::interval,
+    claim_holder     = sqlc.narg('holder'),
     attempts         = messages.attempts + 1
 WHERE id = (
     SELECT m.id FROM messages m
@@ -118,13 +119,16 @@ UPDATE messages SET
     body         = NULL
 WHERE recipient_grn = sqlc.arg('recipient_grn') AND claim_id = sqlc.arg('claim_id');
 
--- ReleaseClaims lapses the recipient's live claims at the database's
--- clock, the one ClaimMessage reads a lease against. The claim's
--- identifier stays until the next claim replaces it, so a completion
--- under it is still judged by whether the message was handed on.
+-- ReleaseClaims lapses the recipient's live claims that holder took,
+-- at the database's clock, the one ClaimMessage reads a lease against.
+-- A claim another holder took, or none named, is left to its lease.
+-- The claim's identifier stays until the next claim replaces it, so a
+-- completion under it is still judged by whether the message was
+-- handed on.
 -- name: ReleaseClaims :exec
 UPDATE messages SET claim_expires_at = now()
 WHERE recipient_grn = sqlc.arg('recipient_grn')
+  AND claim_holder = sqlc.arg('holder')
   AND completed_at IS NULL
   AND claim_expires_at > now();
 

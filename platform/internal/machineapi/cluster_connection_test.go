@@ -63,6 +63,8 @@ type connectionClusters struct {
 	// held is the live bot token each value is, as ResolveBotToken
 	// answers it; a value it does not name is not live.
 	held map[string]bot.HeldBotToken
+	// holdErr is what HoldMailboxPoll answers; nil holds the poll.
+	holdErr error
 }
 
 func (c *connectionClusters) Report(_ context.Context, caller grn.GRN, r bot.Report) error {
@@ -110,6 +112,13 @@ func (c *connectionClusters) ResolveBotToken(_ context.Context, value string) (b
 		return bot.HeldBotToken{}, bot.ErrBotTokenInvalid
 	}
 	return held, nil
+}
+
+func (c *connectionClusters) HoldMailboxPoll(grn.GRN) (func(), error) {
+	if c.holdErr != nil {
+		return nil, c.holdErr
+	}
+	return func() {}, nil
 }
 
 func (c *connectionClusters) Rotate(_ context.Context, caller grn.GRN, jwk []byte, _, _ string) (app.Rotation, error) {

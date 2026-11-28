@@ -93,12 +93,13 @@ type Service interface {
 	// that cannot be signed spends none of the message's attempts
 	// (ADR-0104).
 	Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence, signer Signer) (*Claim, Signed, error)
-	// Poll is Claim for a queue with one reader, which acknowledges by
-	// polling again: it completes the claim cursor names, where one is
-	// named, hands out again whatever the caller holds unacknowledged,
-	// and claims the oldest message as Claim does. A cursor whose
-	// message was handed on is ErrStaleClaim, and nothing is claimed.
-	Poll(ctx context.Context, caller, recipient grn.GRN, cursor *ClaimID, signer Signer) (*Claim, Signed, error)
+	// Poll is Claim for a mailbox whose reader acknowledges by polling
+	// again: it completes the claim cursor names, where one is named,
+	// hands out again whatever holder, the key of the polling process,
+	// was handed and did not acknowledge, and claims the oldest ready
+	// message under holder. A cursor whose message was handed on is
+	// ErrStaleClaim, and nothing is claimed.
+	Poll(ctx context.Context, caller, recipient grn.GRN, holder string, cursor *ClaimID, signer Signer) (*Claim, Signed, error)
 	// Renew extends the caller's hold on a message it is still working
 	// on, no further than the ceiling.
 	Renew(ctx context.Context, caller, recipient grn.GRN, id ClaimID, fence *Fence) (*Claim, error)
@@ -198,6 +199,14 @@ func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *F
 	if err := addressesFenced(caller, recipient, fence); err != nil {
 		return nil, Signed{}, err
 	}
+	return s.wait(ctx, signer, func(sign func(*Claim) error) (*Claim, error) {
+		return s.store.Claim(ctx, recipient, s.cfg.Lease, s.cfg.Attempts, fence, sign)
+	})
+}
+
+// wait takes a claim, signed by signer, until one is ready or the wait
+// runs out.
+func (s *service) wait(ctx context.Context, signer Signer, take func(sign func(*Claim) error) (*Claim, error)) (*Claim, Signed, error) {
 	var signed Signed
 	sign := func(c *Claim) error {
 		var err error
@@ -212,7 +221,7 @@ func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *F
 	// ADR-0013 accepted in place of a push.
 	deadline := time.Now().Add(s.cfg.Wait)
 	for {
-		claim, err := s.store.Claim(ctx, recipient, s.cfg.Lease, s.cfg.Attempts, fence, sign)
+		claim, err := take(sign)
 		// The store has one not-found to answer this with, so the kind
 		// names it and no sentinel needs telling apart.
 		if !errorx.IsKind(err, errorx.KindNotFound) {
@@ -234,22 +243,28 @@ func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *F
 	}
 }
 
-// Poll releases what the caller holds before it claims, so a message
-// whose answer was lost with its connection is the next one handed
-// out rather than one waiting for its lease to run out.
-func (s *service) Poll(ctx context.Context, caller, recipient grn.GRN, cursor *ClaimID, signer Signer) (*Claim, Signed, error) {
+// Poll releases what holder holds before it claims, so a message whose
+// answer was lost with its connection is the next one handed out
+// rather than one waiting for its lease to run out. Another holder's
+// claim is that process's, and lapses at its lease.
+func (s *service) Poll(ctx context.Context, caller, recipient grn.GRN, holder string, cursor *ClaimID, signer Signer) (*Claim, Signed, error) {
 	if err := addresses(caller, recipient); err != nil {
 		return nil, Signed{}, err
+	}
+	if holder == "" {
+		return nil, Signed{}, errorx.New(errorx.KindInternal, "message: a poll names the key of the process holding it")
 	}
 	if cursor != nil {
 		if err := s.store.Complete(ctx, recipient, *cursor, nil); err != nil {
 			return nil, Signed{}, err
 		}
 	}
-	if err := s.store.Release(ctx, recipient); err != nil {
+	if err := s.store.Release(ctx, recipient, holder); err != nil {
 		return nil, Signed{}, err
 	}
-	return s.Claim(ctx, caller, recipient, nil, signer)
+	return s.wait(ctx, signer, func(sign func(*Claim) error) (*Claim, error) {
+		return s.store.ClaimHeld(ctx, recipient, holder, s.cfg.Lease, s.cfg.Attempts, sign)
+	})
 }
 
 func (s *service) Renew(ctx context.Context, caller, recipient grn.GRN, id ClaimID, fence *Fence) (*Claim, error) {

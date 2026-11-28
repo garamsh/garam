@@ -634,6 +634,24 @@ type AuthorityIntrospection struct {
 	Authority string `json:"authority"`
 }
 
+// BotDelivery One message handed to a bot's process, the cursor that acknowledges it, and garam's signature over it (ADR-0101).
+type BotDelivery struct {
+	// Attempt Which hand-out of this message this is. Delivery is at-least-once (ADR-0018), so this tells a first delivery from a repeat.
+	Attempt int `json:"attempt"`
+
+	// Content The `garam-message.v1` object of `contract`, `sender` and `body`, as `Claim`'s `content` is.
+	Content string `json:"content"`
+
+	// Cursor What the next poll names to acknowledge this message.
+	Cursor string `json:"cursor"`
+
+	// Message One stored message, under an identifier the queue minted.
+	Message Message `json:"message"`
+
+	// Signature garam's signature over this hand-out, as `Claim`'s `signature` is, with the bot as its audience.
+	Signature string `json:"signature"`
+}
+
 // BoundAssignment Where the agent ran when an operation on it was authorized. Present for `iam:agent.configure`, `iam:agent.recover`, `iam:agent.execution-read` and `iam:agent.replace` only.
 type BoundAssignment struct {
 	// Epoch Opaque.
@@ -1101,6 +1119,9 @@ type AgentEnrollmentContractVersion = string
 // ApprovalId defines model for approval.
 type ApprovalId = string
 
+// BotGrn defines model for bot.
+type BotGrn = string
+
 // ClaimId defines model for claim.
 type ClaimId = string
 
@@ -1133,6 +1154,9 @@ type TokenContractVersion = string
 
 // AgentEnrollmentContractError defines model for AgentEnrollmentContractError.
 type AgentEnrollmentContractError = Error
+
+// BotTokenRefused defines model for BotTokenRefused.
+type BotTokenRefused = Error
 
 // ContractError defines model for ContractError.
 type ContractError = Error
@@ -1201,6 +1225,12 @@ type IntrospectAgentExecutionParams struct {
 type MintAgentTokenParams struct {
 	// TokenContractVersion Must be `machine-token.v1` (ADR-0100); any other value is refused with 400 naming it.
 	TokenContractVersion TokenContractVersion `json:"Garam-Contract-Version"`
+}
+
+// PollBotMailboxParams defines parameters for PollBotMailbox.
+type PollBotMailboxParams struct {
+	// Cursor The `cursor` the previous poll for this bot answered, which acknowledges its message. Absent acknowledges nothing.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // IntrospectOperationAuthorityParams defines parameters for IntrospectOperationAuthority.
@@ -1667,6 +1697,16 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /agents/{agent}/turn-events (the `ForwardTurnEvent` operationId).
 	ForwardTurnEvent(ctx context.Context, agentGrn AgentGrn, body ForwardTurnEventJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PollBotMailbox Long-poll the next message addressed to a bot, acknowledging the last.
+	//
+	// A bot garam declared and placed receives the messages addressed to its GRN by this long poll, which its own process opens with its bot token (ADR-0194). The caller polls for the bot its token names and is refused every other one.
+	// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018). A bot's mailbox has one reader: a poll hands out again what any earlier poll for the bot was handed, so two processes polling for one bot are each handed the other's messages.
+	// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor.
+	// The token is sent as `Authorization: DPoP <token>` with a `DPoP` proof signed by the key it is bound to, for this request's method and URL, with `ath` the token's hash. A proof is spent once. A missing or unknown token, one that expired or whose declaration, connector key or instance went, a token sent under any other scheme, `Bearer` included, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403.
+	//
+	// Corresponds with POST /bots/{bot}/mailbox (the `PollBotMailbox` operationId).
+	PollBotMailbox(ctx context.Context, botGrn BotGrn, params *PollBotMailboxParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetIdentity Return the identity the connection authenticated as.
 	//
@@ -2420,6 +2460,26 @@ func (c *Client) ForwardTurnEventWithBody(ctx context.Context, agentGrn AgentGrn
 // Corresponds with POST /agents/{agent}/turn-events (the `ForwardTurnEvent` operationId).
 func (c *Client) ForwardTurnEvent(ctx context.Context, agentGrn AgentGrn, body ForwardTurnEventJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewForwardTurnEventRequest(c.Server, agentGrn, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PollBotMailbox Long-poll the next message addressed to a bot, acknowledging the last.
+//
+// A bot garam declared and placed receives the messages addressed to its GRN by this long poll, which its own process opens with its bot token (ADR-0194). The caller polls for the bot its token names and is refused every other one.
+// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018). A bot's mailbox has one reader: a poll hands out again what any earlier poll for the bot was handed, so two processes polling for one bot are each handed the other's messages.
+// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor.
+// The token is sent as `Authorization: DPoP <token>` with a `DPoP` proof signed by the key it is bound to, for this request's method and URL, with `ath` the token's hash. A proof is spent once. A missing or unknown token, one that expired or whose declaration, connector key or instance went, a token sent under any other scheme, `Bearer` included, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403.
+//
+// Corresponds with POST /bots/{bot}/mailbox (the `PollBotMailbox` operationId).
+func (c *Client) PollBotMailbox(ctx context.Context, botGrn BotGrn, params *PollBotMailboxParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPollBotMailboxRequest(c.Server, botGrn, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3567,6 +3627,67 @@ func NewForwardTurnEventRequestWithBody(server string, agentGrn AgentGrn, conten
 	return req, nil
 }
 
+// NewPollBotMailboxRequest constructs an http.Request for the PollBotMailbox method
+func NewPollBotMailboxRequest(server string, botGrn BotGrn, params *PollBotMailboxParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "bot", botGrn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/bots/%s/mailbox", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetIdentityRequest constructs an http.Request for the GetIdentity method
 func NewGetIdentityRequest(server string) (*http.Request, error) {
 	var err error
@@ -4453,6 +4574,18 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /agents/{agent}/turn-events (the `ForwardTurnEvent` operationId).
 	ForwardTurnEventWithResponse(ctx context.Context, agentGrn AgentGrn, body ForwardTurnEventJSONRequestBody, reqEditors ...RequestEditorFn) (*ForwardTurnEventResponse, error)
+
+	// PollBotMailboxWithResponse Long-poll the next message addressed to a bot, acknowledging the last.
+	//
+	// A bot garam declared and placed receives the messages addressed to its GRN by this long poll, which its own process opens with its bot token (ADR-0194). The caller polls for the bot its token names and is refused every other one.
+	// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018). A bot's mailbox has one reader: a poll hands out again what any earlier poll for the bot was handed, so two processes polling for one bot are each handed the other's messages.
+	// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor.
+	// The token is sent as `Authorization: DPoP <token>` with a `DPoP` proof signed by the key it is bound to, for this request's method and URL, with `ath` the token's hash. A proof is spent once. A missing or unknown token, one that expired or whose declaration, connector key or instance went, a token sent under any other scheme, `Bearer` included, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /bots/{bot}/mailbox (the `PollBotMailbox` operationId).
+	PollBotMailboxWithResponse(ctx context.Context, botGrn BotGrn, params *PollBotMailboxParams, reqEditors ...RequestEditorFn) (*PollBotMailboxResponse, error)
 
 	// GetIdentityWithResponse Return the identity the connection authenticated as.
 	//
@@ -6069,6 +6202,82 @@ func (r ForwardTurnEventResponse) ContentType() string {
 	return ""
 }
 
+// PollBotMailboxResponse401Headers the declared response headers of an HTTP 401 response for PollBotMailbox
+type PollBotMailboxResponse401Headers struct {
+	WWWAuthenticate *string
+}
+
+type PollBotMailboxResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BotDelivery
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *BotTokenRefused
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+	// Headers401 the parsed response headers for an HTTP 401 response
+	Headers401 *PollBotMailboxResponse401Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PollBotMailboxResponse) GetJSON200() *BotDelivery {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PollBotMailboxResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PollBotMailboxResponse) GetJSON401() *BotTokenRefused {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PollBotMailboxResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PollBotMailboxResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PollBotMailboxResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PollBotMailboxResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PollBotMailboxResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PollBotMailboxResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetIdentityResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -7617,6 +7826,24 @@ func (c *ClientWithResponses) ForwardTurnEventWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseForwardTurnEventResponse(rsp)
+}
+
+// PollBotMailboxWithResponse Long-poll the next message addressed to a bot, acknowledging the last.
+//
+// A bot garam declared and placed receives the messages addressed to its GRN by this long poll, which its own process opens with its bot token (ADR-0194). The caller polls for the bot its token names and is refused every other one.
+// The poll answers the oldest message not yet acknowledged, with a `cursor`, or waits for one and answers 204 when none arrives within 30 seconds. The next poll names that `cursor`, which acknowledges the message: it is completed, its body dropped, and it is not handed out again. A message handed out and not acknowledged is handed out again by the next poll, before any later one, so a process whose connection dropped polls again with the cursor it last held and is handed what it missed. Each hand-out spends one of the message's attempts, and one that spends them all is not handed out again (ADR-0018). A bot's mailbox has one reader: a poll hands out again what any earlier poll for the bot was handed, so two processes polling for one bot are each handed the other's messages.
+// A cursor whose message was handed out again since is answered 409 `failed_precondition`, nothing is acknowledged and nothing is claimed; the caller polls again with no cursor.
+// The token is sent as `Authorization: DPoP <token>` with a `DPoP` proof signed by the key it is bound to, for this request's method and URL, with `ath` the token's hash. A proof is spent once. A missing or unknown token, one that expired or whose declaration, connector key or instance went, a token sent under any other scheme, `Bearer` included, and a proof that does not verify or was spent are each 401, with a `WWW-Authenticate` challenge naming the scheme. A token of another bot is 403.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /bots/{bot}/mailbox (the `PollBotMailbox` operationId).
+func (c *ClientWithResponses) PollBotMailboxWithResponse(ctx context.Context, botGrn BotGrn, params *PollBotMailboxParams, reqEditors ...RequestEditorFn) (*PollBotMailboxResponse, error) {
+	rsp, err := c.PollBotMailbox(ctx, botGrn, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePollBotMailboxResponse(rsp)
 }
 
 // GetIdentityWithResponse Return the identity the connection authenticated as.
@@ -9336,6 +9563,76 @@ func ParseForwardTurnEventResponse(rsp *http.Response) (*ForwardTurnEventRespons
 		}
 		response.JSON409 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParsePollBotMailboxResponse parses an HTTP response from a PollBotMailboxWithResponse call
+func ParsePollBotMailboxResponse(rsp *http.Response) (*PollBotMailboxResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PollBotMailboxResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BotDelivery
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest BotTokenRefused
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 401:
+		var headers PollBotMailboxResponse401Headers
+		if values := rsp.Header.Values("WWW-Authenticate"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "WWW-Authenticate", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.WWWAuthenticate = &value
+		}
+		response.Headers401 = &headers
 	}
 
 	return response, nil

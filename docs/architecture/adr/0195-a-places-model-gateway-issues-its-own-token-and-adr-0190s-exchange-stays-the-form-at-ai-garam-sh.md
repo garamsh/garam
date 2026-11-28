@@ -13,7 +13,7 @@ Drafted for garam-bot#1211, item G3 of garam-bot's
 of G3's design on garam-bot#1211 names this number. garam is read at
 `ca336eedb423ebb6a177c8701ba33fc2d6412729`, and garam-bot's interface 5
 at garam-bot#1304's head,
-`42fa43d2f73f7a4d02697dc917b57054606da0e0`. A claim below that names no
+`2ccef492134bfed3459586dddff3f95aa4ee4c12`. A claim below that names no
 revision holds for those.
 
 ## Context

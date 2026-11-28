@@ -1,6 +1,8 @@
 # ADR 0190: ai-gateway is an interface deployable at garam or in the organization's own environment, and a session has one brain
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0195](./0195-a-places-model-gateway-issues-its-own-token-and-adr-0190s-exchange-stays-the-form-at-ai-garam-sh.md),
+> on the exchanged token at a gateway outside `ai.garam.sh` (decision 2)
 > Date: 2026-11-25
 
 Append-only: once merged, the body below is not rewritten. A fact later

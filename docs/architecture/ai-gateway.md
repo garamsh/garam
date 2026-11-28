@@ -5,6 +5,7 @@ garam or in an organization's own environment, and garam's
 implementation of it, with the keys it holds, how it routes and what
 it records
 ([ADR-0190](./adr/0190-ai-gateway-is-an-interface-deployable-at-garam-or-in-the-organizations-own-environment-and-a-session-has-one-brain.md),
+[ADR-0195](./adr/0195-a-places-model-gateway-issues-its-own-token-and-adr-0190s-exchange-stays-the-form-at-ai-garam-sh.md),
 ADR-0126).
 
 **None of this is built.** No `ai-gateway/` folder exists, and an agent
@@ -15,7 +16,9 @@ This document moves to `ai-gateway/docs/` with the service
 ([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)).
 
 ADR-0190 supersedes ADR-0126 in part, on the single endpoint, the
-token and the migration of the agent running then. It also decides
+token and the migration of the agent running then. ADR-0195 supersedes
+ADR-0190 decision 2 in part, on the token at a gateway outside
+`ai.garam.sh`. It also decides
 [ADR-0180](./adr/0180-garam-adds-a-workspace-registry-and-how-a-workspace-reaches-models-is-open.md)'s
 open question for the gateway. ADR-0126's keys, routing, records and
 billing govern garam's deployment at `ai.garam.sh`.
@@ -29,26 +32,40 @@ billing govern garam's deployment at `ai.garam.sh`.
 ## Current decisions
 
 - **An interface with deployments** (ADR-0190). ai-gateway is
-  garam-bot's interface 5, whose specification garam-bot writes with
-  garam and which is not written yet. It is deployed:
-  - at `ai.garam.sh`, garam's, serving
-    `https://ai.garam.sh/v1/chat/completions`, OpenAI compatible and
-    streaming included;
+  garam-bot's interface 5, whose specification is garam-bot's
+  `api/model-gateway/v1alpha1/README.md` (garam-bot ADR 0044, proposed
+  in garam-bot#1304). It is deployed:
+  - at `ai.garam.sh`, garam's;
   - in an organization's environment: its cluster, or built into
     garam-bot at the place, where call content stays.
+- **What interface 5 carries at `v1alpha1`** is the Anthropic Messages
+  API, passed through, with the model named as that API names it. A
+  gateway that maps a model's name does so as its own.
+  - `ai.garam.sh` serves interface 5's model surface alone, its
+    profile for a gateway whose tokens another party issues
+    (interface 5's PRO-2), since its tokens are ADR-0190's exchange.
+  - ADR-0126's `https://ai.garam.sh/v1/chat/completions`, OpenAI
+    compatible and streaming included, and its model name `auto` below,
+    are garam's deployment's own and outside interface 5 at
+    `v1alpha1`. Bringing an OpenAI-compatible surface into interface 5
+    is a later release's, its open question "Other provider APIs".
 - **A session has one brain**, the agent harness chosen when the work
   starts. Every other capability, another agent among them, reaches it
   as an MCP tool (ADR-0190 decision 3).
-- **What an agent asks for.** The model name `auto` asks the gateway to
-  route. Any other name asks for that model, which is refused unless
-  the organization's pool allows it.
-- **Authentication.** A bot garam declared exchanges its bot token
-  ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)
-  decision 2) for a JWT whose `aud` is the gateway's, which any
-  deployment verifies offline against garam's JWKS. It lives no
-  longer than the bot's token, and the bot's process rewrites its
-  token file. No provider key reaches a workspace, a harness or a
-  response.
+- **What an agent asks for at `ai.garam.sh`'s OpenAI-compatible
+  endpoint.** The model name `auto` asks the gateway to route. Any
+  other name asks for that model, which is refused unless the
+  organization's pool allows it.
+- **Authentication.** A model call carries a token that lives at most
+  an hour, of the gateway's own audience, checked by that gateway
+  alone (interface 5's TOKEN-1). The bot's process rewrites its token
+  file. No provider key reaches a workspace, a harness or a response.
+  - At `ai.garam.sh`, a bot garam declared exchanges its bot token
+    ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)
+    decision 2) for a JWT whose `aud` is garam's gateway's
+    (ADR-0190 decision 2).
+  - At the place, the gateway issues its own token to the place's
+    issuer, and garam neither issues nor verifies it (ADR-0195).
 - **Keys at `ai.garam.sh`** (ADR-0126). In an organization's
   environment, its own secret store holds its provider key, and garam
   never sees it (ADR-0190 decision 4).
@@ -88,6 +105,9 @@ billing govern garam's deployment at `ai.garam.sh`.
 - An interface rather than one endpoint, because a strict or
   self-hosted organization keeps call content in its environment
   (ADR-0190).
+- A place's gateway issues its own token, because a bot declared at
+  its place has no garam token, and no token garam issues to a bot's
+  process may enter a workspace (ADR-0195).
 - One place for model settings, keys and spend, because organizations,
   policies and audit are the platform's, and a setting spread across
   runtimes can be neither enforced nor measured (ADR-0126).
@@ -104,9 +124,9 @@ billing govern garam's deployment at `ai.garam.sh`.
 
 ## What other repositories owe
 
-- garam-bot writes interface 5 with garam, and builds a gateway at the
-  place (G3 in garam-bot `docs/architecture/bot-system.md` at
-  `18f95d28443ccdb47b1202ce8cf5bd16dc0db2a0`).
+- garam-bot builds a gateway at the place to interface 5 (G3 in
+  garam-bot `docs/architecture/bot-system.md` at
+  `012314edfd20a78129b260bd737cbaf4a9e41012`).
 
 ## Open questions
 

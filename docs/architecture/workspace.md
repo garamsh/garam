@@ -25,12 +25,13 @@ decides.
   The bot's permission (`spec.permissions`) governs what the bot
   running inside a workspace may do.
 
-## Decided (ADR-0189, ADR-0190)
+## Decided (ADR-0189, ADR-0190, ADR-0195)
 
 - **A workspace reaches models through ai-gateway**
-  ([ai-gateway.md](./ai-gateway.md)), with a token bound to the
-  gateway's audience that a bot garam declared obtains by exchanging
-  its bot token. The gateway runs at `ai.garam.sh` or in the
+  ([ai-gateway.md](./ai-gateway.md)), with a token of the gateway's
+  own audience: at `ai.garam.sh`, one a bot garam declared obtains by
+  exchanging its bot token; at the place, one the gateway issues
+  itself. The gateway runs at `ai.garam.sh` or in the
   organization's environment, where it also does the key proxy's job:
   the provider key stays in the gateway.
 - **A bot's `spec.permissions` become Cedar policies**, decided by the

@@ -129,7 +129,7 @@ func TestSpecification_EveryOperationButTheExemptOnesTakesAToken(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(raw, &spec))
 
 	exempt := map[string]bool{standaloneEnrollmentRoute: true, tokenExchangeRoute: true,
-		assertionExchangeRoute: true, keySetRoute: true, introspectionRoute: true}
+		assertionExchangeRoute: true, keySetRoute: true, introspectionRoute: true, botMailboxRoute: true}
 	listed, bearer, every := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	operations := 0
 	for path, methods := range spec.Paths {

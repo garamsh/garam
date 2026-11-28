@@ -360,7 +360,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			WithSendPolicy(cfg.Decisions, agentStore).
 			WithFeed(cfg.Feed).
 			WithIdentity(cfg.Identity, principals).
-			WithInstances(instances, bots, dpop.NewVerifier(dpoppg.New(pool), cfg.Now), cfg.TokenURL),
+			WithInstances(instances, bots, dpop.NewVerifier(dpoppg.New(pool), cfg.Now), cfg.TokenURL,
+				string(cfg.Issuer)),
 		machinegen.StdHTTPServerOptions{
 			BaseRouter: mux,
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.ConfineApps, machineapi.RecoverPanics,

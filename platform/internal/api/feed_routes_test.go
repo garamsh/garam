@@ -85,6 +85,7 @@ var feedClassification = map[string]string{
 	"postMessage":             "writes messages", "postOutboxMessage": "writes messages",
 	"claimMessage": "writes messages", "renewClaim": "writes messages", "forwardTurnEvent": "forwards",
 	"completeClaim": "writes messages", "introspectOperationAuthority": "reads",
+	"pollBotMailbox":       "writes messages and dpop_jtis, which no trigger watches",
 	"introspectController": "reads", "activateAgent": "writes agent_executions",
 	"deactivateAgent": "writes agent_executions", "introspectAgentExecution": "reads",
 	"recoverAgentCredential": "writes agent_executions", "prepareAgentEnrollment": "stores an approval",

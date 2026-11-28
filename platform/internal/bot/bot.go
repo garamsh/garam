@@ -191,6 +191,15 @@ func (s *service) MintBotToken(ctx context.Context, exchange BotExchange) (*BotT
 		KeyThumbprint: exchange.KeyThumbprint, ExpiresAt: expiresAt}, nil
 }
 
+// ResolveBotToken refuses a value no exchange could have issued before
+// any read, so a caller sending noise costs the database nothing.
+func (s *service) ResolveBotToken(ctx context.Context, value string) (HeldBotToken, error) {
+	if !app.WellFormed(value, BotTokenPrefix) {
+		return HeldBotToken{}, ErrBotTokenInvalid
+	}
+	return s.botTokens.ResolveBotToken(ctx, app.HashSecret(value))
+}
+
 // ErrScopeUndefined answers a scope: none is defined for a bot yet, and
 // nothing is implied.
 var ErrScopeUndefined = errorx.New(errorx.KindInvalidArgument, "no scope is defined for a bot's token yet")

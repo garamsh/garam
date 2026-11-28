@@ -144,7 +144,8 @@ release of that contract and no compatibility window (ADR-0049).
 ## A bot garam declares
 
 **Its GRN, its token exchange and its identifier space are built
-(#2049); its policy and the agent records' move are not.** A bot placed
+(#2049), and its mailbox (#2075); its policy and the agent records'
+move are not.** A bot placed
 on an instance by a declaration
 ([bots.md](./bots.md)) is an IAM principal of its own
 ([ADR-0189](./adr/0189-a-bot-garam-declares-is-an-iam-principal-whose-connector-exchanges-for-its-token-and-one-cedar-policy-decides-what-it-may-do.md)):
@@ -165,6 +166,9 @@ on an instance by a declaration
   token).
 - **One Cedar policy decides what it may do**, from its
   `spec.permissions` ([authz.md](./authz.md) §A bot's policy).
+- **Its messages reach its process by a long poll the process opens
+  with its token** (ADR-0194, #2075), from the queue every agent's
+  messages are in ([messaging.md](./messaging.md) §A bot's mailbox).
 - **A bot declared at its place** has no garam identity and no garam
   token. Whether it gets one is open, as garam-bot left it.
 - **Its place becomes an instance** of an app whose installation the

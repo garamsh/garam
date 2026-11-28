@@ -57,6 +57,11 @@ type Store interface {
 	// ErrStaleClaim when the claim has since been handed on. Completing
 	// twice with the same claim reports the same delivery.
 	Complete(ctx context.Context, recipient grn.GRN, id ClaimID, fence *Fence) error
+	// Release lapses every live claim on the recipient's messages, so
+	// the next Claim hands them out again, oldest first. It is for a
+	// queue with one reader, whose every poll says that what it was
+	// handed and did not acknowledge did not reach it.
+	Release(ctx context.Context, recipient grn.GRN) error
 	// Status returns how far the sender's message has got, or
 	// ErrNoSuchMessage when that sender stored none under the
 	// identifier. maxAttempts is the bound Claim hands the message out

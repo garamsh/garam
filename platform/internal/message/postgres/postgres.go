@@ -322,6 +322,14 @@ func (s *Store) Complete(ctx context.Context, recipient grn.GRN, id message.Clai
 	})
 }
 
+// Release lapses the recipient's live claims in one statement.
+func (s *Store) Release(ctx context.Context, recipient grn.GRN) error {
+	if err := s.q.ReleaseClaims(ctx, recipient.String()); err != nil {
+		return pgxerr.Classify(err, "release", nil, nil)
+	}
+	return nil
+}
+
 // Status returns how far the sender's message has got. A sender that
 // stored none under the identifier matches no row, hence
 // ErrNoSuchMessage — which is also what a message the sweep deleted

@@ -101,13 +101,16 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 // (ADR-0184 decision 5, ADR-0192 decision 5), the bot-token mint of
 // garam-bot-connector's (ADR-0189 decision 2), and the verifier of the
 // DPoP proofs that bind a bot's token to its process's key, read for
-// the token endpoint at tokenURL (ADR-0191). Without the verifier or
-// the URL the bot exchange answers 503.
-func (s *Server) WithInstances(instances app.Service, bots bot.Service, proofs *dpop.Verifier, tokenURL string) *Server {
+// the token endpoint at tokenURL and for a route a bot's token reaches
+// at origin, this listener's external https origin (ADR-0191). Without
+// the verifier or the URL the bot exchange answers 503, and without the
+// verifier or the origin so does the bot's mailbox.
+func (s *Server) WithInstances(instances app.Service, bots bot.Service, proofs *dpop.Verifier, tokenURL, origin string) *Server {
 	s.instances = instances
 	s.bots = bots
 	s.dpopProofs = proofs
 	s.tokenURL = tokenURL
+	s.origin = origin
 	return s
 }
 

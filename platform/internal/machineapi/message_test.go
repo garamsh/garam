@@ -97,6 +97,18 @@ func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN, fen
 	return nil, message.Signed{}, message.ErrNoMessageReady
 }
 
+func (s *messageService) Poll(_ context.Context, caller, recipient grn.GRN, cursor *message.ClaimID, _ message.Signer) (*message.Claim, message.Signed, error) {
+	call := messageCall{method: "poll", caller: caller, recipient: recipient}
+	if cursor != nil {
+		call.claim = *cursor
+	}
+	s.calls = append(s.calls, call)
+	if s.err != nil {
+		return nil, message.Signed{}, s.err
+	}
+	return nil, message.Signed{}, message.ErrNoMessageReady
+}
+
 func (s *messageService) Renew(_ context.Context, caller, recipient grn.GRN, id message.ClaimID, _ *message.Fence) (*message.Claim, error) {
 	s.calls = append(s.calls, messageCall{method: "renew", caller: caller, recipient: recipient, claim: id})
 	if s.err != nil {

@@ -66,6 +66,11 @@ type Service interface {
 	// decision 10). Past BotTokensPerInstance it answers
 	// *operator.Exceeded.
 	MintBotToken(ctx context.Context, exchange BotExchange) (*BotToken, error)
+	// ResolveBotToken answers the live bot token value is, with the
+	// bot and the key it is bound to, or ErrBotTokenInvalid. It proves
+	// nothing about the holder: a resource server verifies the proof
+	// of that key before it acts (ADR-0191 decision 6).
+	ResolveBotToken(ctx context.Context, value string) (HeldBotToken, error)
 }
 
 type service struct {

@@ -517,6 +517,22 @@ func (q *Queries) MessageStatus(ctx context.Context, arg MessageStatusParams) (M
 	return i, err
 }
 
+const releaseClaims = `-- name: ReleaseClaims :exec
+UPDATE messages SET claim_expires_at = now()
+WHERE recipient_grn = $1
+  AND completed_at IS NULL
+  AND claim_expires_at > now()
+`
+
+// ReleaseClaims lapses the recipient's live claims at the database's
+// clock, the one ClaimMessage reads a lease against. The claim's
+// identifier stays until the next claim replaces it, so a completion
+// under it is still judged by whether the message was handed on.
+func (q *Queries) ReleaseClaims(ctx context.Context, recipientGrn string) error {
+	_, err := q.db.Exec(ctx, releaseClaims, recipientGrn)
+	return err
+}
+
 const renewClaim = `-- name: RenewClaim :one
 UPDATE messages SET
     claim_expires_at = least(now() + $1::interval, claimed_at + $2::interval)

@@ -30,7 +30,7 @@ info:
     `Authorization` header while any of them presents a token carries
     no identity.
 
-    Four operations are reached without a token, and each carries
+    Five operations are reached without a token, and each carries
     `security: []` or a credential of its own.
     `enrollStandaloneAgent` is authenticated by the bootstrap secret
     whose hash an administrator approved (ADR-0082).
@@ -38,8 +38,10 @@ info:
     garam's signature on a message with (ADR-0101), which anyone may
     read. `exchangeClientAssertion` is authenticated by the client
     assertion in its body (ADR-0102). `exchangeToken` is authenticated
-    by a supervisor's credential under `machineCredential`. Every other
-    operation requires a token. Every caller verifies garam against the
+    by a supervisor's credential under `machineCredential`.
+    `pollBotMailbox` is authenticated by a bot's token bound to its
+    process's key, under `botDPoP` (ADR-0191). Every other operation
+    requires a token. Every caller verifies garam against the
     garam server root, which it holds before it calls: the listener
     presents that root's leaf to everyone (ADR-0040), and a caller that
     does not check it is talking to whoever answered.
@@ -1096,6 +1098,74 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /bots/{bot}/mailbox:
+    post:
+      operationId: pollBotMailbox
+      tags: [message]
+      security:
+        - botDPoP: []
+      summary: Long-poll the next message addressed to a bot, acknowledging the last.
+      description: >-
+        A bot garam declared and placed receives the messages addressed
+        to its GRN by this long poll, which its own process opens with
+        its bot token (ADR-0194). The caller polls for the bot its
+        token names and is refused every other one.
+
+        The poll answers the oldest message not yet acknowledged, with
+        a `cursor`, or waits for one and answers 204 when none arrives
+        within 30 seconds. The next poll names that `cursor`, which
+        acknowledges the message: it is completed, its body dropped,
+        and it is not handed out again. A message handed out and not
+        acknowledged is handed out again by the next poll, before any
+        later one, so a process whose connection dropped polls again
+        with the cursor it last held and is handed what it missed.
+        Each hand-out spends one of the message's attempts, and one
+        that spends them all is not handed out again (ADR-0018). A
+        bot's mailbox has one reader: a poll hands out again what any
+        earlier poll for the bot was handed, so two processes polling
+        for one bot are each handed the other's messages.
+
+        A cursor whose message was handed out again since is answered
+        409 `failed_precondition`, nothing is acknowledged and nothing
+        is claimed; the caller polls again with no cursor.
+
+        The token is sent as `Authorization: DPoP <token>` with a
+        `DPoP` proof signed by the key it is bound to, for this
+        request's method and URL, with `ath` the token's hash. A proof
+        is spent once. A missing or unknown token, one that expired or
+        whose declaration, connector key or instance went, a token sent
+        under any other scheme, `Bearer` included, and a proof that
+        does not verify or was spent are each 401, with a
+        `WWW-Authenticate` challenge naming the scheme. A token of
+        another bot is 403.
+      parameters:
+        - $ref: '#/components/parameters/bot'
+        - name: cursor
+          in: query
+          required: false
+          description: >-
+            The `cursor` the previous poll for this bot answered,
+            which acknowledges its message. Absent acknowledges
+            nothing.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The oldest message not yet acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotDelivery'
+        '204':
+          description: Nothing arrived before the wait ran out. Poll again with the same cursor.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/BotTokenRefused'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
   /operation-authorities/introspection:
     post:
       operationId: introspectOperationAuthority
@@ -1988,6 +2058,16 @@ components:
       x-go-name: AgentGrn
       schema:
         type: string
+    bot:
+      name: bot
+      in: path
+      required: true
+      description: >-
+        The bot's GRN, `grn:<org>/iam/bot/<declaration id>`,
+        percent-encoded as one path segment, its `/` as `%2F`.
+      x-go-name: BotGrn
+      schema:
+        type: string
     message:
       name: message
       in: path
@@ -2465,6 +2545,35 @@ components:
             ceiling after the claim was taken. Each claim signs afresh,
             and every attempt of one message carries the same content
             and identifier under it.
+    BotDelivery:
+      type: object
+      description: >-
+        One message handed to a bot's process, the cursor that
+        acknowledges it, and garam's signature over it (ADR-0101).
+      required: [cursor, attempt, message, content, signature]
+      properties:
+        cursor:
+          type: string
+          description: What the next poll names to acknowledge this message.
+        attempt:
+          type: integer
+          minimum: 1
+          description: >-
+            Which hand-out of this message this is. Delivery is
+            at-least-once (ADR-0018), so this tells a first delivery
+            from a repeat.
+        message:
+          $ref: '#/components/schemas/Message'
+        content:
+          type: string
+          description: >-
+            The `garam-message.v1` object of `contract`, `sender` and
+            `body`, as `Claim`'s `content` is.
+        signature:
+          type: string
+          description: >-
+            garam's signature over this hand-out, as `Claim`'s
+            `signature` is, with the bot as its audience.
     MessageSigningKeySet:
       type: object
       description: A JWK Set (RFC 7517) of the keys garam signs messages with.
@@ -2969,6 +3078,13 @@ components:
       schema:
         type: string
         enum: [machine-token.v2]
+    DPoPChallenge:
+      description: >-
+        `DPoP algs="ES256", error="<code>"`, where the code is
+        `invalid_token` for a token refused or sent under another
+        scheme and `invalid_dpop_proof` for a proof refused.
+      schema:
+        type: string
     RetryAfter:
       description: Seconds until the window that refused the request closes.
       schema:
@@ -3041,6 +3157,15 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/OAuthError'
+    BotTokenRefused:
+      description: A bot's token or its proof refused (RFC 9449 §7.1).
+      headers:
+        WWW-Authenticate:
+          $ref: '#/components/headers/DPoPChallenge'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     IntrospectionError:
       description: RFC 6749's error response of the introspection.
       content:
@@ -3145,6 +3270,15 @@ components:
         that offers this scheme, and is refused without it; one never
         activated is refused on every such call (ADR-0118). garam stores
         only its hash.
+    botDPoP:
+      type: http
+      scheme: DPoP
+      description: >-
+        A bot's token, which the bot token exchange answered, as
+        `Authorization: DPoP <token>`, with a `DPoP` header carrying a
+        proof signed by the key the token is bound to (RFC 9449,
+        ADR-0191). `pollBotMailbox` alone accepts it, and refuses it
+        sent as `Bearer`. garam stores only its hash.
     machineCredential:
       type: http
       scheme: Garam-Credential

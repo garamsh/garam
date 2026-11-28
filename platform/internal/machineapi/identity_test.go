@@ -97,9 +97,10 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 	}
 }
 
-// standaloneEnrollmentRoute, the two exchanges, keySetRoute and
-// introspectionRoute are the operations reached without a token
-// (ADR-0082, ADR-0100, ADR-0101, ADR-0102, ADR-0141). They are named here so that what a reader
+// standaloneEnrollmentRoute, the two exchanges, keySetRoute,
+// introspectionRoute and botMailboxRoute are the operations reached
+// without a token (ADR-0082, ADR-0100, ADR-0101, ADR-0102, ADR-0141,
+// ADR-0194). They are named here so that what a reader
 // checks is the exemption rather than the routes that are not exempt,
 // which are whatever is left.
 const (
@@ -108,6 +109,7 @@ const (
 	assertionExchangeRoute    = http.MethodPost + " /oauth/token"
 	keySetRoute               = http.MethodGet + " /message-signing-keys"
 	introspectionRoute        = http.MethodPost + " /oauth/introspect"
+	botMailboxRoute           = http.MethodPost + " /bots/{bot}/mailbox"
 )
 
 // TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches
@@ -128,6 +130,7 @@ func TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches(t *t
 	// now.
 	routes := machineRoutes(t, map[string]string{
 		"agent":      agentGRN("acme", "0a1b2c3d4e5f6071").String(),
+		"bot":        "grn:acme/iam/bot/decl-a",
 		"claim":      "c-1",
 		"controller": operatorGRN("acme").String(),
 		"message":    "m-1",
@@ -171,6 +174,16 @@ func TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches(t *t
 	status, body = send(t, client, introspection.method, url+introspection.path, "")
 	assert.Equal(t, http.StatusNotFound, status)
 	assert.Equal(t, "404 page not found\n", body)
+
+	// The bot's mailbox refuses on its own credential, a bot's token
+	// sent as DPoP, rather than on the missing machine token
+	// (ADR-0191).
+	mailbox, ok := routes[botMailboxRoute]
+	require.True(t, ok, "the exemption names no operation the specification declares")
+	delete(routes, botMailboxRoute)
+	status, body = send(t, client, mailbox.method, url+mailbox.path, "")
+	assert.Equal(t, http.StatusUnauthorized, status)
+	assert.Contains(t, body, "DPoP")
 
 	// The key set is public: a verifier anywhere reads it (ADR-0101).
 	keySet, ok := routes[keySetRoute]
